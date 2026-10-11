@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 4, `abi.md` Rev 2,
+Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 `corpus.md` Rev 1, `surface.md` Rev 5, `collisions.md` Rev 12.
 
 ## Scope
@@ -25,6 +25,7 @@ Status: open. Contracts: `pipeline.md` Rev 4, `abi.md` Rev 2,
 | S3 | The measurements of `pipeline.md` §7, the C15 bounds, and their tests at and past each value | Codex |
 | S4 | Phase Review round 1 fixes: `pipeline.md` Rev 2, `abi.md` Rev 1 | Codex |
 | S5 | Phase Review round 2 fixes: `pipeline.md` Rev 3, `abi.md` Rev 2 | Codex |
+| S6 | Phase Review round 3 fixes: `pipeline.md` Rev 5, `collisions.md` Rev 13 C7 | Codex |
 
 ## Exit checklist
 
@@ -238,6 +239,24 @@ Reviewer: fresh agent, diff `f5f0bf1..1db351e`. 3 MAJOR, 4 MINOR.
 Primary measurement: the S4 `if` stress module with the join writes
 removed (50,405 to 45,368 lines) did not finish `luau-analyze` in 5
 minutes. The join writes are necessary; their count is the defect.
+
+## Phase Review round 3
+
+Reviewer: fresh agent, diff `f5f0bf1..2354864`. 2 MAJOR, 3 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Deferred joins copy and merge the pending set per compound statement: 16 KiB 37 ms, 64 KiB 1,080 ms (ratio 29), Debug 11.2 s | MAJOR | pipeline.md §5.10; S6 |
+| The checker accepts `tsc`-rejected equalities (TS2367): `1 === 2`, `const a=1; const b=2; a===b`, `let x: boolean = true; x === false`. Inline literal operands also fail `luau-analyze` (17 of 660 random programs) | MAJOR | collisions.md C7; `r70`, `r71`, `a28`; S6 |
+| `OUTPUT_FACTOR` is not enforced. `1e308` emits 309 digits: ratio 64.79. `&&` over spilled bindings: 62.3 | MINOR | pipeline.md §3.10, §5.13; S6 |
+| The `{} :: any` seed is not necessary: typed constructors of at most 128 fields pass all five binding stress modules | MINOR | pipeline.md §5.8; S6 |
+| abi.md §1.10 is false for the static library: it exports about 1,866 Luau C++ symbols | MINOR | abi.md §1.10 names the dynamic library |
+
+Primary measurement (`tsc` 5.9.2, prelude): `p = true; return p ===
+q;` with `q: boolean`, `p === true` with an unassigned parameter, and
+`let x = n > 1; x === g(true)` give no error. `tsc` gives TS2367 only
+when both operands narrow to literal types. `a28` pins the accepted
+forms.
 
 ## Failures before the fix
 

@@ -5,6 +5,7 @@ Rev 1: the P1 values of §6 and §7 (`tracking/p1-skeleton.md`).
 Rev 2: §3.1, §3.4, §3.10, §5.10 to §5.12, §6.3 and §6.5 (P1 Phase Review).
 Rev 3: §3.10, §5.8, §5.10, §5.11, §6.3 (P1 Phase Review round 2).
 Rev 4: the S5 forms of §5.8 and §5.10; `OUTPUT_FACTOR`; §7 heap value.
+Rev 5: §3.10, §5.8, §5.10, §5.13 (P1 Phase Review round 3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -91,8 +92,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     is at most O(n log n) in the source size n. A gate test compiles
     one input of each shape at n and at 4n bytes. The time at 4n is at
     most 8 times the time at n.
-    The generated Luau has at most `OUTPUT_FACTOR` = 64 bytes per
-    source byte, plus a fixed prelude of 843 bytes. The factor does not depend on the
+    The generated Luau has at most `OUTPUT_FACTOR` bytes per source
+    byte, plus a fixed prelude. The emitter checks the bound on each
+    module. A module over the bound gives `internal`. §7 records the
+    value and its margin over the largest measured ratio. The factor does not depend on the
     nesting depth or on the number of bindings. The shapes of the growth
     test include nested branches with many bindings and many writes.
     §7 records the compiler heap peak of the worst shape at the source
@@ -145,7 +148,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    and a module chunk with the most bindings that fit the ceiling pass
    `luau-analyze`. The spilled bindings go to tables of at most 128
    fields each. Each table local has a table type with one typed field
-   per binding and the initial value `{} :: any`. If the fixed locals
+   per binding. Its initial value is a table constructor with the
+   typed default of each field, as an unspilled local has. If the fixed locals
    leave too few locals for the tables, the tables take more fields.
    The local count of §5.7 includes each table.
    Parameters, temporaries, and generated locals never spill. A
@@ -165,6 +169,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     emitter defers the join writes. It emits each pending join write
     once, before the next read of the binding or before the next
     branch. The number of join writes obeys the output bound of §3.10.
+    The pending set costs O(1) amortized per write and per statement.
+    No statement copies or merges the whole pending set.
     A function type in a write assertion is a generated type alias.
 11. **Analyzer stress gate.** The gate emits one module per stress
     shape. Each module repeats its shape up to the source ceiling.
@@ -178,6 +184,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     `..` expression. A template of more parts lowers to `table.concat`
     of one table constructor. Each byte of a part is copied at most
     twice.
+13. **Number literals.** A number literal is emitted in the shortest
+    decimal form that reads back as the same binary64 value.
 
 ## 6. Limits
 
@@ -245,6 +253,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
+| `OUTPUT_FACTOR` | S6 measures | at least 25% above the largest measured ratio |
 | `ALLOCATION_STEP_BYTES` | 256 | 1,000,000 charged steps of the slowest measured input take about 2.0 s in Release |
 
 ## 8. Corpus runner

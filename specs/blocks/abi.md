@@ -4,6 +4,7 @@ Status: Rev 2, 2026-10-11. ABI version 1, experimental: no binary
 compatibility promise until P3 closes.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 Rev 2: §1.10, §8 (P1 Phase Review round 2).
+Rev 3: §1.10 names the dynamic library (round 3).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -33,9 +34,12 @@ without a second call path.
    context is poisoned: each later call on it, except the free
    functions, gives `ULUA_POISONED`.
 9. Each free function accepts null and does nothing.
-10. The library exports the functions of §7 with the prefix `ulua_`.
-    Each other native symbol that the library exports has the prefix
-    `ulua_internal_`. Test-only native code is not in the library.
+10. The dynamic library exports only the functions of §7. The static
+    library also holds the Luau objects and the Rust runtime with their
+    own symbols; a host that links Luau itself uses the dynamic
+    library. Each native symbol of this project other than §7 has the
+    prefix `ulua_internal_`. Test-only native code is not in either
+    library.
 
 ## 2. Status codes
 
