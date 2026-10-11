@@ -76,7 +76,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 - **P0.5 — measurement round.** Prototypes only; every production change
   reverts. Items M1–M5 in §7. Exit: each item records numbers and a
   decision in §8.
-- **P1 — vertical skeleton.** `number`, `boolean`, `let`/`const`,
+- **P1 — vertical skeleton.** Starts after the fork branch of D7 exists
+  and is pinned by commit. `number`, `boolean`, `let`/`const`,
   functions, `if`, `while`, `for`, templates with numbers. The minimal C
   ABI: context, compile, instance, call of an exported function with
   typed values, the output capability. Source, depth, time, and memory
@@ -121,12 +122,13 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D4 | Emit typed Luau (`--!strict`); `luau-analyze` is a witness | 2026-10-11 | `CLAUDE.md` invariant 6 |
 | D5 | `T \| null` is the only absence; `undefined` is rejected | 2026-10-11 | `collisions.md` C2 |
 | D6 | Strings are native UTF-8; encoding-dependent forms are rejected; byte operations use prelude names | 2026-10-11 | `collisions.md` C5 |
-| D7 | Fork `oxc_parser` on a new branch with a nesting guard, unless M3 shows that no fork is necessary | 2026-10-11 | §7 M3 |
+| D7 | Fork `oxc_parser` on a new branch with a nesting guard; M3 confirms it | 2026-10-11 | §7 M3; `specs/tracking/p05-measurements.md` M3 |
 | D8 | Name Ulua; C prefix `ulua_` | 2026-10-11 | this file |
 | D9 | A number in a template or `String(n)` lowers to `tostring` with fixed rewrites of NaN, the infinities, zero, and the exponent | 2026-10-11 | `collisions.md` C4.5; `specs/tracking/p05-measurements.md` M4 |
 | D10 | The gate runs `luau-analyze` and `node` once per gate run over all entries; lint warnings do not fail it | 2026-10-11 | `specs/tracking/p05-measurements.md` M5 |
 | D11 | Cargo is the build root; `build.rs` compiles Luau with `cc` | 2026-10-11 | `specs/tracking/p05-measurements.md` M1 |
 | D12 | Luau builds with `LUA_USE_LONGJMP=1`; Rust calls only `noexcept` shim entries; every raising call is protected | 2026-10-11 | `specs/tracking/p05-measurements.md` M2 |
+| D13 | Every recursive AST walk in the compiler has its own bound: a chain-length limit or an iterative walk | 2026-10-11 | `specs/tracking/p05-measurements.md` M3 |
 
 ## 9. Corrections and revisions
 

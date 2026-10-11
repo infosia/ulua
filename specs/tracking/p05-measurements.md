@@ -1,6 +1,6 @@
 # P0.5 measurements
 
-Status: open. M1, M2, M4, and M5 are measured. M3 is in progress.
+Status: COMPLETE, 2026-10-11. M1 to M5 are measured and decided.
 
 Every prototype of this round is outside the repository. No production
 change lands.
@@ -9,7 +9,7 @@ change lands.
 
 - [x] M1 build root: numbers and a decision (D11).
 - [x] M2 Rust and the Luau C API: numbers and a decision (D12).
-- [ ] M3 parser depth: numbers and a decision (D7).
+- [x] M3 parser depth: numbers and a decision (D7, D13).
 - [x] M4 number to string: numbers and a decision (D9).
 - [x] M5 witness cost: numbers and a decision (D10).
 
@@ -85,6 +85,67 @@ frame. The shim holds no object with a destructor between a raise and
 its catch. `luau_compile` runs inside `catch (...)`, because it
 allocates `std::string` (read from `lcode.cpp`, not run).
 
+## M3 — parser depth
+
+Parser: `oxc_parser` 0.146.0. STOCK is upstream
+`0389c4010ef8298728f3e47fff8e2a9106d10045` (release oxc v0.146.0). The
+fork https://github.com/infosia/oxc has two guard commits on top of it:
+
+- `78f0be4010`: `ParseOptions::max_nesting_depth: Option<usize>`
+  (default `None`) and `ParserReturn::depth_exceeded`. RAII guards on
+  about 64 recursive cycles (expressions, statements, types, bindings,
+  cover grammar). Two recursive AST walks become loops.
+- `43ad6ed504`: with the guard on, no speculative arrow parse for a `(`
+  head whose first identifier precedes `=`.
+
+Harness: each probe parses one generated form on a thread with a fixed
+stack, in a child process. A binary search finds the deepest level that
+parses. B/lvl is the slope from 8 MiB to 64 MiB. macOS aarch64,
+Release (opt-level 3, fat LTO) and Debug.
+
+Selected STOCK rows (stack bytes per level; stack needed when the whole
+source is one form):
+
+| Form | Source B/lvl | Release B/lvl | Debug B/lvl | Release need at 64 KiB source | A bracket count sees it |
+|---|---|---|---|---|---|
+| `((x))` | 2 | 1,793 | 2,992 | 56 MiB | yes |
+| `{a:{a:x}}` | 4 | 2,081 | 3,456 | 33 MiB | yes |
+| `function(){return ...}` | 19 | 3,136 | 6,065 | 10 MiB | yes |
+| `(a=(a=x))` | 4 | 2,704 | 5,953 | 42 MiB | yes |
+| `a=a=x` | 2 | 912 | 752 | 28.5 MiB | no |
+| `a=>a=>x` | 3 | 1,328 | 1,184 | 28 MiB | no |
+| `a?a?x:b:b` | 4 | 1,088 | 672 | 17 MiB | no |
+| `a**a**a` | 3 | 192 | 1,392 | 4 MiB (Debug 29 MiB) | no |
+| `!x` | 1 | 128 | 224 | 8 MiB | no |
+| else-if chain | 11 | 384 | 640 | 2.2 MiB | no |
+| `A<A<T>>` | 3 | 1,568 | 3,425 | 33 MiB | no (`<` is ambiguous) |
+
+The harness measured 30 forms. 17 of them nest
+without brackets. `f()()()`, `a.b.c`, `a+a+a`, `T[][]`, and `A|B|C` do
+not recurse in the parser.
+
+- Quadratic arena: `(a=(a=x))` in STOCK uses 64·depth² bytes of arena.
+  32 KB of source uses 4.1 GB and parses in 5.4 s. With the fork guard
+  on: 1.0 MB and 2.8 ms.
+- Fork head with the guard on: B/lvl as with the guard off. The worst
+  B/lvl is 3,201 (Release) and 6,304 (Debug), function expressions. A
+  guard of depth N needs about N × 6.3 KB of stack in Debug.
+- After the parse: `needs_drop::<Program>()` is false. The default
+  `oxc_ast_visit::Visit` walk recurses on the flat chains that the
+  parser reads in a loop. It overflows a 1 MiB stack at 13,240 levels
+  (Release, 80 B/lvl) and 1,885 levels (Debug, 560 B/lvl): 26 KB of
+  source.
+
+Decision D7 (confirmed): fork. A token pre-scan does not bound 17 forms
+without a second parser for the recursive cycles. Without a guard, the
+only bound is the source size, about 900 B of stack per source byte
+(Release), and the `(a=` arena is quadratic.
+
+Decision D13: every recursive walk over the AST in the compiler
+(checker, IR, emitter) has a bound that the parser guard does not
+give: a chain-length limit with a limit diagnostic, or an iterative
+walk. P1 measures the stack per level of each walk with the guard.
+
 ## M4 — number to string
 
 Probe: `tools/probes/number-format.mjs` and `.luau`. A seeded xorshift32
@@ -146,4 +207,7 @@ witness fails on exit status 1. Lint warnings do not fail it.
   measures them on the compiler thread and the run thread.
 - M2: a Rust panic in a host function is not tested. P3 tests it.
 - M1, M2: macOS arm64 only. P5 adds Linux and Windows.
+- M3: `oxc_semantic` is not measured (crate `self_cell` is not in the
+  local cache). Mixed-form nesting and the guard's reject path are not
+  measured. P1 measures them with the fork pin.
 - M5 measures hand-written Luau. P1 measures the generated corpus.
