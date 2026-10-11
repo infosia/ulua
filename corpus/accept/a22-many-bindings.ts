@@ -1,6 +1,7 @@
 // corpus: accept/a22-many-bindings
 // purpose: Declares more bindings than a Luau function has locals, at module and function level.
 // rule: C15
+// phase: P1
 // tsc: accepts
 function id(x: number): number {
   return x;

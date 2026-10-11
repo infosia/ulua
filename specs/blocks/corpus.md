@@ -1,6 +1,7 @@
 # Corpus contract
 
-Status: Rev 0, 2026-10-11.
+Status: Rev 1, 2026-10-11 (Rev 0 the same day; Rev 1 adds the `phase`
+header and the Luau witness rules for P1).
 
 ## 1. Layout
 
@@ -29,6 +30,7 @@ Each entry starts with `//` header lines, in this order:
 // corpus: <dir>/<name>
 // purpose: <one sentence>
 // rule: <collision ids, comma-separated>
+// phase: P1 | P2 | ... | P6
 // tsc: accepts | errors <TSnnnn>[, <TSnnnn>...]
 // expected-error: <rule id>: <text>        (reject only)
 // trap: <kind>                             (trap only)
@@ -38,9 +40,10 @@ Each entry starts with `//` header lines, in this order:
   states `tsc: accepts`. A reject entry states the result of `tsc` on
   that file alone with the project options.
 - `rule` names collision ids (`C1`, `C2`, ...) of `collisions.md`.
+- `phase` names the phase from which the Luau witnesses check the entry
+  in full (§4).
 - `expected-error` starts with one id of the `rule` header. The
-  compiler diagnostic must carry that id. Until P1 defines diagnostic
-  codes, the gate checks only the header.
+  compiler diagnostic code must equal that id (§4).
 - `trap` names one trap kind of §6.
 
 ## 4. Witness rules
@@ -62,7 +65,24 @@ Each entry starts with `//` header lines, in this order:
   the golden lines before the `trap:` line. Then `node` must write more
   lines or throw. After that point `node` continues with a value
   outside the static type, and the gate does not compare it.
-- The Luau witnesses join at P1 (`plan.md` §5).
+- The Luau witnesses (`tools/witness/luau.mjs`) run when `Cargo.toml`
+  exists. They build `ulua-corpus` (`pipeline.md` §8), run every entry
+  in one process, and run `luau-analyze` once over all generated Luau.
+  The current phase is the constant `PHASE` in that file.
+- An entry whose phase is the current phase or earlier:
+  - accept: status `ok`, and the output lines equal the golden lines;
+  - reject: status `rejected`, and the code equals the
+    `expected-error` id;
+  - trap: status `failed`, the output lines equal the golden lines
+    before the `trap:` line, and the code is `trap:<kind>`.
+- An entry of a later phase:
+  - accept and trap: status `rejected` with the code `unsupported`.
+    If the entry passes in full, the witness fails and asks for a
+    change of its `phase` header;
+  - reject: status `rejected`, with any code.
+- No entry gives status `internal`.
+- `luau-analyze` exits with status 0 over the generated Luau of every
+  compiled entry (D10).
 
 ## 5. Golden changes
 

@@ -1,6 +1,7 @@
 // corpus: accept/a13-arrays
 // purpose: Reads, writes, appends, and iterates a zero-based array.
 // rule: C6
+// phase: P2
 // tsc: accepts
 export function main(): void {
   const xs: number[] = [10, 20, 30];

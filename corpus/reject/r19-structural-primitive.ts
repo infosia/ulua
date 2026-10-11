@@ -1,6 +1,7 @@
 // corpus: reject/r19-structural-primitive
 // purpose: Rejects a string, an array, and a function in a position of an object type.
 // rule: C1
+// phase: P2
 // tsc: accepts
 // expected-error: C1: a value of an object type must be an object
 type Sized = { length: number };

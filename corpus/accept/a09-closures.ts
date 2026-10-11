@@ -1,6 +1,7 @@
 // corpus: accept/a09-closures
 // purpose: Captures bindings in closures, with one binding per loop iteration.
 // rule: C1, C6, C9
+// phase: P2
 // tsc: accepts
 function counter(): () => number {
   let count = 0;

@@ -1,6 +1,7 @@
 // corpus: accept/a20-literals
 // purpose: Emits number and string literals from their values, not their spelling.
 // rule: C14
+// phase: P2
 // tsc: accepts
 export function main(): void {
   print(`${0xffffffffffffffffff === 4722366482869645213696}`);

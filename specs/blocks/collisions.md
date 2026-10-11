@@ -341,7 +341,9 @@ Accept: `a16`. Reject: `r52`.
 3. The emitter writes a number literal from its binary64 value, and a
    string literal from its decoded scalar values. It never copies the
    source spelling. Luau saturates `0xffffffffffffffffff` to 2^64 and
-   rejects `0o17`; Luau reads `"a\<newline>b"` as `"a\nb"`.
+   rejects `0o17`; Luau reads `"a\<newline>b"` as `"a\nb"`. In a
+   template literal, JavaScript reads a raw CR LF and a raw CR as LF;
+   the decoded value carries LF.
 4. A string literal is emitted as a quoted Luau string. Each byte
    outside `0x20`–`0x7E`, and each `"` and `\`, is a decimal escape
    `\ddd`. Luau rejects a raw CR or NUL inside quotes, and a long
@@ -352,9 +354,10 @@ Accept: `a16`. Reject: `r52`.
    `table`, `string`, or `tostring` cannot capture a library reference
    that a lowering emits, such as `math.fmod` (C4.3). The lowering
    reads each library function through a name that only the compiler
-   writes.
+   writes. The rule includes a script name that is a Luau keyword
+   (`end`, `local`, `nil`, `then`) or a Luau global (`error`, `pcall`).
 
-Accept: `a20`, `a21`, `a24`.
+Accept: `a20`, `a21`, `a24`, `a25`, `a26`.
 
 ## C15. Luau compiler limits
 

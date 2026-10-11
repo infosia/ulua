@@ -1,6 +1,7 @@
 // corpus: trap/t03-index-non-integer
 // purpose: Traps on a non-integer index whose lowered key rounds to an integer.
 // rule: C6
+// phase: P2
 // tsc: accepts
 // trap: index-out-of-range
 export function main(): void {

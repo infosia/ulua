@@ -1,6 +1,7 @@
 // corpus: accept/a02-arithmetic
 // purpose: Evaluates the four arithmetic operators with precedence and grouping.
 // rule: C4
+// phase: P1
 // tsc: accepts
 export function main(): void {
   const a = 7;

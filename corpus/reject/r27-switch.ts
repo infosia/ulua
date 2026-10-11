@@ -1,6 +1,7 @@
 // corpus: reject/r27-switch
 // purpose: Rejects a switch statement.
 // rule: C8
+// phase: P1
 // tsc: accepts
 // expected-error: C8: switch has no lowering
 function name(n: number): string {

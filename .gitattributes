@@ -1,0 +1,2 @@
+# a25 pins raw CR bytes inside a template literal.
+corpus/accept/a25-template-line-ends.ts -text

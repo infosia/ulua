@@ -1,6 +1,7 @@
 // corpus: reject/r37-lone-surrogate-template
 // purpose: Rejects lone surrogates in a template and in a code point escape.
 // rule: C5
+// phase: P2
 // tsc: accepts
 // expected-error: C5: a string literal must not contain a lone surrogate
 export function main(): void {

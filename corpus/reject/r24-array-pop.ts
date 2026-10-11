@@ -1,6 +1,7 @@
 // corpus: reject/r24-array-pop
 // purpose: Rejects an array method whose result type includes undefined.
 // rule: C6
+// phase: P2
 // tsc: accepts
 // expected-error: C6: pop gives undefined on an empty array
 export function main(): void {

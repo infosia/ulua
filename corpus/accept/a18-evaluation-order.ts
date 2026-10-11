@@ -1,6 +1,7 @@
 // corpus: accept/a18-evaluation-order
 // purpose: Keeps left-to-right evaluation when a later operand changes an earlier one.
 // rule: C12
+// phase: P2
 // tsc: accepts
 type Box = { f: number };
 

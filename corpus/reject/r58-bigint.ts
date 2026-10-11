@@ -1,6 +1,7 @@
 // corpus: reject/r58-bigint
 // purpose: Rejects BigInt literals.
 // rule: C4
+// phase: P1
 // tsc: accepts
 // expected-error: C4: bigint is not part of the language
 export function main(): void {

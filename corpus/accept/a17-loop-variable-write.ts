@@ -1,6 +1,7 @@
 // corpus: accept/a17-loop-variable-write
 // purpose: Writes the loop variable in the body, with continue, and captures it per iteration.
 // rule: C9
+// phase: P2
 // tsc: accepts
 export function main(): void {
   for (let i = 0; i < 5; i++) {

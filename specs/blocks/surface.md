@@ -1,7 +1,8 @@
 # Accepted surface
 
-Status: Rev 4, 2026-10-11 (Rev 0 to Rev 3 the same day; P0 Phase Review
-round 10 changed the form from prose to a table of syntax node kinds).
+Status: Rev 5, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
+round 10 changed the form from prose to a table of syntax node kinds;
+round 12 N5 names a parameter callee).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -62,7 +63,7 @@ rejected, also where `tsc` accepts it.
 | `ThisExpression` | In a method or constructor, only as the object of a `StaticMemberExpression` (C13). |
 | `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, and the `string` members of C5.2 as callees. No other member. |
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
-| `CallExpression` | The callee is an `IdentifierReference` of a function declaration or of a binding of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
+| `CallExpression` | The callee is an `IdentifierReference` of a function declaration, or of a binding or a parameter of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
 | `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |

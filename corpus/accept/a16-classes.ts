@@ -1,6 +1,7 @@
 // corpus: accept/a16-classes
 // purpose: Constructs a class instance and calls methods that change its fields.
 // rule: C1, C13
+// phase: P2
 // tsc: accepts
 class Counter {
   private value: number;

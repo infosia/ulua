@@ -1,6 +1,7 @@
 // corpus: accept/a03-remainder
 // purpose: Lowers the remainder operator with the sign of the dividend.
 // rule: C4
+// phase: P1
 // tsc: accepts
 function isNegativeZero(x: number): boolean {
   return x === 0 && 1 / x < 0;

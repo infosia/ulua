@@ -1,6 +1,7 @@
 // corpus: reject/r07-truthy-number
 // purpose: Rejects a truth test on a number.
 // rule: C3
+// phase: P1
 // tsc: accepts
 // expected-error: C3: a condition must be boolean
 export function main(): void {

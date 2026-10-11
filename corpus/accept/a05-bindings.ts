@@ -1,6 +1,7 @@
 // corpus: accept/a05-bindings
 // purpose: Declares, assigns, and shadows block-scoped bindings.
 // rule: C1
+// phase: P1
 // tsc: accepts
 export function main(): void {
   let count = 1;

@@ -23,8 +23,8 @@ diffs against acceptance criteria, runs gates, and makes local commits.
 It does not write production code under `crates/`, `native/`, or
 `include/`.
 
-The implementation agent is a fresh `general-purpose` subagent with the
-Opus model. It writes production code and tests within one handoff. It
+The implementation agent is Codex, started as a fresh `codex:codex-rescue`
+agent of the Codex plugin. It writes production code and tests within one handoff. It
 does not plan, edit `specs/`, change scope, review its own work, start
 reviewer agents, or commit. A subagent that receives a handoff has this
 role. The handoff format is in `specs/workflow.md`.

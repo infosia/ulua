@@ -1,6 +1,7 @@
 // corpus: trap/t01-index-read-out-of-range
 // purpose: Traps on an array read past the last element.
 // rule: C6
+// phase: P2
 // tsc: accepts
 // trap: index-out-of-range
 export function main(): void {

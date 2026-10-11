@@ -1,6 +1,7 @@
 // corpus: accept/a24-library-names
 // purpose: Names bindings like Luau library globals that lowerings use.
 // rule: C14
+// phase: P2
 // tsc: accepts
 export function main(): void {
   const math: number[] = [7];

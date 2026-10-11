@@ -12,7 +12,8 @@ current rule.
 | Invariant 5: accept only agreeing forms; traps where node leaves the static type | 2026-10-11 | Owner decision. With invariant 4, every accept entry is comparable with node, so node detects each wrongly accepted form. Out-of-range reads and holes are where the TypeScript type system is unsound. |
 | Invariant 6: emit typed Luau source; no bytecode | 2026-10-11 | Owner decision on typed output. The prior proof of concept removed a direct bytecode emitter: each emitter or verifier gap was a VM memory-safety defect for hostile input. |
 | Oracle and witnesses: `luau-analyze` is a witness | 2026-10-11 | Owner decision on typed output (D4). |
-| Roles: implementation agent is a Claude Opus subagent | 2026-10-11 | Owner decision. The workflow follows a prior project of the owner. |
+| Roles: implementation agent is a Claude Opus subagent | 2026-10-11 | Owner decision. The workflow follows a prior project of the owner. Replaced the same day (next row). |
+| Roles: implementation agent is Codex through the Codex plugin | 2026-10-11 | Owner decision at the start of P1. |
 | Core principles 1–16 | 2026-10-11 | Adopted from a prior project of the owner, with the two execution tiers replaced by the four witnesses. |
 | Code conventions: 1,000 lines per source file | 2026-10-11 | Smaller files keep implementation handoffs small. |
 | Severity follows invariant 2 | 2026-10-11 | Hostile scripts make any script input a realistic reach. |

@@ -1,6 +1,7 @@
 // corpus: reject/r47-detached-method
 // purpose: Rejects a method read as a value.
 // rule: C11
+// phase: P2
 // tsc: accepts
 // expected-error: C11: a method is never read as a value
 class Counter {

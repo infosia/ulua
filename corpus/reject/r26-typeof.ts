@@ -1,6 +1,7 @@
 // corpus: reject/r26-typeof
 // purpose: Rejects the typeof operator.
 // rule: C8
+// phase: P1
 // tsc: accepts
 // expected-error: C8: typeof has no lowering
 export function main(): void {

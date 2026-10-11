@@ -1,6 +1,7 @@
 // corpus: accept/a06-if-else
 // purpose: Selects branches with if, else if, else, and the conditional operator.
 // rule: C3
+// phase: P1
 // tsc: accepts
 function sign(n: number): string {
   if (n > 0) {

@@ -1,6 +1,7 @@
 // corpus: accept/a15-records
 // purpose: Builds, reads, and updates object values with a nullable field.
 // rule: C1, C2
+// phase: P2
 // tsc: accepts
 type Point = { x: number; y: number };
 type Tagged = { point: Point; tag: string | null };

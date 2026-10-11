@@ -1,6 +1,7 @@
 // corpus: accept/a04-number-template
 // purpose: Formats special and boundary numbers in template literals.
 // rule: C4
+// phase: P1
 // tsc: accepts
 export function main(): void {
   const zero = 0;

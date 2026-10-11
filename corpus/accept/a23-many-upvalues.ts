@@ -1,6 +1,7 @@
 // corpus: accept/a23-many-upvalues
 // purpose: Captures more bindings in one closure than a Luau function has upvalues.
 // rule: C15
+// phase: P2
 // tsc: accepts
 export function main(): void {
   const c0 = 0;

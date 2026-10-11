@@ -24,7 +24,7 @@ const fail = (entry, message) => failures.push(`${entry}: ${message}`);
 
 const NAME = /^([art])(\d{2,})-[a-z0-9-]+\.ts$/;
 const DIRS = { a: "accept", r: "reject", t: "trap" };
-const ORDER = ["corpus", "purpose", "rule", "tsc"];
+const ORDER = ["corpus", "purpose", "rule", "phase", "tsc"];
 // Trap kinds: the table of specs/blocks/corpus.md section 6.
 const corpusSpec = readFileSync(path.join(root, "specs/blocks/corpus.md"), "utf8");
 const TRAP_KINDS = new Set(
@@ -56,6 +56,7 @@ function parseHeader(entry) {
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
   if (entry.dir !== "reject" && header.tsc !== "accepts") fail(entry.id, "accept and trap entries state tsc: accepts");
+  if (!/^P[1-6]$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir === "reject") {
     const id = /^(C\d+): ./.exec(header["expected-error"] || "");

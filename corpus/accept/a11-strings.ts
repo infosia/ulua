@@ -1,6 +1,7 @@
 // corpus: accept/a11-strings
 // purpose: Concatenates, compares, searches, and splits strings without encoding-dependent forms.
 // rule: C5
+// phase: P2
 // tsc: accepts
 export function main(): void {
   const name = "héllo";

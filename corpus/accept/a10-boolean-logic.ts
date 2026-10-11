@@ -1,6 +1,7 @@
 // corpus: accept/a10-boolean-logic
 // purpose: Combines boolean operators and compares with NaN.
 // rule: C3, C4, C7
+// phase: P1
 // tsc: accepts
 function logic(t: boolean, f: boolean): string {
   return `${t && f} ${t || f} ${!t} ${t === f} ${t !== f}`;

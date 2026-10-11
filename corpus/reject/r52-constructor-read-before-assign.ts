@@ -1,6 +1,7 @@
 // corpus: reject/r52-constructor-read-before-assign
 // purpose: Rejects a use of this before every field has a value.
 // rule: C13
+// phase: P2
 // tsc: accepts
 // expected-error: C13: this is used before every field is assigned
 class Account {
