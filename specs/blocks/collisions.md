@@ -1,13 +1,14 @@
 # Semantic collisions — decided rules
 
-Status: Rev 19, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 20, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
 Rev 16: the three resolutions and the divergence format, invariant 5;
 Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
 literal conditions, strict-mode early errors, round 6; Rev 19:
-`ALIAS_TEST_BOUND`, round 7).
+`ALIAS_TEST_BOUND`, round 7; Rev 20: nested bodies inherit the tested
+set, P2.1).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -283,7 +284,11 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      absent `for` test has no false edge. A
      loop test joins the entry edge only, so a test that the body adds
      does not reach the next iteration's test. An assignment does not
-     end a test. The fact is a set per point; the checker updates it in
+     end a test. The body of a nested function or arrow starts with
+     the tested set of the point where it is created: `tsc` keeps the
+     narrowing of a parameter, a `let`, or a `const` inside a callback
+     (`if (p === 1) { take(() => p === 2); }` gives TS2367). The fact
+     is a set per point; the checker updates it in
      time O(1) amortized per reference and per edge (pipeline.md
      §3.10).
 
