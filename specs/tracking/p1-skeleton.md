@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 18.
+`corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 19.
 
 ## Scope
 
@@ -29,6 +29,7 @@ Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 | S7 | Phase Review round 4 fixes: `collisions.md` Rev 14 C7, `surface.md` Rev 6 | Codex |
 | S8 | Phase Review round 5 fixes: `collisions.md` Rev 17 C7 rule 4, `surface.md` Rev 8 | Codex |
 | S9 | Phase Review round 6 fixes: `collisions.md` Rev 18 C7 rule 4 and C11 | Codex |
+| S10 | Phase Review round 7 fixes: `collisions.md` Rev 19 `ALIAS_TEST_BOUND` | Codex |
 
 ## Exit checklist
 
@@ -455,6 +456,20 @@ from findings 1 and 2; 0 `node` mismatches; `luau-analyze` exit 0.
 | The C7 text does not state that a `while (true)` test has no false edge | MINOR | Closed by the literal-condition rule |
 | The boolean `let` rule accepts parentheses; the text does not say so | MINOR | surface.md text |
 | No gate measures the join cost: deep, wide, and nested-loop join shapes measure 3.68 to 3.74 per 4x (Release) | MINOR | S9 adds the three shapes to the growth test |
+
+## Phase Review round 7
+
+Reviewer: fresh agent, diff `f5f0bf1..4dd83ea`. 1 MAJOR, 1 MINOR.
+About 1,050 accepted programs (854 random, about 200 hand-written edge
+cases over literals, escapes, strict mode, declarations, shadowing,
+control flow): each passes `tsc`, runs under `node` with the same
+output, and passes `luau-analyze`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The alias walk is quadratic: `const aN = aN-1 \|\| x === 1;` chains, read many times; Debug 8 KiB 0.09 s, 32 KiB 1.00 s (ratio 11.1, limit 8); Release 16 KiB 0.04 s, 64 KiB 0.39 s | MAJOR | C7: flattened alias sets of at most 8 references (`ALIAS_TEST_BOUND`); `r83`; S10 adds an alias-chain growth shape |
+| C11 states wrong `tsc` codes for `await`: TS1262 at module level, none in a function body | MINOR | C11 text |
+| A hashbang line gives C11 with the message for module directives | note | S10 fixes the message |
 
 ## Failures before the fix
 

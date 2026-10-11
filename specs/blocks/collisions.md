@@ -1,12 +1,13 @@
 # Semantic collisions — decided rules
 
-Status: Rev 18, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 19, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
 Rev 16: the three resolutions and the divergence format, invariant 5;
 Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
-literal conditions, strict-mode early errors, round 6).
+literal conditions, strict-mode early errors, round 6; Rev 19:
+`ALIAS_TEST_BOUND`, round 7).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -261,6 +262,10 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      - `(g)`: the sets of `g`;
      - a read of a `boolean` binding (`const` or `let`): the sets of
        its initializer. `tsc` narrows through an aliased condition.
+       The checker stores these sets with the binding, flattened. Each
+       set holds at most 8 references (`ALIAS_TEST_BOUND`); a larger
+       set gives C7. So a declaration and each read cost O(1), also
+       for a chain of aliases (pipeline.md §3.10).
      A condition that is the literal `true`, with or without
      parentheses, has no false edge. The literal `false` has no true
      edge. A join counts only the edges that exist. At a point that no
@@ -283,7 +288,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      §3.10).
 
 Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`, `r76`, `r77`, `r79`, `r80`.
+`r74`, `r76`, `r77`, `r79`, `r80`, `r83`.
 
 ## C8. Forms outside the subset
 
@@ -359,8 +364,9 @@ literal (`010`, `08`), a legacy octal or `\8`, `\9` escape, and a
 binding named `eval`, `arguments`, `await`, or a strict reserved word
 (`implements`, `interface`, `let`, `package`, `private`, `protected`,
 `public`, `static`, `yield`). Without the rule, `node` does not run
-the program, and `tsc` gives TS1121, TS1214, TS1215, TS1487, TS1488,
-or TS1489. A rule in this file
+the program. `tsc` gives TS1121, TS1214, TS1215, TS1487, TS1488, or
+TS1489; for `await` it gives TS1262 at module level and no error in a
+function body, and `node` gives a SyntaxError in both places. A rule in this file
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
