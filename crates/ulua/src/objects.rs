@@ -43,7 +43,7 @@ impl Drop for Instance {
     fn drop(&mut self) {
         // SAFETY: This instance exclusively owns its VM. The shim accepts null.
         unsafe {
-            native::ulua_shim_free(self.vm);
+            native::ulua_internal_shim_free(self.vm);
         }
     }
 }

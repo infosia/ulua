@@ -1,4 +1,7 @@
 //! Shared P1 measurement and boundary sources. These helpers enter no product build.
+#[path = "s5_inputs.rs"]
+mod s5;
+
 pub const FORMS: &[&str] = &[
     "parentheses",
     "not",
@@ -88,6 +91,17 @@ pub fn recursion() -> &'static str {
 }
 
 pub fn source_ceiling(kind: &str, bytes: usize) -> String {
+    if matches!(
+        kind,
+        "function-bindings"
+            | "module-bindings"
+            | "short-functions"
+            | "nested-bindings"
+            | "nested-writes"
+            | "default-calls"
+    ) {
+        return s5::source(kind, bytes);
+    }
     let mut s = if kind == "functions" || kind == "parameter-functions" {
         "export function main():void {}".to_owned()
     } else {
@@ -139,6 +153,12 @@ pub const SOURCE_SHAPES: &[&str] = &[
     "forward",
     "backward",
     "star",
+    "function-bindings",
+    "module-bindings",
+    "short-functions",
+    "nested-bindings",
+    "nested-writes",
+    "default-calls",
 ];
 
 pub fn call_graph(kind: &str, bytes: usize) -> String {

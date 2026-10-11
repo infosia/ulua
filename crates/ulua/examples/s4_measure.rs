@@ -11,16 +11,17 @@ use ulua_compiler::{COMPILER_STACK_BYTES, Limits};
 // The repr(C) ABI descriptors have fixed layouts; non_exhaustive prevents Rust struct literals only.
 #[allow(improper_ctypes)]
 // SAFETY: These declarations match the private shim and its opt-in measurement probes.
+#[link(name = "ulua_test_native", kind = "static")]
 unsafe extern "C" {
-    fn ulua_shim_compile(
+    fn ulua_internal_shim_compile(
         source: *const c_char,
         length: usize,
         out: *mut *mut c_char,
         size: *mut usize,
         error: *mut c_char,
     ) -> i32;
-    fn ulua_shim_bytecode_free(out: *mut c_char);
-    fn ulua_shim_new(
+    fn ulua_internal_shim_bytecode_free(out: *mut c_char);
+    fn ulua_internal_shim_new(
         code: *const c_char,
         length: usize,
         host: *const Host,
@@ -28,7 +29,7 @@ unsafe extern "C" {
         out: *mut *mut c_void,
         error: *mut c_char,
     ) -> i32;
-    fn ulua_shim_call(
+    fn ulua_internal_shim_call(
         vm: *mut c_void,
         name: *const c_char,
         args: *const Value,
@@ -37,8 +38,8 @@ unsafe extern "C" {
         result: *mut Value,
         error: *mut c_char,
     ) -> i32;
-    fn ulua_shim_free(vm: *mut c_void);
-    fn ulua_probe_run_stats(
+    fn ulua_internal_shim_free(vm: *mut c_void);
+    fn ulua_internal_probe_run_stats(
         vm: *mut c_void,
         bytes: *mut u64,
         charges: *mut u64,
@@ -62,7 +63,7 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
     // SAFETY: This scope owns the shim outputs and frees each object after its last use.
     unsafe {
         assert_eq!(
-            ulua_shim_compile(
+            ulua_internal_shim_compile(
                 compiled.luau.as_ptr().cast(),
                 compiled.luau.len(),
                 &mut bytecode,
@@ -72,7 +73,7 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
             0
         );
         assert_eq!(
-            ulua_shim_new(
+            ulua_internal_shim_new(
                 bytecode,
                 size,
                 &Host::default(),
@@ -82,10 +83,10 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
             ),
             0
         );
-        ulua_shim_bytecode_free(bytecode);
+        ulua_internal_shim_bytecode_free(bytecode);
         let mut result = Value::default();
         let start = Instant::now();
-        let status = ulua_shim_call(
+        let status = ulua_internal_shim_call(
             vm,
             c"main".as_ptr(),
             ptr::null(),
@@ -96,7 +97,7 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
         );
         let seconds = start.elapsed().as_secs_f64();
         let (mut bytes, mut charges, mut interrupts) = (0, 0, 0);
-        ulua_probe_run_stats(vm, &mut bytes, &mut charges, &mut interrupts);
+        ulua_internal_probe_run_stats(vm, &mut bytes, &mut charges, &mut interrupts);
         println!(
             "S4 runtime {label}: iterations={iterations} seconds={seconds:.6} allocated_bytes={bytes} allocation_steps={charges} interrupts={interrupts} ns_per_byte={:.6} ns_per_step={:.3} million_steps_seconds={:.6} status={status} {}",
             seconds * 1e9 / bytes.max(1) as f64,
@@ -105,7 +106,7 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
             CStr::from_ptr(error.as_ptr()).to_string_lossy()
         );
         assert!(status == 0 || (status == 2 && steps == DEFAULT_STEPS));
-        ulua_shim_free(vm);
+        ulua_internal_shim_free(vm);
     }
 }
 fn main() {

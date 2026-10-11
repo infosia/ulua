@@ -1,6 +1,8 @@
 //! S3 ABI boundary gate. Measured Debug cost: 0.37 seconds; budget: 20 seconds.
 //! Reproduce: cargo test --offline -p ulua --test s3_limits -- --nocapture.
 //! Large cases: 64 KiB sources, one million interrupts, and 24 string doublings.
+// This target uses peak counts; the live count serves the heap sampler only.
+#[allow(dead_code)]
 #[path = "../examples/support/alloc.rs"]
 mod allocations;
 // The growth gate uses the graph generators from this shared source module.
@@ -350,17 +352,18 @@ fn memory_budget(bytes: u64) -> RunLimits {
 #[cfg(feature = "measurements")]
 fn native_ccalls() {
     // SAFETY: The optional probe owns its state and protects every recursive C call.
+    #[link(name = "ulua_test_native", kind = "static")]
     unsafe extern "C" {
-        fn ulua_probe_ccalls(count: i32) -> i32;
-        fn ulua_probe_ccalls_protected(count: i32) -> i32;
+        fn ulua_internal_probe_ccalls(count: i32) -> i32;
+        fn ulua_internal_probe_ccalls_protected(count: i32) -> i32;
     }
     // P1 cannot express pcall or a recursive C callback. Test the pinned VM fixture separately.
     // SAFETY: The probe takes only a count and releases its private VM before it returns.
     unsafe {
-        assert_eq!(ulua_probe_ccalls(198), 0);
-        assert_eq!(ulua_probe_ccalls(199), 2);
-        assert_eq!(ulua_probe_ccalls_protected(198), 0);
-        assert_eq!(ulua_probe_ccalls_protected(199), 2);
+        assert_eq!(ulua_internal_probe_ccalls(198), 0);
+        assert_eq!(ulua_internal_probe_ccalls(199), 2);
+        assert_eq!(ulua_internal_probe_ccalls_protected(198), 0);
+        assert_eq!(ulua_internal_probe_ccalls_protected(199), 2);
     }
 }
 fn runtime() {

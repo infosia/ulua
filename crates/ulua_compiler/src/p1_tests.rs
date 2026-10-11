@@ -245,7 +245,7 @@ fn c12_binary_call_and_compound_reads_precede_a_mutating_call() {
         ));
         let main = c.luau.split("__ulua_b3 = (function").nth(1).unwrap();
         let read = main.find("= (__ulua_b0) :: number\n").unwrap();
-        let call = main.find("= (__ulua_b1) :: () -> number\n").unwrap();
+        let call = main.find("= (__ulua_b1) :: ").unwrap();
         assert!(read < call, "{effect}");
     }
 }
@@ -286,4 +286,42 @@ fn c8_module_interface_and_generic_declarations() {
         "function f<T>(): void {} export function main(): void {}",
         "C8",
     );
+}
+
+#[test]
+fn joins_skip_dead_declarations_and_coalesce_nested_writes() {
+    let source = format!(
+        "export function main():void{{let gate=true;let x=0;{}{{let dead=0;x=1;}}x=x+1;}}",
+        "if(gate)".repeat(40)
+    );
+    let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
+    assert_eq!(
+        compiled
+            .luau
+            .matches("__ulua_b2 = (__ulua_b2) :: number")
+            .count(),
+        1
+    );
+    assert!(!compiled.luau.contains("__ulua_b3 = (__ulua_b3)"));
+    let overwrite = compile(
+        b"export function main():void{let x=0;if(true){x=1;}x=2;print(String(x));}",
+        Limits::default(),
+    )
+    .unwrap();
+    assert!(!overwrite.luau.contains("__ulua_b1 = (__ulua_b1)"));
+}
+
+#[test]
+fn demanded_join_precedes_the_next_branch() {
+    let compiled = compile(
+        b"export function main():void{let x=0;let gate=true;if(gate){x=1;}if(gate){x=x+1;}}",
+        Limits::default(),
+    )
+    .unwrap();
+    let reset = compiled
+        .luau
+        .find("__ulua_b1 = (__ulua_b1) :: number")
+        .unwrap();
+    let last_branch = compiled.luau.rfind("if __ulua_t").unwrap();
+    assert!(reset < last_branch);
 }

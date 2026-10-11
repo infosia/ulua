@@ -1,13 +1,19 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
 mod expressions;
 mod statements;
+mod types;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,
     ir::{self, Type},
 };
-use std::{collections::HashMap, fmt::Write};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt::Write,
+};
 
-const LIBRARIES: &str = "local __ulua_concat: typeof(table.concat) = (table.concat) :: typeof(table.concat)\nlocal __ulua_print: typeof(print) = (print) :: typeof(print)\nlocal __ulua_fmod: typeof(math.fmod) = (math.fmod) :: typeof(math.fmod)\nlocal __ulua_tostring: typeof(tostring) = (tostring) :: typeof(tostring)\nlocal __ulua_gsub: typeof(string.gsub) = (string.gsub) :: typeof(string.gsub)\nlocal __ulua_huge: typeof(math.huge) = (math.huge) :: typeof(math.huge)\nlocal function __ulua_format(__ulua_n: number): string\n    if __ulua_n ~= __ulua_n then return \"NaN\" end\n    if __ulua_n == __ulua_huge then return \"Infinity\" end\n    if __ulua_n == -__ulua_huge then return \"-Infinity\" end\n    if __ulua_n == 0 then return \"0\" end\n    local __ulua_s: string = (__ulua_gsub(__ulua_tostring(__ulua_n), \"e([+-])0*(%d)\", \"e%1%2\")) :: string\n    return __ulua_s\nend\n";
+const SPILL_FIELDS: usize = 128;
+
+pub(crate) const LIBRARIES: &str = "local __ulua_concat: typeof(table.concat) = (table.concat) :: typeof(table.concat)\nlocal __ulua_print: typeof(print) = (print) :: typeof(print)\nlocal __ulua_fmod: typeof(math.fmod) = (math.fmod) :: typeof(math.fmod)\nlocal __ulua_tostring: typeof(tostring) = (tostring) :: typeof(tostring)\nlocal __ulua_gsub: typeof(string.gsub) = (string.gsub) :: typeof(string.gsub)\nlocal __ulua_huge: typeof(math.huge) = (math.huge) :: typeof(math.huge)\nlocal function __ulua_format(__ulua_n: number): string\n    if __ulua_n ~= __ulua_n then return \"NaN\" end\n    if __ulua_n == __ulua_huge then return \"Infinity\" end\n    if __ulua_n == -__ulua_huge then return \"-Infinity\" end\n    if __ulua_n == 0 then return \"0\" end\n    local __ulua_s: string = (__ulua_gsub(__ulua_tostring(__ulua_n), \"e([+-])0*(%d)\", \"e%1%2\")) :: string\n    return __ulua_s\nend\n";
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -48,6 +54,7 @@ struct Slot {
 }
 struct Emitter<'a> {
     module: &'a ir::Module,
+    function_types: &'a types::FunctionTypes,
     owner: usize,
     out: String,
     indent: usize,
@@ -59,6 +66,7 @@ struct Emitter<'a> {
     copies: HashMap<usize, String>,
     generated: Vec<(String, String, String, bool)>,
     loops: Vec<Loop>,
+    joins: BTreeSet<usize>,
 }
 #[derive(Clone)]
 struct Loop {
@@ -70,9 +78,11 @@ impl<'a> Emitter<'a> {
         owner: usize,
         module_locations: &'a HashMap<usize, String>,
         binding_ids: &'a [usize],
+        function_types: &'a types::FunctionTypes,
     ) -> Self {
         Self {
             module,
+            function_types,
             owner,
             out: String::new(),
             indent: 1,
@@ -84,6 +94,7 @@ impl<'a> Emitter<'a> {
             copies: HashMap::new(),
             generated: vec![],
             loops: vec![],
+            joins: BTreeSet::new(),
         }
     }
     fn guard(&self, depth: u32) -> Result<u32, Diagnostic> {
@@ -100,7 +111,12 @@ impl<'a> Emitter<'a> {
         Diagnostic::at(&self.module.source, self.offset, code, message)
     }
     fn line(&mut self, text: impl AsRef<str>) {
-        let _ = writeln!(self.out, "{}{}", "    ".repeat(self.indent), text.as_ref());
+        let _ = writeln!(
+            self.out,
+            "{}{}",
+            if self.indent == 0 { "" } else { "    " },
+            text.as_ref()
+        );
     }
     fn location(&self, id: usize) -> Result<String, Diagnostic> {
         self.copies
@@ -114,15 +130,26 @@ impl<'a> Emitter<'a> {
         self.line(format!("{name} = ({}) :: {ty}", value.as_ref()));
     }
     fn write_slot(&mut self, slot: usize, value: impl AsRef<str>) {
-        let ty = self.slots[slot].ty.luau();
+        let ty = self.function_types.luau(&self.slots[slot].ty);
         self.write(&self.temp(slot), value, &ty);
     }
+    fn read_binding(&mut self, id: usize) -> Result<String, Diagnostic> {
+        let location = self.location(id)?;
+        // Delay the join until a read proves that the binding is live.
+        // Each read emits at most one join, independent of enclosing branch count.
+        if self.joins.remove(&id) {
+            self.write_binding(id, &location)?;
+        }
+        Ok(location)
+    }
     fn write_binding(&mut self, id: usize, value: impl AsRef<str>) -> Result<(), Diagnostic> {
-        let ty = self.module.bindings[id]
-            .ty
-            .as_ref()
-            .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?
-            .luau();
+        let ty = self.function_types.luau(
+            self.module.bindings[id]
+                .ty
+                .as_ref()
+                .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?,
+        );
+        self.joins.remove(&id);
         self.write(&self.location(id)?, value, &ty);
         Ok(())
     }
@@ -173,10 +200,30 @@ impl<'a> Emitter<'a> {
             .filter(|id| !parameter_ids.contains(id))
             .collect();
         let spill = fixed + ids.len() > LOCAL_BUDGET;
-        let available = LOCAL_BUDGET - fixed - usize::from(spill);
+        let capacity = LOCAL_BUDGET - fixed;
+        // Reserve every table before assigning any binding to a local.
+        let mut table_count = usize::from(spill);
+        if spill {
+            loop {
+                let needed = (ids.len() - capacity + table_count).div_ceil(SPILL_FIELDS);
+                if needed == table_count {
+                    break;
+                }
+                if needed > capacity {
+                    table_count = capacity;
+                    break;
+                }
+                table_count = needed;
+            }
+        }
+        let available = capacity - table_count;
+        let fields_per_table = if spill {
+            (ids.len() - available).div_ceil(table_count)
+        } else {
+            0
+        };
         let mut declarations = String::new();
-        let mut fields = vec![];
-        let mut values = vec![];
+        let mut tables = vec![Vec::new(); table_count];
         for (index, id) in ids.into_iter().enumerate() {
             let ty = self.module.bindings[id]
                 .ty
@@ -187,24 +234,29 @@ impl<'a> Emitter<'a> {
                 let _ = writeln!(
                     declarations,
                     "local {name}: {0} = ({1}) :: {0}",
-                    ty.luau(),
+                    self.function_types.luau(ty),
                     initial(ty)
                 );
                 self.locations.insert(id, name);
             } else {
-                fields.push(format!("{name}: {}", ty.luau()));
-                values.push(format!("{name} = {}", initial(ty)));
+                let table = (index - available) / fields_per_table;
+                tables[table].push(format!("{name}: {}", self.function_types.luau(ty)));
                 self.locations
-                    .insert(id, format!("__ulua_spill{}.{name}", self.owner));
+                    .insert(id, format!("{}.{name}", self.spill_name(table)));
             }
         }
-        if spill {
+        for (table, fields) in tables.into_iter().enumerate() {
+            if fields.is_empty() {
+                continue;
+            }
             let _ = writeln!(
                 declarations,
-                "local __ulua_spill{0}: {{ {1} }} = ({{ {2} }}) :: {{ {1} }}",
-                self.owner,
-                fields.join(", "),
-                values.join(", ")
+                // C10 guarantees that each field is written before its first read.
+                // The declared table type checks all accesses; the empty seed avoids
+                // a structural comparison of thousands of constructor fields.
+                "local {0}: {{ {1} }} = {{}} :: any",
+                self.spill_name(table),
+                fields.join(", ")
             );
         }
         for (i, slot) in self.slots.iter().enumerate() {
@@ -212,7 +264,7 @@ impl<'a> Emitter<'a> {
                 declarations,
                 "local {0}: {1} = ({2}) :: {1}",
                 self.temp(i),
-                slot.ty.luau(),
+                self.function_types.luau(&slot.ty),
                 initial(&slot.ty)
             );
         }
@@ -224,10 +276,17 @@ impl<'a> Emitter<'a> {
         }
         Ok(declarations)
     }
+    fn spill_name(&self, table: usize) -> String {
+        if table == 0 {
+            format!("__ulua_spill{}", self.owner)
+        } else {
+            format!("__ulua_spill{}_{table}", self.owner)
+        }
+    }
     fn headers(&self, declarations: &str) -> String {
         declarations
             .lines()
-            .map(|s| format!("{}{s}\n", "    ".repeat(self.indent)))
+            .map(|s| format!("{}{s}\n", if self.indent == 0 { "" } else { "    " }))
             .collect()
     }
 }
@@ -241,13 +300,15 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
     for ids in &mut owners {
         ids.sort_by_key(|id| module.bindings[*id].start);
     }
+    let function_types = types::FunctionTypes::new(module);
     let empty = HashMap::new();
-    let mut chunk = Emitter::new(module, 0, &empty, &owners[0]);
+    let mut chunk = Emitter::new(module, 0, &empty, &owners[0], &function_types);
     chunk.statements(&module.body, 0)?;
     let chunk_declarations = chunk.plan(&[], 7)?;
     let module_locations = chunk.locations;
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
+    out.push_str(&function_types.declarations);
     out.push_str(&chunk_declarations);
     for f in &module.functions {
         let mut probe = Emitter::new(
@@ -255,6 +316,7 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
             f.binding + 1,
             &module_locations,
             &owners[f.binding + 1],
+            &function_types,
         );
         probe.defaults(f)?;
         probe.statements(&f.body, 0)?;
@@ -266,6 +328,7 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
             f.binding + 1,
             &module_locations,
             &owners[f.binding + 1],
+            &function_types,
         );
         e.locations = probe.locations;
         e.slots = probe.slots;
@@ -282,15 +345,15 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
                 .as_ref()
                 .ok_or_else(|| e.limit("C11", "Missing parameter type"))?;
             if default.is_some() {
-                parameters.push(format!("__ulua_arg{id}: {}?", ty.luau()));
+                parameters.push(format!("__ulua_arg{id}: {}?", function_types.luau(ty)));
                 let _ = writeln!(
                     parameter_locals,
                     "    local __ulua_b{id}: {0} = ({1}) :: {0}",
-                    ty.luau(),
+                    function_types.luau(ty),
                     initial(ty)
                 );
             } else {
-                parameters.push(format!("__ulua_b{id}: {}", ty.luau()));
+                parameters.push(format!("__ulua_b{id}: {}", function_types.luau(ty)));
             }
         }
         let _ = writeln!(
@@ -298,7 +361,7 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
             "{} = (function({}): {}",
             module_locations[&f.binding],
             parameters.join(", "),
-            f.result.luau()
+            function_types.luau(&f.result)
         );
         out.push_str(&parameter_locals);
         out.push_str(&e.headers(&declarations));
@@ -306,14 +369,15 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         let _ = writeln!(
             out,
             "end) :: {}",
-            module.bindings[f.binding]
-                .ty
-                .as_ref()
-                .ok_or_else(|| e.limit("internal", "Missing function type"))?
-                .luau()
+            function_types.luau(
+                module.bindings[f.binding]
+                    .ty
+                    .as_ref()
+                    .ok_or_else(|| e.limit("internal", "Missing function type"))?
+            )
         );
     }
-    let mut body = Emitter::new(module, 0, &module_locations, &owners[0]);
+    let mut body = Emitter::new(module, 0, &module_locations, &owners[0], &function_types);
     body.indent = 0;
     body.statements(&module.body, 0)?;
     out.push_str(&body.out);

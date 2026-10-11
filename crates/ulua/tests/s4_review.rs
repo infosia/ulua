@@ -88,8 +88,9 @@ fn statement_and_unary_depth_grid() {
 #[test]
 fn allocation_charge_boundary_and_round_up() {
     // SAFETY: The private opt-in probe owns its allocator state and frees the allocation.
+    #[link(name = "ulua_test_native", kind = "static")]
     unsafe extern "C" {
-        fn ulua_probe_allocation(bytes: usize, steps: u64) -> i32;
+        fn ulua_internal_probe_allocation(bytes: usize, steps: u64) -> i32;
     }
     for bytes in [
         1,
@@ -100,8 +101,8 @@ fn allocation_charge_boundary_and_round_up() {
         let charge = (bytes as u64).div_ceil(ALLOCATION_STEP_BYTES);
         // SAFETY: The probe accepts sizes and budgets only; no borrowed pointers cross this call.
         unsafe {
-            assert_eq!(ulua_probe_allocation(bytes, charge), 0);
-            assert_eq!(ulua_probe_allocation(bytes, charge - 1), 2);
+            assert_eq!(ulua_internal_probe_allocation(bytes, charge), 0);
+            assert_eq!(ulua_internal_probe_allocation(bytes, charge - 1), 2);
         }
     }
 }

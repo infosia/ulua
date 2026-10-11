@@ -1,6 +1,6 @@
-#include "ulua.h"
+#include "shim/ulua_shim.h"
 /* Independent C compiler measurements of every version 1 layout field. */
-size_t ulua_layout_probe(size_t index) {
+size_t ulua_internal_layout_probe(size_t index) {
     static const size_t layout[] = {
         sizeof(ulua_diagnostic),
         offsetof(ulua_diagnostic, struct_size),
@@ -44,7 +44,8 @@ size_t ulua_layout_probe(size_t index) {
         ULUA_TYPE_NUMBER,
         ULUA_TYPE_BOOLEAN,
         ULUA_TYPE_STRING,
-        ULUA_MIN_RUN_STACK
+        ULUA_MIN_RUN_STACK,
+        ALLOCATION_STEP_BYTES
     };
     return index < sizeof(layout) / sizeof(layout[0]) ? layout[index] : SIZE_MAX;
 }

@@ -142,13 +142,13 @@ pub(crate) fn loop_break(body: &Statement) -> bool {
     false
 }
 
-// A join write removes analyzer dependencies on earlier branch definitions.
+// Only assignments escape a branch; declarations belong to its lexical scope.
 pub(crate) fn writes(statement: &Statement) -> Vec<usize> {
     let mut pending = vec![statement];
     let mut ids = std::collections::BTreeSet::new();
     while let Some(s) = pending.pop() {
         match s.form() {
-            Statement::Declare(id, _) | Statement::Assign(id, _, _) => {
+            Statement::Assign(id, _, _) => {
                 ids.insert(*id);
             }
             Statement::Block(body) => pending.extend(body),
@@ -170,4 +170,64 @@ pub(crate) fn writes(statement: &Statement) -> Vec<usize> {
         }
     }
     ids.into_iter().collect()
+}
+
+// Read identities prove liveness when a pending join reaches the next statement.
+pub(crate) fn reads(statement: &Statement) -> std::collections::BTreeSet<usize> {
+    let mut statements = vec![statement];
+    let mut expressions = vec![];
+    let mut ids = std::collections::BTreeSet::new();
+    while let Some(s) = statements.pop() {
+        match s.form() {
+            Statement::Declare(_, e) | Statement::Eval(e) => expressions.push(e),
+            Statement::Assign(id, op, e) => {
+                if op.is_some() {
+                    ids.insert(*id);
+                }
+                expressions.push(e);
+            }
+            Statement::Block(b) => statements.extend(b),
+            Statement::If(e, a, b) => {
+                expressions.push(e);
+                statements.push(a);
+                statements.extend(b.iter().map(|s| s.as_ref()));
+            }
+            Statement::While(e, b) => {
+                expressions.push(e);
+                statements.push(b);
+            }
+            Statement::For(init, test, update, body, _) => {
+                statements.extend(init);
+                expressions.extend(test);
+                statements.extend(update.iter().map(|s| s.as_ref()));
+                statements.push(body);
+            }
+            Statement::Return(Some(e)) => expressions.push(e),
+            _ => {}
+        }
+    }
+    while let Some(e) = expressions.pop() {
+        match &e.kind {
+            ExprKind::Read(id) => {
+                ids.insert(*id);
+            }
+            ExprKind::Unary(_, a) => expressions.push(a),
+            ExprKind::Binary(_, a, b) | ExprKind::Logical(_, a, b) => {
+                expressions.push(a);
+                expressions.push(b);
+            }
+            ExprKind::Conditional(t, a, b) => {
+                expressions.push(t);
+                expressions.push(a);
+                expressions.push(b);
+            }
+            ExprKind::Call(c, args) => {
+                expressions.push(c);
+                expressions.extend(args);
+            }
+            ExprKind::Template(parts) => expressions.extend(parts),
+            _ => {}
+        }
+    }
+    ids
 }

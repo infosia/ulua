@@ -48,3 +48,8 @@ pub fn start() -> usize {
 pub fn peak(baseline: usize) -> usize {
     PEAK.load(Ordering::Relaxed).saturating_sub(baseline)
 }
+
+/// Live Rust bytes above the baseline, for the native heap sampler.
+pub fn current(baseline: usize) -> usize {
+    CURRENT.load(Ordering::Relaxed).saturating_sub(baseline)
+}

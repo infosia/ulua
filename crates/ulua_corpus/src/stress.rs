@@ -2,11 +2,33 @@
 use std::path::Path;
 use ulua_compiler::{Limits, SOURCE_CEILING};
 
-pub(crate) const FORMS: &[&str] = &["and", "or", "conditional", "if", "while", "for", "compound"];
+#[path = "../../ulua/src/s5_inputs.rs"]
+mod s5;
+pub(crate) const FORMS: &[&str] = &[
+    "and",
+    "or",
+    "conditional",
+    "if",
+    "while",
+    "nested-bindings",
+    "nested-writes",
+    "function-bindings",
+    "module-bindings",
+    "short-functions",
+    "default-calls",
+];
 
 pub(crate) fn source(form: &str) -> Result<String, String> {
-    if form == "for" {
-        return Ok(for_source());
+    if matches!(
+        form,
+        "nested-bindings"
+            | "nested-writes"
+            | "function-bindings"
+            | "module-bindings"
+            | "short-functions"
+            | "default-calls"
+    ) {
+        return Ok(s5::source(form, SOURCE_CEILING as usize));
     }
     let (prefix, unit, suffix) = match form {
         "and" => ("export function main():void {let b=true;", "b=b&&b;", "}"),
@@ -26,33 +48,12 @@ pub(crate) fn source(form: &str) -> Result<String, String> {
             "while(b){x=x+1;break;}",
             "}",
         ),
-        "compound" => ("export function main():void {let x=0;", "x+=1;", "}"),
         _ => return Err(format!("Unknown stress form: {form}")),
     };
     let count = (SOURCE_CEILING as usize - prefix.len() - suffix.len()) / unit.len();
     let mut source = format!("{prefix}{}{suffix}", unit.repeat(count));
     source.push_str(&" ".repeat(SOURCE_CEILING as usize - source.len()));
     Ok(source)
-}
-
-fn for_source() -> String {
-    // Keep the P1 sequential-loop budget. Repeat 64 loop forms with dense bodies.
-    let count = 64;
-    let prefix = "export function main():void {let b=true;let x=0;";
-    let open = "for(;b;){";
-    let close = "break;}";
-    let unit = "x=x+1;";
-    let room = SOURCE_CEILING as usize - prefix.len() - 1 - count * (open.len() + close.len());
-    let writes = room / unit.len();
-    let mut source = prefix.to_owned();
-    for i in 0..count {
-        source.push_str(open);
-        source.push_str(&unit.repeat(writes / count + usize::from(i < writes % count)));
-        source.push_str(close);
-    }
-    source.push('}');
-    source.push_str(&" ".repeat(SOURCE_CEILING as usize - source.len()));
-    source
 }
 
 pub(crate) fn emit(directory: &Path) -> Result<(), String> {

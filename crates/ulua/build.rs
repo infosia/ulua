@@ -1,4 +1,4 @@
-//! Build the pinned Luau sources, the protected shim, and the C layout probe.
+//! Build the pinned Luau sources, the protected shim, and a separate archive for native tests.
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -73,7 +73,7 @@ fn run() -> Result<(), String> {
     native.files(files(&root.join("native/shim"))?);
     if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
         native.define("ULUA_MEASUREMENTS", None);
-        native.file(root.join("native/probes/s3.cpp"));
+
         println!(
             "cargo:rerun-if-changed={}",
             root.join("native/probes").display()
@@ -100,10 +100,28 @@ fn run() -> Result<(), String> {
         root.join("native/layout.c").display()
     );
     cc::Build::new()
+        .cargo_metadata(false)
         .include(root.join("include"))
         .file(root.join("native/layout.c"))
-        .try_compile("ulua_layout")
+        .try_compile("ulua_test_layout")
         .map_err(|e| e.to_string())?;
+    let mut probes = configure();
+    probes
+        .cargo_metadata(false)
+        .file(root.join("native/probes/allocator.cpp"))
+        .file(root.join("native/probes/stack_shrink.cpp"));
+    if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
+        probes
+            .define("ULUA_MEASUREMENTS", None)
+            .file(root.join("native/probes/s3.cpp"));
+    }
+    probes
+        .try_compile("ulua_test_native")
+        .map_err(|e| e.to_string())?;
+    println!(
+        "cargo:rerun-if-changed={}",
+        root.join("native/probes").display()
+    );
     Ok(())
 }
 fn main() {

@@ -86,6 +86,9 @@ impl Script {
                 code(&d),
                 message(&d)
             );
+            if code(&d) == "limit:steps" {
+                assert_eq!(message(&d), "Step limit exceeded");
+            }
             (status, code(&d))
         }
     }
@@ -108,6 +111,9 @@ impl Script {
                 code(&d),
                 message(&d)
             );
+            if code(&d) == "limit:steps" {
+                assert_eq!(message(&d), "Step limit exceeded");
+            }
             (status, code(&d), value)
         }
     }

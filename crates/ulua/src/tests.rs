@@ -345,6 +345,12 @@ fn instance_new_limits_and_context_ownership() {
             assert_eq!(status, ULUA_FAILED);
         }
         assert_eq!(code(&d), "limit:steps");
+        assert_eq!(
+            std::ffi::CStr::from_ptr(d.message.as_ptr())
+                .to_str()
+                .unwrap(),
+            "Step limit exceeded"
+        );
     }
 }
 #[test]
@@ -475,8 +481,9 @@ fn internal_poison_and_free() {
 #[test]
 fn header_layout() {
     // SAFETY: The linked C probe has this signature and returns only static layout values.
+    #[link(name = "ulua_test_layout", kind = "static")]
     unsafe extern "C" {
-        fn ulua_layout_probe(index: usize) -> usize;
+        fn ulua_internal_layout_probe(index: usize) -> usize;
     }
     let expected = [
         size_of::<Diagnostic>(),
@@ -522,11 +529,12 @@ fn header_layout() {
         ULUA_TYPE_BOOLEAN as usize,
         ULUA_TYPE_STRING as usize,
         ULUA_MIN_RUN_STACK,
+        ALLOCATION_STEP_BYTES as usize,
     ];
     for (index, expected) in expected.into_iter().enumerate() {
         // SAFETY: The probe accepts every index, and the C compiler derives these values from the public header.
         assert_eq!(
-            unsafe { ulua_layout_probe(index) },
+            unsafe { ulua_internal_layout_probe(index) },
             expected,
             "layout index {index}"
         );

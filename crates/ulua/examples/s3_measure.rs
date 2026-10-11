@@ -1,7 +1,7 @@
 //! Reproduce S3 measurements with the pinned native compiler. This is not a gate.
 //! Set LUAU_SOURCE_DIR and CARGO_NET_OFFLINE before each command.
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
-//! MODE is stack, heap, native, or run. Add --release before -p for Release.
+//! MODE is stack, heap, native, run, or emit (with an output directory). Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
 //! Native template emission is incremental: its probe reports a lower bound,
 //! not an absolute maximum, when the next input still compiles.
@@ -21,20 +21,21 @@ use ulua::*;
 use ulua_compiler::{COMPILER_STACK_BYTES, Limits, SOURCE_CEILING};
 
 // SAFETY: These declarations match the opt-in native probe and private shim.
+#[link(name = "ulua_test_native", kind = "static")]
 unsafe extern "C" {
-    fn ulua_probe_stack_start();
-    fn ulua_probe_stack_end() -> usize;
-    fn ulua_probe_heap() -> usize;
-    fn ulua_probe_ccalls(count: i32) -> i32;
-    fn ulua_probe_ccalls_protected(count: i32) -> i32;
-    fn ulua_shim_compile(
+    fn ulua_internal_probe_stack_start();
+    fn ulua_internal_probe_stack_end() -> usize;
+    fn ulua_internal_probe_heap() -> usize;
+    fn ulua_internal_probe_ccalls(count: i32) -> i32;
+    fn ulua_internal_probe_ccalls_protected(count: i32) -> i32;
+    fn ulua_internal_shim_compile(
         source: *const c_char,
         length: usize,
         out: *mut *mut c_char,
         size: *mut usize,
         error: *mut c_char,
     ) -> i32;
-    fn ulua_shim_bytecode_free(out: *mut c_char);
+    fn ulua_internal_shim_bytecode_free(out: *mut c_char);
 }
 fn native(source: &str) -> Result<(), String> {
     let mut out = ptr::null_mut();
@@ -42,14 +43,14 @@ fn native(source: &str) -> Result<(), String> {
     let mut error = [0; 256];
     // SAFETY: Source and outputs cover their lengths. The shim catches every native compiler error.
     unsafe {
-        let status = ulua_shim_compile(
+        let status = ulua_internal_shim_compile(
             source.as_ptr().cast(),
             source.len(),
             &mut out,
             &mut size,
             error.as_mut_ptr(),
         );
-        ulua_shim_bytecode_free(out);
+        ulua_internal_shim_bytecode_free(out);
         if status == 0 {
             Ok(())
         } else {
@@ -80,9 +81,9 @@ fn stages(form: &str, n: usize) {
             // SAFETY: The probe touches only unused stack on this dedicated worker thread.
             unsafe {
                 if before {
-                    ulua_probe_stack_start();
+                    ulua_internal_probe_stack_start();
                 } else {
-                    values.push((stage, ulua_probe_stack_end()));
+                    values.push((stage, ulua_internal_probe_stack_end()));
                 }
             }
         });
@@ -90,11 +91,11 @@ fn stages(form: &str, n: usize) {
         Ok(c) => {
             // SAFETY: The probe uses this dedicated worker's unused stack only.
             unsafe {
-                ulua_probe_stack_start();
+                ulua_internal_probe_stack_start();
             }
             let result = native(&c.luau);
             // SAFETY: The matching start call initializes this thread's probe state.
-            values.push(("luau", unsafe { ulua_probe_stack_end() }));
+            values.push(("luau", unsafe { ulua_internal_probe_stack_end() }));
             result.map_or_else(|e| e, |_| "ok".to_owned())
         }
         Err(e) => e.code.to_owned(),
@@ -107,18 +108,28 @@ fn stages(form: &str, n: usize) {
 fn heap(source: String, label: &str) {
     static STOP: AtomicBool = AtomicBool::new(false);
     static PEAK: AtomicUsize = AtomicUsize::new(0);
+    static NATIVE_PEAK: AtomicUsize = AtomicUsize::new(0);
     // SAFETY: The platform malloc statistics function takes no arguments or ownership.
-    let baseline = unsafe { ulua_probe_heap() };
+    let baseline = unsafe { ulua_internal_probe_heap() };
     PEAK.store(baseline, Ordering::Relaxed);
     STOP.store(false, Ordering::Relaxed);
-    let sampler = std::thread::spawn(|| {
+    NATIVE_PEAK.store(0, Ordering::Relaxed);
+    let rust_baseline = s3_alloc::start();
+    let sampler = std::thread::spawn(move || {
         while !STOP.load(Ordering::Relaxed) {
             // SAFETY: malloc_zone_statistics supports concurrent allocator clients.
-            PEAK.fetch_max(unsafe { ulua_probe_heap() }, Ordering::Relaxed);
+            let total = unsafe { ulua_internal_probe_heap() };
+            PEAK.fetch_max(total, Ordering::Relaxed);
+            // The sampled difference includes system allocator rounding of Rust requests.
+            NATIVE_PEAK.fetch_max(
+                total
+                    .saturating_sub(baseline)
+                    .saturating_sub(s3_alloc::current(rust_baseline)),
+                Ordering::Relaxed,
+            );
             std::thread::sleep(Duration::from_micros(100));
         }
     });
-    let rust_baseline = s3_alloc::start();
     let start = Instant::now();
     let compiled = ulua_compiler::compile(source.as_bytes(), Limits::default());
     let result = compiled
@@ -126,15 +137,16 @@ fn heap(source: String, label: &str) {
         .map_err(|e| e.code.to_owned())
         .and_then(|c| native(&c.luau));
     // SAFETY: The statistics query has no preconditions.
-    PEAK.fetch_max(unsafe { ulua_probe_heap() }, Ordering::Relaxed);
+    PEAK.fetch_max(unsafe { ulua_internal_probe_heap() }, Ordering::Relaxed);
     STOP.store(true, Ordering::Relaxed);
     sampler.join().unwrap();
     println!(
-        "heap {label} bytes={} peak_delta={} peak_total={} rust_peak={} elapsed={:?} status={result:?}",
+        "heap {label} bytes={} peak_delta={} peak_total={} rust_peak={} native_sample_peak={} elapsed={:?} status={result:?}",
         source.len(),
         PEAK.load(Ordering::Relaxed).saturating_sub(baseline),
         PEAK.load(Ordering::Relaxed),
         s3_alloc::peak(rust_baseline),
+        NATIVE_PEAK.load(Ordering::Relaxed),
         start.elapsed()
     );
 }
@@ -149,17 +161,17 @@ fn run_stack() {
     for n in [197, 198, 199, 200] {
         // SAFETY: The native probe protects every recursive C call and uses no host objects.
         unsafe {
-            ulua_probe_stack_start();
-            let status = ulua_probe_ccalls(n);
+            ulua_internal_probe_stack_start();
+            let status = ulua_internal_probe_ccalls(n);
             println!(
                 "ccalls n={n} stack={} status={status}",
-                ulua_probe_stack_end()
+                ulua_internal_probe_stack_end()
             );
-            ulua_probe_stack_start();
-            let status = ulua_probe_ccalls_protected(n);
+            ulua_internal_probe_stack_start();
+            let status = ulua_internal_probe_ccalls_protected(n);
             println!(
                 "protected ccalls n={n} stack={} status={status}",
-                ulua_probe_stack_end()
+                ulua_internal_probe_stack_end()
             );
         }
     }
@@ -198,11 +210,11 @@ fn run_stack() {
             arg.r#type = ULUA_TYPE_NUMBER;
             arg.number = depth as f64;
             let mut result = Value::default();
-            ulua_probe_stack_start();
+            ulua_internal_probe_stack_start();
             let status = ulua_call(instance, 0, &arg, 1, &mut result, &mut d);
             println!(
                 "run depth={depth} stack={} status={status} code={}",
-                ulua_probe_stack_end(),
+                ulua_internal_probe_stack_end(),
                 CStr::from_ptr(d.code.as_ptr()).to_string_lossy()
             );
         }
@@ -211,7 +223,7 @@ fn run_stack() {
 }
 fn main() {
     let mode = std::env::args().nth(1).unwrap_or_else(|| "stack".into());
-    if !cfg!(target_os = "macos") && mode != "native" {
+    if !cfg!(target_os = "macos") && !matches!(mode.as_str(), "native" | "emit") {
         eprintln!("The stack watermark and native heap sampler need macOS.");
         std::process::exit(2);
     }
@@ -246,20 +258,33 @@ fn main() {
                 }
             }
             "heap" => {
-                for label in [
-                    "bindings",
-                    "dense",
-                    "functions",
-                    "parameter-functions",
-                    "expressions",
-                    "templates",
-                    "unary",
-                    "flat",
-                ] {
-                    heap(
-                        inputs::source_ceiling(label, SOURCE_CEILING as usize),
-                        label,
-                    );
+                for label in inputs::SOURCE_SHAPES {
+                    let source = if matches!(*label, "forward" | "backward" | "star") {
+                        inputs::call_graph(label, SOURCE_CEILING as usize)
+                    } else {
+                        inputs::source_ceiling(label, SOURCE_CEILING as usize)
+                    };
+                    heap(source, label);
+                }
+            }
+            "emit" => {
+                let directory = std::env::args()
+                    .nth(2)
+                    .expect("emit requires an output directory");
+                std::fs::create_dir_all(&directory).unwrap();
+                for shape in inputs::SOURCE_SHAPES {
+                    let source = if matches!(*shape, "forward" | "backward" | "star") {
+                        inputs::call_graph(shape, SOURCE_CEILING as usize)
+                    } else {
+                        inputs::source_ceiling(shape, SOURCE_CEILING as usize)
+                    };
+                    let compiled =
+                        ulua_compiler::compile(source.as_bytes(), Limits::default()).unwrap();
+                    std::fs::write(
+                        std::path::Path::new(&directory).join(format!("{shape}.luau")),
+                        compiled.luau,
+                    )
+                    .unwrap();
                 }
             }
             "native" => {

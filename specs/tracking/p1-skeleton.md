@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 3, `abi.md` Rev 2,
+Status: open. Contracts: `pipeline.md` Rev 4, `abi.md` Rev 2,
 `corpus.md` Rev 1, `surface.md` Rev 5, `collisions.md` Rev 12.
 
 ## Scope
@@ -148,6 +148,49 @@ are exact.
 - The 513-part template runs within the default memory. The
   `limit:memory` failure of the review did not reproduce on the
   binary before the fix.
+
+## S5 record
+
+- Codex task. Tests: 54 in the default build, 56 with all features.
+  `gate.sh full` passes: `cargo-test` 18 s (the growth test costs
+  11.0 s in Debug), `luau-witnesses` 22 s (11 stress modules, 18.6 s
+  of `luau-analyze` in one process).
+- Spill candidates at 65,536 bytes (5,549 bindings in a function and in
+  a module chunk; 2,989 short empty functions). One constructor fails
+  all three ("Code is too complex"); a type alias with a constructor
+  fails all three; one table with `{} :: any` passes. Chosen: tables of
+  at most 128 fields with `{} :: any`: 0.354 / 0.077 / 0.095 s. A
+  denser fixture of 11,510 bindings passes in a function and in a
+  module (90 tables). One table of 20,000 fields passes in 6.7 s.
+- Join candidates. Input: 3,609 outer bindings written inside 40
+  nested `if`. An immediate live join at each level gives 144,360 join
+  writes, 12,347,415 bytes (ratio 188), analyzer 4.4 s. The deferred
+  join gives 1,760,664 bytes (ratio 26.9), analyzer 0.4 s. The review
+  input (41 nested `if` around 5,000 declarations) goes from
+  35,107,611 to 648,288 bytes. A join emitted inside the next branch,
+  and no join at all, each make the S4 `if` stress module run past
+  40 s.
+- Function types in write assertions: 32 default parameters, repeated
+  calls: the expanded signature gives 6,667,065 bytes and an analyzer
+  failure; a type alias gives 1,454,408 bytes and exit 0.
+- `OUTPUT_FACTOR` = 64, prelude 843 bytes. Largest measured ratio over
+  17 shapes at the ceiling: 41.7 (`flat`). Growth ratios 4n/n: 3.45 to
+  3.95.
+- Compiler heap at 65,536 bytes, Release, 17 shapes: total peak
+  51,883,760 B (`flat`); Rust requested peak 40,619,549 B
+  (`default-calls`). Native values come from a 100 µs sampler.
+- Stress admission: each of the 11 kept shapes fails without its form.
+  `&&`, `||`, `?:`, `if`, `while` without typed writes: "Internal
+  recursion counter limit exceeded". Function, module, nested, nested
+  writes, and short-function bindings with one spill constructor, and
+  default calls with expanded signatures: "Code is too complex to
+  typecheck". `for` and `+=` passed without the form and left the set.
+- Allocator: an equal or smaller reallocation is not charged and does
+  not fail. A native fixture runs `luaD_pcall -> restore_stack_limit
+  -> luaD_reallocCI` with the steps used up; the shrink succeeds.
+- Exported `ulua_` symbols of the static library: the 14 functions of
+  abi.md §7 and 5 `ulua_internal_shim_*`. The layout probe is in a
+  test-only archive.
 
 ## Phase Review round 1
 

@@ -30,6 +30,13 @@ impl Emitter<'_> {
         if let S::Located(offset, _) = s {
             self.offset = *offset as usize;
         }
+        if !self.joins.is_empty() {
+            // Hoist a demanded join before control flow. A reset inside one arm
+            // does not cut the analyzer dependency of the other arm.
+            for id in ir::reads(s) {
+                self.read_binding(id)?;
+            }
+        }
         let depth = self.guard(depth)?;
         match s.form() {
             S::Located(_, _) => {
@@ -47,7 +54,8 @@ impl Emitter<'_> {
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing assignment type"))?;
                     let v = self.slot(ty)?;
-                    self.write_slot(v, self.location(*id)?);
+                    let value = self.read_binding(*id)?;
+                    self.write_slot(v, value);
                     Some(v)
                 } else {
                     None
@@ -76,6 +84,7 @@ impl Emitter<'_> {
                 self.line("end");
             }
             S::If(e, a, b) => {
+                let prior = self.joins.clone();
                 let t = self.expression(e, depth)?;
                 self.line(format!("if {} then", self.temp(t)));
                 self.release(t);
@@ -89,11 +98,11 @@ impl Emitter<'_> {
                     self.indent -= 1;
                 }
                 self.line("end");
-                for id in ir::writes(s) {
-                    self.write_binding(id, self.location(id)?)?;
-                }
+                self.joins.extend(prior);
+                self.joins.extend(ir::writes(s));
             }
             S::While(e, b) => {
+                let prior = self.joins.clone();
                 self.line("while true do");
                 self.indent += 1;
                 if !matches!(e.kind, ir::ExprKind::Boolean(true)) {
@@ -106,11 +115,11 @@ impl Emitter<'_> {
                 self.loops.pop();
                 self.indent -= 1;
                 self.line("end");
-                for id in ir::writes(s) {
-                    self.write_binding(id, self.location(id)?)?;
-                }
+                self.joins.extend(prior);
+                self.joins.extend(ir::writes(s));
             }
             S::For(init, test, update, body, ids) => {
+                let prior = self.joins.clone();
                 self.statements(init, depth)?;
                 let tail = self.generated("boolean", "true")?;
                 let mut copies = vec![];
@@ -120,12 +129,12 @@ impl Emitter<'_> {
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    let local = self.generated(&ty.luau(), initial(ty))?;
+                    let local = self.generated(&self.function_types.luau(ty), initial(ty))?;
                     if let Some(generated) = self.generated.last_mut() {
                         generated.3 = false;
                     }
                     let head = self.location(*id)?;
-                    copies.push((head, local.clone(), ty.luau()));
+                    copies.push((head, local.clone(), self.function_types.luau(ty)));
                     previous.push((*id, self.copies.insert(*id, local)));
                 }
                 // The condition and update use head bindings; only the body uses copies.
@@ -150,7 +159,10 @@ impl Emitter<'_> {
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    self.line(format!("local {local}: {0} = ({head}) :: {0}", ty.luau()));
+                    self.line(format!(
+                        "local {local}: {0} = ({head}) :: {0}",
+                        self.function_types.luau(ty)
+                    ));
                 }
                 for (id, (_, local, _)) in ids.iter().zip(&copies) {
                     self.copies.insert(*id, local.clone());
@@ -183,9 +195,8 @@ impl Emitter<'_> {
                 }
                 self.indent -= 1;
                 self.line("end");
-                for id in ir::writes(s) {
-                    self.write_binding(id, self.location(id)?)?;
-                }
+                self.joins.extend(prior);
+                self.joins.extend(ir::writes(s));
             }
             S::Break => {
                 if let Some(Loop {

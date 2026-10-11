@@ -15,7 +15,10 @@ impl Emitter<'_> {
             E::Number(n) => self.write_slot(dest, number(*n)),
             E::Boolean(b) => self.write_slot(dest, b.to_string()),
             E::String(s) => self.write_slot(dest, quote(s)),
-            E::Read(id) => self.write_slot(dest, self.location(*id)?),
+            E::Read(id) => {
+                let value = self.read_binding(*id)?;
+                self.write_slot(dest, value);
+            }
             E::Builtin(name) => self.write_slot(dest, name),
             E::Unary(op, a) => {
                 let a = self.expression(a, depth)?;
@@ -144,13 +147,13 @@ impl Emitter<'_> {
         }
         Ok(dest)
     }
-    fn pure(&self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {
+    fn pure(&mut self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {
         let depth = self.guard(depth)?;
         Ok(match &expr.kind {
             E::Number(n) => Some(number(*n)),
             E::Boolean(b) => Some(b.to_string()),
             E::String(s) => Some(quote(s)),
-            E::Read(id) => Some(self.location(*id)?),
+            E::Read(id) => Some(self.read_binding(*id)?),
             E::Unary(op, a) => self.pure(a, depth)?.map(|a| format!("({op} ({a}))")),
             E::Binary(op, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
                 (Some(a), Some(b)) => Some(self.binary(op, &a, &b)),

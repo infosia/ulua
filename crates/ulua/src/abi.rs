@@ -155,7 +155,7 @@ pub unsafe extern "C" fn ulua_compile(
                         let mut bytecode = ptr::null_mut();
                         let mut size = 0;
                         let mut error = [0; 256];
-                        let status = native::ulua_shim_compile(
+                        let status = native::ulua_internal_shim_compile(
                             compiled.luau.as_ptr().cast(),
                             compiled.luau.len(),
                             &mut bytecode,
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn ulua_instance_new(
             let host = shim_host(&mut callback);
             let mut vm = ptr::null_mut();
             let mut error = [0; 256];
-            let code = native::ulua_shim_new(
+            let code = native::ulua_internal_shim_new(
                 (*module).bytecode.as_ptr().cast(),
                 (*module).bytecode.len(),
                 &host,
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn ulua_instance_new(
                 error.as_mut_ptr(),
             );
             if callback.panicked.get() {
-                native::ulua_shim_free(vm);
+                native::ulua_internal_shim_free(vm);
                 write_run_diagnostic(diagnostic, "internal", "Output callback panicked");
                 return ULUA_INTERNAL;
             }
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn ulua_call(
             };
             let mut error = [0; 256];
             let mut value = Value::default();
-            let code = native::ulua_shim_call(
+            let code = native::ulua_internal_shim_call(
                 (*instance).vm,
                 name.as_ptr(),
                 arguments,
@@ -589,7 +589,7 @@ impl Drop for Bytecode {
     fn drop(&mut self) {
         // SAFETY: The shim allocates this bytecode and this owner frees it exactly once.
         unsafe {
-            native::ulua_shim_bytecode_free(self.0);
+            native::ulua_internal_shim_bytecode_free(self.0);
         }
     }
 }

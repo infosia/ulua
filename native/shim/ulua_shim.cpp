@@ -1,6 +1,6 @@
 // Every raising VM call stays inside a native protected call.
 // Protected callbacks contain only trivial objects: longjmp skips no destructor.
-#include "ulua_shim.h"
+#include "allocator.h"
 #include "lua.h"
 #include "lualib.h"
 #include "luacode.h"
@@ -8,23 +8,6 @@
 #include <cstring>
 #include <limits>
 
-struct ulua_vm {
-    lua_State* state;
-    lua_State* thread;
-    size_t budget;
-    size_t used;
-    uint64_t max_steps;
-    uint64_t steps;
-    int flag;
-    int exports;
-    bool charging;
-#ifdef ULUA_MEASUREMENTS
-    uint64_t allocation_bytes;
-    uint64_t allocation_steps;
-    uint64_t interrupts;
-#endif
-    ulua_host host;
-};
 static void message_bytes(char* out, const char* text, size_t length) {
     if (!out) return;
     size_t n = length;
@@ -35,32 +18,6 @@ static void message_bytes(char* out, const char* text, size_t length) {
     out[n] = 0;
 }
 static void message(char* out, const char* text) { message_bytes(out, text, std::strlen(text)); }
-static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new_size) {
-    ulua_vm* vm = static_cast<ulua_vm*>(userdata);
-    size_t old = pointer ? old_size : 0;
-    if (!new_size) {
-        std::free(pointer);
-        vm->used -= old;
-        return nullptr;
-    }
-    if (vm->charging) {
-        const uint64_t charge = new_size / ALLOCATION_STEP_BYTES + (new_size % ALLOCATION_STEP_BYTES != 0);
-        if (vm->steps > vm->max_steps || charge > vm->max_steps - vm->steps) {
-            vm->flag = SHIM_STEPS;
-            return nullptr;
-        }
-        vm->steps += charge;
-#ifdef ULUA_MEASUREMENTS
-        vm->allocation_bytes += new_size;
-        vm->allocation_steps += charge;
-#endif
-    }
-    size_t base = vm->used - old;
-    if (new_size > vm->budget || base > vm->budget - new_size) return nullptr;
-    void* result = std::realloc(pointer, new_size);
-    if (result) vm->used = base + new_size;
-    return result;
-}
 static void interrupt(lua_State* state, int gc) {
     if (gc >= 0) return;
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
@@ -113,6 +70,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     if (status == LUA_ERRMEM || std::strcmp(text, "not enough memory") == 0) code = SHIM_MEMORY;
     else if (std::strstr(text, "stack overflow")) code = SHIM_STACK;
     if (vm->flag) code = vm->flag;
+    if (code == SHIM_STEPS) message(error, "Step limit exceeded");
     vm->flag = 0;
     lua_settop(state, 0);
     // Collection also has a native protection boundary.
@@ -166,7 +124,7 @@ static int call(lua_State* state) {
     *args->result = value;
     return 0;
 }
-extern "C" int ulua_shim_compile(const char* source, size_t length, char** out, size_t* out_length, char* error) noexcept {
+extern "C" int ulua_internal_shim_compile(const char* source, size_t length, char** out, size_t* out_length, char* error) noexcept {
     char* bytecode = nullptr;
     try {
         size_t size = 0;
@@ -190,13 +148,13 @@ extern "C" int ulua_shim_compile(const char* source, size_t length, char** out, 
         return SHIM_INTERNAL;
     }
 }
-extern "C" void ulua_shim_bytecode_free(char* bytecode) noexcept { std::free(bytecode); }
-extern "C" void ulua_shim_free(ulua_vm* vm) noexcept {
+extern "C" void ulua_internal_shim_bytecode_free(char* bytecode) noexcept { std::free(bytecode); }
+extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     if (!vm) return;
     try { if (vm->state) lua_close(vm->state); } catch (...) { }
     std::free(vm);
 }
-extern "C" int ulua_shim_new(const char* bytecode, size_t length, const ulua_host* host,
+extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
     ulua_vm* vm = nullptr;
     try {
@@ -210,7 +168,8 @@ extern "C" int ulua_shim_new(const char* bytecode, size_t length, const ulua_hos
         if (!vm->state) {
             message(error, "Memory limit exceeded at VM creation");
             int code = vm->flag == SHIM_STEPS ? SHIM_STEPS : SHIM_MEMORY;
-            ulua_shim_free(vm);
+            if (code == SHIM_STEPS) message(error, "Step limit exceeded");
+            ulua_internal_shim_free(vm);
             return code;
         }
         lua_callbacks(vm->state)->userdata = vm;
@@ -226,17 +185,17 @@ extern "C" int ulua_shim_new(const char* bytecode, size_t length, const ulua_hos
             vm->charging = true;
             code = finish(vm, vm->thread, lua_cpcall(vm->thread, load, &args), error);
         }
-        if (code) { ulua_shim_free(vm); return code; }
+        if (code) { ulua_internal_shim_free(vm); return code; }
         lua_settop(vm->thread, 0);
         *out = vm;
         return SHIM_OK;
     } catch (...) {
-        ulua_shim_free(vm);
+        ulua_internal_shim_free(vm);
         message(error, "VM creation raised a C++ exception");
         return SHIM_INTERNAL;
     }
 }
-extern "C" int ulua_shim_call(ulua_vm* vm, const char* name, const ulua_value* arguments,
+extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua_value* arguments,
     size_t count, uint32_t result_type, ulua_value* result, char* error) noexcept {
     try {
         vm->steps = 0;
@@ -256,22 +215,3 @@ extern "C" int ulua_shim_call(ulua_vm* vm, const char* name, const ulua_value* a
         return SHIM_INTERNAL;
     }
 }
-
-#ifdef ULUA_MEASUREMENTS
-// These probes exist only in the opt-in measurement build.
-extern "C" void ulua_probe_run_stats(ulua_vm* vm, uint64_t* bytes, uint64_t* charges, uint64_t* interrupts) noexcept {
-    *bytes = vm->allocation_bytes;
-    *charges = vm->allocation_steps;
-    *interrupts = vm->interrupts;
-}
-extern "C" int ulua_probe_allocation(size_t bytes, uint64_t steps) noexcept {
-    ulua_vm vm = {};
-    vm.budget = SIZE_MAX;
-    vm.max_steps = steps;
-    vm.charging = true;
-    void* value = allocate(&vm, nullptr, 0, bytes);
-    int result = value ? SHIM_OK : vm.flag;
-    allocate(&vm, value, bytes, 0);
-    return result;
-}
-#endif
