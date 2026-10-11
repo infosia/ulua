@@ -1,9 +1,9 @@
 # Semantic collisions — decided rules
 
-Status: Rev 14, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 15, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
-structural operand rule, round 4).
+structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -206,7 +206,11 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
 ## C7. Equality
 
 - `===` and `!==` require operands of the same type.
-- `==` and `!=` are accepted only with a `null` operand (C2).
+- `a == b` has the type rules, the result, and the lowering of
+  `a === b`. `a != b` has those of `a !== b`. With a `null` operand, C2
+  applies. Measured: `tsc` gives TS2367 for `==` between `number`,
+  `string`, and `boolean` in each mixed pair; over 69 same-type pairs
+  `node` gives the same result for `==` and `===`.
 - `===` and `!==` between function values are rejected. The Luau
   compiler reuses a closure that captures no upvalue, so two closures
   that JavaScript keeps distinct can compare equal.
@@ -216,7 +220,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
   types. It accepts only operand pairs where `tsc` cannot give a literal
   type to both. The rules below are restrictive on purpose; a later
   revision opens a form when a program needs it.
-  1. `===` and `!==` do not take `boolean` operands. Write `!`, `&&`,
+  1. `===`, `!==`, `==`, and `!=` do not take `boolean` operands. Write `!`, `&&`,
      `||`, or `?:`.
   2. An operand that is `NaN` (in parentheses or not) is rejected: `tsc`
      gives TS2845.
@@ -236,8 +240,10 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      by an equality. For a condition `g`, *T*(g) is the set of
      references that `g` true can narrow, and *F*(g) is the set for `g`
      false:
-     - `x === e` or `e === x`, where `e` is not wide: *T* = {x};
-     - `x !== e` or `e !== x`, where `e` is not wide: *F* = {x};
+     - `x === e`, `e === x`, `x == e`, or `e == x`, where `e` is not
+       wide: *T* = {x};
+     - `x !== e`, `e !== x`, `x != e`, or `e != x`, where `e` is not
+       wide: *F* = {x};
      - `!g`: *T* and *F* of `g` swap;
      - `a && b`, `a || b`: the union of the sets of `a` and `b`;
      - `(g)`: the sets of `g`.
@@ -253,7 +259,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
   A test from an outer region stays in force in each inner region. An
   assignment does not end a test.
 
-Accept: `a10`, `a14`, `a28`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
+Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
 `r74`.
 
 ## C8. Forms outside the subset

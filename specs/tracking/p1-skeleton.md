@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 1, `surface.md` Rev 6, `collisions.md` Rev 14.
+`corpus.md` Rev 1, `surface.md` Rev 6, `collisions.md` Rev 15.
 
 ## Scope
 
@@ -330,6 +330,13 @@ bindings with literals; `a28` becomes `a28-equality-operands`; `r70`
 and `r71` change messages; `r72` becomes
 `r72-tested-reference-equality`; new `r73`, `r74`, `r75`. The goldens
 of `a10` and `a20` do not change.
+
+C7 Rev 15 (user request under D15): `==` and `!=` follow `===` and
+`!==`. `tsc` 5.9.2: `n == s`, `n == b`, `s == b`, `n != s` give TS2367;
+`n == 3`, `s == "a"`, `b == true`, `n == null` give no error. `node`:
+69 same-type pairs of `0`, `-0`, `1`, `NaN`, `Infinity`, `-Infinity`,
+`0.1`, `""`, `"a"`, `"0"`, `"NaN"`, `true`, `false` give the same
+result for `==` and `===`. `r17` now fails rule 3; new `a29`.
 
 P2 note: rule 3 lists no member read and no object operand. `a21`
 (`other.end === this.end`, `a === b` on objects) needs a P2 revision
