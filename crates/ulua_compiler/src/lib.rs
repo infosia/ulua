@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod bounds;
 mod checker;
 mod depth;
 mod emitter;
@@ -11,12 +12,16 @@ use oxc_allocator::Allocator;
 use oxc_parser::{ParseOptions, Parser};
 use oxc_span::SourceType;
 
+pub use bounds::{
+    ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND, TEMPORARY_BOUND,
+};
+
 /// Source ceiling in bytes.
-pub const SOURCE_CEILING: u64 = 1024 * 1024; // provisional: S3 measures
+pub const SOURCE_CEILING: u64 = 64 * 1024;
 /// AST and parser depth ceiling.
-pub const DEPTH_CEILING: u32 = 128; // provisional: S3 measures
+pub const DEPTH_CEILING: u32 = 48;
 /// Stack size for the complete compiler pipeline.
-pub const COMPILER_STACK_BYTES: usize = 8 * 1024 * 1024; // provisional: S3 measures
+pub const COMPILER_STACK_BYTES: usize = 2 * 1024 * 1024;
 
 /// Host limits for the safe compiler stages.
 #[derive(Clone, Copy, Debug)]
@@ -123,6 +128,79 @@ pub struct Compiled {
 
 /// Parse, bound, check, and emit one module.
 pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
+    compile_observed(source, limits, |_, _| {})
+}
+
+/// Measure each stage with a callback before and after its work.
+/// This entry exists only in measurement builds; it uses the production pipeline.
+#[cfg(feature = "measurements")]
+pub fn measure_compile(
+    source: &[u8],
+    limits: Limits,
+    observer: impl FnMut(&'static str, bool),
+) -> Result<Compiled, Diagnostic> {
+    compile_observed(source, limits, observer)
+}
+
+/// Emit a typed template fixture beyond the checker bound, for native limit measurements only.
+/// The production emitter constructs every line of this fixture.
+#[cfg(feature = "measurements")]
+pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
+    use ir::{Binding, Expr, ExprKind, Function, Module, Statement, Type};
+    let mut parts = Vec::new();
+    for i in 0..=substitutions {
+        parts.push(Expr {
+            ty: Type::String,
+            kind: ExprKind::String(format!("x{i}")),
+        });
+        if i < substitutions {
+            parts.push(Expr {
+                ty: Type::Number,
+                kind: ExprKind::Number(i as f64),
+            });
+        }
+    }
+    emitter::emit(&Module {
+        bindings: vec![
+            Binding {
+                ty: Some(Type::Function(vec![], Box::new(Type::Void), 0)),
+                owner: 0,
+                start: 0,
+                end: 0,
+                mutable: false,
+            },
+            Binding {
+                ty: Some(Type::String),
+                owner: 1,
+                start: 1,
+                end: 1,
+                mutable: false,
+            },
+        ],
+        functions: vec![Function {
+            binding: 0,
+            name: "main".into(),
+            exported: true,
+            parameters: vec![],
+            result: Type::Void,
+            body: vec![Statement::Block(vec![Statement::Declare(
+                1,
+                Expr {
+                    ty: Type::String,
+                    kind: ExprKind::Template(parts),
+                },
+            )])],
+        }],
+        body: vec![],
+        depth: DEPTH_CEILING,
+    })
+}
+
+fn compile_observed(
+    source: &[u8],
+    limits: Limits,
+    mut observer: impl FnMut(&'static str, bool),
+) -> Result<Compiled, Diagnostic> {
     let max_source = limits.max_source_bytes.min(SOURCE_CEILING);
     if source.len() as u64 > max_source {
         return Err(Diagnostic::at(
@@ -136,12 +214,14 @@ pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
         .map_err(|e| Diagnostic::at(source, e.valid_up_to(), "syntax", "Source is not UTF-8"))?;
     let max_depth = limits.max_nesting_depth.min(DEPTH_CEILING);
     let allocator = Allocator::default();
+    observer("parse", true);
     let parsed = Parser::new(&allocator, text, SourceType::ts())
         .with_options(ParseOptions {
             max_nesting_depth: Some(max_depth as usize),
             ..ParseOptions::default()
         })
         .parse();
+    observer("parse", false);
     if let Some(offset) = parsed.depth_exceeded {
         return Err(Diagnostic::at(
             source,
@@ -160,9 +240,15 @@ pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
         ));
     }
     depth::check(&parsed.program, max_depth, source)?;
-    let module = checker::check(&parsed.program, source, max_depth)?;
+    observer("check", true);
+    let module = checker::check(&parsed.program, source, max_depth);
+    observer("check", false);
+    let module = module?;
+    observer("emit", true);
+    let luau = emitter::emit(&module);
+    observer("emit", false);
     Ok(Compiled {
-        luau: emitter::emit(&module)?,
+        luau: luau?,
         exports: module
             .functions
             .iter()
@@ -184,6 +270,16 @@ pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
 mod tests {
     use super::*;
     const HELLO: &[u8] = b"export function main(): void { print(\"hello\"); }";
+    #[cfg(feature = "measurements")]
+    #[test]
+    fn template_fixture_matches_the_checked_form() {
+        let checked = compile(
+            b"export function main():void {const a=`x0${0}x1`;}",
+            Limits::default(),
+        )
+        .unwrap();
+        assert_eq!(measure_template(1).unwrap(), checked.luau);
+    }
     #[test]
     fn compile_a01_and_reject_other_shapes() {
         let result = compile(HELLO, Limits::default()).unwrap();

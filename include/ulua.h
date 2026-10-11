@@ -10,8 +10,8 @@ typedef int32_t ulua_status;
 enum { ULUA_OK=0, ULUA_INVALID_ARGUMENT=1, ULUA_REJECTED=2, ULUA_FAILED=3,
        ULUA_HOST_ERROR=4, ULUA_BUSY=5, ULUA_INTERNAL=6, ULUA_POISONED=7 };
 enum { ULUA_TYPE_VOID=0, ULUA_TYPE_NUMBER=1, ULUA_TYPE_BOOLEAN=2, ULUA_TYPE_STRING=3 };
-/* provisional: S3 measures */
-#define ULUA_MIN_RUN_STACK (4u * 1024u * 1024u)
+/* S3 measured 130,544 bytes with protected calls at the pinned C-call limit. */
+#define ULUA_MIN_RUN_STACK (512u * 1024u)
 typedef struct ulua_context ulua_context;
 typedef struct ulua_module ulua_module;
 typedef struct ulua_instance ulua_instance;

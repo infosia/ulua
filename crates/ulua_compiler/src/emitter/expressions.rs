@@ -8,7 +8,7 @@ impl Emitter<'_> {
             &Type::Boolean
         } else {
             &expr.ty
-        });
+        })?;
         let target = self.temp(dest);
         match &expr.kind {
             E::Number(n) => self.line(format!("{target} = {}", number(*n))),

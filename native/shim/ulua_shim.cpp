@@ -87,13 +87,14 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     const char* text = lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error";
     message(error, text);
     int code = SHIM_INTERNAL;
-    if (status == LUA_ERRMEM) code = SHIM_MEMORY;
+    // A failed error-handler allocation can replace LUA_ERRMEM with LUA_ERRERR.
+    if (status == LUA_ERRMEM || std::strcmp(text, "not enough memory") == 0) code = SHIM_MEMORY;
     else if (std::strstr(text, "stack overflow")) code = SHIM_STACK;
     if (vm->flag) code = vm->flag;
     vm->flag = 0;
     lua_settop(state, 0);
     // Collection also has a native protection boundary.
-    if (status == LUA_ERRMEM) {
+    if (code == SHIM_MEMORY) {
         lua_cpcall(state, collect, nullptr);
         lua_settop(state, 0);
     }

@@ -28,11 +28,13 @@ pub const ULUA_TYPE_BOOLEAN: u32 = 2;
 /// String type tag.
 pub const ULUA_TYPE_STRING: u32 = 3;
 /// Minimum host stack for VM operations.
-pub const ULUA_MIN_RUN_STACK: usize = 4 * 1024 * 1024; // provisional: S3 measures
+pub const ULUA_MIN_RUN_STACK: usize = 512 * 1024;
 /// Default per-instance memory budget.
-pub const DEFAULT_MEMORY_BYTES: u64 = 64 * 1024 * 1024; // provisional: S3 measures
+// The default admits 24 string doublings and the measured Luau call-depth boundary.
+pub const DEFAULT_MEMORY_BYTES: u64 = 64 * 1024 * 1024;
 /// Default interrupt budget for one operation.
-pub const DEFAULT_STEPS: u64 = 1_000_000; // provisional: S3 measures
+// The S3 ABI gate exercises this exact interrupt budget and its next callback.
+pub const DEFAULT_STEPS: u64 = 1_000_000;
 
 /// Compiler limits descriptor.
 #[repr(C)]

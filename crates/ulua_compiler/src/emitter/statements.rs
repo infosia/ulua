@@ -41,7 +41,7 @@ impl Emitter<'_> {
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing assignment type"))?;
-                    let v = self.slot(ty);
+                    let v = self.slot(ty)?;
                     self.line(format!("{} = {}", self.temp(v), self.location(*id)?));
                     Some(v)
                 } else {
@@ -101,7 +101,7 @@ impl Emitter<'_> {
             }
             S::For(init, test, update, body, ids) => {
                 self.statements(init, depth)?;
-                let tail = self.generated("boolean", "true");
+                let tail = self.generated("boolean", "true")?;
                 let mut copies = vec![];
                 let mut previous = vec![];
                 for id in ids {
@@ -109,7 +109,7 @@ impl Emitter<'_> {
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    let local = self.generated(&ty.luau(), initial(ty));
+                    let local = self.generated(&ty.luau(), initial(ty))?;
                     if let Some(generated) = self.generated.last_mut() {
                         generated.3 = false;
                     }

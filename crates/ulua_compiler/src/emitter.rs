@@ -2,13 +2,11 @@
 mod expressions;
 mod statements;
 use crate::{
-    Diagnostic,
+    Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,
     ir::{self, Type},
 };
 use std::{collections::HashMap, fmt::Write};
 
-/// Provisional local budget. S3 measures this value.
-pub(crate) const LOCAL_BUDGET: usize = 160;
 const LIBRARIES: &str = "local __ulua_print = print\nlocal __ulua_fmod = math.fmod\nlocal __ulua_tostring = tostring\nlocal __ulua_gsub = string.gsub\nlocal __ulua_huge = math.huge\nlocal function __ulua_format(__ulua_n: number): string\n    if __ulua_n ~= __ulua_n then return \"NaN\" end\n    if __ulua_n == __ulua_huge then return \"Infinity\" end\n    if __ulua_n == -__ulua_huge then return \"-Infinity\" end\n    if __ulua_n == 0 then return \"0\" end\n    local __ulua_s = __ulua_gsub(__ulua_tostring(__ulua_n), \"e([+-])0*(%d)\", \"e%1%2\")\n    return __ulua_s\nend\n";
 
 pub(crate) fn quote(value: &str) -> String {
@@ -97,18 +95,25 @@ impl<'a> Emitter<'a> {
             .cloned()
             .ok_or_else(|| self.limit("C11", "Missing checked binding"))
     }
-    fn slot(&mut self, ty: &Type) -> usize {
+    fn slot(&mut self, ty: &Type) -> Result<usize, Diagnostic> {
         if let Some(i) = self.slots.iter().position(|s| !s.busy && s.ty == *ty) {
             self.slots[i].busy = true;
-            i
+            Ok(i)
         } else {
+            self.reserve_temporary()?;
             let i = self.slots.len();
             self.slots.push(Slot {
                 ty: ty.clone(),
                 busy: true,
             });
-            i
+            Ok(i)
         }
+    }
+    fn reserve_temporary(&self) -> Result<(), Diagnostic> {
+        if self.slots.len() + self.generated.len() >= TEMPORARY_BOUND {
+            return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
+        }
+        Ok(())
     }
     fn temp(&self, i: usize) -> String {
         format!("__ulua_t{}_{}", self.owner, i)
@@ -118,19 +123,17 @@ impl<'a> Emitter<'a> {
             s.busy = false;
         }
     }
-    fn generated(&mut self, ty: &str, value: &str) -> String {
+    fn generated(&mut self, ty: &str, value: &str) -> Result<String, Diagnostic> {
+        self.reserve_temporary()?;
         let name = format!("__ulua_g{}_{}", self.owner, self.generated.len());
         self.generated
             .push((name.clone(), ty.into(), value.into(), true));
-        name
+        Ok(name)
     }
     fn plan(&mut self, parameter_ids: &[usize], overhead: usize) -> Result<String, Diagnostic> {
         let fixed = parameter_ids.len() + self.slots.len() + self.generated.len() + overhead;
-        if fixed >= LOCAL_BUDGET {
-            return Err(self.limit(
-                "limit:locals",
-                "Provisional generated local budget exceeded",
-            ));
+        if self.slots.len() + self.generated.len() + overhead > TEMPORARY_BOUND {
+            return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
         }
         let mut ids: Vec<_> = self
             .module

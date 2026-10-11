@@ -160,6 +160,13 @@ impl Checker<'_> {
                 )
             }
             Expression::CallExpression(call) => {
+                if call.arguments.len() > crate::ARGUMENT_BOUND {
+                    return Err(self.error(
+                        call.span,
+                        "limit:arguments",
+                        "Argument limit exceeded",
+                    ));
+                }
                 if call.optional || call.type_arguments.is_some() {
                     return Err(self.unsupported(call.span));
                 }
@@ -228,6 +235,13 @@ impl Checker<'_> {
                 (*result.clone(), ExprKind::Call(Box::new(callee), args))
             }
             Expression::TemplateLiteral(t) => {
+                if t.quasis.len() + t.expressions.len() > crate::TEMPLATE_PART_BOUND {
+                    return Err(self.error(
+                        t.span,
+                        "limit:template-parts",
+                        "Template part limit exceeded",
+                    ));
+                }
                 let mut parts = vec![];
                 for (i, q) in t.quasis.iter().enumerate() {
                     if q.lone_surrogates {

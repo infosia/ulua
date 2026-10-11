@@ -71,6 +71,13 @@ fn run() -> Result<(), String> {
         native.files(files(&source.join(dir))?);
     }
     native.files(files(&root.join("native/shim"))?);
+    if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
+        native.file(root.join("native/probes/s3.cpp"));
+        println!(
+            "cargo:rerun-if-changed={}",
+            root.join("native/probes").display()
+        );
+    }
     println!(
         "cargo:rerun-if-changed={}",
         root.join("native/shim").display()

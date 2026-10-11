@@ -5,6 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+measurements = ["ulua_compiler/measurements"]
+
+[[example]]
+name = "s3_measure"
+required-features = ["measurements"]
+
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
 

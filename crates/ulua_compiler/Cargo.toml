@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+measurements = []
+
 [dependencies]
 oxc_allocator.workspace = true
 oxc_ast.workspace = true

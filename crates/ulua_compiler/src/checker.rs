@@ -252,6 +252,13 @@ pub(crate) fn check(
         if f.params.rest.is_some() {
             return Err(c.unsupported(f.params.span));
         }
+        if f.params.items.len() > crate::PARAMETER_BOUND {
+            return Err(c.error(
+                f.params.span,
+                "limit:parameters",
+                "Parameter limit exceeded",
+            ));
+        }
         let mut params = vec![];
         let mut required = 0;
         for (i, p) in f.params.items.iter().enumerate() {

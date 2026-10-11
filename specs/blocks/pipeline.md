@@ -1,6 +1,7 @@
 # Pipeline
 
-Status: Rev 0, 2026-10-11. Decisions D7, D9 to D13 (`plan.md` §8).
+Status: Rev 1, 2026-10-11. Decisions D7, D9 to D13 (`plan.md` §8).
+Rev 1: the P1 values of §6 and §7 (`tracking/p1-skeleton.md`).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -112,7 +113,7 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    emitter counts every local that the function declares in all of its
    scopes: parameters, bindings, temporaries (C12), loop copies (C9.2),
    and generated locals. The count includes nested blocks. The budget
-   is `LOCAL_BUDGET`, below the Luau limit of 200; S3 measures it.
+   is `LOCAL_BUDGET` = 176, below the Luau limit of 200 (§7).
 8. **Spill table.** If the count exceeds `LOCAL_BUDGET`, the function
    declares one generated table local at its entry. Each binding past
    the budget, in source order, is a distinct generated field of that
@@ -141,12 +142,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 
 C15 bounds of P1, each a fixed compiler constant:
 
-| Code | Bound |
-|---|---|
-| `limit:parameters` | parameters of one function |
-| `limit:arguments` | arguments of one call |
-| `limit:template-parts` | literal parts and substitutions of one template literal |
-| `limit:temporaries` | temporaries and generated locals of one generated function; they never spill (§5.8) |
+| Code | Bound | Value |
+|---|---|---|
+| `limit:parameters` | parameters of one function | 32 |
+| `limit:arguments` | arguments of one call | 32 |
+| `limit:template-parts` | literal parts and substitutions of one template literal, empty literal parts included | 1025 |
+| `limit:temporaries` | parameters, temporaries, and generated locals of one generated function; they never spill (§5.8) | 136 |
 
 `limit:nesting-depth` also bounds the nesting of the generated Luau
 below the Luau parser recursion limit of 1000. A bound that S3 finds
@@ -173,6 +174,18 @@ the value.
 4. The stack that `ulua_call` needs on the host thread: Luau at
    `LUAI_MAXCCALLS` in a Debug build.
 5. Compiler memory at the source ceiling.
+
+P1 values (constants in `ulua_compiler` and `include/ulua.h`):
+
+| Value | P1 | Measurement |
+|---|---|---|
+| `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
+| Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
+| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 32.3 MB at the ceiling |
+| `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
+| `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
+| Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
+| Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
 
 ## 8. Corpus runner
 
