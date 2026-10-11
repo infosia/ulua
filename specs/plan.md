@@ -128,6 +128,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D11 | Cargo is the build root; `build.rs` compiles Luau with `cc` | 2026-10-11 | `specs/tracking/p05-measurements.md` M1 |
 | D12 | Luau builds with `LUA_USE_LONGJMP=1`; Rust calls only `noexcept` shim entries; every raising call is protected | 2026-10-11 | `specs/tracking/p05-measurements.md` M2 |
 | D13 | Every recursive AST walk in the compiler has its own bound: a chain-length limit or an iterative walk | 2026-10-11 | `specs/tracking/p05-measurements.md` M3 |
+| D14 | License: MIT OR Apache-2.0, at the user's option | 2026-10-11 | `LICENSE-MIT`, `LICENSE-APACHE`, `README.md` |
 
 ## 9. Corrections and revisions
 
