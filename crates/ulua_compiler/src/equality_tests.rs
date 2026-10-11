@@ -92,8 +92,8 @@ fn true_and_false_sets_follow_operators_and_nesting() {
             check(&format!("return ({g})?false:(n===3);"), f);
             check(&format!("while({g}){{return n===3;}}return false;"), t);
             check(&format!("for(;{g};){{return n===3;}}return false;"), t);
-            check(&format!("while({g}){{break;}}return n===3;"), f);
-            check(&format!("for(;{g};){{break;}}return n===3;"), f);
+            check(&format!("while({g}){{break;}}return n===3;"), t && f);
+            check(&format!("for(;{g};){{break;}}return n===3;"), t && f);
             check(&format!("if({g}){{return false;}}return n===3;"), f);
             check(&format!("if({g}){{}}else{{return false;}}return n===3;"), t);
             for exit in ["break;", "continue;"] {
@@ -112,6 +112,7 @@ fn true_and_false_sets_follow_operators_and_nesting() {
 #[test]
 fn each_statement_region_and_block_remainder() {
     for body in [
+        "{if(n!==1){return false;}}return n===2;",
         "while(n===1){return n===2;}return false;",
         "for(;n===1;){return n===2;}return false;",
         "if(n!==1){return false;}return n===2;",
@@ -133,7 +134,6 @@ fn each_statement_region_and_block_remainder() {
     for body in [
         "if(n===1){}return n===2;",
         "if(n!==1){}else{}return n===2;",
-        "{if(n!==1){return false;}}return n===2;",
         "while(n===1){break;}return n===2;",
         "for(;n===1;){break;}return n===2;",
         "if(n===1){return m===2;}return n===2;",
@@ -188,6 +188,11 @@ fn return_coverage_preserves_parentheses_and_loop_breaks() {
         ("while(true){while(true){break;}}", false),
         ("for(;;){for(;;){break;}}", false),
         ("while((true)){}return 1;", false),
+        ("{return 1;}let n=2;", false),
+        ("return 1;let n=2;", false),
+        ("if(true){return 1;}else{{return 2;}}let n=3;", false),
+        ("{let n=1;}", true),
+        ("if(true){return 1;}", true),
     ] {
         let source = format!("function f():number{{{body}}}export function main():void{{}}");
         let result = compile(source.as_bytes(), Limits::default());

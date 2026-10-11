@@ -259,6 +259,20 @@ are exact.
 - Debug costs: growth test 6.84 s, bytecode test 3.21 s; each file
   states its cost.
 
+## S8 record
+
+- Codex task. C7 rule 4 as a flow fact: a join takes the intersection
+  of the incoming edges; each edge record costs O(1); a shared log is
+  read once per join; depth is at most 48. h1 to h5, `r76`, `r77`
+  give C7; `r78` and the two reviewer `let` forms give C11.
+- Random P1 programs: 6,000 generated; 4,517 accepted, 579 rejected
+  with C7, 904 with C11. Accepted programs: 0 `tsc` errors, 0
+  `luau-analyze` errors, 0 `node` differences.
+- Growth test: minimum of 2 runs per size for ratios of 5 or more;
+  Debug 7.75 to 7.87 s; largest time ratio 6.49, largest output ratio
+  62.67.
+- `gate.sh full` passes: `cargo-test` 16 s, `luau-witnesses` 21 s.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

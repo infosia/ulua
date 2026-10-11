@@ -431,3 +431,6 @@ mod tests {
 mod equality_tests;
 #[cfg(test)]
 mod p1_tests;
+
+#[cfg(test)]
+mod flow_tests;

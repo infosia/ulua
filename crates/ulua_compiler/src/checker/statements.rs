@@ -19,13 +19,22 @@ impl Checker<'_> {
                 .copied()
                 .ok_or_else(|| self.error(v.span, "C11", "Missing declaration"))?;
             let depth = self.descend(depth, v.span)?;
-            let value = self.expr(
-                v.init
-                    .as_ref()
-                    .ok_or_else(|| self.error(v.span, "C8", "Missing initializer"))?,
-                depth,
-                false,
-            )?;
+            let initializer = v
+                .init
+                .as_ref()
+                .ok_or_else(|| self.error(v.span, "C8", "Missing initializer"))?;
+            let value = self.expr(initializer, depth, false)?;
+            if d.kind == VariableDeclarationKind::Let
+                && v.type_annotation.is_none()
+                && value.ty == Type::Boolean
+                && !boolean_initializer(initializer)
+            {
+                return Err(self.error(
+                    v.span,
+                    "C11",
+                    "An unannotated boolean let needs a literal or comparison initializer",
+                ));
+            }
             if matches!(value.ty, Type::Function(..)) {
                 return Err(self.unsupported(v.span));
             }
@@ -59,12 +68,10 @@ impl Checker<'_> {
                 self.variable_names(d)?;
             }
         }
-        let checkpoint = self.equality.checkpoint();
         let mut out = vec![];
         for s in statements {
             out.push(self.statement(s, depth)?);
         }
-        self.equality.restore(checkpoint);
         Ok(out)
     }
     fn test(&mut self, e: &Expression<'_>, depth: u32) -> Result<Expr, Diagnostic> {
@@ -169,28 +176,45 @@ impl Checker<'_> {
                 let test = self.test(&i.test, depth)?;
                 let t = self.equality.region(&test, true);
                 let f = self.equality.region(&test, false);
-                let a = self.region_statement(&i.consequent, depth, &t)?;
+                let entry = self.reachable;
+                let checkpoint = self.equality.checkpoint();
+                let mut join = self.equality.join();
+                self.equality.enter(&t);
+                let a = self.statement(&i.consequent, depth)?;
+                join.edge(&self.equality, self.reachable);
+                self.equality.restore(checkpoint);
+                self.reachable = entry;
+                self.equality.enter(&f);
                 let b = i
                     .alternate
                     .as_ref()
-                    .map(|s| self.region_statement(s, depth, &f))
+                    .map(|s| self.statement(s, depth))
                     .transpose()?;
-                if equality::holds_exit(&a) {
-                    self.equality.enter(&f);
-                }
-                if b.as_ref().is_some_and(equality::holds_exit) {
-                    self.equality.enter(&t);
-                }
+                join.edge(&self.equality, self.reachable);
+                self.reachable = self.equality.finish(join);
                 S::If(test, Box::new(a), b.map(Box::new))
             }
             Statement::WhileStatement(w) => {
                 let test = self.test(&w.test, depth)?;
                 let t = self.equality.region(&test, true);
                 let f = self.equality.region(&test, false);
-                self.loops += 1;
-                let body = self.region_statement(&w.body, depth, &t)?;
-                self.loops -= 1;
+                let checkpoint = self.equality.checkpoint();
+                let mut exit = self.equality.join();
                 self.equality.enter(&f);
+                exit.edge(
+                    &self.equality,
+                    self.reachable && !matches!(test.kind, ExprKind::Boolean(true)),
+                );
+                self.equality.restore(checkpoint);
+                let update = self.equality.join();
+                self.loops.push(equality::LoopFlow { exit, update });
+                self.equality.enter(&t);
+                let body = self.statement(&w.body, depth)?;
+                let flow = self
+                    .loops
+                    .pop()
+                    .ok_or_else(|| self.error(w.span, "C11", "Missing loop flow"))?;
+                self.reachable = self.equality.finish(flow.exit);
                 S::While(test, Box::new(body))
             }
             Statement::ForStatement(f) => {
@@ -225,20 +249,53 @@ impl Checker<'_> {
                     .as_ref()
                     .map(|e| self.equality.region(e, false))
                     .unwrap_or_default();
+                let checkpoint = self.equality.checkpoint();
+                let mut exit = self.equality.join();
+                self.equality.enter(&false_ids);
+                exit.edge(
+                    &self.equality,
+                    self.reachable
+                        && test
+                            .as_ref()
+                            .is_some_and(|t| !matches!(t.kind, ExprKind::Boolean(true))),
+                );
+                self.equality.restore(checkpoint);
+                let update_join = self.equality.join();
+                self.loops.push(equality::LoopFlow {
+                    exit,
+                    update: update_join,
+                });
+                self.equality.enter(&t);
+                let body = self.statement(&f.body, depth)?;
+                let mut flow = self
+                    .loops
+                    .pop()
+                    .ok_or_else(|| self.error(f.span, "C11", "Missing loop flow"))?;
+                flow.update.edge(&self.equality, self.reachable);
+                self.reachable = self.equality.finish(flow.update);
                 let update = f
                     .update
                     .as_ref()
                     .map(|e| self.effect(e, depth, true).map(Box::new))
                     .transpose()?;
-                self.loops += 1;
-                let body = self.region_statement(&f.body, depth, &t)?;
-                self.loops -= 1;
+                self.reachable = self.equality.finish(flow.exit);
                 self.scopes.pop();
-                self.equality.enter(&false_ids);
                 S::For(init, test, update, Box::new(body), ids)
             }
-            Statement::BreakStatement(b) if b.label.is_none() && self.loops > 0 => S::Break,
-            Statement::ContinueStatement(c) if c.label.is_none() && self.loops > 0 => S::Continue,
+            Statement::BreakStatement(b) if b.label.is_none() && !self.loops.is_empty() => {
+                if let Some(flow) = self.loops.last_mut() {
+                    flow.exit.edge(&self.equality, self.reachable);
+                }
+                self.reachable = false;
+                S::Break
+            }
+            Statement::ContinueStatement(c) if c.label.is_none() && !self.loops.is_empty() => {
+                if let Some(flow) = self.loops.last_mut() {
+                    flow.update.edge(&self.equality, self.reachable);
+                }
+                self.reachable = false;
+                S::Continue
+            }
             Statement::ReturnStatement(r) => {
                 let value = r
                     .argument
@@ -247,6 +304,7 @@ impl Checker<'_> {
                     .transpose()?;
                 let ty = value.as_ref().map_or(&Type::Void, |v| &v.ty);
                 self.flow(ty, Some(&self.result), r.span)?;
+                self.reachable = false;
                 S::Return(value)
             }
             Statement::FunctionDeclaration(_) | Statement::ForOfStatement(_) => {
@@ -307,4 +365,13 @@ pub(super) fn returns(body: &[S]) -> bool {
         }
     }
     values.pop().unwrap_or(false)
+}
+
+// Parentheses preserve the initializer form.
+fn boolean_initializer(mut e: &Expression<'_>) -> bool {
+    while let Expression::ParenthesizedExpression(p) = e {
+        e = &p.expression;
+    }
+    matches!(e, Expression::BooleanLiteral(_))
+        || matches!(e, Expression::BinaryExpression(b) if matches!(b.operator.as_str(), "<" | ">" | "<=" | ">=" | "===" | "!==" | "==" | "!="))
 }

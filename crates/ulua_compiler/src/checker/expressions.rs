@@ -138,7 +138,14 @@ impl Checker<'_> {
                 }
                 let a = self.expr(&l.left, depth, false)?;
                 let ids = self.equality.region(&a, op == "&&");
-                let b = self.region_expr(&l.right, depth, &ids)?;
+                let skipped = self.equality.region(&a, op != "&&");
+                let checkpoint = self.equality.checkpoint();
+                let mut join = self.equality.join();
+                self.equality.enter(&skipped);
+                join.edge(&self.equality, self.reachable);
+                self.equality.restore(checkpoint);
+                let b = self.edge_expr(&l.right, depth, &ids, &mut join)?;
+                self.equality.finish(join);
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -154,8 +161,10 @@ impl Checker<'_> {
                 }
                 let t = self.equality.region(&test, true);
                 let f = self.equality.region(&test, false);
-                let a = self.region_expr(&c.consequent, depth, &t)?;
-                let b = self.region_expr(&c.alternate, depth, &f)?;
+                let mut join = self.equality.join();
+                let a = self.edge_expr(&c.consequent, depth, &t, &mut join)?;
+                let b = self.edge_expr(&c.alternate, depth, &f, &mut join)?;
+                self.equality.finish(join);
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
                     a.ty.clone(),

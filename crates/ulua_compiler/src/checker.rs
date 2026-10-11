@@ -17,7 +17,8 @@ pub(crate) struct Checker<'s> {
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,
     result: Type,
-    loops: usize,
+    loops: Vec<equality::LoopFlow>,
+    reachable: bool,
     limit: u32,
     references: Vec<(usize, usize, u32)>,
     equality: Equality,
@@ -215,7 +216,8 @@ pub(crate) fn check(
         scopes: vec![HashMap::new()],
         owner: 0,
         result: Type::Void,
-        loops: 0,
+        loops: vec![],
+        reachable: true,
         limit,
         references: vec![],
         equality: Equality::new(),
@@ -329,6 +331,8 @@ pub(crate) fn check(
     }
     let mut checked = vec![];
     for (id, name, exported, result, f) in functions {
+        c.equality.restore(0);
+        c.reachable = true;
         c.owner = id + 1;
         c.result = result.clone();
         c.scopes.push(HashMap::new());
