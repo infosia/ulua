@@ -454,14 +454,11 @@ characters against U+E000 to U+FFFF). Kept rejections, each silently
 wrong otherwise: string `length` and index (byte vs UTF-16), case
 mapping, function `===`, `T | null` defaults, C9.3.
 
-P2 note on `undefined` (user question): an accepted program cannot
-write `undefined` (C2). `node` still gives `undefined` where a library
-call misses (for example a map lookup or a search) if the library
-types the miss as `T | null`; then `x === null` differs from `node`.
-C2 rejects `x === null` for this reason. If the P2 library has no call
-whose miss is `undefined` under `node` (a presence test plus a call
-with a fallback instead), no accepted form gives `undefined`, and P2
-can accept `x === null`. P2 decides this with the library contract.
+P2 note on `undefined` (D16): `undefined` is rejected. No accepted
+form and no library call gives `undefined` under `node`. A library
+call whose miss is `undefined` under `node` is not in the library; the
+library offers a presence test plus a call with a fallback, or a trap.
+P2 states the consequence for `x === null` in C2.
 
 P2 note: rule 3 lists no member read and no object operand. `a21`
 (`other.end === this.end`, `a === b` on objects) needs a P2 revision

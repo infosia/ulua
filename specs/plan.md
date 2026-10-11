@@ -131,6 +131,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D13 | Every recursive AST walk in the compiler has its own bound: a chain-length limit or an iterative walk | 2026-10-11 | `specs/tracking/p05-measurements.md` M3 |
 | D14 | License: MIT OR Apache-2.0, at the user's option | 2026-10-11 | `LICENSE-MIT`, `LICENSE-APACHE`, `README.md` |
 | D15 | Where `tsc` acceptance depends on literal types or narrowing, the checker accepts a restrictive structural subset instead of a model of `tsc`. A later revision opens a form when a program needs it | 2026-10-11 | `collisions.md` C7 Rev 14; `tracking/p1-skeleton.md` round 4 |
+| D16 | `undefined` is rejected. No accepted form and no library call gives `undefined` under `node`; a call whose miss is `undefined` under `node` is not in the library | 2026-10-12 | `collisions.md` C2; `tracking/p1-skeleton.md` |
 
 ## 9. Corrections and revisions
 
