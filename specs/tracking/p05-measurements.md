@@ -1,14 +1,14 @@
 # P0.5 measurements
 
-Status: open. M4 and M5 are measured. M1, M2, and M3 are in progress.
+Status: open. M1, M2, M4, and M5 are measured. M3 is in progress.
 
 Every prototype of this round is outside the repository. No production
 change lands.
 
 ## Exit checklist
 
-- [ ] M1 build root: numbers and a decision in `plan.md` §8.
-- [ ] M2 Rust and the Luau C API: numbers and a decision.
+- [x] M1 build root: numbers and a decision (D11).
+- [x] M2 Rust and the Luau C API: numbers and a decision (D12).
 - [ ] M3 parser depth: numbers and a decision (D7).
 - [x] M4 number to string: numbers and a decision (D9).
 - [x] M5 witness cost: numbers and a decision (D10).
@@ -18,6 +18,72 @@ change lands.
 - `node` v24.18.0, TypeScript 5.9.2.
 - Luau CLI and `luau-analyze` built in Release from the revision in
   `luau-revision.txt` (0.738), Unix Makefiles.
+
+## M1 — build root
+
+Two prototypes of one product: a Rust crate (staticlib and cdylib)
+that exports `ulua_run`, compiles Luau source, and runs it in a
+sandboxed state. A C host links the staticlib. macOS arm64, 8 cores,
+Release, three runs each. Times in seconds.
+
+- A: Cargo is the root. `build.rs` compiles Common, Ast, Bytecode,
+  Compiler, and VM with the `cc` crate (62 objects).
+- B: CMake is the root. Luau's own CMake targets build the Luau
+  libraries, and a custom target runs `cargo build`.
+
+| | A (Cargo, `cc`) | B (CMake drives Cargo) |
+|---|---|---|
+| cold build | 7.87 / 8.48 / 8.64 | 8.61 / 8.90 / 10.07, plus 1.64–1.70 configure |
+| no-op build | 0.05 | 0.91–0.99 |
+| touch one Luau VM `.cpp` | 6.74 / 6.85 / 6.97 (62 objects) | 1.29 / 1.35 / 1.36 (1 object) |
+| touch one Rust file | 0.20–0.21 | 0.82–1.12 (with the host link) |
+| staticlib | 20,032,904 B | 20,032,144 B |
+| cdylib | 1,320,512 B | 1,320,528 B |
+| stripped C host | 1,114,000 B | 1,130,560 B |
+
+Flags of A: `-O3 -std=c++17 -DNDEBUG -fPIC -ffunction-sections
+-fdata-sections`; the VM unit adds `-fno-math-errno` (as Luau's
+CMakeLists). No `LUAI_*` define is necessary. The staticlib needs
+`-lc++` on the host link line (`--print native-static-libs`).
+
+Decision D11: Cargo is the build root, with `build.rs` and `cc`. A Rust
+change is the frequent change: 0.2 s against 0.8–1.1 s. A Luau source
+changes only at a revision pin; A then recompiles all 62 objects
+(6.9 s). A needs no CMake. Sizes are equal.
+
+## M2 — Rust and the Luau C API
+
+Prototype: a C++ shim (`ulua_shim.cpp`, 286 lines, 15 of them a test
+probe; header 67 lines). Every shim entry is `extern "C"` and
+`noexcept`. Rust calls only shim entries.
+
+Rule of the shim: every `lua_*` call that can raise runs inside
+`lua_cpcall` or `lua_pcall`. A host function is a C++ trampoline. It
+calls the Rust function, receives a status code, and raises
+`luaL_error` after the Rust frame returns.
+
+| Unwind mode | ns per successful call (1e6) | ns per failing call (1e5) | unprotected raise under `catch (...)` |
+|---|---|---|---|
+| C++ exceptions | 21.3–22.1 | 9,524–9,681 | caught, process continues |
+| `LUA_USE_LONGJMP=1` | 22.4 | 210–222 | abort, exit 134 |
+
+Cases, both modes, each followed by a script that runs:
+
+| Case | Input | Result |
+|---|---|---|
+| runtime error | `error("x")`; arithmetic on nil | code 1 with the message |
+| compile error | bad syntax; 5,000 nested parentheses | code 2; `Exceeded allowed recursion depth` |
+| memory | `lua_Alloc` with an 8 MiB budget | code 3 `not enough memory`; recovery needs a full GC in the shim |
+| time | interrupt callback with a budget; `while true`, also inside `pcall` | code 4; the error raises again after `pcall` |
+| host function | Rust `print`; a Rust function that fails with 42; the same inside `pcall` | output; code 5; `pcall` returns `false` with the message |
+| stack | Luau recursion; `__index` recursion; `pcall` recursion | code 1 `stack overflow`; `C stack overflow` |
+
+Decision D12: build Luau with `LUA_USE_LONGJMP=1`. An error round trip
+costs 43 times less, and a successful call costs the same. An
+unprotected raise aborts the process: it never unwinds through a Rust
+frame. The shim holds no object with a destructor between a raise and
+its catch. `luau_compile` runs inside `catch (...)`, because it
+allocates `std::string` (read from `lcode.cpp`, not run).
 
 ## M4 — number to string
 
@@ -73,4 +139,11 @@ witness fails on exit status 1. Lint warnings do not fail it.
 
 ## Gaps
 
+- M2: `luau_compile` allocates outside the `lua_Alloc` budget. P1
+  bounds it through the source size limit and measures it.
+- M2: the time limit counts interrupt safepoints, not wall time.
+- M2: the C stack limits are measured on an 8 MiB main thread only. P1
+  measures them on the compiler thread and the run thread.
+- M2: a Rust panic in a host function is not tested. P3 tests it.
+- M1, M2: macOS arm64 only. P5 adds Linux and Windows.
 - M5 measures hand-written Luau. P1 measures the generated corpus.

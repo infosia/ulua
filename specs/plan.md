@@ -125,6 +125,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D8 | Name Ulua; C prefix `ulua_` | 2026-10-11 | this file |
 | D9 | A number in a template or `String(n)` lowers to `tostring` with fixed rewrites of NaN, the infinities, zero, and the exponent | 2026-10-11 | `collisions.md` C4.5; `specs/tracking/p05-measurements.md` M4 |
 | D10 | The gate runs `luau-analyze` and `node` once per gate run over all entries; lint warnings do not fail it | 2026-10-11 | `specs/tracking/p05-measurements.md` M5 |
+| D11 | Cargo is the build root; `build.rs` compiles Luau with `cc` | 2026-10-11 | `specs/tracking/p05-measurements.md` M1 |
+| D12 | Luau builds with `LUA_USE_LONGJMP=1`; Rust calls only `noexcept` shim entries; every raising call is protected | 2026-10-11 | `specs/tracking/p05-measurements.md` M2 |
 
 ## 9. Corrections and revisions
 
