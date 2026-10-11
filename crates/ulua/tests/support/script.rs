@@ -93,6 +93,19 @@ impl Script {
         }
     }
     pub fn call(&self, index: u32, arguments: &[Value]) -> (Status, String, Value) {
+        let (status, d, value) = self.call_diagnostic(index, arguments);
+        assert!(
+            status == ULUA_OK || status == ULUA_FAILED,
+            "{}: {}",
+            code(&d),
+            message(&d)
+        );
+        if code(&d) == "limit:steps" {
+            assert_eq!(message(&d), "Step limit exceeded");
+        }
+        (status, code(&d), value)
+    }
+    pub fn call_diagnostic(&self, index: u32, arguments: &[Value]) -> (Status, Diagnostic, Value) {
         let mut d = Diagnostic::default();
         let mut value = Value::default();
         // SAFETY: The fixture owns a live instance and every argument and output covers its length.
@@ -105,16 +118,7 @@ impl Script {
                 &mut value,
                 &mut d,
             );
-            assert!(
-                status == ULUA_OK || status == ULUA_FAILED,
-                "{}: {}",
-                code(&d),
-                message(&d)
-            );
-            if code(&d) == "limit:steps" {
-                assert_eq!(message(&d), "Step limit exceeded");
-            }
-            (status, code(&d), value)
+            (status, d, value)
         }
     }
 }

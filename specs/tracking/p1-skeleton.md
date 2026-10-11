@@ -302,6 +302,29 @@ are exact.
   `luau-analyze` errors, 0 `node` differences. The longest accepted
   alias chain has 76 links.
 
+## S11 record
+
+- Codex task. `native/shim/runtime_errors.h` lists the size and depth
+  errors of the pinned VM, each with its `VM/src` location.
+  `limit:memory`: not enough memory, string length overflow, memory
+  allocation error: block too big, table overflow, buffer too large,
+  resulting string too large, string slice too long, too many
+  captures, size specifier is too large, and the `packsize` and
+  `move` argument errors. `limit:stack`: stack overflow and its
+  variants, C stack overflow, stack limit, too many results or
+  arguments, pattern too complex, `__index` and `__newindex` chain too
+  long. `LUA_ERRMEM` is memory; a depth `LUA_ERRERR` is stack. Other
+  run errors stay `internal`.
+- The two review cases: before, status 6 then 7; after, status 3
+  `limit:memory` then 0. The large-budget tests run only with the
+  `measurements` feature (0.80 s Debug).
+- Run messages carry no generated-Luau position.
+- Compiler heap at 65,536 bytes, Release, 33 shapes: total peak
+  58,957,600 B and native peak 50,762,190 B (`spilled-mod-39`); Rust
+  peak 40,619,549 B (`default-calls`).
+- Tests: 86 with all features. `gate.sh full`: `cargo-test` 12 s,
+  `luau-witnesses` 21 s.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

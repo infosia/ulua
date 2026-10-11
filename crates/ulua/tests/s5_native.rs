@@ -1,4 +1,5 @@
 //! Default-build native checks exercise the production allocator and VM recovery path.
+//! Measured Debug cost: 0.12 seconds (round 8 review).
 // SAFETY: These fixture entries own all native state and return only a status.
 #[link(name = "ulua_test_native", kind = "static")]
 unsafe extern "C" {

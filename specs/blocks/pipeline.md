@@ -257,7 +257,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 |---|---|---|
 | `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
-| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak at the ceiling over every growth shape (S11 measures; S5: 51.9 MB, `flat`, Release) |
+| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 59.0 MB at the ceiling over 33 growth shapes (`spilled-mod-39`, Release, S11) |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |

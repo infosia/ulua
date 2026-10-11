@@ -9,6 +9,10 @@
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
+#[path = "../tests/support/growth_joins.rs"]
+mod joins;
+#[path = "../src/s6_inputs.rs"]
+mod review;
 #[path = "support/alloc.rs"]
 mod s3_alloc;
 use std::{
@@ -105,7 +109,12 @@ fn stages(form: &str, n: usize) {
     }
     println!("stack {form} levels={n} {values:?} status={status}");
 }
-fn heap(source: String, label: &str) {
+struct HeapPeak {
+    total: usize,
+    rust: usize,
+    native: usize,
+}
+fn heap(source: String, label: &str) -> HeapPeak {
     static STOP: AtomicBool = AtomicBool::new(false);
     static PEAK: AtomicUsize = AtomicUsize::new(0);
     static NATIVE_PEAK: AtomicUsize = AtomicUsize::new(0);
@@ -140,15 +149,23 @@ fn heap(source: String, label: &str) {
     PEAK.fetch_max(unsafe { ulua_internal_probe_heap() }, Ordering::Relaxed);
     STOP.store(true, Ordering::Relaxed);
     sampler.join().unwrap();
+    let peak = HeapPeak {
+        total: PEAK.load(Ordering::Relaxed).saturating_sub(baseline),
+        rust: s3_alloc::peak(rust_baseline),
+        native: NATIVE_PEAK.load(Ordering::Relaxed),
+    };
     println!(
         "heap {label} bytes={} peak_delta={} peak_total={} rust_peak={} native_sample_peak={} elapsed={:?} status={result:?}",
         source.len(),
-        PEAK.load(Ordering::Relaxed).saturating_sub(baseline),
+        peak.total,
         PEAK.load(Ordering::Relaxed),
-        s3_alloc::peak(rust_baseline),
-        NATIVE_PEAK.load(Ordering::Relaxed),
+        peak.rust,
+        peak.native,
         start.elapsed()
     );
+    assert_eq!(source.len(), SOURCE_CEILING as usize);
+    assert_eq!(result, Ok(()), "heap shape {label}");
+    peak
 }
 fn largest(label: &str, maximum: usize, make: impl Fn(usize) -> String) {
     let n = boundary(|n| native(&make(n)).is_ok(), maximum);
@@ -258,14 +275,33 @@ fn main() {
                 }
             }
             "heap" => {
-                for label in inputs::SOURCE_SHAPES {
-                    let source = if matches!(*label, "forward" | "backward" | "star") {
+                let mut worst = [("", 0); 3];
+                for label in inputs::SOURCE_SHAPES
+                    .iter()
+                    .chain(review::SHAPES)
+                    .chain(joins::SHAPES)
+                {
+                    let source = if joins::SHAPES.contains(label) {
+                        joins::source(label, SOURCE_CEILING as usize)
+                    } else if review::SHAPES.contains(label) {
+                        review::source(label, SOURCE_CEILING as usize)
+                    } else if matches!(*label, "forward" | "backward" | "star") {
                         inputs::call_graph(label, SOURCE_CEILING as usize)
                     } else {
                         inputs::source_ceiling(label, SOURCE_CEILING as usize)
                     };
-                    heap(source, label);
+                    let peak = heap(source, label);
+                    for (entry, bytes) in worst.iter_mut().zip([peak.total, peak.rust, peak.native])
+                    {
+                        if bytes > entry.1 {
+                            *entry = (label, bytes);
+                        }
+                    }
                 }
+                println!(
+                    "heap worst total={:?} rust={:?} native={:?}",
+                    worst[0], worst[1], worst[2]
+                );
             }
             "emit" => {
                 let directory = std::env::args()

@@ -1,6 +1,7 @@
 // Every raising VM call stays inside a native protected call.
 // Protected callbacks contain only trivial objects: longjmp skips no destructor.
 #include "allocator.h"
+#include "runtime_errors.h"
 #include "lua.h"
 #include "lualib.h"
 #include "luacode.h"
@@ -63,12 +64,9 @@ static int collect(lua_State* state) {
 static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     vm->charging = false;
     if (status == LUA_OK) return SHIM_OK;
-    const char* text = lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error";
+    const char* text = run_message(lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error");
     message(error, text);
-    int code = SHIM_INTERNAL;
-    // A failed error-handler allocation can replace LUA_ERRMEM with LUA_ERRERR.
-    if (status == LUA_ERRMEM || std::strcmp(text, "not enough memory") == 0) code = SHIM_MEMORY;
-    else if (std::strstr(text, "stack overflow")) code = SHIM_STACK;
+    int code = run_error_code(status, text);
     if (vm->flag) code = vm->flag;
     if (code == SHIM_STEPS) message(error, "Step limit exceeded");
     vm->flag = 0;
