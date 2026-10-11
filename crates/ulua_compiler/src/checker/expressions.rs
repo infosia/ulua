@@ -49,6 +49,7 @@ impl Checker<'_> {
                 return Err(self.error(e.span(), "C4", "BigInt is rejected"));
             }
             Expression::Identifier(n) => {
+                self.default_reference(n.name.as_str(), n.span)?;
                 if self.scopes.iter().any(|s| s.contains_key(n.name.as_str())) {
                     let id = self.lookup(n.name.as_str(), n.span)?;
                     let ty = self.bindings[id]
@@ -200,6 +201,7 @@ impl Checker<'_> {
                     return Err(self.unsupported(call.span));
                 }
                 let callee = if let Expression::Identifier(n) = &call.callee {
+                    self.default_reference(n.name.as_str(), n.span)?;
                     if matches!(n.name.as_str(), "print" | "String")
                         && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str()))
                     {

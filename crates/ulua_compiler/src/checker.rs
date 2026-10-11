@@ -26,6 +26,7 @@ pub(crate) struct Checker<'s> {
     references: Vec<(usize, usize, u32)>,
     equality: Equality,
     functions: Vec<ir::Function>,
+    default_scopes: Vec<(usize, std::collections::HashSet<String>)>,
 }
 impl Checker<'_> {
     fn error(&self, span: Span, code: &'static str, message: &str) -> Diagnostic {
@@ -114,6 +115,7 @@ impl Checker<'_> {
         Ok(id)
     }
     fn lookup(&mut self, name: &str, span: Span) -> Result<usize, Diagnostic> {
+        self.default_reference(name, span)?;
         let id = self
             .scopes
             .iter()
@@ -133,6 +135,18 @@ impl Checker<'_> {
         }
         self.references.push((self.owner, id, span.start));
         Ok(id)
+    }
+    fn default_reference(&self, name: &str, span: Span) -> Result<(), Diagnostic> {
+        for (scope, names) in &self.default_scopes {
+            if names.contains(name) && !self.scopes[*scope..].iter().any(|s| s.contains_key(name)) {
+                return Err(self.error(
+                    span,
+                    "C11",
+                    "Default refers to a top-level body declaration",
+                ));
+            }
+        }
+        Ok(())
     }
     fn variable_names(&mut self, d: &VariableDeclaration<'_>) -> Result<(), Diagnostic> {
         if d.kind == VariableDeclarationKind::Var {
@@ -202,6 +216,7 @@ pub(crate) fn check(
         references: vec![],
         equality: Equality::new(),
         functions: vec![],
+        default_scopes: vec![],
     };
     if let Some(hashbang) = &program.hashbang {
         return Err(c.error(hashbang.span, "C11", "Hashbang lines are rejected"));

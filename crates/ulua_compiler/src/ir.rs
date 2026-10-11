@@ -1,5 +1,5 @@
 //! Checked P1 and P2.1 forms. Binding identities carry type, scope, and declaration order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Type {
     Number,
     Boolean,

@@ -3,7 +3,7 @@ use crate::ir::{self, ExprKind as E, Statement as S, Type};
 use std::{collections::HashMap, fmt::Write};
 
 pub(super) struct FunctionTypes {
-    names: HashMap<String, String>,
+    names: HashMap<Type, String>,
     pub(super) declarations: String,
 }
 impl FunctionTypes {
@@ -75,19 +75,41 @@ impl FunctionTypes {
         types
     }
     fn add(&mut self, ty: &Type) {
-        if !matches!(ty, Type::Function(..)) {
+        let Type::Function(params, result, required) = ty else {
+            return;
+        };
+        if self.names.contains_key(ty) {
             return;
         }
-        let signature = ty.luau();
-        if !self.names.contains_key(&signature) {
-            let name = format!("__ulua_fn{}", self.names.len());
-            let _ = writeln!(self.declarations, "type {name} = {signature}");
-            self.names.insert(signature, name);
+        for parameter in params {
+            self.add(parameter);
         }
+        self.add(result);
+        let parameters = params
+            .iter()
+            .enumerate()
+            .map(|(i, parameter)| {
+                let name = self.luau(parameter);
+                if i < *required {
+                    name
+                } else if matches!(parameter, Type::Function(..)) {
+                    format!("({name})?")
+                } else {
+                    format!("{name}?")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let name = format!("__ulua_fn{}", self.names.len());
+        let _ = writeln!(
+            self.declarations,
+            "type {name} = ({parameters}) -> {}",
+            self.luau(result)
+        );
+        self.names.insert(ty.clone(), name);
     }
     pub(super) fn luau(&self, ty: &Type) -> String {
-        let signature = ty.luau();
-        self.names.get(&signature).cloned().unwrap_or(signature)
+        self.names.get(ty).cloned().unwrap_or_else(|| ty.luau())
     }
 }
 

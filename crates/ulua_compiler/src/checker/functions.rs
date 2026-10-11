@@ -93,6 +93,7 @@ impl Checker<'_> {
     fn parameters(
         &mut self,
         params: &FormalParameters<'_>,
+        body: &[Statement<'_>],
         depth: u32,
     ) -> Result<Vec<(usize, Option<Expr>)>, Diagnostic> {
         let mut out = vec![];
@@ -119,6 +120,25 @@ impl Checker<'_> {
             )?;
             out.push((id, None));
         }
+        let mut names = std::collections::HashSet::new();
+        for statement in body {
+            match statement {
+                Statement::FunctionDeclaration(f) => {
+                    if let Some(n) = &f.id {
+                        names.insert(n.name.to_string());
+                    }
+                }
+                Statement::VariableDeclaration(d) => {
+                    for v in &d.declarations {
+                        if let BindingPattern::BindingIdentifier(n) = &v.id {
+                            names.insert(n.name.to_string());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.default_scopes.push((self.scopes.len(), names));
         for (p, (id, default)) in params.items.iter().zip(&mut out) {
             if let Some(e) = &p.initializer {
                 let value = self.expr(e, depth, false)?;
@@ -126,6 +146,7 @@ impl Checker<'_> {
                 *default = Some(value);
             }
         }
+        self.default_scopes.pop();
         Ok(out)
     }
 
@@ -144,8 +165,8 @@ impl Checker<'_> {
             return Err(self.unsupported(f.span));
         };
         let state = self.enter_function(id, *result.clone());
-        let parameters = self.parameters(&f.params, depth)?;
         let b = f.body.as_ref().ok_or_else(|| self.unsupported(f.span))?;
+        let parameters = self.parameters(&f.params, &b.statements, depth)?;
         if !b.directives.is_empty() {
             return Err(self.error(b.span, "C11", "Function directives are rejected"));
         }
@@ -198,7 +219,7 @@ impl Checker<'_> {
         )?;
         self.scopes.pop();
         let state = self.enter_function(id, result.clone().unwrap_or(Type::Void));
-        let parameters = self.parameters(&a.params, depth)?;
+        let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
             let value = self.expr(e, body_depth, true)?;
@@ -207,6 +228,9 @@ impl Checker<'_> {
             }
             if let Some(result) = &result {
                 self.flow(&value.ty, Some(result), a.span)?;
+            }
+            if result.is_none() && matches!(value.ty, Type::Function(..)) {
+                return Err(self.error(a.span, "C11", "Function result needs an annotation"));
             }
             let result = result.unwrap_or_else(|| value.ty.clone());
             let body = if result == Type::Void {

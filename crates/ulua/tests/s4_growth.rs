@@ -1,8 +1,8 @@
 //! Growth gate: source ceiling shapes, 8 KiB and 32 KiB, through the full ABI.
 //! Ratios above 6.5 use the minimum of two runs per size. Lower ratios retain ample margin.
-//! Measured Debug cost: 7.77 seconds. Largest time ratio: 6.517 (spilled-mod-38).
-//! Alias-chain ratios: Debug 3.909 / 3.927; Release 3.753 / 3.780 (one / eight references).
-//! Measured Release cost: 2.14 seconds. Largest time ratio: 6.505 (spilled-mod-36).
+//! Measured Debug cost: 8.20 seconds. Largest time ratio: 6.494 (spilled-mod-37).
+//! Alias-chain ratios: Debug 3.913 / 3.898; Release 3.777 / 3.785 (one / eight references).
+//! Measured Release cost: 2.32 seconds. Largest time ratio: 6.433 (spilled-mod-37).
 //! The largest output ratio is 62.671; 1.25 times this ratio stays below 80.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
@@ -58,9 +58,13 @@ fn full_pipeline_growth_stays_below_eight() {
             .spawn({
                 let source = ceiling.clone();
                 move || {
-                    ulua_compiler::compile(source.as_bytes(), Limits::default())
-                        .unwrap()
-                        .luau
+                    let result = ulua_compiler::compile(source.as_bytes(), Limits::default());
+                    if let Some(code) = functions::diagnostic(shape) {
+                        assert_eq!(result.unwrap_err().code, code);
+                        String::new()
+                    } else {
+                        result.unwrap().luau
+                    }
                 }
             })
             .unwrap()
@@ -76,15 +80,21 @@ fn full_pipeline_growth_stays_below_eight() {
         max_output = max_output.max(output_ratio);
         if let Ok(directory) = std::env::var("ULUA_GROWTH_OUTPUT_DIR") {
             std::fs::create_dir_all(&directory).unwrap();
-            std::fs::write(
-                std::path::Path::new(&directory).join(format!("{shape}.luau")),
-                &generated,
-            )
-            .unwrap();
+            if !generated.is_empty() {
+                std::fs::write(
+                    std::path::Path::new(&directory).join(format!("{shape}.luau")),
+                    &generated,
+                )
+                .unwrap();
+            }
         }
         let measure = |source: &str| {
             let now = Instant::now();
-            let script = Script::new(source);
+            let script = Script::compile(
+                source,
+                ulua::CompileLimits::default(),
+                functions::diagnostic(shape).unwrap_or(""),
+            );
             let elapsed = now.elapsed();
             drop(script);
             elapsed

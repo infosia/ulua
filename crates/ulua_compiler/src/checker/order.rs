@@ -6,6 +6,13 @@ impl Checker<'_> {
     pub(super) fn tdz(&self) -> Result<(), Diagnostic> {
         let mut latest = vec![HashMap::<usize, u32>::new(); self.bindings.len() + 1];
         let mut callers = vec![vec![]; latest.len()];
+        for function in &self.functions {
+            let parent = self.bindings[function.binding].owner;
+            if parent != 0 {
+                // C10.3 attributes every created function's references to its creator.
+                callers[function.binding + 1].push(parent);
+            }
+        }
         for &(owner, id, _) in &self.references {
             if owner == 0 {
                 continue;

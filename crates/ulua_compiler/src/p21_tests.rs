@@ -102,9 +102,7 @@ fn inferred_function_values_compare_defaults_in_both_directions() {
     }
     // The result type contains another function signature with its own default count.
     reject(
-        &body(
-            "function f(n:number=1):number{return n;}const make=()=>f;const g:()=>(n:number)=>number=make;",
-        ),
+        &body("function f(n:number=1):number{return n;}const make=():(n:number)=>number=>f;"),
         "C1",
     );
 }
@@ -113,9 +111,9 @@ fn inferred_function_values_compare_defaults_in_both_directions() {
 fn function_type_equality_is_recursive_at_each_value_flow() {
     for (setup, target, matching) in [
         (
-            "function leaf(n:number=1):number{return n;}const f=()=>leaf;",
+            "function f():(n:string)=>number{return (n:string):number=>1;}",
             "()=>(n:number)=>number",
-            "()=>((n:number):number=>n)",
+            "():(n:number)=>number=>((n:number):number=>n)",
         ),
         (
             "function f(g:(n:string)=>number):number{return 1;}",
@@ -125,7 +123,7 @@ fn function_type_equality_is_recursive_at_each_value_flow() {
         (
             "function f():()=>boolean{return ()=>true;}",
             "()=>()=>number",
-            "()=>()=>1",
+            "():()=>number=>()=>1",
         ),
     ] {
         for flow in [
@@ -213,11 +211,7 @@ fn parameter_defaults_form_one_trailing_suffix() {
 fn optional_function_parameters_keep_the_function_result_required() {
     let source = "function test(n:number,f:(a:number)=>boolean=(a:number):boolean=>a>1):boolean{return f(n);}export function main():void{print(`${test(2)} ${test(0)} ${test(0,(a:number):boolean=>a===0)}`);}";
     let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
-    assert!(
-        compiled
-            .luau
-            .contains("(number, ((number) -> boolean)?) -> boolean")
-    );
+    assert!(compiled.luau.contains("(number, (__ulua_fn0)?) -> boolean"));
     accept(
         "function outer(f:(g:(n:number)=>number)=>((n:number)=>number)=(g:(n:number)=>number):(n:number)=>number=>g):(n:number)=>number{return f((n:number):number=>n);}export function main():void{const g=outer();print(`${g(1)}`);}",
     );
@@ -373,4 +367,87 @@ fn hoisted_writes_obey_the_same_tdz_as_reads() {
     accept(&body(
         "let x=1;set();function set():void{x=4;}print(`${x}`);",
     ));
+}
+
+#[test]
+fn declarations_reach_references_in_every_created_closure() {
+    for source in [
+        "const r=mk();r();let x=1;function mk():()=>number{return ():number=>x;}",
+        "let r=()=>0;setup();r();let x=1;function setup():void{r=()=>x;}",
+        "const r=mk();r();let x=1;function mk():()=>number{return ()=>read();}function read():number{return x;}",
+        "const r=mk();r();let x=1;function mk():()=>number{function nested():()=>number{return ()=>x;}return nested();}",
+        "const r=mk();r();let x=1;function mk():()=>()=>number{return ():()=>number=>()=>x;}",
+        "f();let x=1;function f(g:()=>number=()=>x):number{return g();}",
+    ] {
+        reject(&body(source), "C10");
+    }
+    reject(
+        "let r=()=>0;const ignored=setup();let x=1;function setup():number{r=()=>x;return 0;}export function main():void{r();}",
+        "C10",
+    );
+    accept(&body(
+        "function mk():()=>number{let x=1;return ()=>x;}const r=mk();r();",
+    ));
+    reject(
+        "const ignored=set();let x=1;function set():number{x=4;return 0;}export function main():void{}",
+        "C10",
+    );
+    accept(&body(
+        "let x=1;const r=mk();function mk():()=>number{return ()=>x;}r();",
+    ));
+}
+
+#[test]
+fn function_valued_arrow_results_need_their_own_annotation() {
+    for source in [
+        "const make=()=>()=>1;",
+        "const f=()=>1;const make=()=>f;",
+        "function get():()=>number{return ()=>1;}const make=()=>get();",
+        "const f=()=>1;const make=()=>true?f:f;",
+        "const make:()=>()=>number=()=>()=>1;",
+    ] {
+        reject(&body(source), "C11");
+    }
+    accept(&body("const make=():()=>number=>()=>1;const f=make();f();"));
+}
+
+#[test]
+fn defaults_cannot_refer_to_top_level_body_declarations() {
+    for source in [
+        "function g():number{return 1;}function f(a:number=g()):number{function g():number{return 2;}return a;}",
+        "let x=1;function f(a:number=x):number{let x=2;return a;}",
+        "let x=1;function f(a:()=>number=()=>x):number{const x=2;return a();}",
+        "function f(a:number=Infinity):number{let Infinity=2;return a;}",
+        "function f(a:string=String(1)):string{function String(n:number):string{return 'x';}return a;}",
+    ] {
+        reject(&body(source), "C11");
+    }
+    accept(&body(
+        "let x=1;function f(a:number=x):number{{let x=2;}return a;}f();",
+    ));
+    accept(&body(
+        "let x=1;function f(a:(x:number)=>number=(x:number)=>x):number{let x=2;return a(x);}f();",
+    ));
+}
+
+#[test]
+fn nested_aliases_have_one_function_signature_per_declaration() {
+    let result = format!("{}number", "()=>".repeat(20));
+    let mut parameter = String::from("number");
+    for _ in 0..20 {
+        parameter = format!("(g:{parameter})=>number");
+    }
+    let source = body(&format!(
+        "function result(f:{result}):{result}{{return f;}}function parameter(f:{parameter}):{parameter}{{return f;}}"
+    ));
+    let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
+    let aliases: Vec<_> = compiled
+        .luau
+        .lines()
+        .filter(|line| line.starts_with("type "))
+        .collect();
+    assert_eq!(aliases.len(), 43);
+    for alias in aliases {
+        assert_eq!(alias.matches(" -> ").count(), 1, "{alias}");
+    }
 }

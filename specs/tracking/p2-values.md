@@ -37,8 +37,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 - [x] `pipeline.md` §5.14 implemented; `UPVALUE_BUDGET` measured and
   pinned by a test at and past the bound.
 - [x] P2.1 entries pass in full; later slices stay `unsupported`.
-- [ ] `luau-analyze` passes on the generated modules and the stress set
-  (round 2 found an inferred-type chain that crashes it).
+- [x] `luau-analyze` passes on the generated modules and the stress set.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements
@@ -98,6 +97,17 @@ value flow, defaults, type printing).
 | `s4_growth.rs` states 7.77 s; it measures 8.70 s | MINOR | S fix states the cost |
 | C15 lists closures per function as a bound; §5.14.7 says none is needed | MINOR | C15 text |
 | The tracking slice table, entry count, and checklist are stale | MINOR | This note |
+
+Fix record: closure references propagate to the creating
+declaration; arrows with function results need an annotation; defaults
+cannot name body declarations; nested function types print through
+their own aliases. Growth (Debug / Release time ratio, output ratio):
+inferred chain 3.58 / 2.71 (C11); deep result types 3.72 / 3.54 (1.6);
+deep parameter types 3.76 / 3.49 (0.58). Largest over all shapes 6.49
+/ 6.43, output 62.7. Growth test 8.20 s Debug. The deep-type shapes
+pass `luau-analyze` without the aliases, so they stay out of the
+stress set (§5.11). Random: 640 programs, 425 accepted (each passes
+`tsc`, `node`, `luau-analyze`), 215 rejected.
 
 ## Failures before the fix
 

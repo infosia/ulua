@@ -1,19 +1,46 @@
 //! P2.1 source fixtures serve ABI, analyzer, and growth tests.
 
-/// Shapes for the P2.1 analyzer and growth gates.
-pub const SHAPES: &[&str] = &["nested-functions", "arrows"];
+/// Shapes for P2.1 growth measurements and analyzer admission checks.
+pub const SHAPES: &[&str] = &[
+    "nested-functions",
+    "arrows",
+    "inferred-type-chain",
+    "deep-result-types",
+    "deep-parameter-types",
+];
 
-/// Fill a source size with sibling declarations or arrow assignments.
+/// The inferred function result violates the arrow annotation rule.
+pub fn diagnostic(shape: &str) -> Option<&'static str> {
+    (shape == "inferred-type-chain").then_some("C11")
+}
+
+/// Fill a source size with declarations, arrows, or nested function annotations.
 pub fn source(shape: &str, bytes: usize) -> String {
     let mut out = String::from("export function main():void{");
-    if shape == "arrows" {
-        out.push_str("let f=()=>0;");
+    match shape {
+        "arrows" => out.push_str("let f=()=>0;"),
+        "inferred-type-chain" => out.push_str("const f0=()=>0;"),
+        _ => {}
+    }
+    let result_type = format!("{}number", "()=>".repeat(20));
+    let mut parameter_type = String::from("number");
+    for _ in 0..20 {
+        parameter_type = format!("(f:{parameter_type})=>number");
     }
     let mut count = 0;
     loop {
         let unit = match shape {
             "nested-functions" => format!("function f{count}():number{{return {count};}}"),
             "arrows" => "f=()=>0;".to_owned(),
+            "inferred-type-chain" => format!("const f{}=()=>f{count};", count + 1),
+            "deep-result-types" | "deep-parameter-types" => {
+                let ty = if shape == "deep-result-types" {
+                    &result_type
+                } else {
+                    &parameter_type
+                };
+                format!("function f{count}(g:{ty}):{ty}{{return g;}}")
+            }
             _ => return String::new(),
         };
         if out.len() + unit.len() + 1 > bytes {
