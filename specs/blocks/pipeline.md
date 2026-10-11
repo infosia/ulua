@@ -6,6 +6,7 @@ Rev 2: §3.1, §3.4, §3.10, §5.10 to §5.12, §6.3 and §6.5 (P1 Phase Review)
 Rev 3: §3.10, §5.8, §5.10, §5.11, §6.3 (P1 Phase Review round 2).
 Rev 4: the S5 forms of §5.8 and §5.10; `OUTPUT_FACTOR`; §7 heap value.
 Rev 5: §3.10, §5.8, §5.10, §5.13 (P1 Phase Review round 3).
+Rev 6: §4.6a, §7 values (round 8).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -115,6 +116,14 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    error after the Rust frame returns.
 6. After a memory-limit error, the shim runs a full collection before
    it returns.
+6a. Each error that the pinned Luau VM raises for a size limit gives
+   `limit:memory`, and each error for a depth limit gives `limit:stack`,
+   whatever the host limits are. The shim holds the list of these
+   errors, read from the pinned VM source, with the source location of
+   each. Examples: "not enough memory", "string length overflow"
+   (`MAXSSIZE`), "memory allocation error: block too big", "stack
+   overflow". A test reaches each listed error that a P1 script can
+   reach, through the ABI. Any other Luau error of a run is `internal`.
 7. Each instance is one `lua_State` from `lua_newstate` with the
    budget allocator, `luaL_openlibs`, and `luaL_sandbox`. Each call
    runs on a thread from `luaL_sandboxthread`.
@@ -248,12 +257,12 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 |---|---|---|
 | `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
-| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 51.9 MB at the ceiling (`flat`, Release) |
+| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak at the ceiling over every growth shape (S11 measures; S5: 51.9 MB, `flat`, Release) |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
-| `OUTPUT_FACTOR` | 80, prelude 843 B | largest measured ratio 56.7 (`&&` over spilled bindings); margin 41% |
+| `OUTPUT_FACTOR` | 80, prelude 843 B | largest measured ratio 62.7 (`%` chain over a spilled binding, S7); margin 27% |
 | `ALLOCATION_STEP_BYTES` | 256 | 1,000,000 charged steps of the slowest measured input take about 2.0 s in Release |
 
 ## 8. Corpus runner

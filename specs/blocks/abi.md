@@ -1,10 +1,11 @@
 # C ABI
 
-Status: Rev 2, 2026-10-11. ABI version 1, experimental: no binary
+Status: Rev 4, 2026-10-12. ABI version 1, experimental: no binary
 compatibility promise until P3 closes.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 Rev 2: §1.10, §8 (P1 Phase Review round 2).
 Rev 3: §1.10 names the dynamic library (round 3).
+Rev 4: §3 run messages (round 8).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -75,7 +76,8 @@ The parameter can be null. Run codes: `trap:<kind>` (corpus.md §6),
 code `host:output`. `ULUA_INTERNAL` has the code `internal`. If the OS
 refuses the compiler thread, `ulua_compile` gives `ULUA_FAILED` with the
 code `host:resources` and does not poison the context. In P1 a run diagnostic
-has offset `UINT64_MAX`.
+has offset `UINT64_MAX`. A run diagnostic message holds no chunk name and
+no line of the generated Luau (`CLAUDE.md` invariant 6).
 
 ## 4. Values
 

@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
+Status: open. Contracts: `pipeline.md` Rev 6, `abi.md` Rev 4,
 `corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 19.
 
 ## Scope
@@ -30,6 +30,7 @@ Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 | S8 | Phase Review round 5 fixes: `collisions.md` Rev 17 C7 rule 4, `surface.md` Rev 8 | Codex |
 | S9 | Phase Review round 6 fixes: `collisions.md` Rev 18 C7 rule 4 and C11 | Codex |
 | S10 | Phase Review round 7 fixes: `collisions.md` Rev 19 `ALIAS_TEST_BOUND` | Codex |
+| S11 | Phase Review round 8 fixes: `pipeline.md` Rev 6 §4.6a, `abi.md` Rev 4 §3 | Codex |
 
 ## Exit checklist
 
@@ -483,6 +484,21 @@ output, and passes `luau-analyze`.
 | The alias walk is quadratic: `const aN = aN-1 \|\| x === 1;` chains, read many times; Debug 8 KiB 0.09 s, 32 KiB 1.00 s (ratio 11.1, limit 8); Release 16 KiB 0.04 s, 64 KiB 0.39 s | MAJOR | C7: flattened alias sets of at most 8 references (`ALIAS_TEST_BOUND`); `r83`; S10 adds an alias-chain growth shape |
 | C11 states wrong `tsc` codes for `await`: TS1262 at module level, none in a function body | MINOR | C11 text |
 | A hashbang line gives C11 with the message for module directives | note | S10 fixes the message |
+
+## Phase Review round 8
+
+Reviewer: fresh agent, whole phase, diff `f5f0bf1..cce8946`. 1 MAJOR,
+3 MINOR. Random: 5,200 programs, 3,292 accepted; 0 `tsc` errors, 0
+`node` differences, 0 `luau-analyze` errors, 0 `internal`. About 100
+hand-written edge cases agree. Limits recover; busy rules hold; the
+dynamic library exports the 14 functions only.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| String doubling with `max_memory_bytes` 2 GiB and 10,000,000 steps gives `internal` ("string length overflow", `MAXSSIZE` 1 << 30) and poisons the context; a 17-part template at 4 GiB gives "memory allocation error: block too big" | MAJOR | pipeline.md §4.6a; S11 |
+| The `OUTPUT_FACTOR` row of §7 states 56.7; S7 measured 62.7. The heap peak covers only the S5 shapes | MINOR | §7 row; S11 remeasures the heap |
+| Run messages hold generated Luau lines (`script:46: stack overflow`) | MINOR | abi.md §3; S11 |
+| `s4_review.rs` and `s5_native.rs` state no cost (0.13 s, 0.12 s) | MINOR | S11 |
 
 ## Failures before the fix
 
