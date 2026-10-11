@@ -90,3 +90,31 @@ impl FunctionTypes {
         self.names.get(&signature).cloned().unwrap_or(signature)
     }
 }
+
+// Crowded functions use nested pages. Every constructor keeps at most 128 fields.
+pub(super) fn spill_constructor(fields: &[(String, String, &str)]) -> (String, String) {
+    if fields.len() <= super::SPILL_FIELDS {
+        let ty = fields
+            .iter()
+            .map(|(name, ty, _)| format!("{name}: {ty}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let value = fields
+            .iter()
+            .map(|(name, ty, value)| format!("{name} = ({value}) :: {ty}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return (format!("{{ {ty} }}"), format!("{{ {value} }}"));
+    }
+    let mut types = vec![];
+    let mut values = vec![];
+    for (page, fields) in fields.chunks(super::SPILL_FIELDS).enumerate() {
+        let (ty, value) = spill_constructor(fields);
+        types.push(format!("__ulua_page{page}: {ty}"));
+        values.push(format!("__ulua_page{page} = {value}"));
+    }
+    (
+        format!("{{ {} }}", types.join(", ")),
+        format!("{{ {} }}", values.join(", ")),
+    )
+}

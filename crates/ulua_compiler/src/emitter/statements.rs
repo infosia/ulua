@@ -67,6 +67,7 @@ impl Emitter<'_> {
                     self.temp(v)
                 };
                 self.write_binding(*id, value)?;
+                self.joins.assigned(*id);
                 self.release(v);
                 if let Some(v) = old {
                     self.release(v);
@@ -84,7 +85,7 @@ impl Emitter<'_> {
                 self.line("end");
             }
             S::If(e, a, b) => {
-                let prior = self.joins.clone();
+                self.joins.enter();
                 let t = self.expression(e, depth)?;
                 self.line(format!("if {} then", self.temp(t)));
                 self.release(t);
@@ -98,11 +99,10 @@ impl Emitter<'_> {
                     self.indent -= 1;
                 }
                 self.line("end");
-                self.joins.extend(prior);
-                self.joins.extend(ir::writes(s));
+                self.joins.leave();
             }
             S::While(e, b) => {
-                let prior = self.joins.clone();
+                self.joins.enter();
                 self.line("while true do");
                 self.indent += 1;
                 if !matches!(e.kind, ir::ExprKind::Boolean(true)) {
@@ -115,11 +115,10 @@ impl Emitter<'_> {
                 self.loops.pop();
                 self.indent -= 1;
                 self.line("end");
-                self.joins.extend(prior);
-                self.joins.extend(ir::writes(s));
+                self.joins.leave();
             }
             S::For(init, test, update, body, ids) => {
-                let prior = self.joins.clone();
+                self.joins.enter();
                 self.statements(init, depth)?;
                 let tail = self.generated("boolean", "true")?;
                 let mut copies = vec![];
@@ -195,8 +194,7 @@ impl Emitter<'_> {
                 }
                 self.indent -= 1;
                 self.line("end");
-                self.joins.extend(prior);
-                self.joins.extend(ir::writes(s));
+                self.joins.leave();
             }
             S::Break => {
                 if let Some(Loop {

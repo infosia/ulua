@@ -253,7 +253,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
-| `OUTPUT_FACTOR` | S6 measures | at least 25% above the largest measured ratio |
+| `OUTPUT_FACTOR` | 80, prelude 843 B | largest measured ratio 56.7 (`&&` over spilled bindings); margin 41% |
 | `ALLOCATION_STEP_BYTES` | 256 | 1,000,000 charged steps of the slowest measured input take about 2.0 s in Release |
 
 ## 8. Corpus runner

@@ -49,6 +49,11 @@ fn without_write_assertions(source: &str, initializers: bool) -> String {
     for line in source.lines() {
         let line = if !initializers && line.trim_start().starts_with("local ") {
             line.to_owned()
+        } else if line.trim_start().starts_with("local __ulua_spill") {
+            let start = line.find(" = (").unwrap();
+            let end = line.rfind(") :: ").unwrap();
+            let constructor = format!("{} = {}", &line[..start], &line[start + 4..end]);
+            without_field_assertions(&constructor)
         } else if let Some(end) = line.rfind(") :: ") {
             if let Some(start) = line.find(" = (") {
                 format!("{} = {}", &line[..start], &line[start + 4..end])
@@ -63,6 +68,22 @@ fn without_write_assertions(source: &str, initializers: bool) -> String {
         out.push_str(&line);
         out.push('\n');
     }
+    out
+}
+// Constructor fields use primitive types or function aliases and literal defaults.
+fn without_field_assertions(mut text: &str) -> String {
+    let mut out = String::new();
+    while let Some(start) = text.find(" = (") {
+        let value = start + 4;
+        let end = value + text[value..].find(") :: ").unwrap();
+        let suffix = end + 5;
+        let next = suffix + text[suffix..].find([',', '}']).unwrap();
+        out.push_str(&text[..start]);
+        out.push_str(" = ");
+        out.push_str(&text[value..end]);
+        text = &text[next..];
+    }
+    out.push_str(text);
     out
 }
 #[test]

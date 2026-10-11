@@ -1,15 +1,13 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
 mod expressions;
+mod joins;
 mod statements;
 mod types;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,
     ir::{self, Type},
 };
-use std::{
-    collections::{BTreeSet, HashMap},
-    fmt::Write,
-};
+use std::{collections::HashMap, fmt::Write};
 
 const SPILL_FIELDS: usize = 128;
 
@@ -45,7 +43,7 @@ fn number(n: f64) -> String {
     } else if n == 0.0 && n.is_sign_negative() {
         "(-0)".into()
     } else {
-        n.to_string()
+        format!("{n:?}")
     }
 }
 struct Slot {
@@ -66,7 +64,7 @@ struct Emitter<'a> {
     copies: HashMap<usize, String>,
     generated: Vec<(String, String, String, bool)>,
     loops: Vec<Loop>,
-    joins: BTreeSet<usize>,
+    joins: joins::Joins,
 }
 #[derive(Clone)]
 struct Loop {
@@ -94,7 +92,7 @@ impl<'a> Emitter<'a> {
             copies: HashMap::new(),
             generated: vec![],
             loops: vec![],
-            joins: BTreeSet::new(),
+            joins: joins::Joins::default(),
         }
     }
     fn guard(&self, depth: u32) -> Result<u32, Diagnostic> {
@@ -137,7 +135,7 @@ impl<'a> Emitter<'a> {
         let location = self.location(id)?;
         // Delay the join until a read proves that the binding is live.
         // Each read emits at most one join, independent of enclosing branch count.
-        if self.joins.remove(&id) {
+        if self.joins.clear(id) {
             self.write_binding(id, &location)?;
         }
         Ok(location)
@@ -149,7 +147,7 @@ impl<'a> Emitter<'a> {
                 .as_ref()
                 .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?,
         );
-        self.joins.remove(&id);
+        self.joins.clear(id);
         self.write(&self.location(id)?, value, &ty);
         Ok(())
     }
@@ -240,23 +238,25 @@ impl<'a> Emitter<'a> {
                 self.locations.insert(id, name);
             } else {
                 let table = (index - available) / fields_per_table;
-                tables[table].push(format!("{name}: {}", self.function_types.luau(ty)));
-                self.locations
-                    .insert(id, format!("{}.{name}", self.spill_name(table)));
+                tables[table].push((name.clone(), self.function_types.luau(ty), initial(ty)));
+                let page = (index - available) % fields_per_table / SPILL_FIELDS;
+                let location = if fields_per_table > SPILL_FIELDS {
+                    format!("{}.__ulua_page{page}.{name}", self.spill_name(table))
+                } else {
+                    format!("{}.{name}", self.spill_name(table))
+                };
+                self.locations.insert(id, location);
             }
         }
         for (table, fields) in tables.into_iter().enumerate() {
             if fields.is_empty() {
                 continue;
             }
+            let (ty, value) = types::spill_constructor(&fields);
             let _ = writeln!(
                 declarations,
-                // C10 guarantees that each field is written before its first read.
-                // The declared table type checks all accesses; the empty seed avoids
-                // a structural comparison of thousands of constructor fields.
-                "local {0}: {{ {1} }} = {{}} :: any",
-                self.spill_name(table),
-                fields.join(", ")
+                "local {}: {ty} = ({value}) :: {ty}",
+                self.spill_name(table)
             );
         }
         for (i, slot) in self.slots.iter().enumerate() {
@@ -391,5 +391,20 @@ pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         );
     }
     out.push_str("}\n");
+    check_output(module, out.len())?;
     Ok(out)
+}
+
+fn check_output(module: &ir::Module, generated: usize) -> Result<(), Diagnostic> {
+    let bound = crate::OUTPUT_PRELUDE_BYTES
+        .saturating_add(crate::OUTPUT_FACTOR.saturating_mul(module.source.len()));
+    if generated > bound {
+        return Err(Diagnostic::at(
+            &module.source,
+            0,
+            "internal",
+            "Generated source exceeds the output bound",
+        ));
+    }
+    Ok(())
 }

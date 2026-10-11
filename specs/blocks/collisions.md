@@ -209,18 +209,32 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
 - `===` and `!==` between function values are rejected. The Luau
   compiler reuses a closure that captures no upvalue, so two closures
   that JavaScript keeps distinct can compare equal.
-- `tsc` gives TS2367 when both operands have literal types of different
-  values. The checker approximates this with three operand classes:
-  - *constant*: a literal, `-` of a numeric literal, or a `const`
-    binding whose initializer is constant. It has a value.
-  - *narrowable*: a `boolean` `let` binding, or a `boolean` parameter
-    that the function assigns. `tsc` can narrow it to a literal type.
-  - *other*: every other operand.
-  If neither operand is *other*, `===` and `!==` are rejected, except
-  for two *constant* operands of the same value. Without the rule, the
-  inline operands of `(false == true)` also fail `luau-analyze` (D10).
+- `tsc` gives TS2367 when the literal types of the two operands do not
+  overlap. The checker models them. For each operand it derives *L*, a
+  finite set of literal values, *wide*, or *narrowable*:
+  - a number, string, or boolean literal, `-` of a numeric literal, or
+    a template without substitutions: the one value;
+  - a `const` binding: *L* of its initializer;
+  - `(e)`: *L* of `e`;
+  - `!e`: the negation of each value of a finite *L*(e);
+  - `c ? a : b`: the union of *L*(a) and *L*(b);
+  - `a && b`: *L*(b), with `false` added if `a` can be `false`;
+  - `a || b`: *L*(b), with `true` added if `a` can be `true`;
+  - a `boolean` `let` binding, or a `boolean` parameter that the
+    function assigns: *narrowable*, because `tsc` narrows it on
+    assignment;
+  - every other form: *wide*.
+  If a part is *narrowable*, the result is *narrowable*. Else if a part
+  is *wide*, the result is *wide*. `a` can be `false` if *L*(a) is
+  *wide* or holds `false`.
+  `===` and `!==` are rejected if both operands have finite sets that
+  do not overlap, or if one operand is *narrowable* and the other is
+  not *wide*. Without the rule, inline literal operands such as
+  `(false == true)` also fail `luau-analyze` (D10). A `tsc`-rejected
+  form that the model accepts is a defect of the model. It is fixed
+  when it is found.
 
-Accept: `a10`, `a14`, `a28`. Reject: `r16`, `r17`, `r70`, `r71`.
+Accept: `a10`, `a14`, `a28`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`.
 
 ## C8. Forms outside the subset
 

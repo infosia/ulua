@@ -98,6 +98,9 @@ impl Checker<'_> {
                                 "Equality requires identical value types",
                             ));
                         }
+                        let left = self.operand(&b.left, &a);
+                        let right = self.operand(&b.right, &r);
+                        self.equalities.push((b.span, left, right));
                         (Type::Boolean, if op == "===" { "==" } else { "~=" })
                     }
                     "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" => {

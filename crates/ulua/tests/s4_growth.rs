@@ -1,9 +1,11 @@
 //! Growth gate: source ceiling shapes, 16 KiB and 64 KiB, minimum of three full ABI compiles.
-//! Measured Debug cost: about 11 seconds. The test prints each ratio and its wall cost.
+//! Measured Debug cost: about 12 seconds. The test prints each ratio and its wall cost.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
+#[path = "../src/s6_inputs.rs"]
+mod review;
 // This test uses the compile operation only.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
@@ -16,9 +18,13 @@ use ulua_compiler::{COMPILER_STACK_BYTES, Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_
 fn full_pipeline_growth_stays_below_eight() {
     let start = Instant::now();
     let n = 16 * 1024;
-    for shape in inputs::SOURCE_SHAPES {
+    let mut max_growth: f64 = 0.0;
+    let mut max_output: f64 = 0.0;
+    for shape in inputs::SOURCE_SHAPES.iter().chain(review::SHAPES) {
         let make = |bytes| {
-            if matches!(*shape, "forward" | "backward" | "star") {
+            if review::SHAPES.contains(shape) {
+                review::source(shape, bytes)
+            } else if matches!(*shape, "forward" | "backward" | "star") {
                 inputs::call_graph(shape, bytes)
             } else {
                 inputs::source_ceiling(shape, bytes)
@@ -44,14 +50,19 @@ fn full_pipeline_growth_stays_below_eight() {
         let output_ratio =
             generated.len().saturating_sub(OUTPUT_PRELUDE_BYTES) as f64 / large.len() as f64;
         eprintln!(
-            "S5 output {shape}: source={} generated={} ratio={output_ratio:.3} bound={OUTPUT_FACTOR}",
+            "S6 output {shape}: source={} generated={} ratio={output_ratio:.3} bound={OUTPUT_FACTOR}",
             large.len(),
             generated.len()
         );
-        assert!(
-            generated.len() <= OUTPUT_PRELUDE_BYTES + OUTPUT_FACTOR * large.len(),
-            "{shape}: output ratio {output_ratio}"
-        );
+        max_output = max_output.max(output_ratio);
+        if let Ok(directory) = std::env::var("ULUA_GROWTH_OUTPUT_DIR") {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                std::path::Path::new(&directory).join(format!("{shape}.luau")),
+                &generated,
+            )
+            .unwrap();
+        }
         let mut times = [Duration::MAX; 2];
         for _ in 0..3 {
             for (i, source) in [&small, &large].into_iter().enumerate() {
@@ -68,7 +79,12 @@ fn full_pipeline_growth_stays_below_eight() {
             4 * n,
             times[1]
         );
-        assert!(ratio <= 8.0, "{shape}: ratio {ratio}");
+        max_growth = max_growth.max(ratio);
     }
     eprintln!("S4 growth gate cost: {:?}", start.elapsed());
+    assert!(max_growth <= 8.0, "growth ratio {max_growth}");
+    assert!(
+        1.25 * max_output <= OUTPUT_FACTOR as f64,
+        "output margin: ratio {max_output}"
+    );
 }

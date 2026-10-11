@@ -94,6 +94,89 @@ fn c7_equal_types_and_function_identity() {
     );
     reject(&body("const x = 1 != 1;"), "C7");
 }
+
+#[test]
+fn c7_each_operand_class_pair_in_both_orders() {
+    for op in ["===", "!=="] {
+        let operands = ["true", "n", "p"];
+        for (left, a) in operands.iter().enumerate() {
+            for (right, b) in operands.iter().enumerate() {
+                let source = format!(
+                    "function f(p:boolean):boolean{{let n=true;return {a}{op}{b};}}export function main():void{{}}"
+                );
+                if (left == 2 || right == 2) || (left == 0 && right == 0) {
+                    accept(&source);
+                } else {
+                    reject(&source, "C7");
+                }
+            }
+        }
+        for (a, b) in [("1", "2"), ("true", "false"), ("'a'", "'b'")] {
+            reject(&body(&format!("const x={a}{op}{b};")), "C7");
+            reject(
+                &body(&format!("const a={a};const b={b};const x=a{op}b;")),
+                "C7",
+            );
+        }
+        for (a, b) in [
+            ("-0", "0"),
+            ("0", "-0"),
+            ("true", "true"),
+            ("0xffffffffffffffffff", "4722366482869645213696"),
+            (r#""\0""#, r#""\u0000""#),
+        ] {
+            accept(&body(&format!("const x={a}{op}{b};")));
+            accept(&body(&format!(
+                "const a={a};const alias=a;const b={b};const x=alias{op}b;"
+            )));
+        }
+        // Assignment anywhere in the function makes a boolean parameter narrowable.
+        reject(
+            &format!(
+                "function f(p:boolean):boolean{{const x=p{op}true;p=false;return x;}}export function main():void{{}}"
+            ),
+            "C7",
+        );
+        reject(
+            &format!(
+                "function f(p:boolean,q:boolean):boolean{{p=true;q=false;return p{op}q;}}export function main():void{{}}"
+            ),
+            "C7",
+        );
+        accept(&body(&format!(
+            "let n=1;let s='x';const a=n{op}2;const b=s{op}'y';"
+        )));
+        // Pure nonconstant expressions retain the primitive boolean type.
+        accept(&body(&format!("const x=true?(1<2){op}false:false;")));
+    }
+}
+
+#[test]
+fn output_bound_rejects_a_module_with_inconsistent_source_size() {
+    let allocator = Allocator::default();
+    let source = body("print('a literal from a checked module');");
+    let parsed = Parser::new(&allocator, &source, SourceType::ts()).parse();
+    let mut module = checker::check(&parsed.program, source.as_bytes(), DEPTH_CEILING).unwrap();
+    module.source.clear();
+    assert_eq!(emitter::emit(&module).unwrap_err().code, "internal");
+}
+
+#[test]
+fn number_literals_use_compact_round_trip_forms() {
+    for (literal, emitted) in [
+        ("5e-324", "5e-324"),
+        ("1.7976931348623157e308", "1.7976931348623157e308"),
+        ("1e21", "1e21"),
+        ("1e-7", "1e-7"),
+        ("9007199254740993", "9007199254740992.0"),
+    ] {
+        let compiled = accept(&body(&format!("let n={literal};")));
+        assert!(
+            compiled.luau.contains(&format!("({emitted}) :: number")),
+            "{literal}"
+        );
+    }
+}
 #[test]
 fn c8_each_unimplemented_control_and_expression_form() {
     for s in [
@@ -213,6 +296,16 @@ fn c15_small_functions_avoid_spill_and_nested_bindings_share_one_table() {
     let large = accept(&body(&text));
     assert_eq!(large.luau.matches("local __ulua_spill").count(), 1);
     assert!(large.luau.contains("__ulua_spill1.__ulua_b"));
+    assert!(!large.luau.contains("{} :: any"));
+    for line in large
+        .luau
+        .lines()
+        .filter(|line| line.contains("local __ulua_spill"))
+    {
+        let constructor = line.split_once(" = ({ ").unwrap().1;
+        assert!(constructor.matches(" = ").count() <= 128);
+        assert!(constructor.contains("(0) :: number"));
+    }
 }
 #[test]
 fn depth_checks_cover_defaults_and_assignment_operands() {

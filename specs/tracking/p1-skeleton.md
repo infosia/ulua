@@ -193,6 +193,31 @@ are exact.
   abi.md §7 and 5 `ulua_internal_shim_*`. The layout probe is in a
   test-only archive.
 
+## S6 record
+
+- Codex task. Tests: 59 in the default build, 61 with all features.
+  `gate.sh full` passes: `cargo-test` 22 s, `luau-witnesses` 21 s.
+- Pending joins: one depth bit set per binding; no set copy or merge.
+  `ir::reads` and `ir::writes` no longer build sets per statement.
+  Release, 16 KiB / 64 KiB: `pending-if` 34.6 / 1,029.2 ms (ratio
+  29.7) before, 7.6 / 28.9 ms (3.79) after; `pending-loops` 18.6 /
+  476.1 ms (25.6) before, 6.4 / 24.4 ms (3.80) after.
+- `OUTPUT_FACTOR` = 80. Largest ratio over 21 shapes: 56.71
+  (`spilled-and`). The `1e308` shape drops from 64.72 to 15.91 with
+  shortest number literals.
+- Spill: typed constructors of at most 128 fields. Binding stress
+  modules pass in 0.19 to 1.03 s; one constructor fails each in 0.46
+  to 3.33 s ("Code is too complex to typecheck").
+- C7: `-0 === 0` and `0 === -0` literals: `tsc` accepts, `node` gives
+  `true`. The checker treats them as one value.
+- Gap found by S6: `(!true) === true` is accepted; `tsc` gives TS2367.
+  Primary measurement of 14 forms (`tsc` 5.9.2): `!`, `?:`, `&&`,
+  `||`, and templates without substitutions carry literal types;
+  `(p && true) === false`, `(-a) === 1`, `(!p) === true` give no
+  error; `(p || true) === false`, `(c ? "x" : "y") === "z"`, `` `a`
+  === "b" ``, `a === -1` (with `const a = 1`) give TS2367. C7 now
+  states the literal-set model; `r72` and `a28` pin it.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

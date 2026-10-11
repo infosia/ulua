@@ -34,6 +34,20 @@ impl Checker<'_> {
             } else {
                 self.bindings[id].ty = Some(value.ty.clone());
             }
+            self.operand_classes[id] = if !self.bindings[id].mutable {
+                let operand = self.operand(
+                    v.init.as_ref().ok_or_else(|| self.unsupported(v.span))?,
+                    &value,
+                );
+                match self.resolve_operand(operand) {
+                    constant @ Operand::Constant(_) => constant,
+                    _ => Operand::Other,
+                }
+            } else if value.ty == Type::Boolean {
+                Operand::Narrowable
+            } else {
+                Operand::Other
+            };
             out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
         }
         Ok(out)
@@ -75,6 +89,9 @@ impl Checker<'_> {
         let id = self.lookup(n.name.as_str(), n.span)?;
         if !self.bindings[id].mutable {
             return Err(self.error(n.span, "C11", "Target is not mutable"));
+        }
+        if self.bindings[id].ty == Some(Type::Boolean) {
+            self.operand_classes[id] = Operand::Narrowable;
         }
         Ok(id)
     }

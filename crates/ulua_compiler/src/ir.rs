@@ -142,47 +142,17 @@ pub(crate) fn loop_break(body: &Statement) -> bool {
     false
 }
 
-// Only assignments escape a branch; declarations belong to its lexical scope.
-pub(crate) fn writes(statement: &Statement) -> Vec<usize> {
-    let mut pending = vec![statement];
-    let mut ids = std::collections::BTreeSet::new();
-    while let Some(s) = pending.pop() {
-        match s.form() {
-            Statement::Assign(id, _, _) => {
-                ids.insert(*id);
-            }
-            Statement::Block(body) => pending.extend(body),
-            Statement::If(_, a, b) => {
-                pending.push(a);
-                if let Some(b) = b {
-                    pending.push(b);
-                }
-            }
-            Statement::While(_, body) => pending.push(body),
-            Statement::For(init, _, update, body, _) => {
-                pending.extend(init);
-                pending.push(body);
-                if let Some(update) = update {
-                    pending.push(update);
-                }
-            }
-            _ => {}
-        }
-    }
-    ids.into_iter().collect()
-}
-
 // Read identities prove liveness when a pending join reaches the next statement.
-pub(crate) fn reads(statement: &Statement) -> std::collections::BTreeSet<usize> {
+pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
     let mut statements = vec![statement];
     let mut expressions = vec![];
-    let mut ids = std::collections::BTreeSet::new();
+    let mut ids = Vec::new();
     while let Some(s) = statements.pop() {
         match s.form() {
             Statement::Declare(_, e) | Statement::Eval(e) => expressions.push(e),
             Statement::Assign(id, op, e) => {
                 if op.is_some() {
-                    ids.insert(*id);
+                    ids.push(*id);
                 }
                 expressions.push(e);
             }
@@ -209,7 +179,7 @@ pub(crate) fn reads(statement: &Statement) -> std::collections::BTreeSet<usize> 
     while let Some(e) = expressions.pop() {
         match &e.kind {
             ExprKind::Read(id) => {
-                ids.insert(*id);
+                ids.push(*id);
             }
             ExprKind::Unary(_, a) => expressions.push(a),
             ExprKind::Binary(_, a, b) | ExprKind::Logical(_, a, b) => {

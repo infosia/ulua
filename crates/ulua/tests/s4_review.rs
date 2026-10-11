@@ -8,6 +8,26 @@ use ulua::*;
 use ulua_compiler::{DEPTH_CEILING, Limits};
 
 #[test]
+fn number_literals_round_trip_through_the_luau_vm() {
+    for (literal, value) in [
+        ("5e-324", f64::from_bits(1)),
+        ("1.7976931348623157e308", f64::MAX),
+        ("1e21", 1e21),
+        ("1e-7", 1e-7),
+        ("-0", -0.0),
+        ("9007199254740993", 9007199254740992.0),
+    ] {
+        let mut script = Script::new(&format!(
+            "export function f():number{{return {literal};}}export function main():void{{}}"
+        ));
+        assert_eq!(script.instance(RunLimits::default()).0, ULUA_OK);
+        let result = script.call(script.index("f"), &[]);
+        assert_eq!(result.0, ULUA_OK);
+        assert_eq!(result.2.number.to_bits(), value.to_bits(), "{literal}");
+    }
+}
+
+#[test]
 fn allocation_work_stops_at_the_default_step_limit() {
     let source = "export function main():void{let s=\"x\";for(let i=0;i<18;i++){s=`${s}${s}`;}let t=\"\";for(let i=0;i<1000;i++){t=`${s}${s}${s}${s}`;}}";
     let mut script = Script::new(source);
