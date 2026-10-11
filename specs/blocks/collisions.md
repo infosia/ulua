@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 20, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 21, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -8,7 +8,7 @@ Rev 16: the three resolutions and the divergence format, invariant 5;
 Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
 literal conditions, strict-mode early errors, round 6; Rev 19:
 `ALIAS_TEST_BOUND`, round 7; Rev 20: nested bodies inherit the tested
-set, P2.1).
+set, P2.1; Rev 21: C1.4 function type equality, P2.1 review).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -56,8 +56,13 @@ results, and object fields.
 2. `T` is assignable to `T | null`.
 3. Array element types must be identical. `tsc` accepts `string[]` as
    `{ length: number }[]` by covariance.
-4. Function types relate only when their parameter types are identical
-   and their results relate.
+4. A function type is assignable only to an equal function type: the
+   same parameter types, the same result type, and the same number of
+   parameters with a default. The branches of `?:` have one type, so
+   two function branches have equal types. `tsc` relates a function
+   with fewer required parameters to a function type with more; a call
+   through the second type can then omit an argument that the first
+   needs (`b ? g : f` with `g(a: number = 7)` and `f(a: number)`).
 5. An object type and a class never relate, in either direction, until
    P2 decides structural or nominal relation. A call of a field of
    function type reads the field and calls it. A method call is a
@@ -66,7 +71,7 @@ results, and object fields.
    type, or an object literal seen through a class type, selects the
    wrong call form.
 
-Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`,
+Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`, `r84`,
 `r54`.
 
 ## C2. Absence — `T | null` only
@@ -375,8 +380,8 @@ function body, and `node` gives a SyntaxError in both places. A rule in this fil
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
-Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`.
+Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
+`r75`, `r78`, `r81`, `r82`, `r85`.
 
 ## C12. Evaluation order
 

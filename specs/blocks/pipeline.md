@@ -8,6 +8,7 @@ Rev 4: the S5 forms of §5.8 and §5.10; `OUTPUT_FACTOR`; §7 heap value.
 Rev 5: §3.10, §5.8, §5.10, §5.13 (P1 Phase Review round 3).
 Rev 6: §4.6a, §7 values (round 8).
 Rev 7: §5.14 functions as values, `limit:upvalues` (P2.1).
+Rev 8: §5.14.3 parentheses for an optional function type (P2.1 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -211,7 +212,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        one block can call each other.
     3. An arrow lowers to a Luau function expression with typed
        parameters and a typed result. A function type lowers to a Luau
-       function type through a generated type alias (§5.10).
+       function type through a generated type alias (§5.10). A function
+       type inside an optional type is in parentheses:
+       `((number) -> boolean)?`. Without them, Luau reads
+       `(number) -> boolean?` as a function with an optional result.
     4. The upvalues of a generated function are the distinct captured
        locals of enclosing functions that it reads or writes; a spill
        table counts once. A function with more upvalues than

@@ -1,10 +1,11 @@
 # Accepted surface
 
-Status: Rev 8, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 9, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
-C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5).
+C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
+Rev 9: trailing defaults, P2.1 review).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -94,7 +95,7 @@ its target.
 
 | Node kind | Accepted form |
 |---|---|
-| `FormalParameter` | A `BindingIdentifier` with a type annotation. No binding pattern, no rest element, no `?`, no modifiers. A default is allowed in a `FunctionDeclaration` or a `MethodDefinition` if the type excludes `null` (C2). |
+| `FormalParameter` | A `BindingIdentifier` with a type annotation. No binding pattern, no rest element, no `?`, no modifiers. A default is allowed in a `FunctionDeclaration` or a `MethodDefinition` if the type excludes `null` (C2) and each later parameter also has a default. `tsc` types a parameter with a default before a parameter without one as `T | undefined` (D16). |
 
 ## 5. Types
 

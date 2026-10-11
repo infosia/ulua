@@ -1,7 +1,7 @@
 # P2 value representations
 
-Status: open. Contracts: `pipeline.md` Rev 7, `abi.md` Rev 4,
-`corpus.md` Rev 3, `surface.md` Rev 8, `collisions.md` Rev 20.
+Status: open. Contracts: `pipeline.md` Rev 8, `abi.md` Rev 4,
+`corpus.md` Rev 3, `surface.md` Rev 9, `collisions.md` Rev 21.
 Decisions: D15, D16 (`plan.md` §8).
 
 ## Slices
@@ -62,6 +62,19 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   the expected C7, C9, C10 codes.
 - `gate.sh full`: 57 entries in P2.1 or earlier; 16 generated modules,
   13 stress modules.
+
+### P2.1 Phase Review round 1
+
+Reviewer: fresh agent, diff `b4e42f3..e7532c2`. 3 MAJOR. Fuzz: 400
+closure and loop programs, 346 accepted, each equal to `node`, `tsc`
+clean, `luau-analyze` clean; 400 deep-nesting programs, no
+`internal`. Upvalue limits hold at two and three levels.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `?:` between function values takes the first branch type; `b ? g : f` with `g(a = 7)` and `f(a)` accepts `b()`; `tsc` TS2554; the run gives `internal` | MAJOR | C1.4 Rev 21: function types assign only when equal, defaults counted; `r84` |
+| `function g(a = 1, b)` gets the type of `(a, b) => number`; `tsc` gives `a` the type `number \| undefined` | MAJOR | surface.md Rev 9: trailing defaults only; `r85` |
+| A function-typed parameter with a default emits `(number, (number) -> boolean?) -> boolean`; `luau-analyze` reads an optional result | MAJOR | pipeline.md §5.14.3 parentheses; `a30` |
 
 ## Failures before the fix
 
