@@ -35,11 +35,16 @@ Status: open. Contracts: `pipeline.md` Rev 6, `abi.md` Rev 4,
 ## Exit checklist
 
 - [x] `sh tools/gate.sh full` passes with the Luau witnesses.
-- [ ] Every function of `abi.md` has a direct unit test; the layout test
-  passes.
+- [x] Every function of `abi.md` has a direct unit test; the layout test
+  passes (round 9: `crates/ulua/src/tests.rs`, `header_layout`).
 - [x] `pipeline.md` §7 values measured and pinned by tests.
-- [ ] P0 carry-over: the P1 Phase Review verifies C12.6 and C16.4 (`plan.md` §9 Rev 2).
-- [ ] P0 carry-over N3 (`a25`), N4 (`a26`), N5 (surface.md Rev 5).
+- [x] P0 carry-over: the P1 Phase Review verifies C12.6 and C16.4 (`plan.md` §9 Rev 2).
+  Round 9 verified both by the contract text: C12.6 agrees with the
+  JavaScript order of `push`; C16.4 is restrictive against `tsc` and
+  sound for JavaScript. P1 rejects their forms with `unsupported`, so
+  the executable check moves to the P2 exit (`plan.md` §9 Rev 4).
+- [x] P0 carry-over N3 (`a25`), N4 (`a26`), N5 (surface.md Rev 5): `a25`
+  and `a26` pass; N5 has the P2 entry `a27`.
 - [ ] Phase Review with no open CRITICAL or MAJOR finding.
 
 ## S1 record
@@ -523,9 +528,30 @@ dynamic library exports the 14 functions only.
 | Run messages hold generated Luau lines (`script:46: stack overflow`) | MINOR | abi.md §3; S11 |
 | `s4_review.rs` and `s5_native.rs` state no cost (0.13 s, 0.12 s) | MINOR | S11 |
 
+## Phase Review round 9
+
+Reviewer: fresh agent, whole phase, diff `f5f0bf1..87d38f4`. No
+CRITICAL, no MAJOR, 4 MINOR. Extreme host limits (0 to UINT64_MAX for
+memory and steps, a 512 KiB host stack) give only limit codes; no
+`internal`, no poison, no crash. About 140 edge cases, 600 random
+programs, 2,350 mutants, and 9,000 number formats agree with `tsc`,
+`node`, and `luau-analyze`. A depth sweep of 32,500 compiles gives no
+`internal`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `runtime_errors.h` maps the `buffer.writestring` argument error "string length overflow" (`VM/src/lbuflib.cpp:228`) to `limit:memory`; the text equals the `MAXSSIZE` error | MINOR | Not reachable in P1 (no `buffer` library). Gap for the phase that exposes `buffer` |
+| The two size errors that P1 reaches are tested only with the `measurements` feature | MINOR | A default-build test (S12) |
+| A `%` chain after 180 `let` bindings peaks at 61.1 MB, above the recorded 59.0 MB | MINOR | `pipeline.md` §7 row |
+| The exit checklist leaves C12.6, C16.4, N5 and the ABI test item open | MINOR | Checklist closed with the evidence above |
+
 ## Failures before the fix
 
 ## Gaps
+
+- `runtime_errors.h` classifies by message text. The `buffer` library
+  raises "string length overflow" for an argument error. The phase that
+  exposes `buffer` classifies by source location, not by text.
 
 - Sequential `for` loops each keep one generated local (round 1
   MINOR). P6 measures the reuse of locals across sibling scopes.

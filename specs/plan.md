@@ -154,3 +154,8 @@ Each entry records what changed, the evidence, and the consequence.
   `tracking/p1-skeleton.md`. Consequence: `corpus.md` Rev 2 adds the
   `js-comparable` header; `collisions.md` Rev 16 states the divergence
   format; an audit of C1 to C16 found no rule that changes in P1.
+- **Rev 4 (2026-10-12).** The P1 Phase Review verified C12.6 and C16.4
+  by the contract text. P1 rejects their forms with `unsupported`, so
+  no P1 program executes them. Consequence: the P2 exit runs entries
+  that execute C12.6 and C16.4. Evidence: `tracking/p1-skeleton.md`
+  round 9.
