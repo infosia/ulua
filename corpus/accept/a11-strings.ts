@@ -3,6 +3,7 @@
 // rule: C5
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   const name = "héllo";
   const greeting = name + ", " + "世界";

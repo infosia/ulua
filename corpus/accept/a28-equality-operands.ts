@@ -3,6 +3,7 @@
 // rule: C7
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function pick(n: number): string {
   if (n === 1 || n === 2) {
     return "low";

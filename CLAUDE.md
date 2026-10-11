@@ -56,13 +56,15 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    `T` lowers to. A lowering can replace an operation with a fixed Luau
    expression. A lowering never changes how a value is represented: no
    sentinels, no re-encoded strings, no length fields beside arrays.
-5. **Accept only forms where JavaScript and Luau agree.** The run of an
-   accepted program prints the output that `node` prints, or it traps
-   at the point where `node` produces a value or an array hole outside
-   the static type. A limit diagnostic and a resource-limit trap (invariant 2)
-   are outside this comparison: `node` has its own, different limits.
-   If a form cannot meet this with the native representation, the
-   compiler rejects it.
+5. **JavaScript agreement is the default. A divergence is decided.**
+   An accepted program prints the output that `node` prints, unless
+   `collisions.md` names a divergence for its form. A divergence entry
+   states the measured outputs of both sides. A disagreement that no
+   rule names is a defect: the compiler rejects the form, or the
+   contract names the divergence. A trap where `node` produces a value
+   outside the static type is a named divergence. A limit diagnostic
+   and a resource-limit trap (invariant 2) are outside the comparison:
+   `node` has its own, different limits.
 6. **One pipeline.** The Rust compiler emits Luau source with
    `--!strict` type annotations for the pinned Luau compiler. Do not
    emit bytecode. Do not add a second backend. Generated Luau and
@@ -87,10 +89,12 @@ witnesses are divergence detectors, never oracles:
 
 - `tsc` gates acceptance. Every accept entry type-checks. Every reject
   entry's header states what `tsc` does, measured.
-- `node` runs every accept and trap entry. Under invariant 5 each accept
-  entry is comparable with `node`. A disagreement is a defect of this
-  compiler: it accepted a form that it must reject. A disagreement
-  never corrects a golden.
+- `node` runs each accept and trap entry with the header
+  `js-comparable: yes`. A disagreement is a defect of this compiler or
+  a divergence that `collisions.md` must name (invariant 5). A
+  disagreement never corrects a golden. An entry with
+  `js-comparable: no` cites the collision id that names its
+  divergence.
 - `luau-analyze` in strict mode checks the generated Luau with zero
   errors.
 - The Luau VM runs the generated Luau through the product C ABI.

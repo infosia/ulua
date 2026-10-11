@@ -3,6 +3,7 @@
 // rule: C3, C4, C7
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function logic(t: boolean, f: boolean): string {
   return `${t && f} ${t || f} ${!t} ${t ? f : !f} ${t ? !f : f}`;
 }

@@ -3,6 +3,7 @@
 // rule: C14
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   let big = 0xffffffffffffffffff;
   print(`${big === 4722366482869645213696}`);

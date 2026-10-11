@@ -3,6 +3,7 @@
 // rule: C14
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 type R = { __index: number; nil: number; end: number };
 
 class Q {

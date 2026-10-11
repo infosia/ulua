@@ -3,6 +3,7 @@
 // rule: C1, C6, C9
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 function counter(): () => number {
   let count = 0;
   return (): number => {

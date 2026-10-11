@@ -18,3 +18,4 @@ current rule.
 | Code conventions: 1,000 lines per source file | 2026-10-11 | Smaller files keep implementation handoffs small. |
 | Severity follows invariant 2 | 2026-10-11 | Hostile scripts make any script input a realistic reach. |
 | Environment: `LUAU_SOURCE_DIR` | 2026-10-11 | A local checkout path is machine-specific and stays out of the repository. |
+| Invariant 5: JavaScript agreement is the default; a divergence is decided and named | 2026-10-11 | Owner decision in the P1 Phase Review: exact `node` agreement for every accepted form is too strict. The level follows the owner's prior project: `node` is a divergence detector, and a `js-comparable: no` entry cites its collision. |

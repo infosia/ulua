@@ -1,7 +1,8 @@
 # Corpus contract
 
-Status: Rev 1, 2026-10-11 (Rev 0 the same day; Rev 1 adds the `phase`
-header and the Luau witness rules for P1).
+Status: Rev 2, 2026-10-11 (Rev 0 the same day; Rev 1 adds the `phase`
+header and the Luau witness rules for P1; Rev 2 adds the
+`js-comparable` header, CLAUDE.md invariant 5).
 
 ## 1. Layout
 
@@ -32,6 +33,7 @@ Each entry starts with `//` header lines, in this order:
 // rule: <collision ids, comma-separated>
 // phase: P1 | P2 | ... | P6
 // tsc: accepts | errors <TSnnnn>[, <TSnnnn>...]
+// js-comparable: yes | no <collision id>    (accept and trap only)
 // expected-error: <rule id>: <text>        (reject only)
 // trap: <kind>                             (trap only)
 ```
@@ -45,6 +47,9 @@ Each entry starts with `//` header lines, in this order:
 - `expected-error` starts with one id of the `rule` header. The
   compiler diagnostic code must equal that id (§4).
 - `trap` names one trap kind of §6.
+- `js-comparable: no <id>` names a rule of the `rule` header. That
+  rule of `collisions.md` names the divergence, with the measured
+  outputs of both sides.
 
 ## 4. Witness rules
 
@@ -60,7 +65,8 @@ Each entry starts with `//` header lines, in this order:
   prelude and every accept and trap entry reports zero errors. One
   program over the prelude and every reject entry reports, per file,
   the codes that its header states.
-- `node`: each accept entry writes exactly its golden, byte for byte,
+- `node`: the gate runs each entry with `js-comparable: yes`. Each such
+  accept entry writes exactly its golden, byte for byte,
   and does not throw. For a trap entry, the `node` output starts with
   the golden lines before the `trap:` line. Then `node` must write more
   lines or throw. After that point `node` continues with a value

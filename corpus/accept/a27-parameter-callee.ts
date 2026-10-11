@@ -3,6 +3,7 @@
 // rule: C11
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 function twice(f: (n: number) => number, n: number): number {
   return f(f(n));
 }

@@ -3,6 +3,7 @@
 // rule: C4
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   const zero = 0;
   print(`${-zero} ${1e-6} ${1e-7} ${1.5e-7}`);

@@ -3,6 +3,7 @@
 // rule: C12
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 type Box = { f: number };
 
 let n = 0;

@@ -3,6 +3,7 @@
 // rule: C1
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   let count = 1;
   const step = 2;

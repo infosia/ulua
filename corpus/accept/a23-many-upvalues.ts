@@ -3,6 +3,7 @@
 // rule: C15
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   const c0 = 0;
   const c1 = 1;

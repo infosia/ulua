@@ -3,6 +3,7 @@
 // rule: C6
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   const xs: number[] = [10, 20, 30];
   print(`${xs[0]} ${xs[2]} ${xs.length}`);

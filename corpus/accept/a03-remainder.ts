@@ -3,6 +3,7 @@
 // rule: C4
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function isNegativeZero(x: number): boolean {
   return x === 0 && 1 / x < 0;
 }

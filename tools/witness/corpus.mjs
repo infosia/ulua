@@ -49,6 +49,7 @@ function parseHeader(entry) {
     keys.push(m[1]);
   }
   const want = [...ORDER];
+  if (entry.dir !== "reject") want.push("js-comparable");
   if (entry.dir === "reject") want.push("expected-error");
   if (entry.dir === "trap") want.push("trap");
   if (keys.join(",") !== want.join(",")) fail(entry.id, `header keys ${keys.join(",")}, want ${want.join(",")}`);
@@ -58,6 +59,11 @@ function parseHeader(entry) {
   if (entry.dir !== "reject" && header.tsc !== "accepts") fail(entry.id, "accept and trap entries state tsc: accepts");
   if (!/^P[1-6]$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
+  if (entry.dir !== "reject") {
+    const jc = /^(yes|no (C\d+))$/.exec(header["js-comparable"] || "");
+    if (!jc) fail(entry.id, `js-comparable is '${header["js-comparable"]}', want 'yes' or 'no <collision id>'`);
+    else if (jc[2] && !rules.includes(jc[2])) fail(entry.id, `js-comparable cites ${jc[2]}, which the rule header does not name`);
+  }
   if (entry.dir === "reject") {
     const id = /^(C\d+): ./.exec(header["expected-error"] || "");
     if (!id || !rules.includes(id[1])) fail(entry.id, "expected-error must start with an id of the rule header");
@@ -182,8 +188,10 @@ for (const group of [[...accept, ...trap], reject]) {
   }
 }
 
-// node: accept entries print the golden; trap entries print its prefix.
+// node: comparable accept entries print the golden; comparable trap
+// entries print its prefix (CLAUDE.md invariant 5).
 for (const e of [...accept, ...trap]) {
+  if (headers.get(e.id)["js-comparable"] !== "yes") continue;
   const goldenPath = e.path.replace(/\.ts$/, ".expected");
   if (!existsSync(goldenPath)) {
     fail(e.id, "missing .expected");

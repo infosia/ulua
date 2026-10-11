@@ -3,6 +3,7 @@
 // rule: C3, C9
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   let total = 0;
   for (let i = 0; i < 10; i++) {

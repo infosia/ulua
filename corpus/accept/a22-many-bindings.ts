@@ -3,6 +3,7 @@
 // rule: C15
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function id(x: number): number {
   return x;
 }

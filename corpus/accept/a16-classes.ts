@@ -3,6 +3,7 @@
 // rule: C1, C13
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 class Counter {
   private value: number;
 

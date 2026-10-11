@@ -3,6 +3,7 @@
 // rule: C14
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   print(`a
 bc`);

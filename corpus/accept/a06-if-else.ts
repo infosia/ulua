@@ -3,6 +3,7 @@
 // rule: C3
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function sign(n: number): string {
   if (n > 0) {
     return "positive";

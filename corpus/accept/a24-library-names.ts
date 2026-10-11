@@ -3,6 +3,7 @@
 // rule: C14
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 export function main(): void {
   const math: number[] = [7];
   const table = "t";

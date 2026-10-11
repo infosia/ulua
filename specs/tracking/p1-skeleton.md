@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 1, `surface.md` Rev 6, `collisions.md` Rev 15.
+`corpus.md` Rev 2, `surface.md` Rev 6, `collisions.md` Rev 15.
 
 ## Scope
 
@@ -357,6 +357,13 @@ C7 Rev 15 (user request under D15): `==` and `!=` follow `===` and
 69 same-type pairs of `0`, `-0`, `1`, `NaN`, `Infinity`, `-Infinity`,
 `0.1`, `""`, `"a"`, `"0"`, `"NaN"`, `true`, `false` give the same
 result for `==` and `===`. `r17` now fails rule 3; new `a29`.
+
+Invariant 5 revision (user decision): `node` is a divergence detector.
+A decided divergence is named in `collisions.md` with the measured
+outputs of both sides, and its entries state `js-comparable: no <id>`.
+corpus.md Rev 2 adds the header; every current accept and trap entry
+states `js-comparable: yes`. P2 can now decide `x === null` and library
+misses as named divergences instead of rejections.
 
 P2 note on `undefined` (user question): an accepted program cannot
 write `undefined` (C2). `node` still gives `undefined` where a library

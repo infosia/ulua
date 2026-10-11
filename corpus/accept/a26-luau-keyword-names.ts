@@ -3,6 +3,7 @@
 // rule: C14
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function end(local: number, nil: number): number {
   return local + nil;
 }

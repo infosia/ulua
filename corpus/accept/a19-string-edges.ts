@@ -3,6 +3,7 @@
 // rule: C5
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 function show(parts: string[]): string {
   let out = "";
   for (const p of parts) {

@@ -3,6 +3,7 @@
 // rule: C1, C2
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 type Point = { x: number; y: number };
 type Tagged = { point: Point; tag: string | null };
 

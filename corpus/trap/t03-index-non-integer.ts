@@ -3,6 +3,7 @@
 // rule: C6
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 // trap: index-out-of-range
 export function main(): void {
   const xs: number[] = [10, 20];

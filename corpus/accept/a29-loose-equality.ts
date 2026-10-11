@@ -3,6 +3,7 @@
 // rule: C7
 // phase: P1
 // tsc: accepts
+// js-comparable: yes
 function classify(n: number): string {
   if (n == 0) {
     return "zero";

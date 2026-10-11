@@ -3,6 +3,7 @@
 // rule: C2, C7, C16
 // phase: P2
 // tsc: accepts
+// js-comparable: yes
 type Node = { value: number; next: Node | null };
 
 function find(head: Node | null, value: number): Node | null {
