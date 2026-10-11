@@ -37,6 +37,13 @@ function grow(): number {
   return 9;
 }
 
+const ws: number[] = [1];
+
+function growWs(): number {
+  ws.push(5);
+  return 9;
+}
+
 class K {
   v: number;
 
@@ -87,4 +94,8 @@ export function main(): void {
     print(`${z}`);
   }
   print(`${zs.length}`);
+  ws.push(growWs());
+  for (const w of ws) {
+    print(`${w}`);
+  }
 }

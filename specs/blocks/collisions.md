@@ -1,8 +1,8 @@
 # Semantic collisions — decided rules
 
-Status: Rev 11, 2026-10-11 (Rev 0 to Rev 10 the same day; P0 Phase
-Review rounds 1 to 11 changed C1 to C6, C9, C10, C12, C14 and added C11
-to C15).
+Status: Rev 12, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
+to C16).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -288,10 +288,10 @@ binding or a field at a fixed point of that order. A Luau operator or
 call can read a local, a field, or a table later: `n + inc()` reads `n`
 after `inc()` runs. The rule:
 
-**The lowering never reads a binding, a field, or an element at a
-different point of the evaluation than JavaScript does.** Where the
-plain Luau form reads a value later, the lowering copies the value into
-a temporary at the JavaScript point. Where the plain Luau form
+**The lowering never reads a binding, a field, an element, or an array
+length at a different point of the evaluation than JavaScript does.**
+Where the plain Luau form reads a value later, the lowering copies the
+value into a temporary at the JavaScript point. Where the plain Luau form
 evaluates a part earlier, the lowering orders the statements.
 
 Instances of the rule, each pinned in `a18`:
@@ -306,6 +306,8 @@ Instances of the rule, each pinned in `a18`:
    `i`), then `e`, then stores. The C6 check runs at the store.
 5. A compound assignment `t op= e` evaluates the target reference,
    reads the old value, evaluates `e`, then stores.
+6. `xs.push(e)` evaluates `xs`, then `e`, then reads the length of
+   `xs`, then stores. `xs[#xs + 1] = e` reads the length before `e`.
 
 Accept: `a18`.
 
@@ -407,10 +409,13 @@ says `T`. The checker narrows only where nothing else can run a write:
 2. `x` is a `const` binding, or a `let` binding or a parameter that no
    function or arrow assigns. A module-level `let` is never narrowed.
 3. The narrowing ends at the next assignment to `x` on that path.
-4. A field, an element, and every other reference are never narrowed.
+4. The narrowing of a `let` binding or a parameter does not continue
+   into a nested function or arrow body. The body can run after a later
+   assignment. The narrowing of a `const` binding continues.
+5. A field, an element, and every other reference are never narrowed.
    Copy the value into a `const` to narrow it.
 
-Accept: `a14`. Reject: `r67`, `r68`.
+Accept: `a14`. Reject: `r67`, `r68`, `r69`.
 
 ## Open items
 

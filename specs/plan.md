@@ -1,6 +1,6 @@
 # Ulua — project plan
 
-Rev 1 (2026-10-11; Rev 0 the same day). This document records the founding design and the
+Rev 2 (2026-10-11; Rev 0 and Rev 1 the same day). This document records the founding design and the
 phase plan. It is a working plan, not a contract. Corrections land in §9
 with evidence. Read §9 before you reason from a claim here.
 
@@ -81,7 +81,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
   ABI: context, compile, instance, call of an exported function with
   typed values, the output capability. Source, depth, time, and memory
   limits from the start. The measured compiler bounds of collisions.md
-  C15, each with a gate test at and past the bound. Exit: every P1 corpus entry matches its golden
+  C15, each with a gate test at and past the bound. The P0 carry-over
+  items (§9 Rev 2). Exit: every P1 corpus entry matches its golden
   through the C ABI; `luau-analyze` reports zero errors; Phase Review.
 - **P2 — value representations.** One slice per representation family:
   strings, arrays, nullable values, records, closures, classes,
@@ -132,3 +133,9 @@ Each entry records what changed, the evidence, and the consequence.
   `collisions.md` C15 with gate tests at and past each bound. Evidence:
   P0 Phase Review rounds 2 and 6 (`specs/tracking/p0-founding.md`).
   Consequence: P1 exit includes the C15 gate tests.
+- **Rev 2 (2026-10-11).** P0 closes after Phase Review round 12. The
+  owner moved the review of the round-12 contract fixes (C12 instance 6,
+  C16.4) and the round-12 MINOR items N3, N4, N5 to the P1 exit.
+  Evidence: `specs/tracking/p0-founding.md` round 12. Consequence: the
+  P1 Phase Review verifies C12.6 and C16.4, and P1 adds entries for N3,
+  N4, and N5.

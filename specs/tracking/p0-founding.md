@@ -1,13 +1,14 @@
 # P0 founding
 
-Status: open.
+Status: COMPLETE, 2026-10-11. The owner moved the review of the round-12
+fixes and the round-12 MINOR items to the P1 exit (`plan.md` §9 Rev 2).
 
 ## Exit checklist
 
 - [x] `CLAUDE.md`, `specs/plan.md`, `specs/workflow.md`, `specs/rules-history.md`.
-- [x] `specs/blocks/collisions.md` Rev 11, `specs/blocks/corpus.md`, `specs/blocks/surface.md` Rev 4.
+- [x] `specs/blocks/collisions.md` Rev 12, `specs/blocks/corpus.md`, `specs/blocks/surface.md` Rev 4.
 - [x] `prelude/ulua.d.ts`, `tsconfig.json`, `package.json` (TypeScript 5.9.2).
-- [x] Seed corpus: 24 accept, 68 reject, 3 trap.
+- [x] Seed corpus: 24 accept, 69 reject, 3 trap.
 - [x] Collision probes measured: `specs/tracking/p0-collisions.md`.
 - [x] `tools/gate.sh quick|full`, `tools/hygiene.sh`.
 - [x] The gate passes with the TypeScript from `npm install`.
@@ -22,7 +23,7 @@ Status: open.
 - [x] Phase Review round 9: 1 MAJOR, 3 MINOR. All fixed (below).
 - [x] Phase Review round 10: 2 MAJOR, 5 MINOR. All fixed (below).
 - [x] Phase Review round 11: 2 MAJOR, 5 MINOR. All fixed (below).
-- [ ] Phase Review round 12 on the fixes.
+- [x] Phase Review round 12: 2 MAJOR, 3 MINOR. MAJOR items fixed in the contract (below). Their review and the MINOR items move to P1.
 
 ## Measurements
 
@@ -179,6 +180,19 @@ A node kind that the table does not list is rejected in every position.
 | MAJOR 1 | Narrowing was unspecified; `tsc` keeps a narrowed field across a call that clears it | C16: only `const` bindings and unassigned-by-closure locals narrow; never fields or elements; `r67`, `r68`; `a14` cites C16 |
 | MAJOR 2 | A script binding `math` captured the `math.fmod` that C4.3 emits | C14.5: generated identifiers in a namespace apart from Luau globals; library reads through compiler-only names; `a24` |
 | MINOR | `Utf8.byteLength` missing from the member row; conditional branch types; `void` arrow bodies; stale §4 references | surface.md Rev 4; collisions.md references |
+
+## Phase Review round 12
+
+The owner ended the review rounds of P0 here. Recent findings concern
+checker rules that P1 implements and tests.
+
+| Id | Finding | Change |
+|---|---|---|
+| MAJOR N1 | A narrowed `let` continued into an arrow body that ran after `s = null`; node printed `nullx`, Luau raised a concat error | C16.4: the narrowing of a `let` or a parameter does not continue into a nested function body; `r69` |
+| MAJOR N2 | C12 did not name the array length; `xs[#xs+1] = g()` gave `1,9` in Luau, node gave `1,5,9` | C12 names the length; instance 6 for `push`; `a18` pins `ws.push(growWs())` |
+| MINOR N3 | A raw CR or CR LF in a template literal becomes LF in JavaScript; no entry pins it | P1 |
+| MINOR N4 | Luau keywords (`end`, `local`, `nil`, `then`, ...) as binding names; no entry pins them | P1 |
+| MINOR N5 | surface.md §3 `CallExpression` callee list does not name a parameter of function type | P1 |
 
 ## Gaps
 
