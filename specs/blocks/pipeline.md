@@ -139,6 +139,19 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 | `max_steps` | each `ulua_instance_new` and `ulua_call`: interrupt callbacks | `limit:steps` |
 | Luau call depth | each call (`LUAI_MAXCALLS`, `LUAI_MAXCCALLS`) | `limit:stack` |
 
+C15 bounds of P1, each a fixed compiler constant:
+
+| Code | Bound |
+|---|---|
+| `limit:parameters` | parameters of one function |
+| `limit:arguments` | arguments of one call |
+| `limit:template-parts` | literal parts and substitutions of one template literal |
+| `limit:temporaries` | temporaries and generated locals of one generated function; they never spill (§5.8) |
+
+`limit:nesting-depth` also bounds the nesting of the generated Luau
+below the Luau parser recursion limit of 1000. A bound that S3 finds
+necessary and that this table does not name is a contract question.
+
 1. A zero limit is a zero limit. It is never "no limit".
 2. The library has a ceiling for `max_source_bytes` and
    `max_nesting_depth`. A request above the ceiling uses the ceiling.
