@@ -73,7 +73,8 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
 ## Non-goals (permanent unless the plan is revised with evidence)
 
 - **npm compatibility and existing TypeScript code.** The subset rejects
-  the forms that do not agree under invariant 5.
+  each form that neither agrees with `node` nor has a named divergence
+  (invariant 5).
 - **Emulation of JavaScript semantics.** No runtime layer imitates a
   JavaScript value representation (invariant 4).
 - **Upstreaming to external projects.** When this project must change a
@@ -157,7 +158,7 @@ for one concept, no hedging.
    `corpus/trap/` are the executable definition of the language. A
    syntax or semantics decision without a corpus entry is not decided.
 3. **Every gate run compares every corpus entry with its golden** and
-   with the witnesses above.
+   with each witness above that applies to the entry.
 4. **Headless-first.** Every gate passes with no GPU, no window, and no
    device.
 5. **No panics in library code.** Use `Result` and `?`. No panic and no

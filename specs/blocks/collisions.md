@@ -1,15 +1,24 @@
 # Semantic collisions — decided rules
 
-Status: Rev 15, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 16, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
-structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`).
+structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
+Rev 16: the three resolutions and the divergence format, invariant 5).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
 `tsc` accepts a superset. This compiler narrows it. A form that `tsc`
 cannot police is policed here, with a diagnostic that names the rule.
 Measurements are in `specs/tracking/p0-collisions.md`.
+
+A rule resolves a collision in one of three ways: it rejects the form,
+it lowers the form to a fixed Luau expression that agrees with `node`,
+or it names a divergence. A divergence states the measured output of
+the Ulua run and of `node` for each input class where they differ. A
+trap where `node` continues with a value outside the static type is a
+divergence; its trap entries compare the output before the trap.
+Entries of any other divergence state `js-comparable: no <id>`.
 
 Each rule ends with the corpus entries that it names. An entry names its
 rules in its `rule:` header. `tools/witness/corpus.mjs` checks that the
@@ -165,7 +174,8 @@ Strings are the native UTF-8 Luau strings.
 4. Byte operations use prelude names that JavaScript does not define:
    `Utf8.byteLength`. Further names are decided in the P2 string slice.
 5. `toUpperCase`, `toLowerCase`, `trim`, `trimStart`, and `trimEnd` are
-   rejected until a lowering agrees with JavaScript on non-ASCII input.
+   rejected until a lowering agrees with JavaScript on non-ASCII input,
+   or a revision names the divergence.
    Luau `string.upper`, `string.lower`, and `%s` act on ASCII only.
 
 Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,

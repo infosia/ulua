@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 2, `surface.md` Rev 6, `collisions.md` Rev 15.
+`corpus.md` Rev 2, `surface.md` Rev 7, `collisions.md` Rev 16.
 
 ## Scope
 
@@ -364,6 +364,23 @@ outputs of both sides, and its entries state `js-comparable: no <id>`.
 corpus.md Rev 2 adds the header; every current accept and trap entry
 states `js-comparable: yes`. P2 can now decide `x === null` and library
 misses as named divergences instead of rejections.
+
+Invariant 5 audit (fresh agent, read-only, measured with `node` and
+the Luau CLI). No P1 rule changes. Stale text fixed: CLAUDE.md
+non-goals and principle 3, plan.md §2, §3, §5, D3 (§9 Rev 3),
+surface.md intro and the `==` row (it contradicted C7 Rev 15),
+collisions.md preamble and C5.5. Candidates for later phases, each
+with an agreeing lowering unless noted: C3 truth tests of `number` and
+`string` (`n ~= 0 and n == n`, `s ~= ""`); C4.6 `string + number` with
+the C4.5 function; C4.4 `**` with a guard for base 1 or -1 and a
+non-finite exponent (`1**NaN`: `node` NaN, Luau `^` 1); C4.7 bitwise
+with a signed fix-up (`-1|0`: `node` -1, `bit32.bor` 4294967295);
+`trim` with the JavaScript whitespace set; `x?: T` as a checked
+`T | undefined`. The one clean divergence candidate: string `<` and
+`>` (Luau compares bytes; they differ from `node` only for astral
+characters against U+E000 to U+FFFF). Kept rejections, each silently
+wrong otherwise: string `length` and index (byte vs UTF-16), case
+mapping, function `===`, `T | null` defaults, C9.3.
 
 P2 note on `undefined` (user question): an accepted program cannot
 write `undefined` (C2). `node` still gives `undefined` where a library

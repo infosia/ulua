@@ -28,14 +28,15 @@ An embedded scripting language for native host applications:
 | [AssemblyScript](https://www.assemblyscript.org/) | A TypeScript-syntax subset with ambient declarations gets editor tooling | Targets WebAssembly with its own runtime |
 
 Ulua differs from the first two by invariant 4 and 5 in `CLAUDE.md`. It
-rejects a form instead of adding a helper layer that imitates
-JavaScript values.
+rejects a form, lowers it to a fixed Luau expression that agrees, or
+names the divergence. It adds no helper layer that imitates JavaScript
+values.
 
 ## 3. Design invariants
 
 The normative copies live in `CLAUDE.md`. In short: embedded with a C
 ABI; hostile scripts; valid TypeScript subset; native Luau value
-representation; accept only forms where JavaScript and Luau agree; one
+representation; JavaScript agreement by default, each divergence named; one
 pipeline to typed Luau source.
 
 ## 4. Pipeline
@@ -58,7 +59,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | Witness | What it checks | Gate |
 |---|---|---|
 | `tsc` (pinned in `package.json`) | acceptance; the reject header | quick |
-| `node` | output of accept and trap entries | quick |
+| `node` | output of accept and trap entries with `js-comparable: yes` | quick |
 | `luau-analyze --!strict` | the generated Luau | quick, from P1 |
 | Luau VM through the C ABI | output of accept and trap entries | quick, from P1 |
 
@@ -117,7 +118,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 |---|---|---|---|
 | D1 | Embedded language with a C ABI; Luau VM in the product | 2026-10-11 | `CLAUDE.md` invariant 1 |
 | D2 | Scripts are hostile | 2026-10-11 | `CLAUDE.md` invariant 2 |
-| D3 | Accept only forms where JavaScript and Luau agree, in the native representation | 2026-10-11 | `CLAUDE.md` invariants 4, 5 |
+| D3 | JavaScript agreement by default, in the native representation; each divergence named in `collisions.md` (revised by §9 Rev 3) | 2026-10-11 | `CLAUDE.md` invariants 4, 5 |
 | D4 | Emit typed Luau (`--!strict`); `luau-analyze` is a witness | 2026-10-11 | `CLAUDE.md` invariant 6 |
 | D5 | `T \| null` is the only absence; `undefined` is rejected | 2026-10-11 | `collisions.md` C2 |
 | D6 | Strings are native UTF-8; encoding-dependent forms are rejected; byte operations use prelude names | 2026-10-11 | `collisions.md` C5 |
@@ -146,3 +147,10 @@ Each entry records what changed, the evidence, and the consequence.
   Evidence: `specs/tracking/p0-founding.md` round 12. Consequence: the
   P1 Phase Review verifies C12.6 and C16.4, and P1 adds entries for N3,
   N4, and N5.
+- **Rev 3 (2026-10-11).** Owner decision: invariant 5 changes from
+  "accept only forms where JavaScript and Luau agree" to "agreement by
+  default; a divergence is decided and named", the level of the
+  owner's prior project. D3 follows. Evidence: `rules-history.md`,
+  `tracking/p1-skeleton.md`. Consequence: `corpus.md` Rev 2 adds the
+  `js-comparable` header; `collisions.md` Rev 16 states the divergence
+  format; an audit of C1 to C16 found no rule that changes in P1.

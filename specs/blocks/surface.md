@@ -1,9 +1,10 @@
 # Accepted surface
 
-Status: Rev 6, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 7, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
-with a result, P1 Phase Review round 4).
+with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
+C7 Rev 15).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -11,7 +12,7 @@ and `oxc` ASTs. **A node kind that this file does not list is
 rejected, in every position** (collisions.md C11). A listed node kind is
 accepted only in the positions and with the children and types that its
 row states. `collisions.md` states why a listed form agrees with
-JavaScript. A form joins this list only with a contract change and
+JavaScript, or names its divergence. A form joins this list only with a contract change and
 corpus entries.
 
 Notation: "expr" is any listed expression node; "T" is a listed type.
@@ -74,7 +75,7 @@ rejected, also where `tsc` accepts it.
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
 | `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
-| `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==` on two operands of the same type (C7). `==`, `!=` with exactly one `NullLiteral` operand. |
+| `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). |
 | `LogicalExpression` | `&&`, `\|\|` on two booleans. `a ?? b` with `a: T \| null` and `b` assignable to `T` or `T \| null`. |
 | `ConditionalExpression` | A `boolean` test. Both branches have one type `T`, or one branch is `null` and the result is `T \| null`. |
 | `AssignmentExpression` | Only as an `ExpressionStatement` or a `for` update; its value is never used. Operators `=`; `+=` on numbers or on two strings; `-=`, `*=`, `/=`, `%=` on numbers. The target is an `IdentifierReference` of a `let` binding or a parameter, a `StaticMemberExpression` of a field (not a method), or a `ComputedMemberExpression` of an array element. |
