@@ -224,9 +224,13 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
     function assigns: *narrowable*, because `tsc` narrows it on
     assignment;
   - every other form: *wide*.
-  If a part is *narrowable*, the result is *narrowable*. Else if a part
-  is *wide*, the result is *wide*. `a` can be `false` if *L*(a) is
-  *wide* or holds `false`.
+  The value parts of a form are `e` of `(e)` and `!e`, `a` and `b` of
+  `c ? a : b`, and `b` of `a && b` and `a || b`. The condition `c` and
+  the left operand `a` of `&&` and `||` are not value parts. If an
+  operand or a value part is *narrowable*, the result is *narrowable*.
+  Else if a value part is *wide*, the result is *wide*. `a` can be
+  `false` if *L*(a) is *wide* or holds `false`; it can be `true` if
+  *L*(a) is *wide* or holds `true`.
   `===` and `!==` are rejected if both operands have finite sets that
   do not overlap, or if one operand is *narrowable* and the other is
   not *wide*. Without the rule, inline literal operands such as

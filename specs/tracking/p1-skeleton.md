@@ -211,12 +211,28 @@ are exact.
 - C7: `-0 === 0` and `0 === -0` literals: `tsc` accepts, `node` gives
   `true`. The checker treats them as one value.
 - Gap found by S6: `(!true) === true` is accepted; `tsc` gives TS2367.
-  Primary measurement of 14 forms (`tsc` 5.9.2): `!`, `?:`, `&&`,
-  `||`, and templates without substitutions carry literal types;
-  `(p && true) === false`, `(-a) === 1`, `(!p) === true` give no
-  error; `(p || true) === false`, `(c ? "x" : "y") === "z"`, `` `a`
-  === "b" ``, `a === -1` (with `const a = 1`) give TS2367. C7 now
-  states the literal-set model; `r72` and `a28` pin it.
+  Primary measurement of 14 forms (`tsc` 5.9.2, prelude, `--strict`).
+  Each is the return expression of `function f(c: boolean, p: boolean):
+  boolean { const a = 1; return <expr>; }`:
+
+  | Expression | `tsc` |
+  |---|---|
+  | `(!true) === true` | TS2367 |
+  | `(!true) === false` | accepts |
+  | `(c ? 1 : 2) === 3` | TS2367 |
+  | `(c ? 1 : 2) === 2` | accepts |
+  | `(p && true) === false` | accepts |
+  | `(true && false) === true` | TS2367 |
+  | `(p \|\| true) === false` | TS2367 |
+  | `` `a` === "b" `` | TS2367 |
+  | `(-a) === 1` | accepts |
+  | `a === -1` | TS2367 |
+  | `(!p) === true` | accepts |
+  | `(c ? true : false) === true` | accepts |
+  | `(c ? "x" : "y") === "z"` | TS2367 |
+  | `(1 + 1) === 3` | accepts |
+
+  C7 now states the literal-set model; `r72` and `a28` pin it.
 
 ## Phase Review round 1
 
