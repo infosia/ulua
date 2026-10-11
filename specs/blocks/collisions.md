@@ -218,8 +218,10 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
   - `(e)`: *L* of `e`;
   - `!e`: the negation of each value of a finite *L*(e);
   - `c ? a : b`: the union of *L*(a) and *L*(b);
-  - `a && b`: *L*(b), with `false` added if `a` can be `false`;
-  - `a || b`: *L*(b), with `true` added if `a` can be `true`;
+  - `a && b`: *L*(b) if `a` can be `true`, plus `false` if `a` can be
+    `false`;
+  - `a || b`: *L*(b) if `a` can be `false`, plus `true` if `a` can be
+    `true`;
   - a `boolean` `let` binding, or a `boolean` parameter that the
     function assigns: *narrowable*, because `tsc` narrows it on
     assignment;
@@ -228,7 +230,8 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
   `c ? a : b`, and `b` of `a && b` and `a || b`. The condition `c` and
   the left operand `a` of `&&` and `||` are not value parts. If an
   operand or a value part is *narrowable*, the result is *narrowable*.
-  Else if a value part is *wide*, the result is *wide*. `a` can be
+  Else if a value part that enters the result is *wide*, the result is
+  *wide*. `a` can be
   `false` if *L*(a) is *wide* or holds `false`; it can be `true` if
   *L*(a) is *wide* or holds `true`.
   `===` and `!==` are rejected if both operands have finite sets that

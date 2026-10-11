@@ -232,6 +232,9 @@ are exact.
   | `(c ? "x" : "y") === "z"` | TS2367 |
   | `(1 + 1) === 3` | accepts |
 
+  Codex measured two more: `(false && true) === true` and `(true ||
+  false) === false` give TS2367. The right operand enters the result
+  only if the left operand does not short-circuit.
   C7 now states the literal-set model; `r72` and `a28` pin it.
 
 ## Phase Review round 1
