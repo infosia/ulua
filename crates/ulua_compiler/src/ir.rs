@@ -76,6 +76,10 @@ pub(crate) struct Function {
     pub(crate) body: Vec<Statement>,
 }
 pub(crate) struct Expr {
+    // Structural width belongs to this node, even when parent and child share a source offset.
+    pub(crate) wide: bool,
+    // Return coverage needs the original test syntax after parentheses disappear.
+    pub(crate) bare_true: bool,
     pub(crate) start: u32,
     pub(crate) ty: Type,
     pub(crate) kind: ExprKind,

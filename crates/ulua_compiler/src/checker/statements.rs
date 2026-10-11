@@ -34,13 +34,7 @@ impl Checker<'_> {
             } else {
                 self.bindings[id].ty = Some(value.ty.clone());
             }
-            self.equality.bindings[id] = if !self.bindings[id].mutable {
-                self.expression_fact(&value)?
-            } else if value.ty == Type::Boolean {
-                NARROWABLE
-            } else {
-                WIDE
-            };
+            self.equality.bindings[id] = self.bindings[id].mutable || value.wide;
             out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
         }
         Ok(out)
@@ -65,10 +59,12 @@ impl Checker<'_> {
                 self.variable_names(d)?;
             }
         }
+        let checkpoint = self.equality.checkpoint();
         let mut out = vec![];
         for s in statements {
             out.push(self.statement(s, depth)?);
         }
+        self.equality.restore(checkpoint);
         Ok(out)
     }
     fn test(&mut self, e: &Expression<'_>, depth: u32) -> Result<Expr, Diagnostic> {
@@ -82,9 +78,6 @@ impl Checker<'_> {
         let id = self.lookup(n.name.as_str(), n.span)?;
         if !self.bindings[id].mutable {
             return Err(self.error(n.span, "C11", "Target is not mutable"));
-        }
-        if self.bindings[id].ty == Some(Type::Boolean) {
-            self.equality.bindings[id] = NARROWABLE;
         }
         Ok(id)
     }
@@ -148,6 +141,8 @@ impl Checker<'_> {
                         "-"
                     }),
                     Expr {
+                        wide: false,
+                        bare_true: false,
                         start: u.span.start,
                         ty: Type::Number,
                         kind: ExprKind::Number(1.0),
@@ -164,25 +159,38 @@ impl Checker<'_> {
             _ => Err(self.error(e.span(), "C11", "Invalid statement expression")),
         }
     }
-    fn statement(&mut self, s: &Statement<'_>, depth: u32) -> Result<S, Diagnostic> {
+    pub(super) fn statement(&mut self, s: &Statement<'_>, depth: u32) -> Result<S, Diagnostic> {
         let depth = self.descend(depth, s.span())?;
         let form = match s {
             Statement::VariableDeclaration(d) => S::Block(self.variables(d, depth)?),
             Statement::BlockStatement(b) => S::Block(self.block(&b.body, depth)?),
             Statement::ExpressionStatement(e) => self.effect(&e.expression, depth, false)?,
-            Statement::IfStatement(i) => S::If(
-                self.test(&i.test, depth)?,
-                Box::new(self.statement(&i.consequent, depth)?),
-                i.alternate
+            Statement::IfStatement(i) => {
+                let test = self.test(&i.test, depth)?;
+                let t = self.equality.region(&test, true);
+                let f = self.equality.region(&test, false);
+                let a = self.region_statement(&i.consequent, depth, &t)?;
+                let b = i
+                    .alternate
                     .as_ref()
-                    .map(|s| self.statement(s, depth).map(Box::new))
-                    .transpose()?,
-            ),
+                    .map(|s| self.region_statement(s, depth, &f))
+                    .transpose()?;
+                if equality::holds_exit(&a) {
+                    self.equality.enter(&f);
+                }
+                if b.as_ref().is_some_and(equality::holds_exit) {
+                    self.equality.enter(&t);
+                }
+                S::If(test, Box::new(a), b.map(Box::new))
+            }
             Statement::WhileStatement(w) => {
                 let test = self.test(&w.test, depth)?;
+                let t = self.equality.region(&test, true);
+                let f = self.equality.region(&test, false);
                 self.loops += 1;
-                let body = self.statement(&w.body, depth)?;
+                let body = self.region_statement(&w.body, depth, &t)?;
                 self.loops -= 1;
+                self.equality.enter(&f);
                 S::While(test, Box::new(body))
             }
             Statement::ForStatement(f) => {
@@ -209,15 +217,24 @@ impl Checker<'_> {
                     })
                     .collect();
                 let test = f.test.as_ref().map(|e| self.test(e, depth)).transpose()?;
+                let t = test
+                    .as_ref()
+                    .map(|e| self.equality.region(e, true))
+                    .unwrap_or_default();
+                let false_ids = test
+                    .as_ref()
+                    .map(|e| self.equality.region(e, false))
+                    .unwrap_or_default();
                 let update = f
                     .update
                     .as_ref()
                     .map(|e| self.effect(e, depth, true).map(Box::new))
                     .transpose()?;
                 self.loops += 1;
-                let body = self.statement(&f.body, depth)?;
+                let body = self.region_statement(&f.body, depth, &t)?;
                 self.loops -= 1;
                 self.scopes.pop();
+                self.equality.enter(&false_ids);
                 S::For(init, test, update, Box::new(body), ids)
             }
             Statement::BreakStatement(b) if b.label.is_none() && self.loops > 0 => S::Break,
@@ -271,13 +288,10 @@ pub(super) fn returns(body: &[S]) -> bool {
                     pending.push(Work::Form(a));
                     pending.push(Work::Form(b));
                 }
-                S::While(test, body) => values
-                    .push(matches!(test.kind, ExprKind::Boolean(true)) && !ir::loop_break(body)),
-                S::For(_, test, _, body, _) => values.push(
-                    test.as_ref()
-                        .is_none_or(|t| matches!(t.kind, ExprKind::Boolean(true)))
-                        && !ir::loop_break(body),
-                ),
+                S::While(test, body) => values.push(test.bare_true && !ir::loop_break(body)),
+                S::For(_, test, _, body, _) => {
+                    values.push(test.as_ref().is_none_or(|t| t.bare_true) && !ir::loop_break(body))
+                }
                 _ => values.push(false),
             },
             Work::Any(n) => {

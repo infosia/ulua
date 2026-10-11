@@ -1,240 +1,147 @@
-//! C7 literal-set formulas preserve const dependencies until parameter assignments are known.
-use super::literal_sets::{Set, Sets};
+//! C7 structural operands and scoped tested references. No literal types are modeled.
 use super::*;
-use crate::ir::{Expr, ExprKind as E};
-
-pub(super) const WIDE: usize = 0;
-pub(super) const NARROWABLE: usize = 1;
-
-#[derive(Hash, PartialEq, Eq)]
-enum Literal {
-    Number(u64),
-    Boolean(bool),
-    String(String),
-}
-#[derive(Clone, Copy)]
-enum Fact {
-    Wide,
-    Narrowable,
-    Finite(Set),
-    Binding(usize),
-    Not(usize),
-    Conditional(usize, usize, usize),
-    Logical(bool, usize, usize),
-}
+use crate::ir::{Expr, ExprKind as E, Statement as S};
 
 pub(super) struct Equality {
-    pub(super) bindings: Vec<usize>,
-    expressions: HashMap<u32, usize>,
-    facts: Vec<Fact>,
-    literals: HashMap<Literal, u32>,
-    sets: Sets,
-    checks: Vec<(Span, usize, usize)>,
-    boolean_sets: [Set; 2],
+    pub(super) bindings: Vec<bool>,
+    pub(super) tested: Vec<bool>,
+    undo: Vec<usize>,
 }
 impl Equality {
     pub(super) fn new() -> Self {
-        let mut equality = Self {
+        Self {
             bindings: vec![],
-            expressions: HashMap::new(),
-            facts: vec![Fact::Wide, Fact::Narrowable],
-            literals: HashMap::new(),
-            sets: Sets::new(),
-            checks: vec![],
-            boolean_sets: [0; 2],
-        };
-        for value in [false, true] {
-            let set = equality.literal(Literal::Boolean(value));
-            equality.boolean_sets[usize::from(value)] = set;
+            tested: vec![],
+            undo: vec![],
         }
-        equality
     }
-    fn literal(&mut self, literal: Literal) -> Set {
-        // The source ceiling bounds literal identities below u32::MAX.
-        let next = self.literals.len() as u32;
-        let id = *self.literals.entry(literal).or_insert(next);
-        self.sets.singleton(id)
+    pub(super) fn checkpoint(&self) -> usize {
+        self.undo.len()
     }
-    pub(super) fn expression(&self, value: &Expr) -> Option<usize> {
-        self.expressions.get(&value.start).copied()
+    pub(super) fn restore(&mut self, checkpoint: usize) {
+        while self.undo.len() > checkpoint {
+            if let Some(id) = self.undo.pop() {
+                self.tested[id] = false;
+            }
+        }
     }
-    pub(super) fn check(&mut self, span: Span, left: usize, right: usize) {
-        self.checks.push((span, left, right));
+    pub(super) fn enter(&mut self, ids: &[usize]) {
+        for &id in ids {
+            if !self.tested[id] {
+                self.tested[id] = true;
+                self.undo.push(id);
+            }
+        }
+    }
+    // Union uses a work list. No region copies the active tested set.
+    pub(super) fn region(&self, condition: &Expr, truth: bool) -> Vec<usize> {
+        let mut work = vec![(condition, truth)];
+        let mut ids = vec![];
+        while let Some((e, truth)) = work.pop() {
+            match &e.kind {
+                E::Unary("not", g) => work.push((g, !truth)),
+                E::Logical(_, a, b) => {
+                    work.push((a, truth));
+                    work.push((b, truth));
+                }
+                E::Binary(op, a, b) if (*op == "==" && truth) || (*op == "~=" && !truth) => {
+                    for (reference, other) in [(a, b), (b, a)] {
+                        if let E::Read(id) = reference.kind
+                            && !other.wide
+                        {
+                            ids.push(id);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        ids
     }
 }
 impl Checker<'_> {
-    pub(super) fn expression_fact(&self, value: &Expr) -> Result<usize, Diagnostic> {
-        self.equality.expression(value).ok_or_else(|| {
-            Diagnostic::at(
-                self.source,
-                value.start as usize,
-                "internal",
-                "Missing expression literal set",
-            )
-        })
-    }
-    pub(super) fn record_fact(
-        &mut self,
-        source: &Expression<'_>,
-        value: &Expr,
-    ) -> Result<(), Diagnostic> {
-        let fact = match source {
-            Expression::NumericLiteral(n) => {
-                Fact::Finite(self.equality.literal(Literal::Number(number_key(n.value))))
-            }
-            Expression::BooleanLiteral(b) => {
-                Fact::Finite(self.equality.boolean_sets[usize::from(b.value)])
-            }
-            Expression::StringLiteral(s) => Fact::Finite(
-                self.equality
-                    .literal(Literal::String(s.value.as_str().into())),
-            ),
-            Expression::TemplateLiteral(t) if t.expressions.is_empty() => {
-                if let E::Template(parts) = &value.kind
-                    && let Some(Expr {
-                        kind: E::String(text),
-                        ..
-                    }) = parts.first()
-                {
-                    Fact::Finite(self.equality.literal(Literal::String(text.clone())))
-                } else {
-                    return Err(self.error(
-                        source.span(),
-                        "internal",
-                        "Missing checked template text",
-                    ));
-                }
+    pub(super) fn is_wide(&self, source: &Expression<'_>, value: &Expr) -> bool {
+        match source {
+            Expression::CallExpression(_) => true,
+            Expression::BinaryExpression(b) => {
+                matches!(b.operator.as_str(), "+" | "-" | "*" | "/" | "%")
             }
             Expression::UnaryExpression(u) if u.operator.as_str() == "-" => {
                 let mut argument = &u.argument;
                 while let Expression::ParenthesizedExpression(p) = argument {
                     argument = &p.expression;
                 }
-                if let Expression::NumericLiteral(n) = argument {
-                    Fact::Finite(self.equality.literal(Literal::Number(number_key(-n.value))))
-                } else {
-                    Fact::Wide
-                }
+                !matches!(argument, Expression::NumericLiteral(_))
             }
-            _ => match &value.kind {
-                E::Read(id) => Fact::Binding(*id),
-                E::Unary("not", e) => Fact::Not(self.expression_fact(e)?),
-                E::Conditional(c, a, b) => Fact::Conditional(
-                    self.expression_fact(c)?,
-                    self.expression_fact(a)?,
-                    self.expression_fact(b)?,
-                ),
-                E::Logical(and, a, b) => {
-                    Fact::Logical(*and, self.expression_fact(a)?, self.expression_fact(b)?)
-                }
-                _ => Fact::Wide,
+            Expression::Identifier(_) => match value.kind {
+                E::Read(id) => self.equality.bindings[id] && !self.equality.tested[id],
+                _ => false,
             },
-        };
-        let id = self.equality.facts.len();
-        self.equality.facts.push(fact);
-        self.equality.expressions.insert(value.start, id);
+            _ => false,
+        }
+    }
+    pub(super) fn equality_operands(
+        &self,
+        span: Span,
+        a: &Expr,
+        b: &Expr,
+    ) -> Result<(), Diagnostic> {
+        if a.ty != b.ty || matches!(a.ty, Type::Function(..)) {
+            return Err(self.error(span, "C7", "Equality requires identical value types"));
+        }
+        if a.ty == Type::Boolean {
+            return Err(self.error(span, "C7", "Boolean equality operands are rejected"));
+        }
+        if [a, b]
+            .iter()
+            .any(|e| matches!(e.kind, E::Number(n) if n.is_nan()))
+        {
+            return Err(self.error(span, "C7", "NaN equality operands are rejected"));
+        }
+        if !a.wide && !b.wide {
+            return Err(self.error(span, "C7", "An equality needs a wide operand"));
+        }
         Ok(())
     }
-    pub(super) fn check_equalities(&mut self) -> Result<(), Diagnostic> {
-        let mut values = Vec::with_capacity(self.equality.facts.len());
-        // Every binding dependency precedes its read (C10). This loop handles long const chains without recursion.
-        for fact in self.equality.facts.iter().copied() {
-            let get = |id| {
-                values.get(id).copied().ok_or_else(|| {
-                    self.error(
-                        Span::default(),
-                        "internal",
-                        "Invalid literal-set dependency",
-                    )
-                })
-            };
-            let value = match fact {
-                Fact::Binding(id) => get(self.equality.bindings[id])?,
-                Fact::Not(id) => match get(id)? {
-                    Fact::Finite(set) => {
-                        let mut negated = 0;
-                        for boolean in [false, true] {
-                            if self
-                                .equality
-                                .sets
-                                .overlap(set, self.equality.boolean_sets[usize::from(boolean)])
-                            {
-                                negated = self.equality.sets.union(
-                                    negated,
-                                    self.equality.boolean_sets[usize::from(!boolean)],
-                                );
-                            }
-                        }
-                        Fact::Finite(negated)
-                    }
-                    value => value,
-                },
-                Fact::Conditional(c, a, b) => {
-                    let c = get(c)?;
-                    let a = get(a)?;
-                    let b = get(b)?;
-                    if matches!(c, Fact::Narrowable)
-                        || matches!(a, Fact::Narrowable)
-                        || matches!(b, Fact::Narrowable)
-                    {
-                        Fact::Narrowable
-                    } else if let (Fact::Finite(a), Fact::Finite(b)) = (a, b) {
-                        Fact::Finite(self.equality.sets.union(a, b))
-                    } else {
-                        Fact::Wide
-                    }
-                }
-                Fact::Logical(and, a, b) => {
-                    let a = get(a)?;
-                    let b = get(b)?;
-                    if matches!(a, Fact::Narrowable) || matches!(b, Fact::Narrowable) {
-                        Fact::Narrowable
-                    } else {
-                        let short = self.equality.boolean_sets[usize::from(!and)];
-                        let enter = self.equality.boolean_sets[usize::from(and)];
-                        let (can_short, can_enter) = match a {
-                            Fact::Finite(a) => (
-                                self.equality.sets.overlap(a, short),
-                                self.equality.sets.overlap(a, enter),
-                            ),
-                            _ => (true, true),
-                        };
-                        let result = if can_enter { b } else { Fact::Finite(0) };
-                        if let Fact::Finite(set) = result {
-                            Fact::Finite(if can_short {
-                                self.equality.sets.union(set, short)
-                            } else {
-                                set
-                            })
-                        } else {
-                            result
-                        }
-                    }
-                }
-                value => value,
-            };
-            values.push(value);
-        }
-        for &(span, left, right) in &self.equality.checks {
-            let left = values[left];
-            let right = values[right];
-            let rejected = match (left, right) {
-                (Fact::Wide, _) | (_, Fact::Wide) => false,
-                (Fact::Narrowable, _) | (_, Fact::Narrowable) => true,
-                (Fact::Finite(a), Fact::Finite(b)) => !self.equality.sets.overlap(a, b),
-                _ => return Err(self.error(span, "internal", "Unresolved literal-set formula")),
-            };
-            if rejected {
-                return Err(self.error(
-                    span,
-                    "C7",
-                    "Equality literal sets do not overlap or depend on narrowing",
-                ));
-            }
-        }
-        Ok(())
+    pub(super) fn region_statement(
+        &mut self,
+        s: &Statement<'_>,
+        depth: u32,
+        ids: &[usize],
+    ) -> Result<S, Diagnostic> {
+        let checkpoint = self.equality.checkpoint();
+        self.equality.enter(ids);
+        let out = self.statement(s, depth);
+        self.equality.restore(checkpoint);
+        out
+    }
+    pub(super) fn region_expr(
+        &mut self,
+        e: &Expression<'_>,
+        depth: u32,
+        ids: &[usize],
+    ) -> Result<Expr, Diagnostic> {
+        let checkpoint = self.equality.checkpoint();
+        self.equality.enter(ids);
+        let out = self.expr(e, depth, false);
+        self.equality.restore(checkpoint);
+        out
     }
 }
-fn number_key(number: f64) -> u64 {
-    if number == 0.0 { 0 } else { number.to_bits() }
+
+pub(super) fn holds_exit(statement: &S) -> bool {
+    let mut pending = vec![statement];
+    while let Some(s) = pending.pop() {
+        match s.form() {
+            S::Return(_) | S::Break | S::Continue => return true,
+            S::Block(body) => pending.extend(body),
+            S::If(_, a, b) => {
+                pending.push(a);
+                pending.extend(b.iter().map(|s| s.as_ref()));
+            }
+            S::While(_, body) | S::For(_, _, _, body, _) => pending.push(body),
+            _ => {}
+        }
+    }
+    false
 }

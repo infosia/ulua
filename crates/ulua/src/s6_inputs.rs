@@ -4,9 +4,34 @@ pub const SHAPES: &[&str] = &[
     "pending-loops",
     "spilled-and",
     "large-numbers",
+    "spilled-mod-36",
+    "spilled-mod-37",
+    "spilled-mod-38",
+    "spilled-mod-39",
+    "spilled-mod-40",
+    "spilled-mod-41",
+    "spilled-mod-42",
 ];
 
 pub fn source(shape: &str, bytes: usize) -> String {
+    if let Some(terms) = shape.strip_prefix("spilled-mod-") {
+        let terms: usize = terms.parse().unwrap();
+        let mut source = (0..120)
+            .map(|i| format!("function f{i}():void{{}}"))
+            .collect::<String>();
+        source.push_str("export function main():void{");
+        for i in 0..200 {
+            source.push_str(&format!("let a{i}=0;"));
+        }
+        source.push_str("let x=1;");
+        let unit = format!("x={};", vec!["x"; terms].join("%"));
+        while source.len() + unit.len() < bytes {
+            source.push_str(&unit);
+        }
+        source.push('}');
+        source.push_str(&" ".repeat(bytes - source.len()));
+        return source;
+    }
     let mut source = "export function main():void{let c=true;".to_owned();
     if shape == "large-numbers" {
         let mut i = 0;

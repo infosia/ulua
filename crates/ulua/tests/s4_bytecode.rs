@@ -1,4 +1,5 @@
 //! Assignment assertions erase. Initializer assertions can change native optimizations.
+//! Measured Debug cost: 3.21 seconds. The test prints its wall cost.
 // The stress source generators serve both the CLI and this bytecode comparison.
 #[allow(dead_code)]
 #[path = "../../ulua_corpus/src/stress.rs"]
@@ -88,6 +89,7 @@ fn without_field_assertions(mut text: &str) -> String {
 }
 #[test]
 fn assignment_assertions_erase_and_initializers_report_native_differences() {
+    let start = std::time::Instant::now();
     assert_eq!(ulua::ulua_abi_version(), 1);
     std::thread::Builder::new()
         .stack_size(COMPILER_STACK_BYTES)
@@ -115,4 +117,5 @@ fn assignment_assertions_erase_and_initializers_report_native_differences() {
         .unwrap()
         .join()
         .unwrap();
+    eprintln!("S4 bytecode gate cost: {:?}", start.elapsed());
 }

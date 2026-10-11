@@ -408,3 +408,39 @@ fn check_output(module: &ir::Module, generated: usize) -> Result<(), Diagnostic>
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod output_tests {
+    use super::*;
+
+    #[test]
+    fn independently_oversized_ir_reaches_the_output_check() {
+        let source = "export function main():void{print('x');}";
+        let allocator = oxc_allocator::Allocator::default();
+        let parsed =
+            oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::ts()).parse();
+        let mut module =
+            crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                .unwrap();
+        let bound = crate::OUTPUT_PRELUDE_BYTES + crate::OUTPUT_FACTOR * source.len();
+        assert!(check_output(&module, bound).is_ok());
+        assert_eq!(
+            check_output(&module, bound + 1).unwrap_err().code,
+            "internal"
+        );
+        let ir::Statement::Located(_, form) = &mut module.functions[0].body[0] else {
+            panic!("located statement");
+        };
+        let ir::Statement::Eval(expr) = form.as_mut() else {
+            panic!("call statement");
+        };
+        let ir::ExprKind::Call(_, arguments) = &mut expr.kind else {
+            panic!("call expression");
+        };
+        arguments[0].kind = ir::ExprKind::String("x".repeat(bound + 1));
+        // The original source size remains intact. The generated text independently exceeds its bound.
+        let error = emit(&module).unwrap_err();
+        assert_eq!(error.code, "internal");
+        assert_eq!(error.message, "Generated source exceeds the output bound");
+    }
+}

@@ -56,7 +56,9 @@ impl Checker<'_> {
                 }
             }
             Expression::ParenthesizedExpression(p) => {
-                return self.expr(&p.expression, depth, statement);
+                let mut value = self.expr(&p.expression, depth, statement)?;
+                value.bare_true = false;
+                return Ok(value);
             }
             Expression::UnaryExpression(u) => {
                 let op = u.operator.as_str();
@@ -84,24 +86,19 @@ impl Checker<'_> {
                 if matches!(op, "**" | "|" | "&" | "^" | "<<" | ">>" | ">>>") {
                     return Err(self.error(b.span, "C4", "Numeric operator has no lowering"));
                 }
-                if matches!(op, "==" | "!=") {
-                    return Err(self.error(b.span, "C7", "Loose equality requires null"));
-                }
                 let a = self.expr(&b.left, depth, false)?;
                 let r = self.expr(&b.right, depth, false)?;
                 let (ty, op) = match op {
-                    "===" | "!==" => {
-                        if a.ty != r.ty || matches!(a.ty, Type::Function(..)) {
-                            return Err(self.error(
-                                b.span,
-                                "C7",
-                                "Equality requires identical value types",
-                            ));
-                        }
-                        let left = self.expression_fact(&a)?;
-                        let right = self.expression_fact(&r)?;
-                        self.equality.check(b.span, left, right);
-                        (Type::Boolean, if op == "===" { "==" } else { "~=" })
+                    "===" | "!==" | "==" | "!=" => {
+                        self.equality_operands(b.span, &a, &r)?;
+                        (
+                            Type::Boolean,
+                            if matches!(op, "===" | "==") {
+                                "=="
+                            } else {
+                                "~="
+                            },
+                        )
                     }
                     "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" => {
                         if op == "+" && a.ty == Type::String && r.ty == Type::String {
@@ -140,7 +137,8 @@ impl Checker<'_> {
                     return Err(self.unsupported(l.span));
                 }
                 let a = self.expr(&l.left, depth, false)?;
-                let b = self.expr(&l.right, depth, false)?;
+                let ids = self.equality.region(&a, op == "&&");
+                let b = self.region_expr(&l.right, depth, &ids)?;
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -154,8 +152,10 @@ impl Checker<'_> {
                 if test.ty != Type::Boolean {
                     return Err(self.error(c.span, "C3", "Boolean condition is required"));
                 }
-                let a = self.expr(&c.consequent, depth, false)?;
-                let b = self.expr(&c.alternate, depth, false)?;
+                let t = self.equality.region(&test, true);
+                let f = self.equality.region(&test, false);
+                let a = self.region_expr(&c.consequent, depth, &t)?;
+                let b = self.region_expr(&c.alternate, depth, &f)?;
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
                     a.ty.clone(),
@@ -183,6 +183,8 @@ impl Checker<'_> {
                             ("__ulua_format", Type::Number, Type::String)
                         };
                         Expr {
+                            wide: false,
+                            bare_true: false,
                             start: call.callee.span().start,
                             ty: Type::Function(vec![p], Box::new(r), 1),
                             kind: ExprKind::Builtin(name),
@@ -256,6 +258,8 @@ impl Checker<'_> {
                             self.error(q.span, "syntax", "Invalid template escape")
                         })?;
                     parts.push(Expr {
+                        wide: false,
+                        bare_true: false,
                         start: q.span.start,
                         ty: Type::String,
                         kind: ExprKind::String(text.as_str().into()),
@@ -304,12 +308,14 @@ impl Checker<'_> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }
-        let value = Expr {
+        let mut value = Expr {
+            wide: false,
+            bare_true: matches!(e, Expression::BooleanLiteral(b) if b.value),
             start: e.span().start,
             ty,
             kind,
         };
-        self.record_fact(e, &value)?;
+        value.wide = self.is_wide(e, &value);
         Ok(value)
     }
 }

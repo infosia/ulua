@@ -238,6 +238,26 @@ are exact.
   only if the left operand does not short-circuit.
   C7 now states the literal-set model; `r72` and `a28` pin it.
 
+## S7 record
+
+- Codex task. The literal-set model is removed. C7 Rev 14 and Rev 15:
+  a structural operand check and a scoped undo log for tested
+  references. The return rule tells `(true)` from `true`.
+  `gate.sh full` passes: `cargo-test` 15 s, `luau-witnesses` 22 s.
+- Random equality programs: 2,400 generated; 465 accepted, each passes
+  `tsc`; 1,751 rejected with C7, 184 with `unsupported`.
+- The 15 narrowing forms of round 4 (bodies of `function f(p: boolean,
+  n: number, s: string): boolean`): each gives C7, and `tsc` gives
+  TS2367 for each (primary measurement).
+- Growth: left-nested `%` chains over a spilled `x`, 36 to 42 terms,
+  ratio 62.36 to 62.67 at 65,536 bytes. Largest time ratio over 28
+  shapes: 6.61 (limit 8). A 25% margin needs `OUTPUT_FACTOR` 78.34;
+  80 stays.
+- A test builds an oversized IR and gets `internal` from the output
+  check.
+- Debug costs: growth test 6.84 s, bytecode test 3.21 s; each file
+  states its cost.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

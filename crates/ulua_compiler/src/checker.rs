@@ -1,8 +1,7 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod equality;
 mod expressions;
-mod literal_sets;
-use equality::{Equality, NARROWABLE, WIDE};
+use equality::Equality;
 mod statements;
 use crate::{
     Diagnostic,
@@ -87,7 +86,8 @@ impl Checker<'_> {
             return Err(self.error(span, "C11", "Duplicate declaration"));
         }
         self.bindings.push(binding);
-        self.equality.bindings.push(WIDE);
+        self.equality.bindings.push(true);
+        self.equality.tested.push(false);
         Ok(id)
     }
     fn lookup(&mut self, name: &str, span: Span) -> Result<usize, Diagnostic> {
@@ -372,7 +372,7 @@ pub(crate) fn check(
         }
         let body = c.block_contents(&b.statements, 0)?;
         if result != Type::Void && !statements::returns(&body) {
-            return Err(c.error(f.span, "C1", "Function can finish without its result"));
+            return Err(c.error(f.span, "C11", "Function can finish without its result"));
         }
         c.scopes.pop();
         checked.push(ir::Function {
@@ -384,7 +384,6 @@ pub(crate) fn check(
             body,
         });
     }
-    c.check_equalities()?;
     c.tdz()?;
     Ok(ir::Module {
         bindings: c.bindings,
