@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 2, `abi.md` Rev 1,
+Status: open. Contracts: `pipeline.md` Rev 3, `abi.md` Rev 2,
 `corpus.md` Rev 1, `surface.md` Rev 5, `collisions.md` Rev 12.
 
 ## Scope
@@ -24,6 +24,7 @@ Status: open. Contracts: `pipeline.md` Rev 2, `abi.md` Rev 1,
 | S2 | The checker and the emitter for every P1 form; every P1 entry passes | Codex |
 | S3 | The measurements of `pipeline.md` §7, the C15 bounds, and their tests at and past each value | Codex |
 | S4 | Phase Review round 1 fixes: `pipeline.md` Rev 2, `abi.md` Rev 1 | Codex |
+| S5 | Phase Review round 2 fixes: `pipeline.md` Rev 3, `abi.md` Rev 2 | Codex |
 
 ## Exit checklist
 
@@ -176,6 +177,24 @@ typecheck" or "Internal recursion counter limit exceeded":
 | `t1 = b; t0 = t1; t0 = if t0 then b else false; b = t0` | fails | fails |
 | The same two forms, each write `:: T` | passes | passes, 0.1 s |
 | `if b then x = x + 1 end` | passes | passes |
+
+## Phase Review round 2
+
+Reviewer: fresh agent, diff `f5f0bf1..1db351e`. 3 MAJOR, 4 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The spill table constructor fails `luau-analyze` at 3200 `let` in one function (37,351 bytes) and at 3300 module bindings | MAJOR | pipeline.md §5.8, §5.11; S5 |
+| Join writes grow with depth x bindings: 41 nested `if` around 5,000 bindings (65,536 bytes) give 38 MB of Luau and 360 MB RSS at compile | MAJOR | pipeline.md §3.10, §5.10; S5 |
+| The step charge can fail a shrinking reallocation; Luau requires that it never fails (`lmem.cpp`); `luaD_reallocCI` after a call-depth overflow runs outside protection | MAJOR | pipeline.md §6.3; S5 |
+| The `for` and `+=` stress modules pass without the write assertions: 0.9 s of gate time without a reason | MINOR | pipeline.md §5.11; S5 |
+| `ALLOCATION_STEP_BYTES` is defined in Rust and in C; only a feature build compares them | MINOR | abi.md §8; S5 |
+| `ulua_layout_probe` and `ulua_shim_*` are exported from the static library | MINOR | abi.md §1.10; S5 |
+| `limit:steps` from the allocator has the message `not enough memory` | MINOR | pipeline.md §6.3; S5 |
+
+Primary measurement: the S4 `if` stress module with the join writes
+removed (50,405 to 45,368 lines) did not finish `luau-analyze` in 5
+minutes. The join writes are necessary; their count is the defect.
 
 ## Failures before the fix
 

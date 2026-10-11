@@ -3,6 +3,7 @@
 Status: Rev 1, 2026-10-11. Decisions D7, D9 to D13 (`plan.md` §8).
 Rev 1: the P1 values of §6 and §7 (`tracking/p1-skeleton.md`).
 Rev 2: §3.1, §3.4, §3.10, §5.10 to §5.12, §6.3 and §6.5 (P1 Phase Review).
+Rev 3: §3.10, §5.8, §5.10, §5.11, §6.3 (P1 Phase Review round 2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -89,6 +90,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     is at most O(n log n) in the source size n. A gate test compiles
     one input of each shape at n and at 4n bytes. The time at 4n is at
     most 8 times the time at n.
+    The generated Luau has at most `OUTPUT_FACTOR` bytes per source
+    byte, plus a fixed prelude. The factor does not depend on the
+    nesting depth or on the number of bindings. The shapes of the growth
+    test include nested branches with many bindings and many writes.
+    §7 records the compiler heap peak of the worst shape at the source
+    ceiling.
 
 ## 4. Shim and the Luau C API
 
@@ -133,6 +140,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    binding, so `luau-analyze` checks each access. Each read and write
    of the binding is a field access of the table. C10 makes each write
    come before each read.
+   The spill form stays inside §5.1 at the source ceiling: a function
+   and a module chunk with the most bindings that fit the ceiling pass
+   `luau-analyze`. The form can split the spilled bindings over more
+   than one table. The local count of §5.7 includes each table.
    Parameters, temporaries, and generated locals never spill. A
    function within the budget declares no table.
 9. **Upvalues.** A function reads a module-level binding as an
@@ -145,10 +156,18 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     spill field has the form `name = (expr) :: T`. `T` is the declared
     Luau type of the target. Without the assertion, `luau-analyze`
     fails on chains of writes inside branches (`tracking/p1-skeleton.md`).
-11. **Analyzer stress gate.** For each form that writes a local inside
-    a branch (`&&`, `||`, `?:`, `if`, loops, compound assignment), the
-    gate emits one function that repeats the form up to the source
-    ceiling. `luau-analyze` checks each one with exit status 0.
+    After a branch or a loop, the emitter writes `name = (name) :: T`
+    for a binding only if the binding is live after the statement and
+    the statement writes it. The number of these join writes obeys the
+    output bound of §3.10.
+11. **Analyzer stress gate.** The gate emits one module per stress
+    shape. Each module repeats its shape up to the source ceiling.
+    `luau-analyze` checks each one with exit status 0. A shape is in
+    the set only if the analyzer fails on it when the emitter drops a
+    form of §5.8 or §5.10; the tracking note records that failure.
+    Shapes: writes inside branches (`&&`, `||`, `?:`, `if`, `while`),
+    nested branches with many bindings, and the most bindings in a
+    function and in a module chunk.
 12. **Template work.** A template of at most 16 parts lowers to one
     `..` expression. A template of more parts lowers to `table.concat`
     of one table constructor. Each byte of a part is copied at most
@@ -183,7 +202,10 @@ necessary and that this table does not name is a contract question.
    `max_nesting_depth`. A request above the ceiling uses the ceiling.
 3. `max_steps` counts interrupt callbacks. Each allocation also
    charges `ceil(bytes / ALLOCATION_STEP_BYTES)` steps. At the limit the
-   allocator returns null and the run gives `limit:steps`. The charge
+   allocator returns null and the run gives `limit:steps` with the
+   message `Step limit exceeded`. A reallocation to an equal or smaller
+   size is never charged and never fails: Luau requires this
+   (`VM/src/lmem.cpp` of the pin). The charge
    bounds the time of one step by a constant, so `max_steps` bounds
    the run time. P1 measures `ALLOCATION_STEP_BYTES` (§7).
 4. Compiler memory is outside `max_memory_bytes`. The source ceiling

@@ -1,8 +1,9 @@
 # C ABI
 
-Status: Rev 1, 2026-10-11. ABI version 1, experimental: no binary
+Status: Rev 2, 2026-10-11. ABI version 1, experimental: no binary
 compatibility promise until P3 closes.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
+Rev 2: §1.10, §8 (P1 Phase Review round 2).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -32,6 +33,9 @@ without a second call path.
    context is poisoned: each later call on it, except the free
    functions, gives `ULUA_POISONED`.
 9. Each free function accepts null and does nothing.
+10. The library exports the functions of §7 with the prefix `ulua_`.
+    Each other native symbol that the library exports has the prefix
+    `ulua_internal_`. Test-only native code is not in the library.
 
 ## 2. Status codes
 
@@ -188,5 +192,6 @@ ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,
 Each function has a direct unit test (CLAUDE.md principle 1). A test
 compiles a C file against `include/ulua.h` and checks `sizeof` and
 each field offset of each struct against the Rust definition. It also
-checks the value of each status code, each type tag, and
-`ULUA_MIN_RUN_STACK` against the Rust constants.
+checks the value of each status code, each type tag,
+`ULUA_MIN_RUN_STACK`, and the native value of `ALLOCATION_STEP_BYTES`
+against the Rust constants. The test runs in the default build.
