@@ -1,7 +1,7 @@
 // corpus: reject/r67-field-narrowing
 // purpose: Rejects a narrowed field read after a call that can clear the field.
 // rule: C16
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // expected-error: C16: a field is never narrowed; copy it into a const
 type T = { tag: string | null };

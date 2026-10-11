@@ -1,7 +1,7 @@
 // corpus: accept/a13-arrays
 // purpose: Reads, writes, appends, and iterates a zero-based array.
 // rule: C6
-// phase: P2
+// phase: P2.2
 // tsc: accepts
 // js-comparable: yes
 export function main(): void {

@@ -1,7 +1,7 @@
 // corpus: accept/a15-records
 // purpose: Builds, reads, and updates object values with a nullable field.
 // rule: C1, C2
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // js-comparable: yes
 type Point = { x: number; y: number };

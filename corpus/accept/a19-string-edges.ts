@@ -1,7 +1,7 @@
 // corpus: accept/a19-string-edges
 // purpose: Pins empty needles and separator edge cases of the accepted string operations.
 // rule: C5
-// phase: P2
+// phase: P2.3
 // tsc: accepts
 // js-comparable: yes
 function show(parts: string[]): string {

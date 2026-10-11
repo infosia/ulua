@@ -1,7 +1,7 @@
 // corpus: accept/a27-parameter-callee
 // purpose: Calls a parameter of function type, with a declaration, a binding, and an arrow as the argument.
 // rule: C11
-// phase: P2
+// phase: P2.1
 // tsc: accepts
 // js-comparable: yes
 function twice(f: (n: number) => number, n: number): number {

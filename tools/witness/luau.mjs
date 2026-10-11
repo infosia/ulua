@@ -11,8 +11,13 @@ import { readFileSync, readdirSync, existsSync, rmSync, mkdirSync } from "node:f
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
-// The current phase. Entries of this phase or earlier are checked in full.
-const PHASE = 1;
+// The current phase and slice. Entries of this point or earlier are checked
+// in full. `P2.1` is slice 1 of P2; `P2` alone sorts after every P2 slice.
+const PHASE = "P2.1";
+const order = (p) => {
+  const m = /^P(\d)(?:\.(\d))?$/.exec(p || "P9");
+  return m ? Number(m[1]) * 10 + (m[2] ? Number(m[2]) : 9) : 99;
+};
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const failures = [];
@@ -70,8 +75,7 @@ for (const e of entries) {
     fail(e.id, `internal: ${r.code} ${r.message ?? ""}`);
     continue;
   }
-  const phase = Number((e.header.phase || "P9").slice(1));
-  const current = phase <= PHASE;
+  const current = order(e.header.phase) <= order(PHASE);
   if (e.dir === "reject") {
     if (r.status !== "rejected") fail(e.id, `status ${r.status}, want rejected`);
     else if (current) {
@@ -88,7 +92,7 @@ for (const e of entries) {
         r.code === `trap:${e.header.trap}` &&
         text(r.output) === g.slice(0, g.lastIndexOf("trap:"));
   if (current && !full) fail(e.id, `status ${r.status}, code ${r.code}, output ${JSON.stringify(r.output)}`);
-  if (!current && full) fail(e.id, `passes in full; change its phase header to P${PHASE}`);
+  if (!current && full) fail(e.id, `passes in full; change its phase header to ${PHASE}`);
   if (!current && !full && !(r.status === "rejected" && r.code === "unsupported"))
     fail(e.id, `later phase: status ${r.status}, code ${r.code}, want rejected unsupported`);
 }
@@ -109,8 +113,8 @@ else if (files.length > 0) {
   if (a.status !== 0) fail("luau-analyze", `exit ${a.status}\n${a.stdout}${a.stderr}`);
 }
 
-const checked = entries.filter((e) => Number(e.header.phase.slice(1)) <= PHASE).length;
-console.log(`luau witnesses: ${entries.length} entries, ${checked} in phase P${PHASE} or earlier, ${files.length} generated modules, ${stressFiles.length} stress modules`);
+const checked = entries.filter((e) => order(e.header.phase) <= order(PHASE)).length;
+console.log(`luau witnesses: ${entries.length} entries, ${checked} in phase ${PHASE} or earlier, ${files.length} generated modules, ${stressFiles.length} stress modules`);
 if (failures.length) {
   for (const f of failures) console.error(`FAIL ${f}`);
   process.exit(1);

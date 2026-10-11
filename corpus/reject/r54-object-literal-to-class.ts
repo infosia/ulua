@@ -1,7 +1,7 @@
 // corpus: reject/r54-object-literal-to-class
 // purpose: Rejects an object literal in a position of a class type.
 // rule: C1
-// phase: P2
+// phase: P2.5
 // tsc: accepts
 // expected-error: C1: an object type and a class do not relate
 class Adder {

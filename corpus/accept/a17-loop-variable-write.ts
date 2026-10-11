@@ -1,7 +1,7 @@
 // corpus: accept/a17-loop-variable-write
 // purpose: Writes the loop variable in the body, with continue, and captures it per iteration.
 // rule: C9
-// phase: P2
+// phase: P2.2
 // tsc: accepts
 // js-comparable: yes
 export function main(): void {

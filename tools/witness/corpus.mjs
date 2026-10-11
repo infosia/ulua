@@ -57,7 +57,7 @@ function parseHeader(entry) {
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
   if (entry.dir !== "reject" && header.tsc !== "accepts") fail(entry.id, "accept and trap entries state tsc: accepts");
-  if (!/^P[1-6]$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6`);
+  if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
     const jc = /^(yes|no (C\d+))$/.exec(header["js-comparable"] || "");

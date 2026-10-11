@@ -1,7 +1,7 @@
 // corpus: reject/r51-recursive-const-arrow
 // purpose: Rejects a const arrow that refers to its own binding.
 // rule: C10
-// phase: P2
+// phase: P2.1
 // tsc: accepts
 // expected-error: C10: a binding is used before the end of its declaration
 export function main(): void {

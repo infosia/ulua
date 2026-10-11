@@ -1,7 +1,7 @@
 // corpus: trap/t02-index-write-gap
 // purpose: Traps on an array write that would leave a hole.
 // rule: C6
-// phase: P2
+// phase: P2.2
 // tsc: accepts
 // js-comparable: yes
 // trap: index-out-of-range

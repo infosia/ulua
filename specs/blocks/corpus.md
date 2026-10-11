@@ -1,8 +1,9 @@
 # Corpus contract
 
-Status: Rev 2, 2026-10-11 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 3, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
-`js-comparable` header, CLAUDE.md invariant 5).
+`js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
+`phase`).
 
 ## 1. Layout
 
@@ -31,7 +32,7 @@ Each entry starts with `//` header lines, in this order:
 // corpus: <dir>/<name>
 // purpose: <one sentence>
 // rule: <collision ids, comma-separated>
-// phase: P1 | P2 | ... | P6
+// phase: P1 | P2 | ... | P6, with an optional slice: P2.1
 // tsc: accepts | errors <TSnnnn>[, <TSnnnn>...]
 // js-comparable: yes | no <collision id>    (accept and trap only)
 // expected-error: <rule id>: <text>        (reject only)
@@ -74,7 +75,9 @@ Each entry starts with `//` header lines, in this order:
 - The Luau witnesses (`tools/witness/luau.mjs`) run when `Cargo.toml`
   exists. They build `ulua-corpus` (`pipeline.md` §8), run every entry
   in one process, and run `luau-analyze` once over all generated Luau.
-  The current phase is the constant `PHASE` in that file.
+  The current phase is the constant `PHASE` in that file, with its
+  slice. `P2.1` comes before `P2.2`; `P2` without a slice comes after
+  every P2 slice.
 - An entry whose phase is the current phase or earlier:
   - accept: status `ok`, and the output lines equal the golden lines;
   - reject: status `rejected`, and the code equals the

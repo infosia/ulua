@@ -1,7 +1,7 @@
 // corpus: accept/a24-library-names
 // purpose: Names bindings like Luau library globals that lowerings use.
 // rule: C14
-// phase: P2
+// phase: P2.3
 // tsc: accepts
 // js-comparable: yes
 export function main(): void {

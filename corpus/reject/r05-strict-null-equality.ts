@@ -1,7 +1,7 @@
 // corpus: reject/r05-strict-null-equality
 // purpose: Rejects a strict comparison with null.
 // rule: C2
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // expected-error: C2: test null with == null or != null
 function first(xs: string[]): string | null {

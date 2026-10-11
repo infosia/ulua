@@ -1,7 +1,7 @@
 // corpus: trap/t03-index-non-integer
 // purpose: Traps on a non-integer index whose lowered key rounds to an integer.
 // rule: C6
-// phase: P2
+// phase: P2.2
 // tsc: accepts
 // js-comparable: yes
 // trap: index-out-of-range

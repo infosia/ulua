@@ -1,7 +1,7 @@
 // corpus: accept/a14-nullable
 // purpose: Tests, narrows, and defaults nullable values.
 // rule: C2, C7, C16
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // js-comparable: yes
 type Node = { value: number; next: Node | null };

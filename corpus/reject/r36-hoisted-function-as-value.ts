@@ -1,7 +1,7 @@
 // corpus: reject/r36-hoisted-function-as-value
 // purpose: Rejects a hoisted function passed as a value before a binding that it reads.
 // rule: C10
-// phase: P2
+// phase: P2.1
 // tsc: accepts
 // expected-error: C10: the referenced function reads a binding that is not declared yet
 function apply(f: () => void): void {

@@ -1,7 +1,7 @@
 // corpus: reject/r28-interface
 // purpose: Rejects an interface declaration.
 // rule: C8
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // expected-error: C8: interface has no lowering
 interface Point {

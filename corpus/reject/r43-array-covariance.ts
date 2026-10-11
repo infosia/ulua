@@ -1,7 +1,7 @@
 // corpus: reject/r43-array-covariance
 // purpose: Rejects a string array that tsc relates to an array of an object type.
 // rule: C1
-// phase: P2
+// phase: P2.4
 // tsc: accepts
 // expected-error: C1: array element types must be identical
 type Sized = { length: number };

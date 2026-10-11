@@ -1,7 +1,7 @@
 // corpus: accept/a20-literals
 // purpose: Emits number and string literals from their values, not their spelling.
 // rule: C14
-// phase: P2
+// phase: P2.3
 // tsc: accepts
 // js-comparable: yes
 export function main(): void {

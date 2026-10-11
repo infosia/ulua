@@ -7,6 +7,7 @@ Rev 3: §3.10, §5.8, §5.10, §5.11, §6.3 (P1 Phase Review round 2).
 Rev 4: the S5 forms of §5.8 and §5.10; `OUTPUT_FACTOR`; §7 heap value.
 Rev 5: §3.10, §5.8, §5.10, §5.13 (P1 Phase Review round 3).
 Rev 6: §4.6a, §7 values (round 8).
+Rev 7: §5.14 functions as values, `limit:upvalues` (P2.1).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -166,8 +167,7 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 9. **Upvalues.** A function reads a module-level binding as an
    upvalue, or through the spill table of the module chunk. Its
    upvalue count is at most `LOCAL_BUDGET` plus the generated locals of
-   the chunk. P2 extends this rule for closures and per-iteration
-   bindings.
+   the chunk. §5.14 extends this rule for nested functions and arrows.
 
 10. **Typed writes.** Each assignment to a generated local or to a
     spill field has the form `name = (expr) :: T`. `T` is the declared
@@ -195,6 +195,38 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     twice.
 13. **Number literals.** A number literal is emitted in the shortest
     decimal form that reads back as the same binary64 value.
+14. **Functions as values (P2.1).**
+    1. A captured binding is a binding that a nested function or arrow
+       reads or writes. The emitter declares each captured binding as
+       a Luau local at the entry of the block that declares it, with
+       its typed default value. Each execution of the block gives a
+       new local, so a closure in a loop body sees the binding of its
+       own iteration (C9). A binding that no closure captures keeps the
+       P1 form.
+    2. A nested function declaration is a captured binding of its
+       block in this sense. The emitter assigns each function
+       declaration of a block at the block entry, after the locals of
+       rule 1 and before the first statement, in source order. So a
+       hoisted call (C10.3) finds its value, and the declarations of
+       one block can call each other.
+    3. An arrow lowers to a Luau function expression with typed
+       parameters and a typed result. A function type lowers to a Luau
+       function type through a generated type alias (§5.10).
+    4. The upvalues of a generated function are the distinct captured
+       locals of enclosing functions that it reads or writes; a spill
+       table counts once. A function with more upvalues than
+       `UPVALUE_BUDGET` gives `limit:upvalues` (§6). P2.1 measures the
+       budget against the Luau limit of 200.
+    5. The local budget of §5.7 and the temporaries bound apply to each
+       generated function on its own. A captured binding past the
+       budget spills (§5.8); a closure reads it through the spill
+       table.
+    6. A call through a function value is a plain Luau call. C10 makes
+       the value non-nil at each call. A function value never crosses
+       the C ABI (`abi.md` §4).
+    7. Luau allows 2^15 closures per function. A 65,536-byte source
+       holds fewer function expressions, so no bound is needed; P2.1
+       records the count.
 
 ## 6. Limits
 
@@ -215,6 +247,7 @@ C15 bounds of P1, each a fixed compiler constant:
 | `limit:arguments` | arguments of one call | 32 |
 | `limit:template-parts` | literal parts and substitutions of one template literal, empty literal parts included | 1025 |
 | `limit:temporaries` | temporaries, default-parameter copies, and generated locals of one generated function; they never spill (§5.8) | 136 |
+| `limit:upvalues` | upvalues of one generated function (§5.14) | P2.1 measures |
 
 `limit:nesting-depth` also bounds the nesting of the generated Luau
 below the Luau parser recursion limit of 1000. A bound that S3 finds
