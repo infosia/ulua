@@ -1,7 +1,8 @@
 # C ABI
 
-Status: Rev 0, 2026-10-11. ABI version 1, experimental: no binary
+Status: Rev 1, 2026-10-11. ABI version 1, experimental: no binary
 compatibility promise until P3 closes.
+Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -39,7 +40,7 @@ without a second call path.
 | `ULUA_OK` | 0 | Success |
 | `ULUA_INVALID_ARGUMENT` | 1 | A precondition of this file is false |
 | `ULUA_REJECTED` | 2 | The compiler rejects the source; the diagnostic has the code |
-| `ULUA_FAILED` | 3 | A run stops at a trap or a run limit; the diagnostic has the code |
+| `ULUA_FAILED` | 3 | A run stops at a trap or a run limit, or the OS refuses a resource; the diagnostic has the code |
 | `ULUA_HOST_ERROR` | 4 | The output callback returned a non-zero status |
 | `ULUA_BUSY` | 5 | A call during a callback of the same context |
 | `ULUA_INTERNAL` | 6 | A defect of this library |
@@ -63,7 +64,9 @@ A function with a `ulua_diagnostic*` parameter writes it on
 `ULUA_REJECTED`, `ULUA_FAILED`, `ULUA_HOST_ERROR`, and `ULUA_INTERNAL`.
 The parameter can be null. Run codes: `trap:<kind>` (corpus.md §6),
 `limit:memory`, `limit:steps`, `limit:stack`. `ULUA_HOST_ERROR` has the
-code `host:output`. `ULUA_INTERNAL` has the code `internal`. In P1 a run diagnostic
+code `host:output`. `ULUA_INTERNAL` has the code `internal`. If the OS
+refuses the compiler thread, `ulua_compile` gives `ULUA_FAILED` with the
+code `host:resources` and does not poison the context. In P1 a run diagnostic
 has offset `UINT64_MAX`.
 
 ## 4. Values
@@ -86,7 +89,9 @@ typedef struct ulua_value {
 2. An argument type must equal the parameter type of the export.
 3. P1 accepts `NUMBER` and `BOOLEAN` parameters, and `VOID`, `NUMBER`,
    and `BOOLEAN` results. A module with an export of another type gives
-   the diagnostic `unsupported`.
+   `ULUA_REJECTED` with the code `unsupported`. The check reads the
+   export signature that the module carries. A direct test compiles a
+   `string` parameter and a `string` result.
 
 ## 5. Limits
 
@@ -182,4 +187,6 @@ ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,
 
 Each function has a direct unit test (CLAUDE.md principle 1). A test
 compiles a C file against `include/ulua.h` and checks `sizeof` and
-each field offset of each struct against the Rust definition.
+each field offset of each struct against the Rust definition. It also
+checks the value of each status code, each type tag, and
+`ULUA_MIN_RUN_STACK` against the Rust constants.

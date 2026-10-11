@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 1, `abi.md` Rev 0,
+Status: open. Contracts: `pipeline.md` Rev 2, `abi.md` Rev 1,
 `corpus.md` Rev 1, `surface.md` Rev 5, `collisions.md` Rev 12.
 
 ## Scope
@@ -23,6 +23,7 @@ Status: open. Contracts: `pipeline.md` Rev 1, `abi.md` Rev 0,
 | S1 | Workspace, `build.rs`, shim, C ABI, `ulua-corpus`, and a compiler that accepts `a01` | Codex |
 | S2 | The checker and the emitter for every P1 form; every P1 entry passes | Codex |
 | S3 | The measurements of `pipeline.md` §7, the C15 bounds, and their tests at and past each value | Codex |
+| S4 | Phase Review round 1 fixes: `pipeline.md` Rev 2, `abi.md` Rev 1 | Codex |
 
 ## Exit checklist
 
@@ -119,9 +120,41 @@ Compiler stack, bytes per level (parse/check/emit), slope over levels
 Native heap peaks come from a 100 µs sampler. Rust allocation counts
 are exact.
 
+## Phase Review round 1
+
+Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A `string` export compiles; a call loses the result or poisons the context | MAJOR | abi.md §4.3: `unsupported` at compile; S4 |
+| `b = b && b;` x100 (about 700 bytes) fails `luau-analyze`: "Code is too complex to typecheck" | MAJOR | pipeline.md §5.10, §5.11; S4 |
+| The emitter is quadratic in functions x bindings: emit 15/38/99/357 ms at 8/16/32/64 KiB | MAJOR | pipeline.md §3.10; S4 |
+| `max_steps` does not bound time: a 4-part template of a 2^18-byte string costs 4.5 ms per step, 75 min at the defaults | MAJOR | pipeline.md §6.3: allocation charge; S4 |
+| A template lowers to one `..` per part: quadratic copy | MINOR | pipeline.md §5.12; S4 |
+| Sequential `for` loops each keep a generated local: 68 loops give `limit:temporaries` | MINOR | Gap; P6 |
+| Emitter limit diagnostics have offset 0; the emitter counts 2 levels per statement, the checker 1 | MINOR | pipeline.md §3.4; S4 |
+| The `limit:temporaries` row names parameters; the code does not count them | MINOR | Contract text corrected |
+| N5 has no accept entry | MINOR | `a27-parameter-callee`, phase P2 |
+| A refused compiler thread poisons the context | MINOR | abi.md §3: `host:resources`; S4 |
+| The layout test does not check status and tag values | MINOR | abi.md §8; S4 |
+
+Analyzer evidence (luau-analyze of the pin, hand-written Luau, one
+function, N repetitions). "Fails" means "Code is too complex to
+typecheck" or "Internal recursion counter limit exceeded":
+
+| Form | N=100 | N=1000 |
+|---|---|---|
+| `y = x; if b then y = x + 1 end; x = y` | fails | fails |
+| `t1 = b; t0 = t1; t0 = if t0 then b else false; b = t0` | fails | fails |
+| The same two forms, each write `:: T` | passes | passes, 0.1 s |
+| `if b then x = x + 1 end` | passes | passes |
+
 ## Failures before the fix
 
 ## Gaps
+
+- Sequential `for` loops each keep one generated local (round 1
+  MINOR). P6 measures the reuse of locals across sibling scopes.
 
 - The `functions` input of `M heap` takes 502 ms in Release at 65,536
   bytes. The other inputs take at most 69 ms. The Phase Review checks

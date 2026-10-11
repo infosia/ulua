@@ -2,6 +2,7 @@
 
 Status: Rev 1, 2026-10-11. Decisions D7, D9 to D13 (`plan.md` §8).
 Rev 1: the P1 values of §6 and §7 (`tracking/p1-skeleton.md`).
+Rev 2: §3.1, §3.4, §3.10, §5.10 to §5.12, §6.3 and §6.5 (P1 Phase Review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -43,7 +44,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 
 1. **Thread.** `ulua_compile` runs the stages up to `luau_compile` on
    a thread that the library starts, with a fixed stack of
-   `COMPILER_STACK_BYTES`. P1 measures the value (§7).
+   `COMPILER_STACK_BYTES`. P1 measures the value (§7). If the OS
+   refuses the thread, `ulua_compile` gives `ULUA_FAILED` with the
+   code `host:resources` (`abi.md` §3). The context stays usable.
 2. **Source.** The source is UTF-8. A byte sequence that is not UTF-8
    gives the diagnostic `syntax` at its first invalid byte. A source
    longer than `max_source_bytes` gives `limit:source-bytes` before
@@ -59,6 +62,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    `max_nesting_depth` it returns `limit:nesting-depth`. A flat chain
    (`a+a+a`, `a.b.c`, `f()()`) is a nested AST and counts one level
    per link (D13).
+   The checker counts the depth that the emitter and the emitted Luau
+   reach. An input that the checker accepts never reaches a depth limit
+   of the emitter. If it does, the result is `internal`. Each limit
+   diagnostic carries the source offset of the form that reaches the
+   limit.
 5. **Checker.** The checker implements `surface.md` and
    `collisions.md`. It derives each type itself (C1). It never reads a
    type from `tsc`.
@@ -77,6 +85,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    defect. It gives `ULUA_INTERNAL` with the Luau message.
 9. **No panic.** A Rust panic on the compiler thread is caught at the
    thread join. It gives `ULUA_INTERNAL`.
+10. **Linear time.** The time of each stage, `luau_compile` included,
+    is at most O(n log n) in the source size n. A gate test compiles
+    one input of each shape at n and at 4n bytes. The time at 4n is at
+    most 8 times the time at n.
 
 ## 4. Shim and the Luau C API
 
@@ -129,6 +141,19 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    the chunk. P2 extends this rule for closures and per-iteration
    bindings.
 
+10. **Typed writes.** Each assignment to a generated local or to a
+    spill field has the form `name = (expr) :: T`. `T` is the declared
+    Luau type of the target. Without the assertion, `luau-analyze`
+    fails on chains of writes inside branches (`tracking/p1-skeleton.md`).
+11. **Analyzer stress gate.** For each form that writes a local inside
+    a branch (`&&`, `||`, `?:`, `if`, loops, compound assignment), the
+    gate emits one function that repeats the form up to the source
+    ceiling. `luau-analyze` checks each one with exit status 0.
+12. **Template work.** A template of at most 16 parts lowers to one
+    `..` expression. A template of more parts lowers to `table.concat`
+    of one table constructor. Each byte of a part is copied at most
+    twice.
+
 ## 6. Limits
 
 | Limit | Applies to | Diagnostic or failure |
@@ -147,7 +172,7 @@ C15 bounds of P1, each a fixed compiler constant:
 | `limit:parameters` | parameters of one function | 32 |
 | `limit:arguments` | arguments of one call | 32 |
 | `limit:template-parts` | literal parts and substitutions of one template literal, empty literal parts included | 1025 |
-| `limit:temporaries` | parameters, temporaries, and generated locals of one generated function; they never spill (§5.8) | 136 |
+| `limit:temporaries` | temporaries, default-parameter copies, and generated locals of one generated function; they never spill (§5.8) | 136 |
 
 `limit:nesting-depth` also bounds the nesting of the generated Luau
 below the Luau parser recursion limit of 1000. A bound that S3 finds
@@ -156,9 +181,15 @@ necessary and that this table does not name is a contract question.
 1. A zero limit is a zero limit. It is never "no limit".
 2. The library has a ceiling for `max_source_bytes` and
    `max_nesting_depth`. A request above the ceiling uses the ceiling.
-3. `max_steps` counts interrupt callbacks, not wall time.
+3. `max_steps` counts interrupt callbacks. Each allocation also
+   charges `ceil(bytes / ALLOCATION_STEP_BYTES)` steps. At the limit the
+   allocator returns null and the run gives `limit:steps`. The charge
+   bounds the time of one step by a constant, so `max_steps` bounds
+   the run time. P1 measures `ALLOCATION_STEP_BYTES` (§7).
 4. Compiler memory is outside `max_memory_bytes`. The source ceiling
    bounds it; P1 measures it.
+5. `max_memory_bytes` counts allocated bytes, garbage included. A
+   collection runs only when Luau starts it.
 
 ## 7. Measurements of P1
 
@@ -186,6 +217,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
+| `ALLOCATION_STEP_BYTES` | S4 measures | 1,000,000 steps of the slowest measured input take at most 10 s in Release |
 
 ## 8. Corpus runner
 

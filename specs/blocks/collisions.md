@@ -282,7 +282,7 @@ form, global, namespace, and member is rejected. A rule in this file
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
-Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`.
+Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`.
 
 ## C12. Evaluation order
 
