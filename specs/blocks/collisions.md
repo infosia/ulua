@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 21, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 22, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -8,7 +8,8 @@ Rev 16: the three resolutions and the divergence format, invariant 5;
 Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
 literal conditions, strict-mode early errors, round 6; Rev 19:
 `ALIAS_TEST_BOUND`, round 7; Rev 20: nested bodies inherit the tested
-set, P2.1; Rev 21: C1.4 function type equality, P2.1 review).
+set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
+closures inside a declaration, C15 closures note, P2.1 review 2).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -356,12 +357,15 @@ included.
 3. A function declaration is hoisted. Let F be a function declaration,
    and let B be a `let`, `const`, or `class` binding declared outside
    F. F reaches B if F refers to B, or if F refers to a function
-   declaration that reaches B. The relation is transitive over chains
+   declaration that reaches B. A reference inside a function or arrow
+   that F creates, at any depth, is a reference of F: the closure can
+   run while B is in its zone (`function mk() { return () => x; }`
+   called before `let x`). The relation is transitive over chains
    of any length. If F reaches B, every reference to F must come after
    the end of the declaration of B in source order. A reference is a
    call or a use as a value, at any nesting depth.
 
-Reject: `r20`, `r35`, `r36`, `r40`, `r41`, `r50`, `r51`, `r56`.
+Reject: `r20`, `r35`, `r36`, `r40`, `r41`, `r50`, `r51`, `r56`, `r86`.
 
 ## C11. The accepted surface is closed
 
@@ -381,7 +385,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`.
 
 ## C12. Evaluation order
 
@@ -483,7 +487,8 @@ Luau limit.** It uses two means:
    depth counted over expression and statement terms of the typed IR
    (each operator of a flat chain counts), parameters per function,
    arguments per call, operands of one concatenation, and closures per
-   function. The register budget of an expression is the register
+   function where the source ceiling does not already bound them
+   (`pipeline.md` §5.14.7: it does for closures). The register budget of an expression is the register
    limit minus the locals of rule 1.
 
 P1 measures each bound against the pinned Luau and records its value

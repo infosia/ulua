@@ -1,7 +1,7 @@
 # P2 value representations
 
-Status: open. Contracts: `pipeline.md` Rev 8, `abi.md` Rev 4,
-`corpus.md` Rev 3, `surface.md` Rev 9, `collisions.md` Rev 21.
+Status: open. Contracts: `pipeline.md` Rev 9, `abi.md` Rev 4,
+`corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
 Decisions: D15, D16 (`plan.md` §8).
 
 ## Slices
@@ -12,7 +12,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 | Slice | Family | Entries |
 |---|---|---|
-| P2.1 | Nested functions and arrows | `a23`, `a27`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66` |
+| P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64` |
 | P2.3 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
 | P2.4 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
@@ -37,7 +37,8 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 - [x] `pipeline.md` §5.14 implemented; `UPVALUE_BUDGET` measured and
   pinned by a test at and past the bound.
 - [x] P2.1 entries pass in full; later slices stay `unsupported`.
-- [x] `luau-analyze` passes on the generated modules and the stress set.
+- [ ] `luau-analyze` passes on the generated modules and the stress set
+  (round 2 found an inferred-type chain that crashes it).
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements
@@ -82,6 +83,21 @@ programs, 432 accepted (each passes `tsc`, `node`, `luau-analyze`), 168
 rejected (C1 96, C11 72). Gap: unions and arrays of function types are
 not in the IR yet; P2.2 and P2.4 add the parentheses rule where they
 print such types.
+
+### P2.1 Phase Review round 2
+
+Reviewer: fresh agent, diff `b4e42f3..26eee97`. 3 MAJOR, 3 MINOR.
+The round 1 fixes close their classes (function type equality at every
+value flow, defaults, type printing).
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A closure created inside a hoisted declaration escapes C10: `const r = mk(); r(); let x = 1; function mk() { return () => x; }` prints 0; `node` throws ReferenceError | MAJOR | C10.3 Rev 22: references inside created closures belong to F; `r86` |
+| Inferred function types have no bound: `() => () => ... a0` gives `internal` (output bound) at 1,060 bytes, a Luau "Exceeded allowed recursion depth" at 18.7 KB, and a `luau-analyze` SIGBUS at 14.5 KB | MAJOR | surface.md Rev 10: an arrow with a function result has a result annotation; pipeline.md §5.14.3 nested aliases; `r87` |
+| A default resolves a name that the body declares: `f(a = g())` with a body `function g`; `tsc` TS2373 | MAJOR | surface.md Rev 10; `r88` |
+| `s4_growth.rs` states 7.77 s; it measures 8.70 s | MINOR | S fix states the cost |
+| C15 lists closures per function as a bound; §5.14.7 says none is needed | MINOR | C15 text |
+| The tracking slice table, entry count, and checklist are stale | MINOR | This note |
 
 ## Failures before the fix
 

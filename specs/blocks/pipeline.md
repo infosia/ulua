@@ -9,6 +9,7 @@ Rev 5: §3.10, §5.8, §5.10, §5.13 (P1 Phase Review round 3).
 Rev 6: §4.6a, §7 values (round 8).
 Rev 7: §5.14 functions as values, `limit:upvalues` (P2.1).
 Rev 8: §5.14.3 parentheses for an optional function type (P2.1 review).
+Rev 9: §5.14.3 nested aliases (P2.1 review 2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -213,6 +214,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     3. An arrow lowers to a Luau function expression with typed
        parameters and a typed result. A function type lowers to a Luau
        function type through a generated type alias (§5.10). A function
+       type alias names each nested function type by its own alias,
+       so the alias text is linear in the source. A function
        type inside an optional type is in parentheses:
        `((number) -> boolean)?`. Without them, Luau reads
        `(number) -> boolean?` as a function with an optional result.
