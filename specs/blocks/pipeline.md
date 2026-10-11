@@ -108,6 +108,25 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 5. Module-level statements run once, in `ulua_instance_new`.
 6. The emitted chunk name is `=script`. A Luau error message carries no
    host path.
+7. **Local budget (C15.1).** For each generated Luau function, the
+   emitter counts every local that the function declares in all of its
+   scopes: parameters, bindings, temporaries (C12), loop copies (C9.2),
+   and generated locals. The count includes nested blocks. The budget
+   is `LOCAL_BUDGET`, below the Luau limit of 200; S3 measures it.
+8. **Spill table.** If the count exceeds `LOCAL_BUDGET`, the function
+   declares one generated table local at its entry. Each binding past
+   the budget, in source order, is a distinct generated field of that
+   table. The table has a table type with one typed field per spilled
+   binding, so `luau-analyze` checks each access. Each read and write
+   of the binding is a field access of the table. C10 makes each write
+   come before each read.
+   Parameters, temporaries, and generated locals never spill. A
+   function within the budget declares no table.
+9. **Upvalues.** A function reads a module-level binding as an
+   upvalue, or through the spill table of the module chunk. Its
+   upvalue count is at most `LOCAL_BUDGET` plus the generated locals of
+   the chunk. P2 extends this rule for closures and per-iteration
+   bindings.
 
 ## 6. Limits
 
@@ -137,7 +156,7 @@ the value.
    deepest form at the ceiling compiles in a Debug build with half of
    the stack unused.
 2. The ceiling of `max_source_bytes`.
-3. The C15 bounds and their limit names.
+3. The C15 bounds and their limit names, and `LOCAL_BUDGET`.
 4. The stack that `ulua_call` needs on the host thread: Luau at
    `LUAI_MAXCCALLS` in a Debug build.
 5. Compiler memory at the source ceiling.
