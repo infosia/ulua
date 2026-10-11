@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 1, `surface.md` Rev 5, `collisions.md` Rev 12.
+`corpus.md` Rev 1, `surface.md` Rev 6, `collisions.md` Rev 14.
 
 ## Scope
 
@@ -26,6 +26,7 @@ Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 | S4 | Phase Review round 1 fixes: `pipeline.md` Rev 2, `abi.md` Rev 1 | Codex |
 | S5 | Phase Review round 2 fixes: `pipeline.md` Rev 3, `abi.md` Rev 2 | Codex |
 | S6 | Phase Review round 3 fixes: `pipeline.md` Rev 5, `collisions.md` Rev 13 C7 | Codex |
+| S7 | Phase Review round 4 fixes: `collisions.md` Rev 14 C7, `surface.md` Rev 6 | Codex |
 
 ## Exit checklist
 
@@ -301,6 +302,38 @@ q;` with `q: boolean`, `p === true` with an unassigned parameter, and
 `let x = n > 1; x === g(true)` give no error. `tsc` gives TS2367 only
 when both operands narrow to literal types. `a28` pins the accepted
 forms.
+
+## Phase Review round 4
+
+Reviewer: fresh agent, diff `f5f0bf1..0f84500`. 4 MAJOR, 4 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C7 ignores `tsc` narrowing by conditions: `if (p) { return p === false; }`, `return n === 1 && n === 2;`, `if (n !== 1) { return true; } return n === 2;` and 12 more give TS2367 and compile | MAJOR | D15; C7 Rev 14 rules 3 and 4; `r72` |
+| A template with literal substitutions is *wide*: `` `${1}` === "2" `` gives TS2367 and compiles | MAJOR | C7 Rev 14 rule 3; `r74` |
+| `n === NaN` compiles; `tsc` gives TS2845 | MAJOR | C7 Rev 14 rule 2; `r73` |
+| `while ((true)) { return 1; }` ends a function with a result; `tsc` gives TS2366 | MAJOR | surface.md Rev 6; `r75` |
+| `x=x%x%...%x` over a spilled `x` gives ratio 63.8; margin to 80 is 0.25 over 25% | MINOR | S7 adds the shape |
+| No test builds an output-bound violation | MINOR | S7 |
+| The C7 text and the code disagree on a *narrowable* condition | MINOR | Closed by C7 Rev 14 |
+| Stale gate cost statements: `s4_growth.rs` states 12 s, measures 18.9 s; `s4_bytecode.rs` states none, measures 3.7 s | MINOR | S7 |
+
+Round 3 and round 4 found 1 and 3 new instances of the class "the
+checker accepts a `tsc`-rejected program". The user chose a
+restrictive structural subset (D15). C7 Rev 14 replaces the
+literal-set model: no `boolean` equality operands, no `NaN` operand,
+and one *wide* operand that `tsc` cannot type as a literal.
+
+Corpus changes for C7 Rev 14: `a10` replaces `t === f` and `t !== f`
+with `?:` forms and declares `let zero`; `a20` (P2) compares `let`
+bindings with literals; `a28` becomes `a28-equality-operands`; `r70`
+and `r71` change messages; `r72` becomes
+`r72-tested-reference-equality`; new `r73`, `r74`, `r75`. The goldens
+of `a10` and `a20` do not change.
+
+P2 note: rule 3 lists no member read and no object operand. `a21`
+(`other.end === this.end`, `a === b` on objects) needs a P2 revision
+of rule 3.
 
 ## Failures before the fix
 

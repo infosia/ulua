@@ -1,8 +1,9 @@
 # Accepted surface
 
-Status: Rev 5, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 6, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
-round 12 N5 names a parameter callee).
+round 12 N5 names a parameter callee; Rev 6: the end of a function
+with a result, P1 Phase Review round 4).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -44,6 +45,12 @@ C16 only, not the `tsc` type.
 | `ForOfStatement` | The left side is a `const` declaration of one `BindingIdentifier`. The right side has an array type. Not `await`. |
 | `BreakStatement`, `ContinueStatement` | No label. |
 | `ReturnStatement` | With an expr, or empty in a function with a `void` result. |
+
+A function with a result other than `void` ends in a statement that
+cannot complete: `return`, an `if` with an `else` whose two branches
+cannot complete, or a loop whose test is the literal `true` with no
+parentheses or is absent, and whose body holds no `break` of that
+loop. `tsc` gives TS2366 for a parenthesized `(true)` test.
 
 ## 3. Expressions
 

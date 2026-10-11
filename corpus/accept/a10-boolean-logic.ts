@@ -4,12 +4,12 @@
 // phase: P1
 // tsc: accepts
 function logic(t: boolean, f: boolean): string {
-  return `${t && f} ${t || f} ${!t} ${t === f} ${t !== f}`;
+  return `${t && f} ${t || f} ${!t} ${t ? f : !f} ${t ? !f : f}`;
 }
 
 export function main(): void {
   print(logic(true, false));
-  const zero = 0;
+  let zero = 0;
   const nan = zero / zero;
   print(`${nan < 1} ${nan >= 1} ${!(nan < 1)} ${nan === nan} ${nan !== nan}`);
   print(`${zero === -zero} ${1 <= 1} ${2 > 1}`);

@@ -1,8 +1,9 @@
 # Semantic collisions — decided rules
 
-Status: Rev 13, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 14, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
-to C16; Rev 13: C7 literal operands, P1 Phase Review round 3).
+to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
+structural operand rule, round 4).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -209,39 +210,51 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
 - `===` and `!==` between function values are rejected. The Luau
   compiler reuses a closure that captures no upvalue, so two closures
   that JavaScript keeps distinct can compare equal.
-- `tsc` gives TS2367 when the literal types of the two operands do not
-  overlap. The checker models them. For each operand it derives *L*, a
-  finite set of literal values, *wide*, or *narrowable*:
-  - a number, string, or boolean literal, `-` of a numeric literal, or
-    a template without substitutions: the one value;
-  - a `const` binding: *L* of its initializer;
-  - `(e)`: *L* of `e`;
-  - `!e`: the negation of each value of a finite *L*(e);
-  - `c ? a : b`: the union of *L*(a) and *L*(b);
-  - `a && b`: *L*(b) if `a` can be `true`, plus `false` if `a` can be
-    `false`;
-  - `a || b`: *L*(b) if `a` can be `false`, plus `true` if `a` can be
-    `true`;
-  - a `boolean` `let` binding, or a `boolean` parameter that the
-    function assigns: *narrowable*, because `tsc` narrows it on
-    assignment;
-  - every other form: *wide*.
-  The value parts of a form are `e` of `(e)` and `!e`, `a` and `b` of
-  `c ? a : b`, and `b` of `a && b` and `a || b`. The condition `c` and
-  the left operand `a` of `&&` and `||` are not value parts. If an
-  operand or a value part is *narrowable*, the result is *narrowable*.
-  Else if a value part that enters the result is *wide*, the result is
-  *wide*. `a` can be
-  `false` if *L*(a) is *wide* or holds `false`; it can be `true` if
-  *L*(a) is *wide* or holds `true`.
-  `===` and `!==` are rejected if both operands have finite sets that
-  do not overlap, or if one operand is *narrowable* and the other is
-  not *wide*. Without the rule, inline literal operands such as
-  `(false == true)` also fail `luau-analyze` (D10). A `tsc`-rejected
-  form that the model accepts is a defect of the model. It is fixed
-  when it is found.
+- `tsc` gives TS2367 when the types of the two operands do not overlap.
+  A literal type, a union of literal types, or a reference that `tsc`
+  narrows to one makes this possible. The checker does not model these
+  types. It accepts only operand pairs where `tsc` cannot give a literal
+  type to both. The rules below are restrictive on purpose; a later
+  revision opens a form when a program needs it.
+  1. `===` and `!==` do not take `boolean` operands. Write `!`, `&&`,
+     `||`, or `?:`.
+  2. An operand that is `NaN` (in parentheses or not) is rejected: `tsc`
+     gives TS2845.
+  3. At least one operand is *wide*. A wide operand is one of these
+     forms:
+     - a call to a function that declares its result type;
+     - a binary `+`, `-`, `*`, `/`, or `%` expression;
+     - `-e`, where `e` is not a numeric literal;
+     - a reference to a `let` binding or a parameter that is not
+       *tested* at that point;
+     - a reference to a `const` binding that is not *tested* at that
+       point, if its initializer is wide;
+     - `(e)`, where `e` is wide.
+     Every other form is not wide: literals, `-` of a numeric literal,
+     templates, `?:`, `&&`, `||`, `!`, and tested references.
+  4. A reference `x` is *tested* in a region where `tsc` can narrow it
+     by an equality. For a condition `g`, *T*(g) is the set of
+     references that `g` true can narrow, and *F*(g) is the set for `g`
+     false:
+     - `x === e` or `e === x`, where `e` is not wide: *T* = {x};
+     - `x !== e` or `e !== x`, where `e` is not wide: *F* = {x};
+     - `!g`: *T* and *F* of `g` swap;
+     - `a && b`, `a || b`: the union of the sets of `a` and `b`;
+     - `(g)`: the sets of `g`.
+     The references of *T*(g) are tested in the `then` branch of `if`,
+     the body of `while` and `for`, the right operand of `g && b`, and
+     the `?` branch of `g ? a : b`. The references of *F*(g) are tested
+     in the `else` branch, the right operand of `g || b`, and the `:`
+     branch. After an `if` whose `then` branch holds a `return`,
+     `break`, or `continue`, the references of *F*(g) are tested for
+     the rest of the block. If the `else` branch holds one, the same
+     applies to *T*(g). After a `while` or a `for`, the references of
+     *F*(g) are tested for the rest of the block.
+  A test from an outer region stays in force in each inner region. An
+  assignment does not end a test.
 
-Accept: `a10`, `a14`, `a28`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`.
+Accept: `a10`, `a14`, `a28`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
+`r74`.
 
 ## C8. Forms outside the subset
 
@@ -313,7 +326,8 @@ form, global, namespace, and member is rejected. A rule in this file
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
-Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`.
+Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
+`r75`.
 
 ## C12. Evaluation order
 
