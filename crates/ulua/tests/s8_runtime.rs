@@ -13,6 +13,20 @@ use ulua::*;
 #[link(name = "ulua_test_native", kind = "static")]
 unsafe extern "C" {
     fn ulua_internal_probe_runtime_errors() -> i32;
+    fn ulua_internal_probe_size_errors() -> i32;
+}
+
+#[test]
+fn size_errors_use_the_production_memory_classifier() {
+    // Measured Debug cost: 1.08 ms for both cases, including compilation, VM setup, calls, and cleanup.
+    // buffer.writestring with count 2 and one byte emits "string length overflow".
+    // This tests the MAXSSIZE message without a large concatenation allocation.
+    // buffer.create(1073741825) emits "memory allocation error: block too big" before allocation.
+    let start = std::time::Instant::now();
+    assert_eq!(ulua_abi_version(), 1);
+    // SAFETY: The fixture takes no pointers and releases each VM before it returns.
+    assert_eq!(unsafe { ulua_internal_probe_size_errors() }, 0);
+    eprintln!("S8 default size cases: {:?}", start.elapsed());
 }
 
 #[test]

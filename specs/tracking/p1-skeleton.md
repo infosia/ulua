@@ -1,6 +1,6 @@
 # P1 vertical skeleton
 
-Status: open. Contracts: `pipeline.md` Rev 6, `abi.md` Rev 4,
+Status: COMPLETE, 2026-10-12. Contracts: `pipeline.md` Rev 6, `abi.md` Rev 4,
 `corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 19.
 
 ## Scope
@@ -45,7 +45,7 @@ Status: open. Contracts: `pipeline.md` Rev 6, `abi.md` Rev 4,
   the executable check moves to the P2 exit (`plan.md` §9 Rev 4).
 - [x] P0 carry-over N3 (`a25`), N4 (`a26`), N5 (surface.md Rev 5): `a25`
   and `a26` pass; N5 has the P2 entry `a27`.
-- [ ] Phase Review with no open CRITICAL or MAJOR finding.
+- [x] Phase Review with no open CRITICAL or MAJOR finding (round 9).
 
 ## S1 record
 
@@ -541,9 +541,18 @@ programs, 2,350 mutants, and 9,000 number formats agree with `tsc`,
 | Finding | Severity | Resolution |
 |---|---|---|
 | `runtime_errors.h` maps the `buffer.writestring` argument error "string length overflow" (`VM/src/lbuflib.cpp:228`) to `limit:memory`; the text equals the `MAXSSIZE` error | MINOR | Not reachable in P1 (no `buffer` library). Gap for the phase that exposes `buffer` |
-| The two size errors that P1 reaches are tested only with the `measurements` feature | MINOR | A default-build test (S12) |
+| The two size errors that P1 reaches are tested only with the `measurements` feature | MINOR | Default-build test in `s8_runtime.rs` through the native fixture (1.08 ms). It reaches "string length overflow" through the `buffer.writestring` argument path, so it checks the list entry, not the `MAXSSIZE` path |
 | A `%` chain after 180 `let` bindings peaks at 61.1 MB, above the recorded 59.0 MB | MINOR | `pipeline.md` §7 row |
 | The exit checklist leaves C12.6, C16.4, N5 and the ABI test item open | MINOR | Checklist closed with the evidence above |
+
+## Phase close
+
+- `sh tools/gate.sh full` passes: 29 accept, 83 reject, 3 trap; 45
+  entries in phase P1 or earlier; 14 generated modules and 11 stress
+  modules pass `luau-analyze`; `cargo-test` 12 s; `luau-witnesses`
+  22 s. `sh tools/hygiene.sh` passes.
+- Running tasks at the close: none. Each Codex task and each waiter
+  shell completed; the round 9 reviewer was stopped after its report.
 
 ## Failures before the fix
 

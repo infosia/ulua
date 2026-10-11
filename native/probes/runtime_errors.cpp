@@ -11,6 +11,19 @@ struct ErrorCase {
     int code;
     const char* message;
 };
+static int runtime_error_cases(const ErrorCase* cases, size_t count);
+
+extern "C" int ulua_internal_probe_size_errors() noexcept {
+    const ErrorCase cases[] = {
+        // This buffer count check emits the same pinned text as MAXSSIZE concatenation.
+        {"return {main=function() buffer.writestring(buffer.create(1),0,'a',2) end}", SHIM_MEMORY,
+            "string length overflow"},
+        {"return {main=function() buffer.create(1073741825) end}", SHIM_MEMORY,
+            "memory allocation error: block too big"},
+    };
+    return runtime_error_cases(cases, sizeof(cases) / sizeof(cases[0]));
+}
+
 static int hard_lua_depth(lua_State* state) {
     luaD_reallocCI(state, LUAI_MAXCALLS + (LUAI_MAXCALLS >> 3));
     luaD_growCI(state);
@@ -60,15 +73,19 @@ extern "C" int ulua_internal_probe_runtime_errors() noexcept {
         {"return {main=function() local t={} t() end}", SHIM_INTERNAL, "attempt to call a table value"},
         {"return {main=function() string.packsize('i17') end}", SHIM_INTERNAL, "integral size (17) out of limits [1,16]"},
     };
+    return runtime_error_cases(cases, sizeof(cases) / sizeof(cases[0]));
+}
+
+static int runtime_error_cases(const ErrorCase* cases, size_t count) {
     ulua_host host = {};
     host.struct_size = sizeof(host);
     ulua_run_limits limits = {};
     limits.struct_size = sizeof(limits);
     limits.max_memory_bytes = 64 * 1024 * 1024;
     limits.max_steps = 10000;
-    int index = 0;
-    for (const ErrorCase& test : cases) {
-        ++index;
+    for (size_t i = 0; i < count; ++i) {
+        const ErrorCase& test = cases[i];
+        int index = int(i + 1);
         char error[256] = {};
         char* bytecode = nullptr;
         size_t length = 0;
