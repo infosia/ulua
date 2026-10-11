@@ -1,10 +1,10 @@
 # Accepted surface
 
-Status: Rev 7, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 8, 2026-10-11 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
-C7 Rev 15).
+C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -27,7 +27,7 @@ C16 only, not the `tsc` type.
 | `ExportNamedDeclaration` | Only `export` before a module-level `FunctionDeclaration`. No specifiers, no `export default`. |
 | `FunctionDeclaration` | Not `async`, not a generator. A `BindingIdentifier` name. Each parameter is a `FormalParameter` of §4. A result type annotation is required. |
 | `VariableDeclaration` | `let` or `const`, one or more `VariableDeclarator`s. |
-| `VariableDeclarator` | The id is a `BindingIdentifier` (no binding pattern). An initializer is required. A type annotation is optional; without it the type is the checked type of the initializer, which must not be `null` alone or an empty array literal. |
+| `VariableDeclarator` | The id is a `BindingIdentifier` (no binding pattern). An initializer is required. A type annotation is optional; without it the type is the checked type of the initializer, which must not be `null` alone or an empty array literal. A `let` without an annotation whose initializer has type `boolean` is accepted only if the initializer is a boolean literal or a comparison (`<`, `>`, `<=`, `>=`, an equality). `tsc` gives a narrowed boolean reference a literal type, and a later assignment then gives TS2322. |
 | `TSTypeAliasDeclaration` | Module level only. No type parameters. The type is a `TSTypeLiteral` of §5. |
 | `ClassDeclaration` | Module level only. No `extends`, `implements`, type parameters, or decorators. Members: `PropertyDefinition` and `MethodDefinition` of this table. |
 | `PropertyDefinition` | An identifier key, not computed, not `static`, not `declare`, not `readonly`, not `#private`. A type annotation is required. An initializer is optional (C13). Modifier: `private`. |
@@ -47,11 +47,13 @@ C16 only, not the `tsc` type.
 | `BreakStatement`, `ContinueStatement` | No label. |
 | `ReturnStatement` | With an expr, or empty in a function with a `void` result. |
 
-A function with a result other than `void` ends in a statement that
-cannot complete: `return`, an `if` with an `else` whose two branches
-cannot complete, or a loop whose test is the literal `true` with no
-parentheses or is absent, and whose body holds no `break` of that
-loop. `tsc` gives TS2366 for a parenthesized `(true)` test.
+The body of a function with a result other than `void` cannot
+complete. A statement list cannot complete if one of its statements
+cannot complete. A statement cannot complete if it is a `return`; a
+block whose list cannot complete; an `if` with an `else` whose two
+branches cannot complete; or a loop whose test is the literal `true`
+with no parentheses or is absent, and whose body holds no `break` of
+that loop. `tsc` gives TS2366 for a parenthesized `(true)` test.
 
 ## 3. Expressions
 

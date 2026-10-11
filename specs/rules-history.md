@@ -19,3 +19,4 @@ current rule.
 | Severity follows invariant 2 | 2026-10-11 | Hostile scripts make any script input a realistic reach. |
 | Environment: `LUAU_SOURCE_DIR` | 2026-10-11 | A local checkout path is machine-specific and stays out of the repository. |
 | Invariant 5: JavaScript agreement is the default; a divergence is decided and named | 2026-10-11 | Owner decision in the P1 Phase Review: exact `node` agreement for every accepted form is too strict. The level follows the owner's prior project: `node` is a divergence detector, and a `js-comparable: no` entry cites its collision. |
+| Invariant 3: `tsc` resource limits are outside the rule | 2026-10-11 | Owner decision in P1 Phase Review round 5: 1,000 `if` statements in one function (about 14 KB) give TS2563; a 64 KB loop input overflows the `tsc` stack. Both are inside `max_source_bytes`. |

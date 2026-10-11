@@ -1,10 +1,11 @@
 # Semantic collisions — decided rules
 
-Status: Rev 16, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 17, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
-Rev 16: the three resolutions and the divergence format, invariant 5).
+Rev 16: the three resolutions and the divergence format, invariant 5;
+Rev 17: C7 rule 4 as a flow fact, round 5).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -238,7 +239,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      forms:
      - a call to a function that declares its result type;
      - a binary `+`, `-`, `*`, `/`, or `%` expression;
-     - `-e`, where `e` is not a numeric literal;
+     - `-e`, where `e` without its parentheses is not a numeric literal;
      - a reference to a `let` binding or a parameter that is not
        *tested* at that point;
      - a reference to a `const` binding that is not *tested* at that
@@ -246,10 +247,10 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      - `(e)`, where `e` is wide.
      Every other form is not wide: literals, `-` of a numeric literal,
      templates, `?:`, `&&`, `||`, `!`, and tested references.
-  4. A reference `x` is *tested* in a region where `tsc` can narrow it
-     by an equality. For a condition `g`, *T*(g) is the set of
-     references that `g` true can narrow, and *F*(g) is the set for `g`
-     false:
+  4. A reference `x` is *tested* at a point if `tsc` can narrow it by an
+     equality on every control-flow path to that point. For a
+     condition `g`, *T*(g) is the set of references that `g` true can
+     narrow, and *F*(g) is the set for `g` false:
      - `x === e`, `e === x`, `x == e`, or `e == x`, where `e` is not
        wide: *T* = {x};
      - `x !== e`, `e !== x`, `x != e`, or `e != x`, where `e` is not
@@ -257,20 +258,24 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      - `!g`: *T* and *F* of `g` swap;
      - `a && b`, `a || b`: the union of the sets of `a` and `b`;
      - `(g)`: the sets of `g`.
-     The references of *T*(g) are tested in the `then` branch of `if`,
-     the body of `while` and `for`, the right operand of `g && b`, and
-     the `?` branch of `g ? a : b`. The references of *F*(g) are tested
-     in the `else` branch, the right operand of `g || b`, and the `:`
-     branch. After an `if` whose `then` branch holds a `return`,
-     `break`, or `continue`, the references of *F*(g) are tested for
-     the rest of the block. If the `else` branch holds one, the same
-     applies to *T*(g). After a `while` or a `for`, the references of
-     *F*(g) are tested for the rest of the block.
-  A test from an outer region stays in force in each inner region. An
-  assignment does not end a test.
+     The checker computes the tested set as a forward flow fact over
+     the control-flow graph of the function. The true edge of a
+     condition adds *T*(g); its false edge adds *F*(g). Conditions are
+     those of `if`, `while`, `for`, `?:`, and the left operands of `&&`
+     and `||`. At a join, a reference is tested if it is tested on each
+     incoming edge. The joins are: the end of an `if`; the end of a
+     block; a loop exit, from the false edge of the test and from each
+     `break`; the `for` update, from the end of the body and from each
+     `continue`; and the loop test, from the loop entry. A `return`,
+     `break`, or `continue` edge does not reach the next statement. A
+     loop test joins the entry edge only, so a test that the body adds
+     does not reach the next iteration's test. An assignment does not
+     end a test. The fact is a set per point; the checker updates it in
+     time O(1) amortized per reference and per edge (pipeline.md
+     §3.10).
 
 Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`.
+`r74`, `r76`, `r77`.
 
 ## C8. Forms outside the subset
 
@@ -343,7 +348,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`.
+`r75`, `r78`.
 
 ## C12. Evaluation order
 

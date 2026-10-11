@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 2, `surface.md` Rev 7, `collisions.md` Rev 16.
+`corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 17.
 
 ## Scope
 
@@ -27,6 +27,7 @@ Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 | S5 | Phase Review round 2 fixes: `pipeline.md` Rev 3, `abi.md` Rev 2 | Codex |
 | S6 | Phase Review round 3 fixes: `pipeline.md` Rev 5, `collisions.md` Rev 13 C7 | Codex |
 | S7 | Phase Review round 4 fixes: `collisions.md` Rev 14 C7, `surface.md` Rev 6 | Codex |
+| S8 | Phase Review round 5 fixes: `collisions.md` Rev 17 C7 rule 4, `surface.md` Rev 8 | Codex |
 
 ## Exit checklist
 
@@ -394,6 +395,23 @@ can accept `x === null`. P2 decides this with the library contract.
 P2 note: rule 3 lists no member read and no object operand. `a21`
 (`other.end === this.end`, `a === b` on objects) needs a P2 revision
 of rule 3.
+
+## Phase Review round 5
+
+Reviewer: fresh agent, diff `f5f0bf1..0e681f1`. 3 MAJOR, 4 MINOR.
+Random programs: 26,500 generated, about 3,800 accepted; 0
+`luau-analyze` errors, 0 `node` mismatches, no `internal`; `tsc` errors
+only from findings 1 and 2.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C7 tests do not leave their region: a test inside a closed block, a branch whose sibling exits, `while (true)` with `break`, and the `for` update; each compiles and gives TS2367 | MAJOR | C7 rule 4 as a flow fact (Rev 17); `r76`, `r77`; S8 |
+| Truthiness narrowing gives a `let` a literal type: `if (b) { let v = b; v = false; }` gives TS2322 | MAJOR | surface.md Rev 8: unannotated boolean `let`; `r78`; S8 |
+| 1,000 `if` in one function (14.1 KB) give TS2563; a 64,983-byte loop input overflows the `tsc` stack; the compiler accepts both | MAJOR | Owner decision: `tsc` resource limits are outside invariant 3 (CLAUDE.md) |
+| surface.md `==` row contradicts C7 Rev 15 | MINOR | Fixed in surface.md Rev 7 |
+| `-(1)` is wide in the C7 text, not in the code | MINOR | C7 text: `e` without its parentheses |
+| The return rule in the code accepts a block and statements after `return`; the text lists neither | MINOR | surface.md Rev 8 states the statement-list rule |
+| The growth test changed to 8/32 KiB, one run; the S4 record still says 16/64 KiB, minimum of 3. `spilled-mod` ratios 6.25 to 6.40 against 8 | MINOR | Recorded here; S8 reviews the margin |
 
 ## Failures before the fix
 
