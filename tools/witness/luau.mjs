@@ -3,7 +3,9 @@
 // Usage: node tools/witness/luau.mjs
 // Needs LUAU_SOURCE_DIR for the build. LUAU_ANALYZE names luau-analyze; the
 // default is the binary that tools/luau-tools.sh builds.
-// Cost: one cargo build, one ulua-corpus process, one luau-analyze process.
+// It also analyzes the stress modules of pipeline.md section 5.11.
+// Cost: one cargo build, two ulua-corpus processes, one luau-analyze
+// process. The stress modules take about 18 s of the analyzer time.
 
 import { readFileSync, readdirSync, existsSync, rmSync, mkdirSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -91,16 +93,24 @@ for (const e of entries) {
     fail(e.id, `later phase: status ${r.status}, code ${r.code}, want rejected unsupported`);
 }
 
+const stressDir = path.join(root, "target/stress-luau");
+rmSync(stressDir, { recursive: true, force: true });
+mkdirSync(stressDir, { recursive: true });
+const stress = spawnSync(runner, ["--emit-stress", stressDir], { cwd: root, encoding: "utf8" });
+if (stress.status !== 0) fail("stress", `ulua-corpus --emit-stress exited with status ${stress.status}\n${stress.stderr}`);
+const stressFiles = readdirSync(stressDir).map((f) => path.join(stressDir, f));
+if (stressFiles.length === 0) fail("stress", "no stress modules");
+
 const analyze = process.env.LUAU_ANALYZE || path.join(root, "target/luau-tools/luau-analyze");
 const files = readdirSync(luauDir).map((f) => path.join(luauDir, f));
 if (!existsSync(analyze)) fail("luau-analyze", `not found at ${path.relative(root, analyze)}; run sh tools/luau-tools.sh`);
 else if (files.length > 0) {
-  const a = spawnSync(analyze, files, { encoding: "utf8" });
+  const a = spawnSync(analyze, [...files, ...stressFiles], { encoding: "utf8", maxBuffer: 1 << 28 });
   if (a.status !== 0) fail("luau-analyze", `exit ${a.status}\n${a.stdout}${a.stderr}`);
 }
 
 const checked = entries.filter((e) => Number(e.header.phase.slice(1)) <= PHASE).length;
-console.log(`luau witnesses: ${entries.length} entries, ${checked} in phase P${PHASE} or earlier, ${files.length} generated modules`);
+console.log(`luau witnesses: ${entries.length} entries, ${checked} in phase P${PHASE} or earlier, ${files.length} generated modules, ${stressFiles.length} stress modules`);
 if (failures.length) {
   for (const f of failures) console.error(`FAIL ${f}`);
   process.exit(1);

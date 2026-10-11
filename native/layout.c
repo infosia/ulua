@@ -32,6 +32,18 @@ size_t ulua_layout_probe(size_t index) {
         offsetof(ulua_host, reserved),
         offsetof(ulua_host, userdata),
         offsetof(ulua_host, output),
+        ULUA_OK,
+        ULUA_INVALID_ARGUMENT,
+        ULUA_REJECTED,
+        ULUA_FAILED,
+        ULUA_HOST_ERROR,
+        ULUA_BUSY,
+        ULUA_INTERNAL,
+        ULUA_POISONED,
+        ULUA_TYPE_VOID,
+        ULUA_TYPE_NUMBER,
+        ULUA_TYPE_BOOLEAN,
+        ULUA_TYPE_STRING,
         ULUA_MIN_RUN_STACK
     };
     return index < sizeof(layout) / sizeof(layout[0]) ? layout[index] : SIZE_MAX;

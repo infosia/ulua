@@ -7,7 +7,7 @@ use crate::{
 };
 use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap};
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
@@ -161,21 +161,20 @@ impl Checker<'_> {
                 latest[owner] = latest[owner].max(self.bindings[id].end);
             }
         }
-        let mut pending: VecDeque<_> = latest
+        // Largest declaration offsets settle first. Each edge propagates at most once.
+        let mut pending: BinaryHeap<_> = latest
             .iter()
             .enumerate()
-            .filter_map(|(i, end)| (*end > 0).then_some(i))
+            .filter_map(|(i, end)| (*end > 0).then_some((*end, i)))
             .collect();
-        let mut queued: Vec<_> = latest.iter().map(|end| *end > 0).collect();
-        while let Some(function) = pending.pop_front() {
-            queued[function] = false;
+        while let Some((end, function)) = pending.pop() {
+            if latest[function] != end {
+                continue;
+            }
             for &caller in &callers[function] {
-                if latest[caller] < latest[function] {
-                    latest[caller] = latest[function];
-                    if !queued[caller] {
-                        queued[caller] = true;
-                        pending.push_back(caller);
-                    }
+                if latest[caller] < end {
+                    latest[caller] = end;
+                    pending.push((end, caller));
                 }
             }
         }
@@ -366,7 +365,7 @@ pub(crate) fn check(
             return Err(c.error(b.span, "C11", "Function directives are rejected"));
         }
         let body = c.block_contents(&b.statements, 0)?;
-        if result != Type::Void && !statements::returns(&body, 0, limit)? {
+        if result != Type::Void && !statements::returns(&body) {
             return Err(c.error(f.span, "C1", "Function can finish without its result"));
         }
         c.scopes.pop();
@@ -385,5 +384,6 @@ pub(crate) fn check(
         functions: checked,
         body,
         depth: limit,
+        source: source.to_vec(),
     })
 }

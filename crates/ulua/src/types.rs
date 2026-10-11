@@ -32,7 +32,9 @@ pub const ULUA_MIN_RUN_STACK: usize = 512 * 1024;
 /// Default per-instance memory budget.
 // The default admits 24 string doublings and the measured Luau call-depth boundary.
 pub const DEFAULT_MEMORY_BYTES: u64 = 64 * 1024 * 1024;
-/// Default interrupt budget for one operation.
+/// Allocated bytes per additional runtime step.
+pub const ALLOCATION_STEP_BYTES: u64 = 256;
+/// Default interrupt and allocation budget for one operation.
 // The S3 ABI gate exercises this exact interrupt budget and its next callback.
 pub const DEFAULT_STEPS: u64 = 1_000_000;
 

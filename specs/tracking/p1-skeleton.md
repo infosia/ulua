@@ -120,6 +120,34 @@ Compiler stack, bytes per level (parse/check/emit), slope over levels
 Native heap peaks come from a 100 µs sampler. Rust allocation counts
 are exact.
 
+## S4 record
+
+- Codex task. Tests: 49 in the default build, 51 with all features.
+  `gate.sh full` passes; `luau-witnesses` takes 20 s, of which the 7
+  stress modules take about 18 s of `luau-analyze`.
+- Typed writes: the bytecode of the 7 stress modules is the same with
+  and without the write assertions.
+- Linear time (`crates/ulua/tests/s4_growth.rs`, Debug, minimum of 3
+  runs, test cost 3.4 s): the ratio of 64 KiB to 16 KiB time is 3.71
+  to 3.96 for all 11 shapes (`bindings`, `dense`, `functions`,
+  `parameter-functions`, `expressions`, `templates`, `unary`, `flat`,
+  forward and backward call chains, star). Before the fix, `functions`
+  had a ratio of about 3.6 per doubling.
+- `ALLOCATION_STEP_BYTES` = 256 (Release, `s4_measure`): a tight loop
+  costs 15.3 ns per step. The slowest allocation input is
+  `String(i*1e280)`, 7.78 ns per allocated byte, so 1,000,000 charged
+  steps cost about 2.0 s. The review input (four-part template of a
+  2^18-byte string) stops at `limit:steps` after 0.055 s at the
+  defaults.
+- Stress modules, 65,536 bytes each, `luau-analyze` time: `&&` 12.6 s,
+  `||` 12.7 s, `?:` 12.9 s, `if` 14.3 s, `while` 7.6 s, `for` 0.5 s,
+  `+=` 0.4 s; all 7 in one process 18.3 s; exit 0.
+- Depth grid: 109 pairs of an accepted input and an input one level
+  past it; each rejection has a non-zero offset.
+- The 513-part template runs within the default memory. The
+  `limit:memory` failure of the review did not reproduce on the
+  binary before the fix.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

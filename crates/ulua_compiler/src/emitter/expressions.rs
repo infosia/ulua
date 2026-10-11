@@ -3,6 +3,7 @@ use super::*;
 use crate::ir::{Expr, ExprKind as E};
 impl Emitter<'_> {
     pub(super) fn expression(&mut self, expr: &Expr, depth: u32) -> Result<usize, Diagnostic> {
+        self.offset = expr.start as usize;
         let depth = self.guard(depth)?;
         let dest = self.slot(if expr.ty == Type::Void {
             &Type::Boolean
@@ -11,27 +12,27 @@ impl Emitter<'_> {
         })?;
         let target = self.temp(dest);
         match &expr.kind {
-            E::Number(n) => self.line(format!("{target} = {}", number(*n))),
-            E::Boolean(b) => self.line(format!("{target} = {b}")),
-            E::String(s) => self.line(format!("{target} = {}", quote(s))),
-            E::Read(id) => self.line(format!("{target} = {}", self.location(*id)?)),
-            E::Builtin(name) => self.line(format!("{target} = {name}")),
+            E::Number(n) => self.write_slot(dest, number(*n)),
+            E::Boolean(b) => self.write_slot(dest, b.to_string()),
+            E::String(s) => self.write_slot(dest, quote(s)),
+            E::Read(id) => self.write_slot(dest, self.location(*id)?),
+            E::Builtin(name) => self.write_slot(dest, name),
             E::Unary(op, a) => {
                 let a = self.expression(a, depth)?;
-                self.line(format!("{target} = {op} ({})", self.temp(a)));
+                self.write_slot(dest, format!("{op} ({})", self.temp(a)));
                 self.release(a);
             }
             E::Binary(op, a, b) => {
                 let a = self.expression(a, depth)?;
                 let b = self.expression(b, depth)?;
                 let value = self.binary(op, &self.temp(a), &self.temp(b));
-                self.line(format!("{target} = {value}"));
+                self.write_slot(dest, value);
                 self.release(a);
                 self.release(b);
             }
             E::Logical(and, a, b) => {
                 let a = self.expression(a, depth)?;
-                self.line(format!("{target} = {}", self.temp(a)));
+                self.write_slot(dest, self.temp(a));
                 self.release(a);
                 self.line(format!(
                     "if {}{target} then",
@@ -39,11 +40,8 @@ impl Emitter<'_> {
                 ));
                 self.indent += 1;
                 let b = self.expression(b, depth)?;
-                self.line(format!(
-                    "{target} = {target} {} {}",
-                    if *and { "and" } else { "or" },
-                    self.temp(b)
-                ));
+                // The branch already selects the right operand of this boolean operation.
+                self.write_slot(dest, self.temp(b));
                 self.release(b);
                 self.indent -= 1;
                 self.line("end");
@@ -51,26 +49,22 @@ impl Emitter<'_> {
             E::Conditional(test, a, b) => {
                 let t = self.expression(test, depth)?;
                 if let (Some(a), Some(b)) = (self.pure(a, depth)?, self.pure(b, depth)?) {
-                    self.line(format!("{target} = if {} then {a} else {b}", self.temp(t)));
+                    self.write_slot(dest, format!("if {} then {a} else {b}", self.temp(t)));
                 } else {
                     // Branch statements preserve short-circuit evaluation of calls.
                     self.line(format!("if {} then", self.temp(t)));
                     self.indent += 1;
                     let a = self.expression(a, depth)?;
+                    self.write_slot(dest, self.temp(a));
+                    self.release(a);
                     self.indent -= 1;
                     self.line("else");
                     self.indent += 1;
                     let b = self.expression(b, depth)?;
+                    self.write_slot(dest, self.temp(b));
+                    self.release(b);
                     self.indent -= 1;
                     self.line("end");
-                    self.line(format!(
-                        "{target} = if {} then {} else {}",
-                        self.temp(t),
-                        self.temp(a),
-                        self.temp(b)
-                    ));
-                    self.release(a);
-                    self.release(b);
                 }
                 self.release(t);
             }
@@ -91,7 +85,7 @@ impl Emitter<'_> {
                 if expr.ty == Type::Void {
                     self.line(call);
                 } else {
-                    self.line(format!("{target} = {call}"));
+                    self.write_slot(dest, call);
                 }
                 self.release(c);
                 for arg in args {
@@ -99,16 +93,52 @@ impl Emitter<'_> {
                 }
             }
             E::Template(parts) => {
-                self.line(format!("{target} = \"\""));
-                for part in parts {
+                let table = if parts.len() > 16 {
+                    let table = self.slot(&Type::StringParts)?;
+                    self.write_slot(table, "{}");
+                    Some(table)
+                } else {
+                    None
+                };
+                let mut values = vec![];
+                for (index, part) in parts.iter().enumerate() {
                     let value = self.expression(part, depth)?;
                     let converted = match part.ty {
                         Type::Number => format!("__ulua_format({})", self.temp(value)),
                         Type::Boolean => format!("__ulua_tostring({})", self.temp(value)),
                         _ => self.temp(value),
                     };
-                    self.line(format!("{target} = {target} .. {converted}"));
-                    self.release(value);
+                    if let Some(table) = table {
+                        // Freeze each converted value before the next part can change a binding.
+                        self.write(
+                            &format!("{}[{}]", self.temp(table), index + 1),
+                            converted,
+                            "string",
+                        );
+                        self.release(value);
+                    } else {
+                        // Conversion also occurs before the next source expression.
+                        let frozen = self.slot(&Type::String)?;
+                        self.write_slot(frozen, converted);
+                        self.release(value);
+                        values.push(frozen);
+                    }
+                }
+                if let Some(table) = table {
+                    self.write_slot(dest, format!("__ulua_concat({})", self.temp(table)));
+                    self.release(table);
+                } else {
+                    self.write_slot(
+                        dest,
+                        values
+                            .iter()
+                            .map(|v| self.temp(*v))
+                            .collect::<Vec<_>>()
+                            .join(" .. "),
+                    );
+                    for value in values {
+                        self.release(value);
+                    }
                 }
             }
         }

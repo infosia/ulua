@@ -1,5 +1,6 @@
 //! Corpus runner: compile and execute through the product C ABI.
 #![warn(missing_docs)]
+mod stress;
 use std::{
     ffi::{c_char, c_void},
     path::{Path, PathBuf},
@@ -183,10 +184,15 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
 }
 fn run() -> Result<(), String> {
     let mut emit = None;
+    let mut stress = None;
     let mut entries = vec![];
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
-        if arg == "--emit-luau" {
+        if arg == "--emit-stress" {
+            stress = Some(PathBuf::from(
+                args.next().ok_or("--emit-stress requires a directory")?,
+            ));
+        } else if arg == "--emit-luau" {
             emit = Some(PathBuf::from(
                 args.next().ok_or("--emit-luau requires a directory")?,
             ));
@@ -194,8 +200,13 @@ fn run() -> Result<(), String> {
             entries.push(PathBuf::from(arg));
         }
     }
-    if entries.is_empty() {
-        return Err("usage: ulua-corpus [--emit-luau <dir>] <entry.ts>...".into());
+    if let Some(directory) = &stress {
+        stress::emit(directory)?;
+    }
+    if entries.is_empty() && stress.is_none() {
+        return Err(
+            "usage: ulua-corpus [--emit-stress <dir>] [--emit-luau <dir>] <entry.ts>...".into(),
+        );
     }
     if let Some(path) = &emit {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;

@@ -8,12 +8,12 @@ impl Emitter<'_> {
                 self.line(format!("if __ulua_arg{id} == nil then"));
                 self.indent += 1;
                 let v = self.expression(value, 0)?;
-                self.line(format!("__ulua_b{id} = {}", self.temp(v)));
+                self.write_binding(*id, self.temp(v))?;
                 self.release(v);
                 self.indent -= 1;
                 self.line("else");
                 self.indent += 1;
-                self.line(format!("__ulua_b{id} = __ulua_arg{id}"));
+                self.write_binding(*id, format!("__ulua_arg{id}"))?;
                 self.indent -= 1;
                 self.line("end");
             }
@@ -21,18 +21,23 @@ impl Emitter<'_> {
         Ok(())
     }
     pub(super) fn statements(&mut self, body: &[S], depth: u32) -> Result<(), Diagnostic> {
-        let depth = self.guard(depth)?;
         for s in body {
             self.statement(s, depth)?;
         }
         Ok(())
     }
     fn statement(&mut self, s: &S, depth: u32) -> Result<(), Diagnostic> {
+        if let S::Located(offset, _) = s {
+            self.offset = *offset as usize;
+        }
         let depth = self.guard(depth)?;
-        match s {
+        match s.form() {
+            S::Located(_, _) => {
+                return Err(self.limit("internal", "Nested source location wrapper"));
+            }
             S::Declare(id, e) => {
                 let v = self.expression(e, depth)?;
-                self.line(format!("{} = {}", self.location(*id)?, self.temp(v)));
+                self.write_binding(*id, self.temp(v))?;
                 self.release(v);
             }
             S::Assign(id, op, e) => {
@@ -42,7 +47,7 @@ impl Emitter<'_> {
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing assignment type"))?;
                     let v = self.slot(ty)?;
-                    self.line(format!("{} = {}", self.temp(v), self.location(*id)?));
+                    self.write_slot(v, self.location(*id)?);
                     Some(v)
                 } else {
                     None
@@ -53,7 +58,7 @@ impl Emitter<'_> {
                 } else {
                     self.temp(v)
                 };
-                self.line(format!("{} = {value}", self.location(*id)?));
+                self.write_binding(*id, value)?;
                 self.release(v);
                 if let Some(v) = old {
                     self.release(v);
@@ -84,6 +89,9 @@ impl Emitter<'_> {
                     self.indent -= 1;
                 }
                 self.line("end");
+                for id in ir::writes(s) {
+                    self.write_binding(id, self.location(id)?)?;
+                }
             }
             S::While(e, b) => {
                 self.line("while true do");
@@ -98,6 +106,9 @@ impl Emitter<'_> {
                 self.loops.pop();
                 self.indent -= 1;
                 self.line("end");
+                for id in ir::writes(s) {
+                    self.write_binding(id, self.location(id)?)?;
+                }
             }
             S::For(init, test, update, body, ids) => {
                 self.statements(init, depth)?;
@@ -114,7 +125,7 @@ impl Emitter<'_> {
                         generated.3 = false;
                     }
                     let head = self.location(*id)?;
-                    copies.push((head, local.clone()));
+                    copies.push((head, local.clone(), ty.luau()));
                     previous.push((*id, self.copies.insert(*id, local)));
                 }
                 // The condition and update use head bindings; only the body uses copies.
@@ -134,17 +145,17 @@ impl Emitter<'_> {
                     self.line(format!("if not {} then break end", self.temp(t)));
                     self.release(t);
                 }
-                for (id, (head, local)) in ids.iter().zip(&copies) {
+                for (id, (head, local, _)) in ids.iter().zip(&copies) {
                     let ty = self.module.bindings[*id]
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    self.line(format!("local {local}: {} = {head}", ty.luau()));
+                    self.line(format!("local {local}: {0} = ({head}) :: {0}", ty.luau()));
                 }
-                for (id, (_, local)) in ids.iter().zip(&copies) {
+                for (id, (_, local, _)) in ids.iter().zip(&copies) {
                     self.copies.insert(*id, local.clone());
                 }
-                self.line(format!("{tail} = true"));
+                self.write(&tail, "true", "boolean");
                 self.line("repeat");
                 self.indent += 1;
                 self.loops.push(Loop {
@@ -157,8 +168,8 @@ impl Emitter<'_> {
                 if ir::loop_break(body) {
                     self.line(format!("if not {tail} then break end"));
                 }
-                for (head, local) in &copies {
-                    self.line(format!("{head} = {local}"));
+                for (head, local, ty) in &copies {
+                    self.write(head, local, ty);
                 }
                 for (id, old) in previous {
                     if let Some(old) = old {
@@ -172,13 +183,17 @@ impl Emitter<'_> {
                 }
                 self.indent -= 1;
                 self.line("end");
+                for id in ir::writes(s) {
+                    self.write_binding(id, self.location(id)?)?;
+                }
             }
             S::Break => {
                 if let Some(Loop {
                     tail: Some(tail), ..
                 }) = self.loops.last()
                 {
-                    self.line(format!("{tail} = false"));
+                    let tail = tail.clone();
+                    self.write(&tail, "false", "boolean");
                 }
                 // A do block allows a following source statement after a terminator.
                 self.line("do break end");

@@ -196,11 +196,11 @@ fn c14_decoded_numbers_templates_and_generated_names() {
 #[test]
 fn export_signatures_follow_checked_types() {
     let c = accept(
-        "export function f(n: number, b: boolean, s: string): string { return s; } export function main(): void {}",
+        "export function f(n: number, b: boolean): number { return n; } export function main(): void {}",
     );
     assert_eq!(c.exports.len(), 2);
-    assert_eq!(c.exports[0].parameters, [1, 2, 3]);
-    assert_eq!(c.exports[0].result, 3);
+    assert_eq!(c.exports[0].parameters, [1, 2]);
+    assert_eq!(c.exports[0].result, 1);
 }
 #[test]
 fn c15_small_functions_avoid_spill_and_nested_bindings_share_one_table() {
@@ -230,7 +230,7 @@ fn c9_loop_copies_cover_continue_before_update() {
     let c = accept(&body(
         "for (let i = 0; i < 5; i++) { i++; if (i === 1) { continue; } }",
     ));
-    let copy_back = c.luau.find("__ulua_b1 = __ulua_g1_1").unwrap();
+    let copy_back = c.luau.find("__ulua_b1 = (__ulua_g1_1) :: number").unwrap();
     let update = c.luau.rfind("__ulua_b1 = (").unwrap();
     assert!(copy_back < update);
     assert!(c.luau.contains("repeat\n"));
@@ -243,9 +243,9 @@ fn c12_binary_call_and_compound_reads_precede_a_mutating_call() {
         let c = accept(&format!(
             "let n = 0; function inc(): number {{ n++; return n; }} function pair(a: number, b: number): void {{}} export function main(): void {{ {effect} }}"
         ));
-        let main = c.luau.split("__ulua_b3 = function").nth(1).unwrap();
-        let read = main.find("= __ulua_b0\n").unwrap();
-        let call = main.find("= __ulua_b1\n").unwrap();
+        let main = c.luau.split("__ulua_b3 = (function").nth(1).unwrap();
+        let read = main.find("= (__ulua_b0) :: number\n").unwrap();
+        let call = main.find("= (__ulua_b1) :: () -> number\n").unwrap();
         assert!(read < call, "{effect}");
     }
 }

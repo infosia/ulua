@@ -5,6 +5,11 @@ use std::{
     ptr, slice,
 };
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static REFUSE_COMPILER_THREAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 unsafe fn diagnostic_valid(d: *mut Diagnostic) -> bool {
     // SAFETY: Non-null descriptors must refer to aligned storage of their declared size.
     unsafe {
@@ -138,10 +143,14 @@ pub unsafe extern "C" fn ulua_compile(
         guard(context, diagnostic, || {
             out.write(ptr::null_mut());
             let joined = std::thread::scope(|scope| {
+                #[cfg(test)]
+                if REFUSE_COMPILER_THREAD.with(|flag| flag.replace(false)) {
+                    return Err((ULUA_FAILED, "Compiler thread refused by test".to_owned()));
+                }
                 let worker = std::thread::Builder::new()
                     .name("ulua-compiler".into())
                     .stack_size(ulua_compiler::COMPILER_STACK_BYTES)
-                    .spawn_scoped(scope, move || {
+                    .spawn_scoped(scope, move || -> Result<_, ulua_compiler::Diagnostic> {
                         let compiled = ulua_compiler::compile(source, compiler_limits(limits))?;
                         let mut bytecode = ptr::null_mut();
                         let mut size = 0;
@@ -163,8 +172,8 @@ pub unsafe extern "C" fn ulua_compile(
                 match worker {
                     Ok(worker) => worker
                         .join()
-                        .map_err(|_| "Compiler thread panicked".to_owned()),
-                    Err(e) => Err(e.to_string()),
+                        .map_err(|_| (ULUA_INTERNAL, "Compiler thread panicked".to_owned())),
+                    Err(e) => Err((ULUA_FAILED, e.to_string())),
                 }
             });
             match joined {
@@ -189,17 +198,27 @@ pub unsafe extern "C" fn ulua_compile(
                 }
                 Ok(Err(d)) => {
                     out.write(ptr::null_mut());
+                    let status = if d.code == "internal" {
+                        ULUA_INTERNAL
+                    } else {
+                        ULUA_REJECTED
+                    };
                     write_compile_diagnostic(diagnostic, &Some(d));
-                    ULUA_REJECTED
+                    status
                 }
                 Ok(Ok(Err(error))) => {
                     out.write(ptr::null_mut());
                     finish(5, &error, diagnostic)
                 }
-                Err(message) => {
+                Err((status, message)) => {
                     out.write(ptr::null_mut());
-                    write_run_diagnostic(diagnostic, "internal", &message);
-                    ULUA_INTERNAL
+                    let code = if status == ULUA_FAILED {
+                        "host:resources"
+                    } else {
+                        "internal"
+                    };
+                    write_run_diagnostic(diagnostic, code, &message);
+                    status
                 }
             }
         })

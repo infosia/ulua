@@ -180,6 +180,7 @@ impl Checker<'_> {
                             ("__ulua_format", Type::Number, Type::String)
                         };
                         Expr {
+                            start: call.callee.span().start,
                             ty: Type::Function(vec![p], Box::new(r), 1),
                             kind: ExprKind::Builtin(name),
                         }
@@ -252,6 +253,7 @@ impl Checker<'_> {
                             self.error(q.span, "syntax", "Invalid template escape")
                         })?;
                     parts.push(Expr {
+                        start: q.span.start,
                         ty: Type::String,
                         kind: ExprKind::String(text.as_str().into()),
                     });
@@ -299,6 +301,10 @@ impl Checker<'_> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }
-        Ok(Expr { ty, kind })
+        Ok(Expr {
+            start: e.span().start,
+            ty,
+            kind,
+        })
     }
 }

@@ -18,6 +18,7 @@ impl Checker<'_> {
                 .and_then(|s| s.get(n.name.as_str()))
                 .copied()
                 .ok_or_else(|| self.error(v.span, "C11", "Missing declaration"))?;
+            let depth = self.descend(depth, v.span)?;
             let value = self.expr(
                 v.init
                     .as_ref()
@@ -33,7 +34,7 @@ impl Checker<'_> {
             } else {
                 self.bindings[id].ty = Some(value.ty.clone());
             }
-            out.push(S::Declare(id, value));
+            out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
         }
         Ok(out)
     }
@@ -137,6 +138,7 @@ impl Checker<'_> {
                         "-"
                     }),
                     Expr {
+                        start: u.span.start,
                         ty: Type::Number,
                         kind: ExprKind::Number(1.0),
                     },
@@ -154,7 +156,7 @@ impl Checker<'_> {
     }
     fn statement(&mut self, s: &Statement<'_>, depth: u32) -> Result<S, Diagnostic> {
         let depth = self.descend(depth, s.span())?;
-        Ok(match s {
+        let form = match s {
             Statement::VariableDeclaration(d) => S::Block(self.variables(d, depth)?),
             Statement::BlockStatement(b) => S::Block(self.block(&b.body, depth)?),
             Statement::ExpressionStatement(e) => self.effect(&e.expression, depth, false)?,
@@ -189,7 +191,7 @@ impl Checker<'_> {
                 let ids = init
                     .iter()
                     .filter_map(|s| {
-                        if let S::Declare(id, _) = s {
+                        if let S::Declare(id, _) = s.form() {
                             Some(*id)
                         } else {
                             None
@@ -231,40 +233,54 @@ impl Checker<'_> {
                 return Err(self.error(s.span(), "C8", "Statement has no lowering"));
             }
             _ => return Err(self.error(s.span(), "C11", "Statement is outside the surface")),
-        })
+        };
+        Ok(S::Located(s.span().start, Box::new(form)))
     }
 }
-pub(super) fn returns(body: &[S], depth: u32, limit: u32) -> Result<bool, Diagnostic> {
-    let depth = depth + 1;
-    if depth >= limit {
-        return Err(Diagnostic::at(
-            &[],
-            0,
-            "limit:nesting-depth",
-            "Return analysis depth limit exceeded",
-        ));
+// Return coverage uses an explicit postorder stack. It adds no compiler recursion.
+pub(super) fn returns(body: &[S]) -> bool {
+    enum Work<'a> {
+        Body(&'a [S]),
+        Form(&'a S),
+        Any(usize),
+        Both,
     }
-    for s in body {
-        let complete = match s {
-            S::Return(_) => true,
-            S::Block(b) => returns(b, depth, limit)?,
-            S::While(test, body) => {
-                matches!(test.kind, ExprKind::Boolean(true)) && !ir::loop_break(body)
+    let mut pending = vec![Work::Body(body)];
+    let mut values = vec![];
+    while let Some(work) = pending.pop() {
+        match work {
+            Work::Body(body) => {
+                pending.push(Work::Any(body.len()));
+                pending.extend(body.iter().map(Work::Form));
             }
-            S::For(_, test, _, body, _) => {
-                test.as_ref()
-                    .is_none_or(|test| matches!(test.kind, ExprKind::Boolean(true)))
-                    && !ir::loop_break(body)
+            Work::Form(s) => match s.form() {
+                S::Return(_) => values.push(true),
+                S::Block(b) => pending.push(Work::Body(b)),
+                S::If(_, a, Some(b)) => {
+                    pending.push(Work::Both);
+                    pending.push(Work::Form(a));
+                    pending.push(Work::Form(b));
+                }
+                S::While(test, body) => values
+                    .push(matches!(test.kind, ExprKind::Boolean(true)) && !ir::loop_break(body)),
+                S::For(_, test, _, body, _) => values.push(
+                    test.as_ref()
+                        .is_none_or(|t| matches!(t.kind, ExprKind::Boolean(true)))
+                        && !ir::loop_break(body),
+                ),
+                _ => values.push(false),
+            },
+            Work::Any(n) => {
+                let start = values.len().saturating_sub(n);
+                let complete = values.drain(start..).any(|v| v);
+                values.push(complete);
             }
-            S::If(_, a, Some(b)) => {
-                returns(std::slice::from_ref(a), depth, limit)?
-                    && returns(std::slice::from_ref(b), depth, limit)?
+            Work::Both => {
+                let a = values.pop().unwrap_or(false);
+                let b = values.pop().unwrap_or(false);
+                values.push(a && b);
             }
-            _ => false,
-        };
-        if complete {
-            return Ok(true);
         }
     }
-    Ok(false)
+    values.pop().unwrap_or(false)
 }

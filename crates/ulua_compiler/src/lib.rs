@@ -150,11 +150,13 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     let mut parts = Vec::new();
     for i in 0..=substitutions {
         parts.push(Expr {
+            start: 0,
             ty: Type::String,
             kind: ExprKind::String(format!("x{i}")),
         });
         if i < substitutions {
             parts.push(Expr {
+                start: 0,
                 ty: Type::Number,
                 kind: ExprKind::Number(i as f64),
             });
@@ -186,6 +188,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
             body: vec![Statement::Block(vec![Statement::Declare(
                 1,
                 Expr {
+                    start: 0,
                     ty: Type::String,
                     kind: ExprKind::Template(parts),
                 },
@@ -193,6 +196,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         }],
         body: vec![],
         depth: DEPTH_CEILING,
+        source: vec![],
     })
 }
 
@@ -244,6 +248,24 @@ fn compile_observed(
     let module = checker::check(&parsed.program, source, max_depth);
     observer("check", false);
     let module = module?;
+    for f in module.functions.iter().filter(|f| f.exported) {
+        if !matches!(
+            f.result,
+            ir::Type::Void | ir::Type::Number | ir::Type::Boolean
+        ) || f.parameters.iter().any(|(id, _)| {
+            !matches!(
+                module.bindings[*id].ty,
+                Some(ir::Type::Number | ir::Type::Boolean)
+            )
+        }) {
+            return Err(Diagnostic::at(
+                source,
+                module.bindings[f.binding].start as usize,
+                "unsupported",
+                "P1 host exports require number or boolean values",
+            ));
+        }
+    }
     observer("emit", true);
     let luau = emitter::emit(&module);
     observer("emit", false);

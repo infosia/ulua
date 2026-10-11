@@ -12,6 +12,10 @@ measurements = ["ulua_compiler/measurements"]
 name = "s3_measure"
 required-features = ["measurements"]
 
+[[example]]
+name = "s4_measure"
+required-features = ["measurements"]
+
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
 

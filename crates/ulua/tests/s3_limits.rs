@@ -1,8 +1,10 @@
-//! S3 ABI boundary gate. Measured Debug cost: 1.80 seconds; budget: 20 seconds.
+//! S3 ABI boundary gate. Measured Debug cost: 0.37 seconds; budget: 20 seconds.
 //! Reproduce: cargo test --offline -p ulua --test s3_limits -- --nocapture.
 //! Large cases: 64 KiB sources, one million interrupts, and 24 string doublings.
 #[path = "../examples/support/alloc.rs"]
 mod allocations;
+// The growth gate uses the graph generators from this shared source module.
+#[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
 use std::{ffi::CStr, ptr, time::Instant};
@@ -176,11 +178,11 @@ fn nesting() {
         ("not", 42),
         ("minus", 42),
         ("conditional", 42),
-        ("if", 15),
+        ("if", 22),
         ("else-if", 43),
-        ("block", 23),
-        ("while", 15),
-        ("for", 15),
+        ("block", 44),
+        ("while", 22),
+        ("for", 22),
         ("call", 42),
         ("flat", 42),
         ("template", 42),
@@ -279,13 +281,13 @@ fn compiler_bounds() {
 }
 fn combined() {
     let mut body = String::new();
-    for level in 0..21 {
+    for level in 0..42 {
         body.push('{');
         for binding in 0..16 {
             body.push_str(&format!("const a{level}_{binding}=1;"));
         }
     }
-    body.push_str(&"}".repeat(21));
+    body.push_str(&"}".repeat(42));
     let nested = format!("export function main():void {{{body}}}");
     Script::compile(
         &format!("export function main():void {{ {{ {body} }} }}"),
@@ -387,6 +389,8 @@ fn runtime() {
     let index = s.index("f");
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
     assert_eq!(s.call(index, &[number(24)]).0, ULUA_OK);
+    // Reset the VM so the allocation boundary does not depend on the previous GC schedule.
+    assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
     let past = s.call(index, &[number(25)]);
     assert_eq!((past.0, past.1), (ULUA_FAILED, "limit:memory".into()));
     assert_eq!(s.call(index, &[number(0)]).0, ULUA_OK);

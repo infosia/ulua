@@ -72,6 +72,7 @@ fn run() -> Result<(), String> {
     }
     native.files(files(&root.join("native/shim"))?);
     if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
+        native.define("ULUA_MEASUREMENTS", None);
         native.file(root.join("native/probes/s3.cpp"));
         println!(
             "cargo:rerun-if-changed={}",

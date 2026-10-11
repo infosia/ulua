@@ -5,6 +5,7 @@ pub(crate) enum Type {
     Boolean,
     String,
     Void,
+    StringParts,
     Function(Vec<Type>, Box<Type>, usize),
 }
 impl Type {
@@ -23,6 +24,7 @@ impl Type {
                     Self::Boolean => out.push_str("boolean"),
                     Self::String => out.push_str("string"),
                     Self::Void => out.push_str("()"),
+                    Self::StringParts => out.push_str("{string}"),
                     Self::Function(params, result, required) => {
                         pending.push(Part::Ty(result));
                         pending.push(Part::Text(") -> ".into()));
@@ -63,6 +65,7 @@ pub(crate) struct Module {
     pub(crate) functions: Vec<Function>,
     pub(crate) body: Vec<Statement>,
     pub(crate) depth: u32,
+    pub(crate) source: Vec<u8>,
 }
 pub(crate) struct Function {
     pub(crate) binding: usize,
@@ -73,6 +76,7 @@ pub(crate) struct Function {
     pub(crate) body: Vec<Statement>,
 }
 pub(crate) struct Expr {
+    pub(crate) start: u32,
     pub(crate) ty: Type,
     pub(crate) kind: ExprKind,
 }
@@ -90,6 +94,7 @@ pub(crate) enum ExprKind {
     Template(Vec<Expr>),
 }
 pub(crate) enum Statement {
+    Located(u32, Box<Statement>),
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
     Eval(Expr),
@@ -108,11 +113,21 @@ pub(crate) enum Statement {
     Return(Option<Expr>),
 }
 
+impl Statement {
+    pub(crate) fn form(&self) -> &Self {
+        match self {
+            Self::Located(_, form) => form,
+            _ => self,
+        }
+    }
+}
+
 // Nested loop exits do not exit this loop. The work list avoids another recursive walk.
 pub(crate) fn loop_break(body: &Statement) -> bool {
     let mut pending = vec![body];
     while let Some(s) = pending.pop() {
         match s {
+            Statement::Located(_, s) => pending.push(s),
             Statement::Break => return true,
             Statement::Block(b) => pending.extend(b),
             Statement::If(_, a, b) => {
@@ -125,4 +140,34 @@ pub(crate) fn loop_break(body: &Statement) -> bool {
         }
     }
     false
+}
+
+// A join write removes analyzer dependencies on earlier branch definitions.
+pub(crate) fn writes(statement: &Statement) -> Vec<usize> {
+    let mut pending = vec![statement];
+    let mut ids = std::collections::BTreeSet::new();
+    while let Some(s) = pending.pop() {
+        match s.form() {
+            Statement::Declare(id, _) | Statement::Assign(id, _, _) => {
+                ids.insert(*id);
+            }
+            Statement::Block(body) => pending.extend(body),
+            Statement::If(_, a, b) => {
+                pending.push(a);
+                if let Some(b) = b {
+                    pending.push(b);
+                }
+            }
+            Statement::While(_, body) => pending.push(body),
+            Statement::For(init, _, update, body, _) => {
+                pending.extend(init);
+                pending.push(body);
+                if let Some(update) = update {
+                    pending.push(update);
+                }
+            }
+            _ => {}
+        }
+    }
+    ids.into_iter().collect()
 }

@@ -509,6 +509,18 @@ fn header_layout() {
         offset_of!(Host, reserved),
         offset_of!(Host, userdata),
         offset_of!(Host, output),
+        ULUA_OK as usize,
+        ULUA_INVALID_ARGUMENT as usize,
+        ULUA_REJECTED as usize,
+        ULUA_FAILED as usize,
+        ULUA_HOST_ERROR as usize,
+        ULUA_BUSY as usize,
+        ULUA_INTERNAL as usize,
+        ULUA_POISONED as usize,
+        ULUA_TYPE_VOID as usize,
+        ULUA_TYPE_NUMBER as usize,
+        ULUA_TYPE_BOOLEAN as usize,
+        ULUA_TYPE_STRING as usize,
         ULUA_MIN_RUN_STACK,
     ];
     for (index, expected) in expected.into_iter().enumerate() {
@@ -639,4 +651,82 @@ fn p1_spills_remain_typed_and_reachable_across_nested_scopes() {
     }
     source.push_str("m219 += 1; print(`${x179} ${read()}`); }");
     assert_eq!(p1_output(&source), ["179 220"]);
+}
+
+#[test]
+fn string_exports_reject_before_host_calls() {
+    let f = Fixture::new();
+    for source in [
+        "export function g():string{return \"x\";} export function main():void {}",
+        "export function f(s:string):void{print(s);} export function main():void {}",
+    ] {
+        let mut module = ptr::null_mut();
+        let mut d = Diagnostic::default();
+        // SAFETY: The fixture owns the context and all source and output storage covers its size.
+        unsafe {
+            assert_eq!(
+                ulua_compile(
+                    f.context,
+                    source.as_ptr().cast(),
+                    source.len(),
+                    ptr::null(),
+                    &mut module,
+                    &mut d
+                ),
+                ULUA_REJECTED
+            );
+        }
+        assert_eq!(code(&d), "unsupported");
+        assert!(module.is_null());
+    }
+}
+
+#[test]
+fn refused_compiler_thread_keeps_context_usable() {
+    let f = Fixture::new();
+    let mut module = ptr::null_mut();
+    let mut d = Diagnostic::default();
+    crate::abi::REFUSE_COMPILER_THREAD.with(|flag| flag.set(true));
+    // SAFETY: The fixture owns the context and all source and output storage covers its size.
+    unsafe {
+        assert_eq!(
+            ulua_compile(
+                f.context,
+                HELLO.as_ptr().cast(),
+                HELLO.len(),
+                ptr::null(),
+                &mut module,
+                &mut d
+            ),
+            ULUA_FAILED
+        );
+        assert!(module.is_null());
+        assert_eq!(code(&d), "host:resources");
+        assert_eq!(
+            ulua_compile(
+                f.context,
+                HELLO.as_ptr().cast(),
+                HELLO.len(),
+                ptr::null(),
+                &mut module,
+                &mut d
+            ),
+            ULUA_OK
+        );
+    }
+}
+
+#[test]
+fn templates_freeze_each_read_and_conversion_in_order() {
+    for count in [7, 8, 256] {
+        let source = format!(
+            "let n=1;function inc():number {{n++;return n;}} export function main():void {{print(`{}${{n}}${{inc()}}${{n}}`);}}",
+            "x".repeat(count)
+                .chars()
+                .map(|_| "${n}")
+                .collect::<String>()
+        );
+        let expected = format!("{}122", "1".repeat(count));
+        assert_eq!(p1_output(&source), [expected]);
+    }
 }

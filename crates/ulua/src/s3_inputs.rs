@@ -126,3 +126,49 @@ pub fn source_ceiling(kind: &str, bytes: usize) -> String {
     s.push_str(&" ".repeat(bytes.saturating_sub(s.len())));
     s
 }
+
+pub const SOURCE_SHAPES: &[&str] = &[
+    "bindings",
+    "dense",
+    "functions",
+    "parameter-functions",
+    "expressions",
+    "templates",
+    "unary",
+    "flat",
+    "forward",
+    "backward",
+    "star",
+];
+
+pub fn call_graph(kind: &str, bytes: usize) -> String {
+    let make = |count: usize| {
+        let mut source = String::new();
+        for i in 0..count {
+            source.push_str(&format!("const a{i}={i};"));
+        }
+        for i in 0..count {
+            let call = match kind {
+                "forward" if i + 1 < count => format!("f{}()+", i + 1),
+                "backward" if i > 0 => format!("f{}()+", i - 1),
+                "star" if i > 0 => "f0()+".to_owned(),
+                _ => String::new(),
+            };
+            source.push_str(&format!("function f{i}():number {{return {call}a{i};}}"));
+        }
+        source.push_str("export function main():void {}");
+        source
+    };
+    let (mut lo, mut hi) = (0, bytes / 32);
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2;
+        if make(mid).len() <= bytes {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let mut source = make(lo);
+    source.push_str(&" ".repeat(bytes.saturating_sub(source.len())));
+    source
+}

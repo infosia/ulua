@@ -17,6 +17,12 @@ struct ulua_vm {
     uint64_t steps;
     int flag;
     int exports;
+    bool charging;
+#ifdef ULUA_MEASUREMENTS
+    uint64_t allocation_bytes;
+    uint64_t allocation_steps;
+    uint64_t interrupts;
+#endif
     ulua_host host;
 };
 static void message_bytes(char* out, const char* text, size_t length) {
@@ -37,6 +43,18 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
         vm->used -= old;
         return nullptr;
     }
+    if (vm->charging) {
+        const uint64_t charge = new_size / ALLOCATION_STEP_BYTES + (new_size % ALLOCATION_STEP_BYTES != 0);
+        if (vm->steps > vm->max_steps || charge > vm->max_steps - vm->steps) {
+            vm->flag = SHIM_STEPS;
+            return nullptr;
+        }
+        vm->steps += charge;
+#ifdef ULUA_MEASUREMENTS
+        vm->allocation_bytes += new_size;
+        vm->allocation_steps += charge;
+#endif
+    }
     size_t base = vm->used - old;
     if (new_size > vm->budget || base > vm->budget - new_size) return nullptr;
     void* result = std::realloc(pointer, new_size);
@@ -51,6 +69,9 @@ static void interrupt(lua_State* state, int gc) {
         luaL_error(state, "Step limit exceeded");
     }
     ++vm->steps;
+#ifdef ULUA_MEASUREMENTS
+    ++vm->interrupts;
+#endif
 }
 static int output(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
@@ -83,6 +104,7 @@ static int collect(lua_State* state) {
     return 0;
 }
 static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
+    vm->charging = false;
     if (status == LUA_OK) return SHIM_OK;
     const char* text = lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error";
     message(error, text);
@@ -94,7 +116,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     vm->flag = 0;
     lua_settop(state, 0);
     // Collection also has a native protection boundary.
-    if (code == SHIM_MEMORY) {
+    if (code == SHIM_MEMORY || code == SHIM_STEPS) {
         lua_cpcall(state, collect, nullptr);
         lua_settop(state, 0);
     }
@@ -183,20 +205,25 @@ extern "C" int ulua_shim_new(const char* bytecode, size_t length, const ulua_hos
         vm->budget = limits->max_memory_bytes > SIZE_MAX ? SIZE_MAX : static_cast<size_t>(limits->max_memory_bytes);
         vm->max_steps = limits->max_steps;
         vm->host = *host;
+        vm->charging = true;
         vm->state = lua_newstate(allocate, vm);
         if (!vm->state) {
             message(error, "Memory limit exceeded at VM creation");
+            int code = vm->flag == SHIM_STEPS ? SHIM_STEPS : SHIM_MEMORY;
             ulua_shim_free(vm);
-            return SHIM_MEMORY;
+            return code;
         }
         lua_callbacks(vm->state)->userdata = vm;
         int status = lua_cpcall(vm->state, setup, vm);
         int code = finish(vm, vm->state, status, error);
-        if (!code) code = finish(vm, vm->thread, lua_cpcall(vm->thread, sandbox, nullptr), error);
+        if (!code) {
+            vm->charging = true;
+            code = finish(vm, vm->thread, lua_cpcall(vm->thread, sandbox, nullptr), error);
+        }
         if (!code) {
             lua_callbacks(vm->state)->interrupt = interrupt;
             Load args = {vm, bytecode, length};
-            vm->steps = 0;
+            vm->charging = true;
             code = finish(vm, vm->thread, lua_cpcall(vm->thread, load, &args), error);
         }
         if (code) { ulua_shim_free(vm); return code; }
@@ -214,6 +241,12 @@ extern "C" int ulua_shim_call(ulua_vm* vm, const char* name, const ulua_value* a
     try {
         vm->steps = 0;
         vm->flag = 0;
+        vm->charging = true;
+#ifdef ULUA_MEASUREMENTS
+        vm->allocation_bytes = 0;
+        vm->allocation_steps = 0;
+        vm->interrupts = 0;
+#endif
         Call args = {vm, name, arguments, count, result_type, result};
         int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call, &args), error);
         lua_settop(vm->thread, 0);
@@ -223,3 +256,22 @@ extern "C" int ulua_shim_call(ulua_vm* vm, const char* name, const ulua_value* a
         return SHIM_INTERNAL;
     }
 }
+
+#ifdef ULUA_MEASUREMENTS
+// These probes exist only in the opt-in measurement build.
+extern "C" void ulua_probe_run_stats(ulua_vm* vm, uint64_t* bytes, uint64_t* charges, uint64_t* interrupts) noexcept {
+    *bytes = vm->allocation_bytes;
+    *charges = vm->allocation_steps;
+    *interrupts = vm->interrupts;
+}
+extern "C" int ulua_probe_allocation(size_t bytes, uint64_t steps) noexcept {
+    ulua_vm vm = {};
+    vm.budget = SIZE_MAX;
+    vm.max_steps = steps;
+    vm.charging = true;
+    void* value = allocate(&vm, nullptr, 0, bytes);
+    int result = value ? SHIM_OK : vm.flag;
+    allocate(&vm, value, bytes, 0);
+    return result;
+}
+#endif
