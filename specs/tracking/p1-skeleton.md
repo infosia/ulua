@@ -338,6 +338,15 @@ C7 Rev 15 (user request under D15): `==` and `!=` follow `===` and
 `0.1`, `""`, `"a"`, `"0"`, `"NaN"`, `true`, `false` give the same
 result for `==` and `===`. `r17` now fails rule 3; new `a29`.
 
+P2 note on `undefined` (user question): an accepted program cannot
+write `undefined` (C2). `node` still gives `undefined` where a library
+call misses (for example a map lookup or a search) if the library
+types the miss as `T | null`; then `x === null` differs from `node`.
+C2 rejects `x === null` for this reason. If the P2 library has no call
+whose miss is `undefined` under `node` (a presence test plus a call
+with a fallback instead), no accepted form gives `undefined`, and P2
+can accept `x === null`. P2 decides this with the library contract.
+
 P2 note: rule 3 lists no member read and no object operand. `a21`
 (`other.end === this.end`, `a === b` on objects) needs a P2 revision
 of rule 3.
