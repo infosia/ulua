@@ -1,7 +1,7 @@
 # P1 vertical skeleton
 
 Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
-`corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 17.
+`corpus.md` Rev 2, `surface.md` Rev 8, `collisions.md` Rev 18.
 
 ## Scope
 
@@ -28,6 +28,7 @@ Status: open. Contracts: `pipeline.md` Rev 5, `abi.md` Rev 3,
 | S6 | Phase Review round 3 fixes: `pipeline.md` Rev 5, `collisions.md` Rev 13 C7 | Codex |
 | S7 | Phase Review round 4 fixes: `collisions.md` Rev 14 C7, `surface.md` Rev 6 | Codex |
 | S8 | Phase Review round 5 fixes: `collisions.md` Rev 17 C7 rule 4, `surface.md` Rev 8 | Codex |
+| S9 | Phase Review round 6 fixes: `collisions.md` Rev 18 C7 rule 4 and C11 | Codex |
 
 ## Exit checklist
 
@@ -426,6 +427,21 @@ only from findings 1 and 2.
 | `-(1)` is wide in the C7 text, not in the code | MINOR | C7 text: `e` without its parentheses |
 | The return rule in the code accepts a block and statements after `return`; the text lists neither | MINOR | surface.md Rev 8 states the statement-list rule |
 | The growth test changed to 8/32 KiB, one run; the S4 record still says 16/64 KiB, minimum of 3. `spilled-mod` ratios 6.25 to 6.40 against 8 | MINOR | Recorded here; S8 reviews the margin |
+
+## Phase Review round 6
+
+Reviewer: fresh agent, diff `f5f0bf1..317fba6`. 3 MAJOR, 3 MINOR.
+Random programs: 13,500 generated, 5,328 accepted; `tsc` errors only
+from findings 1 and 2; 0 `node` mismatches; `luau-analyze` exit 0.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Aliased conditions: `const isOne = x === 1; if (isOne) { return x === 2; }` and 6 more compile; `tsc` gives TS2367 | MAJOR | C7 rule 4: a boolean binding read has the sets of its initializer; `r79`; S9 |
+| A bare `true` or `false` in `if`, `?:`, `&&`, `||` keeps both edges; `tsc` drops one: `if (x !== 1) { if (true) { return false; } } if (x === 2)` compiles, TS2367 | MAJOR | C7 rule 4: literal conditions have one edge; `r80`; S9 |
+| Strict-mode early errors pass: `010` (prints 8), `08`, `"\01"`, `"\8"`, `let eval`, `let arguments`, `let yield`, `let await`, and other reserved words; `node` gives SyntaxError, `tsc` TS1121/1214/1215/1487/1488/1489 | MAJOR | C11 strict-mode rule; `r81`, `r82`; S9 |
+| The C7 text does not state that a `while (true)` test has no false edge | MINOR | Closed by the literal-condition rule |
+| The boolean `let` rule accepts parentheses; the text does not say so | MINOR | surface.md text |
+| No gate measures the join cost: deep, wide, and nested-loop join shapes measure 3.68 to 3.74 per 4x (Release) | MINOR | S9 adds the three shapes to the growth test |
 
 ## Failures before the fix
 

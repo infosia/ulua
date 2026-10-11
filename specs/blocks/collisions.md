@@ -1,11 +1,12 @@
 # Semantic collisions — decided rules
 
-Status: Rev 17, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 18, 2026-10-11 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
 Rev 16: the three resolutions and the divergence format, invariant 5;
-Rev 17: C7 rule 4 as a flow fact, round 5).
+Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
+literal conditions, strict-mode early errors, round 6).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -257,7 +258,13 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
        wide: *F* = {x};
      - `!g`: *T* and *F* of `g` swap;
      - `a && b`, `a || b`: the union of the sets of `a` and `b`;
-     - `(g)`: the sets of `g`.
+     - `(g)`: the sets of `g`;
+     - a read of a `boolean` binding (`const` or `let`): the sets of
+       its initializer. `tsc` narrows through an aliased condition.
+     A condition that is the literal `true`, with or without
+     parentheses, has no false edge. The literal `false` has no true
+     edge. A join counts only the edges that exist. At a point that no
+     edge reaches, every reference is tested.
      The checker computes the tested set as a forward flow fact over
      the control-flow graph of the function. The true edge of a
      condition adds *T*(g); its false edge adds *F*(g). Conditions are
@@ -267,7 +274,8 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      block; a loop exit, from the false edge of the test and from each
      `break`; the `for` update, from the end of the body and from each
      `continue`; and the loop test, from the loop entry. A `return`,
-     `break`, or `continue` edge does not reach the next statement. A
+     `break`, or `continue` edge does not reach the next statement. An
+     absent `for` test has no false edge. A
      loop test joins the entry edge only, so a test that the body adds
      does not reach the next iteration's test. An assignment does not
      end a test. The fact is a set per point; the checker updates it in
@@ -275,7 +283,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      §3.10).
 
 Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`, `r76`, `r77`.
+`r74`, `r76`, `r77`, `r79`, `r80`.
 
 ## C8. Forms outside the subset
 
@@ -343,12 +351,21 @@ Reject: `r20`, `r35`, `r36`, `r40`, `r41`, `r50`, `r51`, `r56`.
 ## C11. The accepted surface is closed
 
 `surface.md` lists every accepted form. Every other syntax form, type
-form, global, namespace, and member is rejected. A rule in this file
+form, global, namespace, and member is rejected.
+
+The source is an ECMAScript module, so it is strict-mode code. Each
+early error of strict-mode module code gives C11: a legacy octal
+literal (`010`, `08`), a legacy octal or `\8`, `\9` escape, and a
+binding named `eval`, `arguments`, `await`, or a strict reserved word
+(`implements`, `interface`, `let`, `package`, `private`, `protected`,
+`public`, `static`, `yield`). Without the rule, `node` does not run
+the program, and `tsc` gives TS1121, TS1214, TS1215, TS1487, TS1488,
+or TS1489. A rule in this file
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`.
+`r75`, `r78`, `r81`, `r82`.
 
 ## C12. Evaluation order
 
