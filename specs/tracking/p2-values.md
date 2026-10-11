@@ -1,7 +1,7 @@
 # P2 value representations
 
 Status: open. Contracts: `pipeline.md` Rev 7, `abi.md` Rev 4,
-`corpus.md` Rev 3, `surface.md` Rev 8, `collisions.md` Rev 19.
+`corpus.md` Rev 3, `surface.md` Rev 8, `collisions.md` Rev 20.
 Decisions: D15, D16 (`plan.md` §8).
 
 ## Slices
@@ -34,13 +34,34 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.1)
 
-- [ ] `pipeline.md` §5.14 implemented; `UPVALUE_BUDGET` measured and
+- [x] `pipeline.md` §5.14 implemented; `UPVALUE_BUDGET` measured and
   pinned by a test at and past the bound.
-- [ ] P2.1 entries pass in full; later slices stay `unsupported`.
-- [ ] `luau-analyze` passes on the generated modules and the stress set.
+- [x] P2.1 entries pass in full; later slices stay `unsupported`.
+- [x] `luau-analyze` passes on the generated modules and the stress set.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements
+
+### P2.1 implementation record
+
+- Codex task. C7 Rev 20 during the task: Codex measured that `tsc`
+  keeps narrowing inside a callback (`if (p === 1) { take(() => p ===
+  2); }` gives TS2367 for a parameter, a `let`, and a `const`); the
+  handoff claimed the opposite.
+- `UPVALUE_BUDGET` = 192: with the generated forms the pinned Luau
+  accepts 200 upvalues and rejects 201. ABI tests at 192 and 193, a
+  library capture, three nested levels with spills, per-iteration
+  bindings.
+- Growth, 8 to 32 KiB: nested functions 3.98 (output ratio 7.9),
+  arrows 3.95 (27.4); largest over 35 shapes 6.37 (62.7). Growth test
+  8.96 s Debug.
+- Closures in `main` at 65,536 bytes: 8,187 (arrows), 1,830 (nested
+  declarations); a 4-byte minimum gives at most 16,384 < 32,768.
+- Random: 300 programs; 240 accepted, each passes `tsc`, matches
+  `node` through the ABI, and passes `luau-analyze`; 60 rejected with
+  the expected C7, C9, C10 codes.
+- `gate.sh full`: 57 entries in P2.1 or earlier; 16 generated modules,
+  13 stress modules.
 
 ## Failures before the fix
 

@@ -8,7 +8,7 @@ impl Checker<'_> {
         to: Option<&Type>,
         span: Span,
     ) -> Result<(), Diagnostic> {
-        if to != Some(from) {
+        if !to.is_some_and(|to| assignable(from, to)) {
             return Err(self.error(span, "C1", "Value types do not agree"));
         }
         Ok(())
@@ -232,18 +232,24 @@ impl Checker<'_> {
                             "Math member has no lowering",
                         ));
                     }
-                    return Err(match &call.callee {
-                        Expression::StaticMemberExpression(_)
-                        | Expression::ComputedMemberExpression(_) => {
-                            self.unsupported(call.callee.span())
-                        }
+                    match &call.callee {
                         Expression::ParenthesizedExpression(p)
                             if matches!(p.expression, Expression::ArrowFunctionExpression(_)) =>
                         {
-                            self.unsupported(call.callee.span())
+                            self.expr(&call.callee, depth, false)?
                         }
-                        _ => self.error(call.callee.span(), "C11", "Invalid callee position"),
-                    });
+                        Expression::StaticMemberExpression(_)
+                        | Expression::ComputedMemberExpression(_) => {
+                            return Err(self.unsupported(call.callee.span()));
+                        }
+                        _ => {
+                            return Err(self.error(
+                                call.callee.span(),
+                                "C11",
+                                "Invalid callee position",
+                            ));
+                        }
+                    }
                 };
                 let Type::Function(params, result, required) = &callee.ty else {
                     return Err(self.error(
@@ -314,8 +320,8 @@ impl Checker<'_> {
             Expression::SequenceExpression(_) | Expression::TaggedTemplateExpression(_) => {
                 return Err(self.error(e.span(), "C8", "Expression has no lowering"));
             }
-            Expression::ArrowFunctionExpression(_)
-            | Expression::ArrayExpression(_)
+            Expression::ArrowFunctionExpression(a) => self.arrow(a, depth)?,
+            Expression::ArrayExpression(_)
             | Expression::ObjectExpression(_)
             | Expression::NullLiteral(_)
             | Expression::StaticMemberExpression(_)
@@ -344,4 +350,21 @@ impl Checker<'_> {
         value.wide = self.is_wide(e, &value);
         Ok(value)
     }
+}
+
+// Function parameters are invariant. The required count belongs to each call signature.
+fn assignable(from: &Type, to: &Type) -> bool {
+    let mut pending = vec![(from, to)];
+    while let Some((from, to)) = pending.pop() {
+        match (from, to) {
+            (Type::Function(a, ar, required), Type::Function(b, br, target))
+                if a == b && required <= target =>
+            {
+                pending.push((ar, br))
+            }
+            _ if from == to => {}
+            _ => return false,
+        }
+    }
+    true
 }

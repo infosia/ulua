@@ -179,13 +179,10 @@ fn later_phase_forms_stay_unsupported() {
         "const x = null;",
         "const x = [];",
         "const x = {};",
-        "const x = () => 1;",
-        "function f(): void {}",
         "print('x' + 'y');",
         "let s = 'x'; s += 'y';",
         "print('x'.includes('x'));",
         "const x: number[] = [];",
-        "const x: (() => number) = f;",
         "const x: number | null = 1;",
     ] {
         reject(&body(s), "unsupported");

@@ -2,6 +2,8 @@
 mod equality;
 mod expressions;
 use equality::Equality;
+mod functions;
+mod order;
 mod statements;
 mod strict;
 use crate::{
@@ -10,7 +12,7 @@ use crate::{
 };
 use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::HashMap;
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
@@ -23,13 +25,18 @@ pub(crate) struct Checker<'s> {
     limit: u32,
     references: Vec<(usize, usize, u32)>,
     equality: Equality,
+    functions: Vec<ir::Function>,
 }
 impl Checker<'_> {
     fn error(&self, span: Span, code: &'static str, message: &str) -> Diagnostic {
         Diagnostic::at(self.source, span.start as usize, code, message)
     }
     fn unsupported(&self, span: Span) -> Diagnostic {
-        self.error(span, "unsupported", "This form is outside P1")
+        self.error(
+            span,
+            "unsupported",
+            "This form is outside the implemented slices",
+        )
     }
     fn descend(&self, depth: u32, span: Span) -> Result<u32, Diagnostic> {
         let next = depth + 1;
@@ -67,10 +74,20 @@ impl Checker<'_> {
                 }
                 return Err(self.error(t.span(), "C2", "Only T | null is a union"));
             }
+            TSType::TSFunctionType(f) => {
+                if f.type_parameters.is_some() || f.this_param.is_some() {
+                    return Err(self.error(f.span, "C11", "Invalid function type"));
+                }
+                let (params, required) = self.signature(&f.params, false, depth)?;
+                Type::Function(
+                    params,
+                    Box::new(self.ty(&f.return_type.type_annotation, true, depth)?),
+                    required,
+                )
+            }
             TSType::TSParenthesizedType(p) => return self.ty(&p.type_annotation, result, depth),
             TSType::TSNullKeyword(_)
             | TSType::TSArrayType(_)
-            | TSType::TSFunctionType(_)
             | TSType::TSTypeReference(_)
             | TSType::TSTypeLiteral(_) => return Err(self.unsupported(t.span())),
             _ => return Err(self.error(t.span(), "C11", "Type is outside the closed surface")),
@@ -111,7 +128,7 @@ impl Checker<'_> {
                 )
             })?;
         let binding = &self.bindings[id];
-        if !matches!(binding.ty, Some(Type::Function(..))) && span.start < binding.end {
+        if !binding.declaration && span.start < binding.end {
             return Err(self.error(span, "C10", "Reference precedes the end of its declaration"));
         }
         self.references.push((self.owner, id, span.start));
@@ -152,52 +169,10 @@ impl Checker<'_> {
                     start: v.span.start,
                     end: d.span.end,
                     mutable: d.kind == VariableDeclarationKind::Let,
+                    declaration: false,
                 },
                 v.span,
             )?;
-        }
-        Ok(())
-    }
-    fn tdz(&self) -> Result<(), Diagnostic> {
-        // Only the latest declaration end matters for a reference's source offset.
-        let mut latest = vec![0; self.bindings.len() + 1];
-        let mut callers = vec![Vec::new(); latest.len()];
-        for &(owner, id, _) in &self.references {
-            if owner == 0 {
-                continue;
-            }
-            if matches!(self.bindings[id].ty, Some(Type::Function(..))) {
-                callers[id + 1].push(owner);
-            } else if self.bindings[id].owner == 0 {
-                latest[owner] = latest[owner].max(self.bindings[id].end);
-            }
-        }
-        // Largest declaration offsets settle first. Each edge propagates at most once.
-        let mut pending: BinaryHeap<_> = latest
-            .iter()
-            .enumerate()
-            .filter_map(|(i, end)| (*end > 0).then_some((*end, i)))
-            .collect();
-        while let Some((end, function)) = pending.pop() {
-            if latest[function] != end {
-                continue;
-            }
-            for &caller in &callers[function] {
-                if latest[caller] < end {
-                    latest[caller] = end;
-                    pending.push((end, caller));
-                }
-            }
-        }
-        for &(_, id, offset) in &self.references {
-            if matches!(self.bindings[id].ty, Some(Type::Function(..))) && offset < latest[id + 1] {
-                return Err(Diagnostic::at(
-                    self.source,
-                    offset as usize,
-                    "C10",
-                    "Function reaches an undeclared binding",
-                ));
-            }
         }
         Ok(())
     }
@@ -226,6 +201,7 @@ pub(crate) fn check(
         limit,
         references: vec![],
         equality: Equality::new(),
+        functions: vec![],
     };
     if let Some(hashbang) = &program.hashbang {
         return Err(c.error(hashbang.span, "C11", "Hashbang lines are rejected"));
@@ -233,18 +209,19 @@ pub(crate) fn check(
     if !program.directives.is_empty() {
         return Err(c.error(program.span, "C11", "Module directives are rejected"));
     }
-    let mut functions = Vec::new();
+    let mut declarations = Vec::new();
     for s in &program.body {
-        let (f, exported) = match s {
-            Statement::FunctionDeclaration(f) => (f.as_ref(), false),
+        match s {
+            Statement::FunctionDeclaration(f) => {
+                declarations.push((c.function_name(f, 0)?, f.as_ref(), false));
+            }
             Statement::ExportDeclaration(e) => match &e.declaration {
-                Declaration::FunctionDeclaration(f) => (f.as_ref(), true),
+                Declaration::FunctionDeclaration(f) => {
+                    declarations.push((c.function_name(f, 0)?, f.as_ref(), true));
+                }
                 _ => return Err(c.unsupported(e.span)),
             },
-            Statement::VariableDeclaration(d) => {
-                c.variable_names(d)?;
-                continue;
-            }
+            Statement::VariableDeclaration(d) => c.variable_names(d)?,
             Statement::TSInterfaceDeclaration(_) => {
                 return Err(c.error(s.span(), "C8", "Interface declarations have no lowering"));
             }
@@ -252,154 +229,43 @@ pub(crate) fn check(
                 return Err(c.unsupported(s.span()));
             }
             _ => return Err(c.error(s.span(), "C11", "Module statements must be declarations")),
-        };
-        if f.type_parameters.is_some() {
-            return Err(c.error(f.span, "C8", "Generic declarations have no lowering"));
         }
-        if f.r#async || f.generator || f.declare || f.this_param.is_some() {
-            return Err(c.unsupported(f.span));
-        }
-        let name =
-            f.id.as_ref()
-                .ok_or_else(|| c.error(f.span, "C11", "Function name is required"))?
-                .name
-                .as_str();
-        if f.params.rest.is_some() {
-            return Err(c.unsupported(f.params.span));
-        }
-        if f.params.items.len() > crate::PARAMETER_BOUND {
-            return Err(c.error(
-                f.params.span,
-                "limit:parameters",
-                "Parameter limit exceeded",
-            ));
-        }
-        let mut params = vec![];
-        let mut required = 0;
-        for (i, p) in f.params.items.iter().enumerate() {
-            if p.optional {
-                return Err(c.error(p.span, "C2", "Optional parameters are rejected"));
-            }
-            if !p.decorators.is_empty()
-                || p.accessibility.is_some()
-                || p.readonly
-                || p.r#override
-                || !matches!(p.pattern, BindingPattern::BindingIdentifier(_))
-            {
-                return Err(c.unsupported(p.span));
-            }
-            if p.initializer.is_some() && p.type_annotation.as_ref().is_some_and(|t| matches!(unparen(&t.type_annotation), TSType::TSUnionType(u) if u.types.iter().any(|t| matches!(unparen(t), TSType::TSNullKeyword(_))))) {
-                return Err(c.error(p.span, "C2", "A default parameter must exclude null"));
-            }
-            params.push(
-                c.ty(
-                    &p.type_annotation
-                        .as_ref()
-                        .ok_or_else(|| c.error(p.span, "C11", "Parameter annotation is required"))?
-                        .type_annotation,
-                    false,
-                    0,
-                )?,
-            );
-            if p.initializer.is_none() {
-                required = i + 1;
-            }
-        }
-        let result = c.ty(
-            &f.return_type
-                .as_ref()
-                .ok_or_else(|| c.error(f.span, "C11", "Result annotation is required"))?
-                .type_annotation,
-            true,
-            0,
-        )?;
-        let id = c.bind(
-            name,
-            ir::Binding {
-                ty: Some(Type::Function(params, Box::new(result.clone()), required)),
-                owner: 0,
-                start: f.span.start,
-                end: 0,
-                mutable: false,
-            },
-            f.span,
-        )?;
-        functions.push((id, name.to_owned(), exported, result, f));
     }
-    if !functions.iter().any(|(_, name, exported, result, f)| {
-        name == "main" && *exported && *result == Type::Void && f.params.items.is_empty()
+    if !declarations.iter().any(|(id, f, exported)| {
+        *exported && f.id.as_ref().is_some_and(|n| n.name == "main")
+            && matches!(&c.bindings[*id].ty, Some(Type::Function(p, r, _)) if p.is_empty() && **r == Type::Void)
     }) {
         return Err(c.unsupported(program.span));
     }
-    let mut body = vec![];
+    let mut body = vec![ir::Statement::Entry(
+        c.scopes[0].values().copied().collect(),
+    )];
     for s in &program.body {
         if let Statement::VariableDeclaration(d) = s {
             body.extend(c.variables(d, 0)?);
         }
     }
-    let mut checked = vec![];
-    for (id, name, exported, result, f) in functions {
-        c.equality.restore(0);
-        c.reachable = true;
-        c.owner = id + 1;
-        c.result = result.clone();
-        c.scopes.push(HashMap::new());
-        let mut parameters = vec![];
-        // Declare all parameters before defaults, so later parameters have a TDZ.
-        for p in &f.params.items {
-            let BindingPattern::BindingIdentifier(n) = &p.pattern else {
-                return Err(c.unsupported(p.span));
-            };
-            let ty = c.ty(
-                &p.type_annotation
-                    .as_ref()
-                    .ok_or_else(|| c.unsupported(p.span))?
-                    .type_annotation,
-                false,
-                0,
-            )?;
-            let b = c.bind(
-                n.name.as_str(),
-                ir::Binding {
-                    ty: Some(ty),
-                    owner: c.owner,
-                    start: p.span.start,
-                    end: p.span.end,
-                    mutable: true,
-                },
-                p.span,
-            )?;
-            parameters.push((b, None));
-        }
-        for (p, (b, default)) in f.params.items.iter().zip(&mut parameters) {
-            if let Some(e) = &p.initializer {
-                let value = c.expr(e, 0, false)?;
-                c.flow(&value.ty, c.bindings[*b].ty.as_ref(), p.span)?;
-                *default = Some(value);
-            }
-        }
-        let b = f.body.as_ref().ok_or_else(|| c.unsupported(f.span))?;
-        if !b.directives.is_empty() {
-            return Err(c.error(b.span, "C11", "Function directives are rejected"));
-        }
-        let body = c.block_contents(&b.statements, 0)?;
-        if result != Type::Void && !statements::returns(&body) {
-            return Err(c.error(f.span, "C11", "Function can finish without its result"));
-        }
-        c.scopes.pop();
-        checked.push(ir::Function {
-            binding: id,
-            name,
-            exported,
-            parameters,
-            result,
-            body,
-        });
+    c.equality.restore(0);
+    c.reachable = true;
+    for (id, f, exported) in declarations {
+        c.function_body(id, f, exported, 0)?;
+        body.insert(1, ir::Statement::Function(id));
     }
+    // Restore source order after function bodies add their nested declarations.
+    body[1..].sort_by_key(|s| match s.form() {
+        ir::Statement::Function(id) => (0, c.bindings[*id].start),
+        ir::Statement::Declare(id, _) => (1, c.bindings[*id].start),
+        _ => (1, 0),
+    });
     c.tdz()?;
+    let mut captured: Vec<_> = c.bindings.iter().map(|b| b.declaration).collect();
+    for &(owner, id, _) in &c.references {
+        captured[id] |= owner != c.bindings[id].owner;
+    }
     Ok(ir::Module {
+        captured,
         bindings: c.bindings,
-        functions: checked,
+        functions: c.functions,
         body,
         depth: limit,
         source: source.to_vec(),

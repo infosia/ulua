@@ -2,6 +2,9 @@
 use std::path::Path;
 use ulua_compiler::{Limits, SOURCE_CEILING};
 
+#[allow(dead_code)]
+#[path = "../../ulua/src/p21_inputs.rs"]
+mod p21;
 #[path = "../../ulua/src/s5_inputs.rs"]
 mod s5;
 pub(crate) const FORMS: &[&str] = &[
@@ -16,9 +19,14 @@ pub(crate) const FORMS: &[&str] = &[
     "module-bindings",
     "short-functions",
     "default-calls",
+    "nested-functions",
+    "arrows",
 ];
 
 pub(crate) fn source(form: &str) -> Result<String, String> {
+    if p21::SHAPES.contains(&form) {
+        return Ok(p21::source(form, SOURCE_CEILING as usize));
+    }
     if matches!(
         form,
         "nested-bindings"

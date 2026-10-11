@@ -247,7 +247,7 @@ C15 bounds of P1, each a fixed compiler constant:
 | `limit:arguments` | arguments of one call | 32 |
 | `limit:template-parts` | literal parts and substitutions of one template literal, empty literal parts included | 1025 |
 | `limit:temporaries` | temporaries, default-parameter copies, and generated locals of one generated function; they never spill (§5.8) | 136 |
-| `limit:upvalues` | upvalues of one generated function (§5.14) | P2.1 measures |
+| `limit:upvalues` | upvalues of one generated function (§5.14) | 192 |
 
 `limit:nesting-depth` also bounds the nesting of the generated Luau
 below the Luau parser recursion limit of 1000. A bound that S3 finds

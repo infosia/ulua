@@ -39,6 +39,21 @@ impl Emitter<'_> {
         }
         let depth = self.guard(depth)?;
         match s.form() {
+            S::Entry(ids) => {
+                if let Some(context) = self.context {
+                    let key = ids.iter().min().map_or(0, |id| id + 1);
+                    if let Some(headers) = context.layouts[self.owner]
+                        .as_ref()
+                        .and_then(|l| l.entries.get(&key))
+                    {
+                        self.out.push_str(&self.headers(headers));
+                    }
+                }
+            }
+            S::Function(id) => {
+                let value = self.closure(*id, depth)?;
+                self.write_binding(*id, value)?;
+            }
             S::Located(_, _) => {
                 return Err(self.limit("internal", "Nested source location wrapper"));
             }
@@ -62,6 +77,9 @@ impl Emitter<'_> {
                 };
                 let v = self.expression(e, depth)?;
                 let value = if let (Some(op), Some(old)) = (op, old) {
+                    if *op == "%" {
+                        self.capture("__ulua_fmod");
+                    }
                     self.binary(op, &self.temp(old), &self.temp(v))
                 } else {
                     self.temp(v)

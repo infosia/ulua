@@ -22,7 +22,27 @@ pub(super) struct Equality {
     undo: Vec<usize>,
     nodes: Vec<(usize, usize)>,
 }
+pub(super) type BodyState = usize;
 impl Equality {
+    pub(super) fn suspend(&self) -> BodyState {
+        self.checkpoint()
+    }
+    pub(super) fn resume(&mut self, checkpoint: BodyState) {
+        self.restore(checkpoint);
+    }
+    pub(super) fn set_tip(&mut self, tip: usize) {
+        self.restore(0);
+        let mut path = vec![];
+        let mut node = tip;
+        while node != 0 {
+            path.push(node);
+            node = self.nodes[node].0;
+        }
+        for node in path.into_iter().rev() {
+            self.tested[self.nodes[node].1] = true;
+            self.undo.push(node);
+        }
+    }
     pub(super) fn new() -> Self {
         Self {
             bindings: vec![],
@@ -52,7 +72,7 @@ impl Equality {
             }
         }
     }
-    fn tip(&self) -> usize {
+    pub(super) fn tip(&self) -> usize {
         self.undo.last().copied().unwrap_or(0)
     }
     pub(super) fn join(&self) -> Join {

@@ -35,9 +35,6 @@ impl Checker<'_> {
                     "An unannotated boolean let needs a literal or comparison initializer",
                 ));
             }
-            if matches!(value.ty, Type::Function(..)) {
-                return Err(self.unsupported(v.span));
-            }
             if self.bindings[id].ty.is_some() {
                 self.flow(&value.ty, self.bindings[id].ty.as_ref(), v.span)?;
             } else {
@@ -74,14 +71,40 @@ impl Checker<'_> {
         statements: &[Statement<'_>],
         depth: u32,
     ) -> Result<Vec<S>, Diagnostic> {
+        let creation = self.equality.tip();
+        let creation_reachable = self.reachable;
+        let mut declarations = vec![];
         for s in statements {
-            if let Statement::VariableDeclaration(d) = s {
-                self.variable_names(d)?;
+            match s {
+                Statement::VariableDeclaration(d) => self.variable_names(d)?,
+                Statement::FunctionDeclaration(f) => {
+                    declarations.push((self.function_name(f, depth)?, f.as_ref()))
+                }
+                _ => {}
             }
         }
-        let mut out = vec![];
+        let ids = self
+            .scopes
+            .last()
+            .map(|s| s.values().copied().collect())
+            .unwrap_or_default();
+        let mut out = vec![S::Entry(ids)];
+        out.extend(declarations.iter().map(|(id, _)| S::Function(*id)));
         for s in statements {
-            out.push(self.statement(s, depth)?);
+            if !matches!(s, Statement::FunctionDeclaration(_)) {
+                out.push(self.statement(s, depth)?);
+            }
+        }
+        if !declarations.is_empty() {
+            let continuation = self.equality.tip();
+            let reachable = self.reachable;
+            self.equality.set_tip(creation);
+            self.reachable = creation_reachable;
+            for (id, f) in declarations {
+                self.function_body(id, f, false, depth)?;
+            }
+            self.equality.set_tip(continuation);
+            self.reachable = reachable;
         }
         Ok(out)
     }
@@ -307,7 +330,7 @@ impl Checker<'_> {
                 self.reachable = false;
                 S::Return(value)
             }
-            Statement::FunctionDeclaration(_) | Statement::ForOfStatement(_) => {
+            Statement::ForOfStatement(_) => {
                 return Err(self.unsupported(s.span()));
             }
             Statement::SwitchStatement(_)

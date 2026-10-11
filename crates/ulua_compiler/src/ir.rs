@@ -1,4 +1,4 @@
-//! Checked P1 forms. Binding identities carry type, scope, and declaration order.
+//! Checked P1 and P2.1 forms. Binding identities carry type, scope, and declaration order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Type {
     Number,
@@ -59,6 +59,7 @@ pub(crate) struct Binding {
     pub(crate) start: u32,
     pub(crate) end: u32,
     pub(crate) mutable: bool,
+    pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
     pub(crate) bindings: Vec<Binding>,
@@ -66,6 +67,7 @@ pub(crate) struct Module {
     pub(crate) body: Vec<Statement>,
     pub(crate) depth: u32,
     pub(crate) source: Vec<u8>,
+    pub(crate) captured: Vec<bool>,
 }
 pub(crate) struct Function {
     pub(crate) binding: usize,
@@ -89,6 +91,7 @@ pub(crate) enum ExprKind {
     Boolean(bool),
     String(String),
     Read(usize),
+    Closure(usize),
     Builtin(&'static str),
     Unary(&'static str, Box<Expr>),
     Binary(&'static str, Box<Expr>, Box<Expr>),
@@ -99,6 +102,8 @@ pub(crate) enum ExprKind {
 }
 pub(crate) enum Statement {
     Located(u32, Box<Statement>),
+    Entry(Vec<usize>),
+    Function(usize),
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
     Eval(Expr),

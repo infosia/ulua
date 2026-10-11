@@ -12,14 +12,26 @@ impl Emitter<'_> {
         })?;
         let target = self.temp(dest);
         match &expr.kind {
-            E::Number(n) => self.write_slot(dest, number(*n)),
+            E::Number(n) => {
+                if n.is_infinite() {
+                    self.capture("__ulua_huge");
+                }
+                self.write_slot(dest, number(*n));
+            }
             E::Boolean(b) => self.write_slot(dest, b.to_string()),
             E::String(s) => self.write_slot(dest, quote(s)),
             E::Read(id) => {
                 let value = self.read_binding(*id)?;
                 self.write_slot(dest, value);
             }
-            E::Builtin(name) => self.write_slot(dest, name),
+            E::Closure(id) => {
+                let value = self.closure(*id, depth)?;
+                self.write_slot(dest, value);
+            }
+            E::Builtin(name) => {
+                self.capture(name);
+                self.write_slot(dest, name);
+            }
             E::Unary(op, a) => {
                 let a = self.expression(a, depth)?;
                 self.write_slot(dest, format!("{op} ({})", self.temp(a)));
@@ -28,6 +40,9 @@ impl Emitter<'_> {
             E::Binary(op, a, b) => {
                 let a = self.expression(a, depth)?;
                 let b = self.expression(b, depth)?;
+                if *op == "%" {
+                    self.capture("__ulua_fmod");
+                }
                 let value = self.binary(op, &self.temp(a), &self.temp(b));
                 self.write_slot(dest, value);
                 self.release(a);
@@ -96,6 +111,9 @@ impl Emitter<'_> {
                 }
             }
             E::Template(parts) => {
+                if parts.len() > 16 {
+                    self.capture("__ulua_concat");
+                }
                 let table = if parts.len() > 16 {
                     let table = self.slot(&Type::StringParts)?;
                     self.write_slot(table, "{}");
@@ -106,6 +124,11 @@ impl Emitter<'_> {
                 let mut values = vec![];
                 for (index, part) in parts.iter().enumerate() {
                     let value = self.expression(part, depth)?;
+                    match part.ty {
+                        Type::Number => self.capture("__ulua_format"),
+                        Type::Boolean => self.capture("__ulua_tostring"),
+                        _ => {}
+                    }
                     let converted = match part.ty {
                         Type::Number => format!("__ulua_format({})", self.temp(value)),
                         Type::Boolean => format!("__ulua_tostring({})", self.temp(value)),
@@ -150,13 +173,23 @@ impl Emitter<'_> {
     fn pure(&mut self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {
         let depth = self.guard(depth)?;
         Ok(match &expr.kind {
-            E::Number(n) => Some(number(*n)),
+            E::Number(n) => {
+                if n.is_infinite() {
+                    self.capture("__ulua_huge");
+                }
+                Some(number(*n))
+            }
             E::Boolean(b) => Some(b.to_string()),
             E::String(s) => Some(quote(s)),
             E::Read(id) => Some(self.read_binding(*id)?),
             E::Unary(op, a) => self.pure(a, depth)?.map(|a| format!("({op} ({a}))")),
             E::Binary(op, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
-                (Some(a), Some(b)) => Some(self.binary(op, &a, &b)),
+                (Some(a), Some(b)) => {
+                    if *op == "%" {
+                        self.capture("__ulua_fmod");
+                    }
+                    Some(self.binary(op, &a, &b))
+                }
                 _ => None,
             },
             _ => None,

@@ -1,7 +1,9 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
 mod expressions;
+mod functions;
 mod joins;
 mod statements;
+mod storage;
 mod types;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,
@@ -46,6 +48,7 @@ fn number(n: f64) -> String {
         format!("{n:?}")
     }
 }
+#[derive(Clone)]
 struct Slot {
     ty: Type,
     busy: bool,
@@ -65,6 +68,8 @@ struct Emitter<'a> {
     generated: Vec<(String, String, String, bool)>,
     loops: Vec<Loop>,
     joins: joins::Joins,
+    context: Option<&'a functions::Emission>,
+    upvalues: std::collections::HashSet<String>,
 }
 #[derive(Clone)]
 struct Loop {
@@ -93,6 +98,8 @@ impl<'a> Emitter<'a> {
             generated: vec![],
             loops: vec![],
             joins: joins::Joins::default(),
+            context: None,
+            upvalues: std::collections::HashSet::new(),
         }
     }
     fn guard(&self, depth: u32) -> Result<u32, Diagnostic> {
@@ -133,6 +140,7 @@ impl<'a> Emitter<'a> {
     }
     fn read_binding(&mut self, id: usize) -> Result<String, Diagnostic> {
         let location = self.location(id)?;
+        self.capture(&location);
         // Delay the join until a read proves that the binding is live.
         // Each read emits at most one join, independent of enclosing branch count.
         if self.joins.clear(id) {
@@ -148,8 +156,23 @@ impl<'a> Emitter<'a> {
                 .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?,
         );
         self.joins.clear(id);
-        self.write(&self.location(id)?, value, &ty);
+        let location = self.location(id)?;
+        self.capture(&location);
+        self.write(&location, value, &ty);
         Ok(())
+    }
+    fn capture(&mut self, location: &str) {
+        let name = location.split('.').next().unwrap_or(location);
+        if let Some(context) = self.context {
+            if context.locals[self.owner].contains(name)
+                || name.starts_with(&format!("__ulua_g{}_", self.owner))
+            {
+                return;
+            }
+        } else {
+            return;
+        }
+        self.upvalues.insert(name.to_owned());
     }
     fn slot(&mut self, ty: &Type) -> Result<usize, Diagnostic> {
         if let Some(i) = self.slots.iter().position(|s| !s.busy && s.ty == *ty) {
@@ -186,103 +209,6 @@ impl<'a> Emitter<'a> {
             .push((name.clone(), ty.into(), value.into(), true));
         Ok(name)
     }
-    fn plan(&mut self, parameter_ids: &[usize], overhead: usize) -> Result<String, Diagnostic> {
-        let fixed = parameter_ids.len() + self.slots.len() + self.generated.len() + overhead;
-        if self.slots.len() + self.generated.len() + overhead > TEMPORARY_BOUND {
-            return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
-        }
-        let ids: Vec<_> = self
-            .binding_ids
-            .iter()
-            .copied()
-            .filter(|id| !parameter_ids.contains(id))
-            .collect();
-        let spill = fixed + ids.len() > LOCAL_BUDGET;
-        let capacity = LOCAL_BUDGET - fixed;
-        // Reserve every table before assigning any binding to a local.
-        let mut table_count = usize::from(spill);
-        if spill {
-            loop {
-                let needed = (ids.len() - capacity + table_count).div_ceil(SPILL_FIELDS);
-                if needed == table_count {
-                    break;
-                }
-                if needed > capacity {
-                    table_count = capacity;
-                    break;
-                }
-                table_count = needed;
-            }
-        }
-        let available = capacity - table_count;
-        let fields_per_table = if spill {
-            (ids.len() - available).div_ceil(table_count)
-        } else {
-            0
-        };
-        let mut declarations = String::new();
-        let mut tables = vec![Vec::new(); table_count];
-        for (index, id) in ids.into_iter().enumerate() {
-            let ty = self.module.bindings[id]
-                .ty
-                .as_ref()
-                .ok_or_else(|| self.limit("C11", "Missing checked type"))?;
-            let name = format!("__ulua_b{id}");
-            if index < available {
-                let _ = writeln!(
-                    declarations,
-                    "local {name}: {0} = ({1}) :: {0}",
-                    self.function_types.luau(ty),
-                    initial(ty)
-                );
-                self.locations.insert(id, name);
-            } else {
-                let table = (index - available) / fields_per_table;
-                tables[table].push((name.clone(), self.function_types.luau(ty), initial(ty)));
-                let page = (index - available) % fields_per_table / SPILL_FIELDS;
-                let location = if fields_per_table > SPILL_FIELDS {
-                    format!("{}.__ulua_page{page}.{name}", self.spill_name(table))
-                } else {
-                    format!("{}.{name}", self.spill_name(table))
-                };
-                self.locations.insert(id, location);
-            }
-        }
-        for (table, fields) in tables.into_iter().enumerate() {
-            if fields.is_empty() {
-                continue;
-            }
-            let (ty, value) = types::spill_constructor(&fields);
-            let _ = writeln!(
-                declarations,
-                "local {}: {ty} = ({value}) :: {ty}",
-                self.spill_name(table)
-            );
-        }
-        for (i, slot) in self.slots.iter().enumerate() {
-            let _ = writeln!(
-                declarations,
-                "local {0}: {1} = ({2}) :: {1}",
-                self.temp(i),
-                self.function_types.luau(&slot.ty),
-                initial(&slot.ty)
-            );
-        }
-        for (name, ty, value, entry) in &self.generated {
-            if !entry {
-                continue;
-            }
-            let _ = writeln!(declarations, "local {name}: {ty} = ({value}) :: {ty}");
-        }
-        Ok(declarations)
-    }
-    fn spill_name(&self, table: usize) -> String {
-        if table == 0 {
-            format!("__ulua_spill{}", self.owner)
-        } else {
-            format!("__ulua_spill{}_{table}", self.owner)
-        }
-    }
     fn headers(&self, declarations: &str) -> String {
         declarations
             .lines()
@@ -292,107 +218,7 @@ impl<'a> Emitter<'a> {
 }
 
 pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
-    // The first pass counts reusable temporaries and generated loop storage.
-    let mut owners = vec![vec![]; module.bindings.len() + 1];
-    for (id, binding) in module.bindings.iter().enumerate() {
-        owners[binding.owner].push(id);
-    }
-    for ids in &mut owners {
-        ids.sort_by_key(|id| module.bindings[*id].start);
-    }
-    let function_types = types::FunctionTypes::new(module);
-    let empty = HashMap::new();
-    let mut chunk = Emitter::new(module, 0, &empty, &owners[0], &function_types);
-    chunk.statements(&module.body, 0)?;
-    let chunk_declarations = chunk.plan(&[], 7)?;
-    let module_locations = chunk.locations;
-    let mut out = String::from("--!strict\n");
-    out.push_str(LIBRARIES);
-    out.push_str(&function_types.declarations);
-    out.push_str(&chunk_declarations);
-    for f in &module.functions {
-        let mut probe = Emitter::new(
-            module,
-            f.binding + 1,
-            &module_locations,
-            &owners[f.binding + 1],
-            &function_types,
-        );
-        probe.defaults(f)?;
-        probe.statements(&f.body, 0)?;
-        let params: Vec<_> = f.parameters.iter().map(|(id, _)| *id).collect();
-        let default_count = f.parameters.iter().filter(|(_, d)| d.is_some()).count();
-        let declarations = probe.plan(&params, default_count)?;
-        let mut e = Emitter::new(
-            module,
-            f.binding + 1,
-            &module_locations,
-            &owners[f.binding + 1],
-            &function_types,
-        );
-        e.locations = probe.locations;
-        e.slots = probe.slots;
-        for slot in &mut e.slots {
-            slot.busy = false;
-        }
-        e.defaults(f)?;
-        e.statements(&f.body, 0)?;
-        let mut parameters = vec![];
-        let mut parameter_locals = String::new();
-        for (id, default) in &f.parameters {
-            let ty = module.bindings[*id]
-                .ty
-                .as_ref()
-                .ok_or_else(|| e.limit("C11", "Missing parameter type"))?;
-            if default.is_some() {
-                parameters.push(format!("__ulua_arg{id}: {}?", function_types.luau(ty)));
-                let _ = writeln!(
-                    parameter_locals,
-                    "    local __ulua_b{id}: {0} = ({1}) :: {0}",
-                    function_types.luau(ty),
-                    initial(ty)
-                );
-            } else {
-                parameters.push(format!("__ulua_b{id}: {}", function_types.luau(ty)));
-            }
-        }
-        let _ = writeln!(
-            out,
-            "{} = (function({}): {}",
-            module_locations[&f.binding],
-            parameters.join(", "),
-            function_types.luau(&f.result)
-        );
-        out.push_str(&parameter_locals);
-        out.push_str(&e.headers(&declarations));
-        out.push_str(&e.out);
-        let _ = writeln!(
-            out,
-            "end) :: {}",
-            function_types.luau(
-                module.bindings[f.binding]
-                    .ty
-                    .as_ref()
-                    .ok_or_else(|| e.limit("internal", "Missing function type"))?
-            )
-        );
-    }
-    let mut body = Emitter::new(module, 0, &module_locations, &owners[0], &function_types);
-    body.indent = 0;
-    body.statements(&module.body, 0)?;
-    out.push_str(&body.out);
-    out.push_str("return {\n");
-    for f in module.functions.iter().filter(|f| f.exported) {
-        let _ = writeln!(
-            out,
-            "    [{}] = {},",
-            quote(&f.name),
-            module_locations[&f.binding]
-        );
-    }
-    out.push_str("}\n");
-    check_output(module, out.len())?;
-    Ok(out)
+    functions::emit(module)
 }
 
 fn check_output(module: &ir::Module, generated: usize) -> Result<(), Diagnostic> {
@@ -428,7 +254,12 @@ mod output_tests {
             check_output(&module, bound + 1).unwrap_err().code,
             "internal"
         );
-        let ir::Statement::Located(_, form) = &mut module.functions[0].body[0] else {
+        let statement = module.functions[0]
+            .body
+            .iter_mut()
+            .find(|s| matches!(s.form(), ir::Statement::Eval(_)))
+            .unwrap();
+        let ir::Statement::Located(_, form) = statement else {
             panic!("located statement");
         };
         let ir::Statement::Eval(expr) = form.as_mut() else {

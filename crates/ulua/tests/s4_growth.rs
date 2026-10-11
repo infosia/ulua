@@ -13,6 +13,9 @@ mod joins;
 #[path = "../src/s6_inputs.rs"]
 mod review;
 // This test uses the compile operation only.
+#[path = "../src/p21_inputs.rs"]
+#[allow(dead_code)]
+mod functions;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -30,9 +33,12 @@ fn full_pipeline_growth_stays_below_eight() {
         .iter()
         .chain(review::SHAPES)
         .chain(joins::SHAPES)
+        .chain(functions::SHAPES)
     {
         let make = |bytes| {
-            if joins::SHAPES.contains(shape) {
+            if functions::SHAPES.contains(shape) {
+                functions::source(shape, bytes)
+            } else if joins::SHAPES.contains(shape) {
                 joins::source(shape, bytes)
             } else if review::SHAPES.contains(shape) {
                 review::source(shape, bytes)

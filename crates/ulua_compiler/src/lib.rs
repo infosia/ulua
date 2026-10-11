@@ -18,7 +18,7 @@ use oxc_span::SourceType;
 
 pub use bounds::{
     ALIAS_TEST_BOUND, ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND,
-    TEMPORARY_BOUND,
+    TEMPORARY_BOUND, UPVALUE_BUDGET,
 };
 
 /// Source ceiling in bytes.
@@ -181,6 +181,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     }
     source.push_str("`;}");
     emitter::emit(&Module {
+        captured: vec![true, false],
         bindings: vec![
             Binding {
                 ty: Some(Type::Function(vec![], Box::new(Type::Void), 0)),
@@ -188,6 +189,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 start: 0,
                 end: 0,
                 mutable: false,
+                declaration: true,
             },
             Binding {
                 ty: Some(Type::String),
@@ -195,6 +197,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 start: 1,
                 end: 1,
                 mutable: false,
+                declaration: false,
             },
         ],
         functions: vec![Function {
@@ -284,7 +287,7 @@ fn compile_observed(
                 source,
                 module.bindings[f.binding].start as usize,
                 "unsupported",
-                "P1 host exports require number or boolean values",
+                "Host exports require number or boolean values",
             ));
         }
     }
@@ -441,3 +444,6 @@ mod p1_tests;
 
 #[cfg(test)]
 mod flow_tests;
+
+#[cfg(test)]
+mod p21_tests;

@@ -80,6 +80,19 @@ pub(crate) fn check<'a>(
                     pending.push((Node::Statement(&n.body), next));
                 }
                 Statement::ForStatement(n) => {
+                    let mut heads = vec![];
+                    heads.extend(n.test.iter());
+                    heads.extend(n.update.iter());
+                    if let Some(init) = &n.init {
+                        if let Some(e) = init.as_expression() {
+                            heads.push(e);
+                        } else if let ForStatementInit::VariableDeclaration(d) = init {
+                            heads.extend(d.declarations.iter().filter_map(|d| d.init.as_ref()));
+                        }
+                    }
+                    for e in heads {
+                        check_head(e, source)?;
+                    }
                     pending.push((Node::Statement(&n.body), next));
                     for e in [&n.test, &n.update].into_iter().flatten() {
                         pending.push((Node::Expression(e), next));
@@ -121,6 +134,18 @@ pub(crate) fn check<'a>(
                 }
             }
             Node::Expression(e) => match e {
+                Expression::ArrowFunctionExpression(a) => {
+                    for p in &a.params.items {
+                        if let Some(e) = &p.initializer {
+                            pending.push((Node::Expression(e), next));
+                        }
+                    }
+                    if let Some(e) = a.body.as_expression() {
+                        pending.push((Node::Expression(e), next));
+                    } else if let ArrowFunctionBody::FunctionBody(b) = &a.body {
+                        pending.extend(b.statements.iter().map(|s| (Node::Statement(s), next)));
+                    }
+                }
                 Expression::AssignmentExpression(n) => {
                     pending.push((Node::Expression(&n.right), next));
                 }
@@ -166,6 +191,99 @@ pub(crate) fn check<'a>(
                 }
                 _ => {}
             },
+        }
+    }
+    Ok(())
+}
+
+// Head inspection precedes subset checking, including later-slice module declarations.
+fn check_head(e: &Expression<'_>, source: &[u8]) -> Result<(), Diagnostic> {
+    let mut pending = vec![e];
+    while let Some(e) = pending.pop() {
+        match e {
+            Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_) => {
+                return Err(Diagnostic::at(
+                    source,
+                    e.span().start as usize,
+                    "C9",
+                    "Closure in a for head",
+                ));
+            }
+            Expression::ArrayExpression(a) => {
+                for item in &a.elements {
+                    if let Some(e) = item.as_expression() {
+                        pending.push(e);
+                    } else if let ArrayExpressionElement::SpreadElement(s) = item {
+                        pending.push(&s.argument);
+                    }
+                }
+            }
+            Expression::ObjectExpression(o) => {
+                for item in &o.properties {
+                    match item {
+                        ObjectPropertyKind::ObjectProperty(p) => {
+                            pending.push(&p.value);
+                            if let Some(e) = p.key.as_expression() {
+                                pending.push(e);
+                            }
+                        }
+                        ObjectPropertyKind::SpreadProperty(p) => pending.push(&p.argument),
+                    }
+                }
+            }
+            Expression::NewExpression(n) => {
+                pending.push(&n.callee);
+                for arg in &n.arguments {
+                    if let Some(e) = arg.as_expression() {
+                        pending.push(e);
+                    } else if let Argument::SpreadElement(s) = arg {
+                        pending.push(&s.argument);
+                    }
+                }
+            }
+            Expression::TSAsExpression(t) => pending.push(&t.expression),
+            Expression::TSSatisfiesExpression(t) => pending.push(&t.expression),
+            Expression::TSNonNullExpression(t) => pending.push(&t.expression),
+            Expression::AwaitExpression(a) => pending.push(&a.argument),
+            Expression::ParenthesizedExpression(p) => pending.push(&p.expression),
+            Expression::CallExpression(c) => {
+                pending.push(&c.callee);
+                for arg in &c.arguments {
+                    if let Some(e) = arg.as_expression() {
+                        pending.push(e);
+                    } else if let Argument::SpreadElement(s) = arg {
+                        pending.push(&s.argument);
+                    }
+                }
+            }
+            Expression::BinaryExpression(b) => pending.extend([&b.left, &b.right]),
+            Expression::LogicalExpression(b) => pending.extend([&b.left, &b.right]),
+            Expression::AssignmentExpression(a) => {
+                pending.push(&a.right);
+                match &a.left {
+                    AssignmentTarget::ComputedMemberExpression(m) => {
+                        pending.extend([&m.object, &m.expression])
+                    }
+                    AssignmentTarget::StaticMemberExpression(m) => pending.push(&m.object),
+                    _ => {}
+                }
+            }
+            Expression::UpdateExpression(u) => match &u.argument {
+                SimpleAssignmentTarget::ComputedMemberExpression(m) => {
+                    pending.extend([&m.object, &m.expression])
+                }
+                SimpleAssignmentTarget::StaticMemberExpression(m) => pending.push(&m.object),
+                _ => {}
+            },
+            Expression::ConditionalExpression(c) => {
+                pending.extend([&c.test, &c.consequent, &c.alternate])
+            }
+            Expression::UnaryExpression(u) => pending.push(&u.argument),
+            Expression::TemplateLiteral(t) => pending.extend(&t.expressions),
+            Expression::SequenceExpression(s) => pending.extend(&s.expressions),
+            Expression::StaticMemberExpression(m) => pending.push(&m.object),
+            Expression::ComputedMemberExpression(m) => pending.extend([&m.object, &m.expression]),
+            _ => {}
         }
     }
     Ok(())
