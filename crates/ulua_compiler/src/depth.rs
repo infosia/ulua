@@ -96,7 +96,7 @@ pub(crate) fn check<'a>(
                         }
                     }
                 }
-                // Unsupported nodes are never traversed by the S1 checker or emitter.
+                // Later-phase nodes stop before the recursive checker and emitter.
                 _ => {}
             },
             Node::Declaration(d) => match d {
@@ -111,11 +111,19 @@ pub(crate) fn check<'a>(
                 _ => {}
             },
             Node::Function(f) => {
+                for p in &f.params.items {
+                    if let Some(e) = &p.initializer {
+                        pending.push((Node::Expression(e), next));
+                    }
+                }
                 if let Some(body) = &f.body {
                     pending.extend(body.statements.iter().map(|s| (Node::Statement(s), next)));
                 }
             }
             Node::Expression(e) => match e {
+                Expression::AssignmentExpression(n) => {
+                    pending.push((Node::Expression(&n.right), next));
+                }
                 Expression::BinaryExpression(n) => {
                     pending.push((Node::Expression(&n.left), next));
                     pending.push((Node::Expression(&n.right), next));

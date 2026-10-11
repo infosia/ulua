@@ -160,16 +160,21 @@ pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
         ));
     }
     depth::check(&parsed.program, max_depth, source)?;
-    let module = checker::check(&parsed.program, source)?;
+    let module = checker::check(&parsed.program, source, max_depth)?;
     Ok(Compiled {
-        luau: emitter::emit(&module),
+        luau: emitter::emit(&module)?,
         exports: module
             .functions
             .iter()
+            .filter(|f| f.exported)
             .map(|f| Export {
                 name: f.name.clone(),
-                parameters: vec![],
-                result: 0,
+                parameters: f
+                    .parameters
+                    .iter()
+                    .filter_map(|(id, _)| module.bindings[*id].ty.as_ref().map(ir::Type::tag))
+                    .collect(),
+                result: f.result.tag(),
             })
             .collect(),
     })
@@ -184,12 +189,28 @@ mod tests {
         let result = compile(HELLO, Limits::default()).unwrap();
         assert!(result.luau.starts_with("--!strict\n"));
         assert_eq!(result.exports[0].name, "main");
+        assert!(compile(b"export function main(): void {}", Limits::default()).is_ok());
+        assert_eq!(
+            compile(
+                b"export function main(): void { print(1); }",
+                Limits::default()
+            )
+            .unwrap_err()
+            .code,
+            "C1"
+        );
+        assert_eq!(
+            compile(
+                b"export function main<T>(): void { print('x'); }",
+                Limits::default()
+            )
+            .unwrap_err()
+            .code,
+            "C8"
+        );
         for source in [
             b"".as_slice(),
-            b"export function main(): void {}",
-            b"export function main(): void { print(1); }",
             b"export async function main(): void { print('x'); }",
-            b"export function main<T>(): void { print('x'); }",
         ] {
             assert_eq!(
                 compile(source, Limits::default()).unwrap_err().code,
@@ -272,3 +293,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod p1_tests;

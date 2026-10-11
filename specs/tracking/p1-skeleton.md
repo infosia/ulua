@@ -48,6 +48,20 @@ Status: open. Contracts: `pipeline.md` Rev 0, `abi.md` Rev 0,
   ceiling 1 MiB; nesting ceiling 128; minimum run stack 4 MiB; default
   instance memory 64 MiB; default steps 1,000,000.
 
+## S2 record
+
+- Codex task. Tests: ulua 18, ulua_compiler 21, ulua_corpus 1.
+  `gate.sh full` passes in full: 29 P1 entries pass; 69 later-phase
+  entries are rejected; 12 generated modules pass `luau-analyze`.
+- Restrictive readings by the implementation: in a declaration with
+  several declarators, no binding is visible until the whole
+  declaration ends (C10); string `+`, `+=`, and members stay
+  `unsupported` in P1; `===` accepts two operands of one primitive
+  type (C7); `undefined` as a binding name is rejected (C2).
+- Provisional: `LOCAL_BUDGET = 160` (S3 measures).
+- Emission form: each operand goes through a typed temporary that the
+  function declares at its entry (C12). P6 measures its cost.
+
 ## Measurements
 
 ## Failures before the fix

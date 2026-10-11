@@ -5,7 +5,7 @@ resolver = "3"
 [workspace.package]
 edition = "2024"
 rust-version = "1.95"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 oxc_allocator = { git = "https://github.com/infosia/oxc", rev = "43ad6ed5043f524f78c16a2d874b5fc588942a15" }

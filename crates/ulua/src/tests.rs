@@ -13,6 +13,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::source(HELLO)
+    }
+    fn source(source: &[u8]) -> Self {
         let mut context = ptr::null_mut();
         let mut module = ptr::null_mut();
         // SAFETY: Test-local output storage and source bytes satisfy the ABI preconditions.
@@ -21,8 +24,8 @@ impl Fixture {
             assert_eq!(
                 ulua_compile(
                     context,
-                    HELLO.as_ptr().cast(),
-                    HELLO.len(),
+                    source.as_ptr().cast(),
+                    source.len(),
                     ptr::null(),
                     &mut module,
                     ptr::null_mut()
@@ -516,4 +519,124 @@ fn header_layout() {
             "layout index {index}"
         );
     }
+}
+
+fn p1_output(source: &str) -> Vec<String> {
+    let f = Fixture::source(source.as_bytes());
+    let mut output = Output {
+        lines: vec![],
+        context: f.context,
+        module: f.module,
+        fail: false,
+        busy: false,
+    };
+    let host = Host {
+        output: Some(collect),
+        userdata: ptr::from_mut(&mut output).cast(),
+        ..Host::default()
+    };
+    let instance = f.instance(&host);
+    let mut main = 0;
+    let mut result = Value::default();
+    let mut diagnostic = Diagnostic::default();
+    // SAFETY: The fixture and callback buffers remain live until the synchronous call returns.
+    unsafe {
+        assert_eq!(
+            ulua_module_find_export(f.module, c"main".as_ptr(), 4, &mut main),
+            ULUA_OK
+        );
+        assert_eq!(
+            ulua_call(instance, main, ptr::null(), 0, &mut result, &mut diagnostic),
+            ULUA_OK,
+            "{}",
+            code(&diagnostic)
+        );
+    }
+    output.lines
+}
+
+#[test]
+fn p1_evaluation_order_defaults_short_circuit_and_compound_assignment() {
+    let source = r#"
+        let n = 0;
+        function inc(): number { n += 1; return n; }
+        function pair(a: number, b: number): number { return a * 10 + b; }
+        function flag(): boolean { n += 1; return true; }
+        function defaults(a: number = inc(), b: number = a + inc()): number { return a * 10 + b; }
+        export function main(): void {
+            n = 1; print(`${n + inc()} ${n}`);
+            n = 1; print(`${pair(n, inc())} ${n}`);
+            n = 1; n += inc(); print(`${n}`);
+            n = 1; n %= inc(); print(`${n}`);
+            n = 0; print(`${false && flag()} ${true || flag()} ${n}`);
+            n = 0; print(`${true ? inc() : inc()} ${false ? inc() : inc()} ${n}`);
+            n = 0; print(`${defaults()} ${n}`);
+            n = 0; print(`${defaults(10, 20)} ${n}`);
+            n = 0; print(`${n}${inc()}${n}${inc()}${n}`);
+        }
+    "#;
+    assert_eq!(
+        p1_output(source),
+        [
+            "3 2",
+            "12 2",
+            "3",
+            "1",
+            "false true 0",
+            "1 2 2",
+            "13 2",
+            "120 0",
+            "01122"
+        ]
+    );
+}
+
+#[test]
+fn p1_loop_copy_back_continue_break_nested_loops_and_parameters() {
+    let source = r#"
+        function f(n: number): number { n++; n -= 1; return n; }
+        export function main(): void {
+            let total = 0;
+            for (let i = 0; i < 6; ++i) {
+                i += 1;
+                if (i === 1) { continue; }
+                if (i === 5) { break; }
+                total += i;
+            }
+            print(`${total}`);
+            let sum = 0;
+            for (let i = 0, j = 10; i < 3; i++) {
+                j += 2;
+                for (let k = 0; k < 3; k++) {
+                    if (k === 1) { continue; }
+                    sum += i + j;
+                }
+            }
+            print(`${sum}`);
+            let count = 0;
+            while (count < 3) { count++; if (count === 2) { continue; } print(`${count}`); }
+            for (;;) { break; }
+            print(`${f(10)}`);
+        }
+    "#;
+    assert_eq!(p1_output(source), ["3", "90", "1", "3", "10"]);
+}
+
+#[test]
+fn p1_spills_remain_typed_and_reachable_across_nested_scopes() {
+    let mut source = String::from("function id(n: number): number { return n; }");
+    for i in 0..220 {
+        source.push_str(&format!("let m{i} = id({i});"));
+    }
+    source.push_str("function read(): number { return m219; } export function main(): void {");
+    for i in 0..180 {
+        source.push_str(&format!("const x{i} = id({i});"));
+    }
+    for i in 0..30 {
+        source.push_str(&format!(
+            "{{ let n{i} = 0; for (let j{i} = 0; j{i} < 3; j{i}++) {{ n{i} += j{i}; }} }}"
+        ));
+    }
+    source.push_str("m219 += 1; print(`${x179} ${read()}`); }");
+    assert_eq!(p1_output(&source), ["179 220"]);
 }
