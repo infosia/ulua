@@ -98,9 +98,9 @@ impl Checker<'_> {
                                 "Equality requires identical value types",
                             ));
                         }
-                        let left = self.operand(&b.left, &a);
-                        let right = self.operand(&b.right, &r);
-                        self.equalities.push((b.span, left, right));
+                        let left = self.expression_fact(&a)?;
+                        let right = self.expression_fact(&r)?;
+                        self.equality.check(b.span, left, right);
                         (Type::Boolean, if op == "===" { "==" } else { "~=" })
                     }
                     "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" => {
@@ -304,10 +304,12 @@ impl Checker<'_> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }
-        Ok(Expr {
+        let value = Expr {
             start: e.span().start,
             ty,
             kind,
-        })
+        };
+        self.record_fact(e, &value)?;
+        Ok(value)
     }
 }

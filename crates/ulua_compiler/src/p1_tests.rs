@@ -96,7 +96,7 @@ fn c7_equal_types_and_function_identity() {
 }
 
 #[test]
-fn c7_each_operand_class_pair_in_both_orders() {
+fn c7_each_literal_set_domain_pair_in_both_orders() {
     for op in ["===", "!=="] {
         let operands = ["true", "n", "p"];
         for (left, a) in operands.iter().enumerate() {

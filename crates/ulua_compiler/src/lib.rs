@@ -422,4 +422,6 @@ mod tests {
 }
 
 #[cfg(test)]
+mod literal_set_tests;
+#[cfg(test)]
 mod p1_tests;

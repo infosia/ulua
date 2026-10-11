@@ -1,7 +1,8 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod equality;
 mod expressions;
-use equality::Operand;
+mod literal_sets;
+use equality::{Equality, NARROWABLE, WIDE};
 mod statements;
 use crate::{
     Diagnostic,
@@ -20,9 +21,7 @@ pub(crate) struct Checker<'s> {
     loops: usize,
     limit: u32,
     references: Vec<(usize, usize, u32)>,
-    operand_classes: Vec<Operand>,
-    constant_strings: HashMap<String, usize>,
-    equalities: Vec<(Span, Operand, Operand)>,
+    equality: Equality,
 }
 impl Checker<'_> {
     fn error(&self, span: Span, code: &'static str, message: &str) -> Diagnostic {
@@ -88,7 +87,7 @@ impl Checker<'_> {
             return Err(self.error(span, "C11", "Duplicate declaration"));
         }
         self.bindings.push(binding);
-        self.operand_classes.push(Operand::Other);
+        self.equality.bindings.push(WIDE);
         Ok(id)
     }
     fn lookup(&mut self, name: &str, span: Span) -> Result<usize, Diagnostic> {
@@ -219,9 +218,7 @@ pub(crate) fn check(
         loops: 0,
         limit,
         references: vec![],
-        operand_classes: vec![],
-        constant_strings: HashMap::new(),
-        equalities: vec![],
+        equality: Equality::new(),
     };
     if program.hashbang.is_some() || !program.directives.is_empty() {
         return Err(c.error(program.span, "C11", "Module directives are rejected"));
