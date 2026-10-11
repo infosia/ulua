@@ -153,8 +153,8 @@ impl Checker<'_> {
                     return Err(self.unsupported(l.span));
                 }
                 let a = self.expr(&l.left, depth, false)?;
-                let ids = self.equality.region(&a, op == "&&");
-                let skipped = self.equality.region(&a, op != "&&");
+                let [t, f] = self.equality.regions(&a);
+                let (ids, skipped) = if op == "&&" { (t, f) } else { (f, t) };
                 let checkpoint = self.equality.checkpoint();
                 let entry = self.reachable;
                 let mut join = self.equality.join();
@@ -177,8 +177,7 @@ impl Checker<'_> {
                 if test.ty != Type::Boolean {
                     return Err(self.error(c.span, "C3", "Boolean condition is required"));
                 }
-                let t = self.equality.region(&test, true);
-                let f = self.equality.region(&test, false);
+                let [t, f] = self.equality.regions(&test);
                 let mut join = self.equality.join();
                 let a = self.edge_expr(&c.consequent, depth, &t, &mut join)?;
                 let b = self.edge_expr(&c.alternate, depth, &f, &mut join)?;

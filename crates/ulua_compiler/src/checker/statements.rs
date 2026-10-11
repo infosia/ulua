@@ -44,7 +44,15 @@ impl Checker<'_> {
                 self.bindings[id].ty = Some(value.ty.clone());
             }
             if value.ty == Type::Boolean {
-                self.equality.aliases[id] = self.equality.condition_facts(&value);
+                let facts = self.equality.condition_facts(&value);
+                if facts.iter().any(|set| set.len() > crate::ALIAS_TEST_BOUND) {
+                    return Err(self.error(
+                        v.span,
+                        "C7",
+                        "An aliased condition tests at most 8 references per set",
+                    ));
+                }
+                self.equality.aliases[id] = facts;
             }
             self.equality.bindings[id] = self.bindings[id].mutable || value.wide;
             out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
@@ -177,8 +185,7 @@ impl Checker<'_> {
             Statement::ExpressionStatement(e) => self.effect(&e.expression, depth, false)?,
             Statement::IfStatement(i) => {
                 let test = self.test(&i.test, depth)?;
-                let t = self.equality.region(&test, true);
-                let f = self.equality.region(&test, false);
+                let [t, f] = self.equality.regions(&test);
                 let entry = self.reachable;
                 let checkpoint = self.equality.checkpoint();
                 let mut join = self.equality.join();
@@ -199,8 +206,7 @@ impl Checker<'_> {
             }
             Statement::WhileStatement(w) => {
                 let test = self.test(&w.test, depth)?;
-                let t = self.equality.region(&test, true);
-                let f = self.equality.region(&test, false);
+                let [t, f] = self.equality.regions(&test);
                 let checkpoint = self.equality.checkpoint();
                 let entry = self.reachable;
                 let mut exit = self.equality.join();
@@ -243,13 +249,9 @@ impl Checker<'_> {
                     })
                     .collect();
                 let test = f.test.as_ref().map(|e| self.test(e, depth)).transpose()?;
-                let t = test
+                let [t, false_ids] = test
                     .as_ref()
-                    .map(|e| self.equality.region(e, true))
-                    .unwrap_or_default();
-                let false_ids = test
-                    .as_ref()
-                    .map(|e| self.equality.region(e, false))
+                    .map(|e| self.equality.regions(e))
                     .unwrap_or_default();
                 let checkpoint = self.equality.checkpoint();
                 let entry = self.reachable;

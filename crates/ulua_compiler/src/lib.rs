@@ -9,13 +9,16 @@ mod emitter;
 mod ir;
 #[cfg(test)]
 mod round6_tests;
+#[cfg(test)]
+mod round7_tests;
 
 use oxc_allocator::Allocator;
 use oxc_parser::{ParseOptions, Parser};
 use oxc_span::SourceType;
 
 pub use bounds::{
-    ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND, TEMPORARY_BOUND,
+    ALIAS_TEST_BOUND, ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND,
+    TEMPORARY_BOUND,
 };
 
 /// Source ceiling in bytes.

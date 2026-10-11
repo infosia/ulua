@@ -2,13 +2,6 @@
 use super::*;
 use crate::ir::{Expr, ExprKind as E};
 
-#[derive(Clone, Copy)]
-enum Fact {
-    Empty,
-    Reference(usize),
-    Union(usize, usize),
-}
-
 pub(super) struct Region {
     ids: Vec<usize>,
     exists: bool,
@@ -25,8 +18,7 @@ impl Default for Region {
 pub(super) struct Equality {
     pub(super) bindings: Vec<bool>,
     pub(super) tested: Vec<bool>,
-    pub(super) aliases: Vec<[usize; 2]>,
-    facts: Vec<Fact>,
+    pub(super) aliases: Vec<[Vec<usize>; 2]>,
     undo: Vec<usize>,
     nodes: Vec<(usize, usize)>,
 }
@@ -36,7 +28,6 @@ impl Equality {
             bindings: vec![],
             tested: vec![],
             aliases: vec![],
-            facts: vec![Fact::Empty],
             undo: vec![],
             nodes: vec![(0, 0)],
         }
@@ -78,71 +69,47 @@ impl Equality {
         self.enter(&ids);
         reachable
     }
-    // Alias facts form a shared DAG. Declarations do not copy transitive sets.
-    pub(super) fn condition_facts(&mut self, e: &Expr) -> [usize; 2] {
-        match &e.kind {
-            E::Read(id) => self.aliases[*id],
-            E::Unary("not", g) => {
-                let [t, f] = self.condition_facts(g);
-                [f, t]
-            }
-            E::Logical(_, a, b) => {
-                let a = self.condition_facts(a);
-                let b = self.condition_facts(b);
-                [self.union(a[0], b[0]), self.union(a[1], b[1])]
-            }
-            E::Binary(op @ ("==" | "~="), a, b) => {
-                let mut fact = 0;
-                for (reference, other) in [(a, b), (b, a)] {
-                    if let E::Read(id) = reference.kind
-                        && !other.wide
-                    {
-                        self.facts.push(Fact::Reference(id));
-                        fact = self.union(fact, self.facts.len() - 1);
+    // Walk only the initializer syntax. Alias reads copy at most ALIAS_TEST_BOUND references per set.
+    pub(super) fn condition_facts(&self, e: &Expr) -> [Vec<usize>; 2] {
+        let mut facts = [vec![], vec![]];
+        let mut work = vec![(e, false)];
+        while let Some((e, inverted)) = work.pop() {
+            match &e.kind {
+                E::Read(id) => {
+                    let [t, f] = &self.aliases[*id];
+                    facts[usize::from(inverted)].extend_from_slice(t);
+                    facts[usize::from(!inverted)].extend_from_slice(f);
+                }
+                E::Unary("not", g) => work.push((g, !inverted)),
+                E::Logical(_, a, b) => {
+                    work.push((a, inverted));
+                    work.push((b, inverted));
+                }
+                E::Binary(op @ ("==" | "~="), a, b) => {
+                    let set = &mut facts[usize::from((*op == "~=") ^ inverted)];
+                    for (reference, other) in [(a, b), (b, a)] {
+                        if let E::Read(id) = reference.kind
+                            && !other.wide
+                        {
+                            set.push(id);
+                        }
                     }
                 }
-                if *op == "==" { [fact, 0] } else { [0, fact] }
+                _ => {}
             }
-            _ => [0, 0],
         }
+        for set in &mut facts {
+            set.sort_unstable();
+            set.dedup();
+        }
+        facts
     }
-    fn union(&mut self, a: usize, b: usize) -> usize {
-        if a == 0 || a == b {
-            return b;
-        }
-        if b == 0 {
-            return a;
-        }
-        self.facts.push(Fact::Union(a, b));
-        self.facts.len() - 1
-    }
-    pub(super) fn region(&mut self, condition: &Expr, truth: bool) -> Region {
-        let facts = self.condition_facts(condition);
-        let root = facts[usize::from(!truth)];
-        let exists = !matches!(condition.kind, E::Boolean(value) if value != truth);
-        if root == 0 {
-            return Region {
-                ids: vec![],
-                exists,
-            };
-        }
-        let mut work = vec![root];
-        let mut seen = std::collections::HashSet::new();
-        let mut ids = vec![];
-        while let Some(node) = work.pop() {
-            if !seen.insert(node) {
-                continue;
-            }
-            match self.facts[node] {
-                Fact::Empty => {}
-                Fact::Reference(id) => ids.push(id),
-                Fact::Union(a, b) => {
-                    work.push(a);
-                    work.push(b);
-                }
-            }
-        }
-        Region { ids, exists }
+    pub(super) fn regions(&self, condition: &Expr) -> [Region; 2] {
+        let [t, f] = self.condition_facts(condition);
+        [(t, true), (f, false)].map(|(ids, truth)| Region {
+            ids,
+            exists: !matches!(condition.kind, E::Boolean(value) if value != truth),
+        })
     }
 }
 // Each edge records one log tip. Shared prefixes are visited once per join, not once per edge.

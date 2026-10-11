@@ -288,6 +288,19 @@ are exact.
   3.92 / 3.89, nested loops 3.81 / 3.85. Growth gate: Debug 7.06 s,
   Release 2.05 s; largest ratio 6.49 / 6.42.
 
+## S10 record
+
+- Codex task. Alias sets are flattened and bounded by
+  `ALIAS_TEST_BOUND` = 8 (`bounds.rs`); 9 references give C7 at the
+  declaration (`r83`). A hashbang line has its own C11 message.
+- Growth, 8 to 32 KiB: alias chain Debug 11.66 to 45.58 ms (3.91),
+  Release 3.75; an alias with 8 references Debug 3.93, Release 3.78.
+  Growth gate: Debug 7.77 s, largest ratio 6.52; Release 2.14 s.
+- Random P1 programs: 5,000 generated; 1,955 accepted, 3,045 rejected
+  with C7; accepted programs: 0 `tsc` errors, 0 resource limits, 0
+  `luau-analyze` errors, 0 `node` differences. The longest accepted
+  alias chain has 76 links.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

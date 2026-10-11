@@ -92,7 +92,7 @@ impl Checker<'_> {
         }
         self.bindings.push(binding);
         self.equality.bindings.push(true);
-        self.equality.aliases.push([0, 0]);
+        self.equality.aliases.push([vec![], vec![]]);
         self.equality.tested.push(false);
         Ok(id)
     }
@@ -227,7 +227,10 @@ pub(crate) fn check(
         references: vec![],
         equality: Equality::new(),
     };
-    if program.hashbang.is_some() || !program.directives.is_empty() {
+    if let Some(hashbang) = &program.hashbang {
+        return Err(c.error(hashbang.span, "C11", "Hashbang lines are rejected"));
+    }
+    if !program.directives.is_empty() {
         return Err(c.error(program.span, "C11", "Module directives are rejected"));
     }
     let mut functions = Vec::new();

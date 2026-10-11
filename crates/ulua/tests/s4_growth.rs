@@ -1,7 +1,8 @@
 //! Growth gate: source ceiling shapes, 8 KiB and 32 KiB, through the full ABI.
 //! Ratios above 6.5 use the minimum of two runs per size. Lower ratios retain ample margin.
-//! Measured Debug cost: 7.06 seconds. Largest time ratio: 6.485 (spilled-mod-38).
-//! Release join ratios: deep 3.824, wide 3.886, nestloops 3.849. Full cost: 2.05 seconds.
+//! Measured Debug cost: 7.77 seconds. Largest time ratio: 6.517 (spilled-mod-38).
+//! Alias-chain ratios: Debug 3.909 / 3.927; Release 3.753 / 3.780 (one / eight references).
+//! Measured Release cost: 2.14 seconds. Largest time ratio: 6.505 (spilled-mod-36).
 //! The largest output ratio is 62.671; 1.25 times this ratio stays below 80.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
