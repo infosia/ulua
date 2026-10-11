@@ -43,6 +43,9 @@ impl Checker<'_> {
             } else {
                 self.bindings[id].ty = Some(value.ty.clone());
             }
+            if value.ty == Type::Boolean {
+                self.equality.aliases[id] = self.equality.condition_facts(&value);
+            }
             self.equality.bindings[id] = self.bindings[id].mutable || value.wide;
             out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
         }
@@ -179,12 +182,12 @@ impl Checker<'_> {
                 let entry = self.reachable;
                 let checkpoint = self.equality.checkpoint();
                 let mut join = self.equality.join();
-                self.equality.enter(&t);
+                self.enter_region(&t);
                 let a = self.statement(&i.consequent, depth)?;
                 join.edge(&self.equality, self.reachable);
                 self.equality.restore(checkpoint);
                 self.reachable = entry;
-                self.equality.enter(&f);
+                self.enter_region(&f);
                 let b = i
                     .alternate
                     .as_ref()
@@ -199,16 +202,15 @@ impl Checker<'_> {
                 let t = self.equality.region(&test, true);
                 let f = self.equality.region(&test, false);
                 let checkpoint = self.equality.checkpoint();
+                let entry = self.reachable;
                 let mut exit = self.equality.join();
-                self.equality.enter(&f);
-                exit.edge(
-                    &self.equality,
-                    self.reachable && !matches!(test.kind, ExprKind::Boolean(true)),
-                );
+                self.enter_region(&f);
+                exit.edge(&self.equality, self.reachable);
                 self.equality.restore(checkpoint);
+                self.reachable = entry;
                 let update = self.equality.join();
                 self.loops.push(equality::LoopFlow { exit, update });
-                self.equality.enter(&t);
+                self.enter_region(&t);
                 let body = self.statement(&w.body, depth)?;
                 let flow = self
                     .loops
@@ -250,22 +252,18 @@ impl Checker<'_> {
                     .map(|e| self.equality.region(e, false))
                     .unwrap_or_default();
                 let checkpoint = self.equality.checkpoint();
+                let entry = self.reachable;
                 let mut exit = self.equality.join();
-                self.equality.enter(&false_ids);
-                exit.edge(
-                    &self.equality,
-                    self.reachable
-                        && test
-                            .as_ref()
-                            .is_some_and(|t| !matches!(t.kind, ExprKind::Boolean(true))),
-                );
+                self.enter_region(&false_ids);
+                exit.edge(&self.equality, self.reachable && test.is_some());
                 self.equality.restore(checkpoint);
+                self.reachable = entry;
                 let update_join = self.equality.join();
                 self.loops.push(equality::LoopFlow {
                     exit,
                     update: update_join,
                 });
-                self.equality.enter(&t);
+                self.enter_region(&t);
                 let body = self.statement(&f.body, depth)?;
                 let mut flow = self
                     .loops

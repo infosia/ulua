@@ -21,9 +21,25 @@ impl Checker<'_> {
     ) -> Result<Expr, Diagnostic> {
         let depth = self.descend(depth, e.span())?;
         let (ty, kind) = match e {
-            Expression::NumericLiteral(n) => (Type::Number, ExprKind::Number(n.value)),
+            Expression::NumericLiteral(n) => {
+                if strict::legacy_number(&self.source[n.span.start as usize..n.span.end as usize]) {
+                    return Err(self.error(
+                        n.span,
+                        "C11",
+                        "Legacy numeric literal in a strict module",
+                    ));
+                }
+                (Type::Number, ExprKind::Number(n.value))
+            }
             Expression::BooleanLiteral(b) => (Type::Boolean, ExprKind::Boolean(b.value)),
             Expression::StringLiteral(s) => {
+                if strict::legacy_escape(&self.source[s.span.start as usize..s.span.end as usize]) {
+                    return Err(self.error(
+                        s.span,
+                        "C11",
+                        "Legacy string escape in a strict module",
+                    ));
+                }
                 if s.lone_surrogates {
                     return Err(self.error(s.span, "C5", "Unpaired surrogate"));
                 }
@@ -140,12 +156,14 @@ impl Checker<'_> {
                 let ids = self.equality.region(&a, op == "&&");
                 let skipped = self.equality.region(&a, op != "&&");
                 let checkpoint = self.equality.checkpoint();
+                let entry = self.reachable;
                 let mut join = self.equality.join();
-                self.equality.enter(&skipped);
+                self.enter_region(&skipped);
                 join.edge(&self.equality, self.reachable);
                 self.equality.restore(checkpoint);
+                self.reachable = entry;
                 let b = self.edge_expr(&l.right, depth, &ids, &mut join)?;
-                self.equality.finish(join);
+                self.reachable = self.equality.finish(join);
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -164,7 +182,7 @@ impl Checker<'_> {
                 let mut join = self.equality.join();
                 let a = self.edge_expr(&c.consequent, depth, &t, &mut join)?;
                 let b = self.edge_expr(&c.alternate, depth, &f, &mut join)?;
-                self.equality.finish(join);
+                self.reachable = self.equality.finish(join);
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
                     a.ty.clone(),

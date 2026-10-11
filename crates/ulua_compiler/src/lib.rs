@@ -7,6 +7,8 @@ mod checker;
 mod depth;
 mod emitter;
 mod ir;
+#[cfg(test)]
+mod round6_tests;
 
 use oxc_allocator::Allocator;
 use oxc_parser::{ParseOptions, Parser};
@@ -234,7 +236,7 @@ fn compile_observed(
     let max_depth = limits.max_nesting_depth.min(DEPTH_CEILING);
     let allocator = Allocator::default();
     observer("parse", true);
-    let parsed = Parser::new(&allocator, text, SourceType::ts())
+    let parsed = Parser::new(&allocator, text, SourceType::ts().with_module(true))
         .with_options(ParseOptions {
             max_nesting_depth: Some(max_depth as usize),
             ..ParseOptions::default()
@@ -251,12 +253,14 @@ fn compile_observed(
     }
     if let Some(error) = parsed.diagnostics.first() {
         let offset = error.labels.first().map_or(0, |label| label.offset());
-        return Err(Diagnostic::at(
-            source,
-            offset as usize,
-            "syntax",
-            error.to_string(),
-        ));
+        let message = error.to_string();
+        // The parser reports module-reserved await with its async-context diagnostic.
+        let code = if message == "Cannot use `await` as an identifier in an async context" {
+            "C11"
+        } else {
+            "syntax"
+        };
+        return Err(Diagnostic::at(source, offset as usize, code, message));
     }
     depth::check(&parsed.program, max_depth, source)?;
     observer("check", true);

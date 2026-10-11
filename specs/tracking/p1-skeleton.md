@@ -274,6 +274,19 @@ are exact.
   62.67.
 - `gate.sh full` passes: `cargo-test` 16 s, `luau-witnesses` 21 s.
 
+## S9 record
+
+- Codex task. Aliased boolean conditions carry the sets of their
+  initializers; literal `true` and `false` conditions keep one edge;
+  `checker/strict.rs` gives C11 for strict-mode early errors. `r79`,
+  `r80` give C7; `r81`, `r82` give C11; `a10` passes.
+- Random P1 programs: 5,000 generated; 3,701 accepted, 1,299 rejected
+  with C7. Accepted programs: 0 `tsc` errors, 0 `tsc` resource limits,
+  0 `luau-analyze` errors, 0 `node` differences.
+- Join growth shapes, 4x ratio Debug / Release: deep 3.76 / 3.82, wide
+  3.92 / 3.89, nested loops 3.81 / 3.85. Growth gate: Debug 7.06 s,
+  Release 2.05 s; largest ratio 6.49 / 6.42.
+
 ## Phase Review round 1
 
 Reviewer: fresh agent, diff `f5f0bf1..dc36b3b`. 4 MAJOR, 7 MINOR.

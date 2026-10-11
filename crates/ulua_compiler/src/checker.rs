@@ -3,6 +3,7 @@ mod equality;
 mod expressions;
 use equality::Equality;
 mod statements;
+mod strict;
 use crate::{
     Diagnostic,
     ir::{self, Type},
@@ -76,6 +77,9 @@ impl Checker<'_> {
         })
     }
     fn bind(&mut self, name: &str, binding: ir::Binding, span: Span) -> Result<usize, Diagnostic> {
+        if strict::binding(name) {
+            return Err(self.error(span, "C11", "Binding name is forbidden in a strict module"));
+        }
         if name == "undefined" {
             return Err(self.error(span, "C2", "Undefined is rejected even as a binding name"));
         }
@@ -88,6 +92,7 @@ impl Checker<'_> {
         }
         self.bindings.push(binding);
         self.equality.bindings.push(true);
+        self.equality.aliases.push([0, 0]);
         self.equality.tested.push(false);
         Ok(id)
     }

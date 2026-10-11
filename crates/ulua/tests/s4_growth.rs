@@ -1,11 +1,14 @@
 //! Growth gate: source ceiling shapes, 8 KiB and 32 KiB, through the full ABI.
-//! Ratios above five use the minimum of two runs per size. Lower ratios retain ample margin.
-//! Measured Debug cost: 7.75 to 7.87 seconds. Largest time ratio: 6.493 (spilled-mod-36).
+//! Ratios above 6.5 use the minimum of two runs per size. Lower ratios retain ample margin.
+//! Measured Debug cost: 7.06 seconds. Largest time ratio: 6.485 (spilled-mod-38).
+//! Release join ratios: deep 3.824, wide 3.886, nestloops 3.849. Full cost: 2.05 seconds.
 //! The largest output ratio is 62.671; 1.25 times this ratio stays below 80.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
+#[path = "support/growth_joins.rs"]
+mod joins;
 #[path = "../src/s6_inputs.rs"]
 mod review;
 // This test uses the compile operation only.
@@ -22,9 +25,15 @@ fn full_pipeline_growth_stays_below_eight() {
     let n = 8 * 1024;
     let mut max_growth: f64 = 0.0;
     let mut max_output: f64 = 0.0;
-    for shape in inputs::SOURCE_SHAPES.iter().chain(review::SHAPES) {
+    for shape in inputs::SOURCE_SHAPES
+        .iter()
+        .chain(review::SHAPES)
+        .chain(joins::SHAPES)
+    {
         let make = |bytes| {
-            if review::SHAPES.contains(shape) {
+            if joins::SHAPES.contains(shape) {
+                joins::source(shape, bytes)
+            } else if review::SHAPES.contains(shape) {
                 review::source(shape, bytes)
             } else if matches!(*shape, "forward" | "backward" | "star") {
                 inputs::call_graph(shape, bytes)
@@ -74,7 +83,7 @@ fn full_pipeline_growth_stays_below_eight() {
             elapsed
         };
         let mut times = [&small, &large].map(|source| measure(source));
-        let repeat = times[1].as_secs_f64() / times[0].as_secs_f64() >= 5.0;
+        let repeat = times[1].as_secs_f64() / times[0].as_secs_f64() >= 6.5;
         if repeat {
             for (time, source) in times.iter_mut().zip([&small, &large]) {
                 *time = (*time).min(measure(source));

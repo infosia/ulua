@@ -43,7 +43,7 @@ fn branch_and_block_joins_intersect_only_reaching_edges() {
         ("if(c){if(s!=='a'){return false;}}return s==='c';", false),
         (
             "if(c){return false; if(n!==1){return false;}}return n===3;",
-            false,
+            true,
         ),
         (
             "if(c){{if(n!==1){return false;}}}else{return false;}return n===3;",
