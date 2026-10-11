@@ -5,9 +5,9 @@ Status: open.
 ## Exit checklist
 
 - [x] `CLAUDE.md`, `specs/plan.md`, `specs/workflow.md`, `specs/rules-history.md`.
-- [x] `specs/blocks/collisions.md` Rev 10, `specs/blocks/corpus.md`, `specs/blocks/surface.md` Rev 3.
+- [x] `specs/blocks/collisions.md` Rev 11, `specs/blocks/corpus.md`, `specs/blocks/surface.md` Rev 4.
 - [x] `prelude/ulua.d.ts`, `tsconfig.json`, `package.json` (TypeScript 5.9.2).
-- [x] Seed corpus: 23 accept, 66 reject, 3 trap.
+- [x] Seed corpus: 24 accept, 68 reject, 3 trap.
 - [x] Collision probes measured: `specs/tracking/p0-collisions.md`.
 - [x] `tools/gate.sh quick|full`, `tools/hygiene.sh`.
 - [x] The gate passes with the TypeScript from `npm install`.
@@ -21,7 +21,8 @@ Status: open.
 - [x] Phase Review round 8: 1 MAJOR, 3 MINOR. All fixed (below).
 - [x] Phase Review round 9: 1 MAJOR, 3 MINOR. All fixed (below).
 - [x] Phase Review round 10: 2 MAJOR, 5 MINOR. All fixed (below).
-- [ ] Phase Review round 11 on the fixes.
+- [x] Phase Review round 11: 2 MAJOR, 5 MINOR. All fixed (below).
+- [ ] Phase Review round 12 on the fixes.
 
 ## Measurements
 
@@ -170,6 +171,14 @@ A node kind that the table does not list is rejected in every position.
 | MINOR | Index operand type, assignment value use, rest and spread, unannotated initializer types | surface.md §1, §3, §4; `r64`, `r65`, `r66` |
 | MINOR | C4.1 said `+` takes numbers only | C4.1 names both `+` forms |
 | MINOR | A trap prefix compared print calls, not lines | the witness compares lines |
+
+## Phase Review round 11
+
+| Id | Finding | Change |
+|---|---|---|
+| MAJOR 1 | Narrowing was unspecified; `tsc` keeps a narrowed field across a call that clears it | C16: only `const` bindings and unassigned-by-closure locals narrow; never fields or elements; `r67`, `r68`; `a14` cites C16 |
+| MAJOR 2 | A script binding `math` captured the `math.fmod` that C4.3 emits | C14.5: generated identifiers in a namespace apart from Luau globals; library reads through compiler-only names; `a24` |
+| MINOR | `Utf8.byteLength` missing from the member row; conditional branch types; `void` arrow bodies; stale §4 references | surface.md Rev 4; collisions.md references |
 
 ## Gaps
 

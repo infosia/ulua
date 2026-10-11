@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 3, 2026-10-11 (Rev 0 to Rev 2 the same day; P0 Phase Review
+Status: Rev 4, 2026-10-11 (Rev 0 to Rev 3 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds).
 
 This file is the closed list of the forms that the compiler accepts.
@@ -13,7 +13,8 @@ JavaScript. A form joins this list only with a contract change and
 corpus entries.
 
 Notation: "expr" is any listed expression node; "T" is a listed type.
-Every type is the checked type of collisions.md C1, not the `tsc` type.
+Every type is the checked type of collisions.md C1, with the narrowing of
+C16 only, not the `tsc` type.
 
 ## 1. Module and declarations
 
@@ -59,15 +60,15 @@ rejected, also where `tsc` accepts it.
 | `ParenthesizedExpression` | Around an expr. |
 | `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `String` (only as the callee of `String(n)`). |
 | `ThisExpression` | In a method or constructor, only as the object of a `StaticMemberExpression` (C13). |
-| `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, and the `string` members of C5.2 as callees. No other member. |
+| `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, and the `string` members of C5.2 as callees. No other member. |
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
 | `CallExpression` | The callee is an `IdentifierReference` of a function declaration or of a binding of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
-| `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. |
+| `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
 | `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==` on two operands of the same type (C7). `==`, `!=` with exactly one `NullLiteral` operand. |
 | `LogicalExpression` | `&&`, `\|\|` on two booleans. `a ?? b` with `a: T \| null` and `b` assignable to `T` or `T \| null`. |
-| `ConditionalExpression` | A `boolean` test. |
+| `ConditionalExpression` | A `boolean` test. Both branches have one type `T`, or one branch is `null` and the result is `T \| null`. |
 | `AssignmentExpression` | Only as an `ExpressionStatement` or a `for` update; its value is never used. Operators `=`; `+=` on numbers or on two strings; `-=`, `*=`, `/=`, `%=` on numbers. The target is an `IdentifierReference` of a `let` binding or a parameter, a `StaticMemberExpression` of a field (not a method), or a `ComputedMemberExpression` of an array element. |
 | `UpdateExpression` | `++`, `--`, prefix or postfix, only as an `ExpressionStatement` or a `for` update. The target is a `number` binding, parameter, or field, as for `AssignmentExpression`. |
 | `ChainExpression` | Exactly one optional step and no step after it: `a?.f`, or `a?.m(args)`. `a` has type `T \| null`. Only as the left operand of `??` (`a?.f`), or as an `ExpressionStatement` (`a?.m(args)`). |

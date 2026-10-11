@@ -1,7 +1,7 @@
 # Semantic collisions — decided rules
 
-Status: Rev 10, 2026-10-11 (Rev 0 to Rev 9 the same day; P0 Phase
-Review rounds 1 to 10 changed C1 to C6, C9, C10, C12, C14 and added C11
+Status: Rev 11, 2026-10-11 (Rev 0 to Rev 10 the same day; P0 Phase
+Review rounds 1 to 11 changed C1 to C6, C9, C10, C12, C14 and added C11
 to C15).
 
 This file resolves each collision between the TypeScript surface and
@@ -30,7 +30,7 @@ No other value appears. A lowering does not add a field, a sentinel, a
 wrapper, or a second encoding to a value.
 
 The checker decides assignability itself. It does not take the `tsc`
-relation. The relation applies at every value flow (surface.md §4:
+relation. The relation applies at every value flow (surface.md §3:
 arguments, initializers, returns, literal entries, assignments) and at
 every depth: array elements, union members, function parameters and
 results, and object fields.
@@ -331,7 +331,7 @@ Accept: `a16`. Reject: `r52`.
 2. A method call is a direct call of a generated function, with the
    receiver as the first argument. Classes have no inheritance and no
    relation to object types (C1.5), and a method is never assigned
-   (surface.md §4), so each method call has one target that the
+   (surface.md §3), so each method call has one target that the
    checker knows.
 3. The emitter writes a number literal from its binary64 value, and a
    string literal from its decoded scalar values. It never copies the
@@ -342,7 +342,14 @@ Accept: `a16`. Reject: `r52`.
    `\ddd`. Luau rejects a raw CR or NUL inside quotes, and a long
    bracket string changes `\r\n` to `\n`.
 
-Accept: `a20`, `a21`.
+5. Every emitted identifier is generated, in a namespace that no Luau
+   global and no library name uses. A script binding named `math`,
+   `table`, `string`, or `tostring` cannot capture a library reference
+   that a lowering emits, such as `math.fmod` (C4.3). The lowering
+   reads each library function through a name that only the compiler
+   writes.
+
+Accept: `a20`, `a21`, `a24`.
 
 ## C15. Luau compiler limits
 
@@ -386,6 +393,24 @@ is visible in the source: it follows from the number of bindings that
 the source declares (principle 16).
 
 Accept: `a22`, `a23`.
+
+## C16. Narrowing
+
+`tsc` narrows `T | null` to `T` after a null test, and keeps the narrowed
+type across calls and for fields. A call can assign `null` to the
+location in between, and JavaScript then reads `null` where the type
+says `T`. The checker narrows only where nothing else can run a write:
+
+1. A null test (`x != null`, `x == null`, with `!`, `&&`, `||`, `?:`,
+   `if`, `while`, and an early `return`, `break`, or `continue`) narrows
+   a reference `x` on the paths where the test holds.
+2. `x` is a `const` binding, or a `let` binding or a parameter that no
+   function or arrow assigns. A module-level `let` is never narrowed.
+3. The narrowing ends at the next assignment to `x` on that path.
+4. A field, an element, and every other reference are never narrowed.
+   Copy the value into a `const` to narrow it.
+
+Accept: `a14`. Reject: `r67`, `r68`.
 
 ## Open items
 

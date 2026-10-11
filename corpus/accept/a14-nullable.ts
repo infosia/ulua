@@ -1,6 +1,6 @@
 // corpus: accept/a14-nullable
 // purpose: Tests, narrows, and defaults nullable values.
-// rule: C2, C7
+// rule: C2, C7, C16
 // tsc: accepts
 type Node = { value: number; next: Node | null };
 
