@@ -8,7 +8,7 @@ impl Checker<'_> {
         to: Option<&Type>,
         span: Span,
     ) -> Result<(), Diagnostic> {
-        if !to.is_some_and(|to| assignable(from, to)) {
+        if !to.is_some_and(|to| from == to) {
             return Err(self.error(span, "C1", "Value types do not agree"));
         }
         Ok(())
@@ -350,21 +350,4 @@ impl Checker<'_> {
         value.wide = self.is_wide(e, &value);
         Ok(value)
     }
-}
-
-// Function parameters are invariant. The required count belongs to each call signature.
-fn assignable(from: &Type, to: &Type) -> bool {
-    let mut pending = vec![(from, to)];
-    while let Some((from, to)) = pending.pop() {
-        match (from, to) {
-            (Type::Function(a, ar, required), Type::Function(b, br, target))
-                if a == b && required <= target =>
-            {
-                pending.push((ar, br))
-            }
-            _ if from == to => {}
-            _ => return false,
-        }
-    }
-    true
 }

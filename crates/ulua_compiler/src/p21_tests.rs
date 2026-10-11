@@ -25,7 +25,6 @@ fn annotations_defaults_void_and_callee_forms_use_the_closed_surface() {
         "export function main():void{const f=():void=>print('a');f();((n:number):void=>print(`${n}`))(1);}",
         "export function main():void{const f=():void=>{return;};f();}",
         "export function main():void{function f(n:number=4):number{return n;}print(`${f()}`);}",
-        "export function main():void{function f(n:number=4):number{return n;}const g:(n:number)=>number=f;g(1);}",
     ] {
         accept(source);
     }
@@ -52,6 +51,176 @@ fn annotations_defaults_void_and_callee_forms_use_the_closed_surface() {
     ] {
         reject(&body(source), "C7");
     }
+}
+
+#[test]
+fn function_type_equality_applies_at_each_value_flow() {
+    let target = "(n:number)=>number";
+    for (declaration, equal) in [
+        ("function f(n:number):number{return n;}", true),
+        ("function f(n:number=1):number{return n;}", false),
+        ("function f(n:string):number{return 1;}", false),
+        ("function f(n:number):boolean{return true;}", false),
+        ("function f():number{return 1;}", false),
+        ("function f(n:number,m:number):number{return n;}", false),
+    ] {
+        for flow in [
+            format!("function take(g:{target}):void{{}}take(f);"),
+            format!("const g:{target}=f;"),
+            format!("function give():{target}{{return f;}}give();"),
+            format!("const give=():{target}=>f;give();"),
+            format!("let g:{target}=(n:number):number=>n;g=f;"),
+            "const g=true?f:(n:number):number=>n;".into(),
+            "const g=true?(n:number):number=>n:f;".into(),
+            format!("function take(g:{target}=f):void{{}}take();"),
+        ] {
+            let source = body(&format!("{declaration}{flow}"));
+            if equal {
+                accept(&source);
+            } else {
+                reject(&source, "C1");
+            }
+        }
+    }
+}
+
+#[test]
+fn inferred_function_values_compare_defaults_in_both_directions() {
+    for left_default in ["", "=1", "=2"] {
+        for right_default in ["", "=3"] {
+            for flow in ["let h=f;h=g;", "const h=true?f:g;"] {
+                let source = body(&format!(
+                    "function f(n:number{left_default}):number{{return n;}}function g(n:number{right_default}):number{{return n;}}{flow}h(1);"
+                ));
+                if left_default.is_empty() == right_default.is_empty() {
+                    accept(&source);
+                } else {
+                    reject(&source, "C1");
+                }
+            }
+        }
+    }
+    // The result type contains another function signature with its own default count.
+    reject(
+        &body(
+            "function f(n:number=1):number{return n;}const make=()=>f;const g:()=>(n:number)=>number=make;",
+        ),
+        "C1",
+    );
+}
+
+#[test]
+fn function_type_equality_is_recursive_at_each_value_flow() {
+    for (setup, target, matching) in [
+        (
+            "function leaf(n:number=1):number{return n;}const f=()=>leaf;",
+            "()=>(n:number)=>number",
+            "()=>((n:number):number=>n)",
+        ),
+        (
+            "function f(g:(n:string)=>number):number{return 1;}",
+            "(g:(n:number)=>number)=>number",
+            "(g:(n:number)=>number):number=>g(1)",
+        ),
+        (
+            "function f():()=>boolean{return ()=>true;}",
+            "()=>()=>number",
+            "()=>()=>1",
+        ),
+    ] {
+        for flow in [
+            format!("function take(g:{target}):void{{}}take(f);"),
+            format!("const g:{target}=f;"),
+            format!("function give():{target}{{return f;}}give();"),
+            format!("let g:{target}={matching};g=f;"),
+            format!("const g=true?f:{matching};"),
+            format!("const g=true?{matching}:f;"),
+        ] {
+            reject(&body(&format!("{setup}{flow}")), "C1");
+        }
+    }
+}
+
+#[test]
+fn luau_function_types_keep_composite_boundaries() {
+    use crate::ir::Type::{Boolean, Function, Number};
+    let callback = Function(vec![Number], Box::new(Boolean), 1);
+    for (ty, expected) in [
+        (
+            Function(vec![callback.clone(), Number], Box::new(Boolean), 2),
+            "((number) -> boolean, number) -> boolean",
+        ),
+        (
+            Function(vec![], Box::new(callback.clone()), 0),
+            "() -> (number) -> boolean",
+        ),
+        (
+            Function(vec![Number, callback.clone()], Box::new(Boolean), 1),
+            "(number, ((number) -> boolean)?) -> boolean",
+        ),
+        (
+            Function(
+                vec![Function(vec![callback], Box::new(Number), 0)],
+                Box::new(Boolean),
+                0,
+            ),
+            "(((((number) -> boolean)?) -> number)?) -> boolean",
+        ),
+    ] {
+        assert_eq!(ty.luau(), expected);
+    }
+}
+
+#[test]
+fn spilled_table_fields_use_function_type_aliases() {
+    let declarations = (0..240)
+        .map(|i| format!("const f{i}:(n:number)=>boolean=(n:number):boolean=>n>{i};"))
+        .collect::<String>();
+    let compiled = compile(
+        body(&format!("{declarations}print(`${{f239(240)}}`);")).as_bytes(),
+        Limits::default(),
+    )
+    .unwrap();
+    let spill = compiled
+        .luau
+        .lines()
+        .find(|line| line.contains("local __ulua_spill"))
+        .unwrap();
+    assert!(spill.contains(": __ulua_fn"));
+    assert!(!spill.contains(" -> "));
+}
+
+#[test]
+fn parameter_defaults_form_one_trailing_suffix() {
+    for parameters in [
+        "a:number=1,b:number",
+        "a:number,b:number=2,c:number",
+        "a:number=1,b:number=2,c:number",
+        "a:number=1,b:number,c:number=3",
+    ] {
+        reject(&body(&format!("function f({parameters}):void{{}}")), "C11");
+    }
+    for parameters in [
+        "a:number,b:number",
+        "a:number,b:number=2",
+        "a:number=1,b:number=2",
+    ] {
+        accept(&body(&format!("function f({parameters}):void{{}}f(1,2);")));
+    }
+}
+
+#[test]
+fn optional_function_parameters_keep_the_function_result_required() {
+    let source = "function test(n:number,f:(a:number)=>boolean=(a:number):boolean=>a>1):boolean{return f(n);}export function main():void{print(`${test(2)} ${test(0)} ${test(0,(a:number):boolean=>a===0)}`);}";
+    let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
+    assert!(
+        compiled
+            .luau
+            .contains("(number, ((number) -> boolean)?) -> boolean")
+    );
+    accept(
+        "function outer(f:(g:(n:number)=>number)=>((n:number)=>number)=(g:(n:number)=>number):(n:number)=>number=>g):(n:number)=>number{return f((n:number):number=>n);}export function main():void{const g=outer();print(`${g(1)}`);}",
+    );
 }
 #[test]
 fn function_valued_bindings_keep_their_declaration_tdz() {

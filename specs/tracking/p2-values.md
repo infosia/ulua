@@ -76,6 +76,13 @@ clean, `luau-analyze` clean; 400 deep-nesting programs, no
 | `function g(a = 1, b)` gets the type of `(a, b) => number`; `tsc` gives `a` the type `number \| undefined` | MAJOR | surface.md Rev 9: trailing defaults only; `r85` |
 | A function-typed parameter with a default emits `(number, (number) -> boolean?) -> boolean`; `luau-analyze` reads an optional result | MAJOR | pipeline.md §5.14.3 parentheses; `a30` |
 
+Fix record: function types compare exactly; non-trailing defaults
+give C11; an optional function type is in parentheses. Random: 600
+programs, 432 accepted (each passes `tsc`, `node`, `luau-analyze`), 168
+rejected (C1 96, C11 72). Gap: unions and arrays of function types are
+not in the IR yet; P2.2 and P2.4 add the parentheses rule where they
+print such types.
+
 ## Failures before the fix
 
 ## Gaps

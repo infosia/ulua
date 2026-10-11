@@ -32,7 +32,14 @@ impl Type {
                             if i >= *required {
                                 pending.push(Part::Text("?".into()));
                             }
+                            let grouped = i >= *required && matches!(t, Self::Function(..));
+                            if grouped {
+                                pending.push(Part::Text(")".into()));
+                            }
                             pending.push(Part::Ty(t));
+                            if grouped {
+                                pending.push(Part::Text("(".into()));
+                            }
                             if i > 0 {
                                 pending.push(Part::Text(", ".into()));
                             }

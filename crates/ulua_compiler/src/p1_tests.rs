@@ -42,9 +42,12 @@ fn c2_defaults_void_and_undefined() {
     accept(
         "function f(x: boolean = false, y: string = 's'): string { return y; } export function main(): void { print(f()); }",
     );
-    // A default before a required parameter does not reduce the required argument count.
     reject(
         "function f(x: number = 1, y: number): void {} export function main(): void { f(1); }",
+        "C11",
+    );
+    reject(
+        "function f(x: number, y: number = 1): void {} export function main(): void { f(); }",
         "C1",
     );
 }

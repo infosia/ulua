@@ -17,6 +17,7 @@ impl Checker<'_> {
         }
         let mut types = vec![];
         let mut required = 0;
+        let mut default_seen = false;
         for (i, p) in params.items.iter().enumerate() {
             if p.optional {
                 return Err(self.error(p.span, "C2", "Optional parameters are rejected"));
@@ -41,7 +42,12 @@ impl Checker<'_> {
             }
             types.push(self.ty(&annotation.type_annotation, false, depth)?);
             if p.initializer.is_none() {
+                if default_seen {
+                    return Err(self.error(p.span, "C11", "Parameter defaults must be trailing"));
+                }
                 required = i + 1;
+            } else {
+                default_seen = true;
             }
         }
         Ok((types, required))
