@@ -123,6 +123,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D6 | Strings are native UTF-8; encoding-dependent forms are rejected; byte operations use prelude names | 2026-10-11 | `collisions.md` C5 |
 | D7 | Fork `oxc_parser` on a new branch with a nesting guard, unless M3 shows that no fork is necessary | 2026-10-11 | §7 M3 |
 | D8 | Name Ulua; C prefix `ulua_` | 2026-10-11 | this file |
+| D9 | A number in a template or `String(n)` lowers to `tostring` with fixed rewrites of NaN, the infinities, zero, and the exponent | 2026-10-11 | `collisions.md` C4.5; `specs/tracking/p05-measurements.md` M4 |
+| D10 | The gate runs `luau-analyze` and `node` once per gate run over all entries; lint warnings do not fail it | 2026-10-11 | `specs/tracking/p05-measurements.md` M5 |
 
 ## 9. Corrections and revisions
 
