@@ -62,7 +62,8 @@ typedef struct ulua_diagnostic {
 A function with a `ulua_diagnostic*` parameter writes it on
 `ULUA_REJECTED`, `ULUA_FAILED`, `ULUA_HOST_ERROR`, and `ULUA_INTERNAL`.
 The parameter can be null. Run codes: `trap:<kind>` (corpus.md §6),
-`limit:memory`, `limit:steps`, `limit:stack`. In P1 a run diagnostic
+`limit:memory`, `limit:steps`, `limit:stack`. `ULUA_HOST_ERROR` has the
+code `host:output`. `ULUA_INTERNAL` has the code `internal`. In P1 a run diagnostic
 has offset `UINT64_MAX`.
 
 ## 4. Values

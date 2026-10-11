@@ -9,7 +9,7 @@ the C ABI. `collisions.md` states the lowering of each form.
 
 | Path | Content |
 |---|---|
-| `Cargo.toml` | The workspace. Every `oxc_*` crate comes from one pin: https://github.com/infosia/oxc, `rev = "43ad6ed5043f524f78c16a2d874b5fc588942a15"`. |
+| `Cargo.toml` | The workspace. Every `oxc_*` crate that the fork contains comes from one pin: https://github.com/infosia/oxc, `rev = "43ad6ed5043f524f78c16a2d874b5fc588942a15"`. A dependency of the fork from crates.io (for example `oxc_index`) keeps the version that the fork states. |
 | `rust-toolchain.toml` | Toolchain `1.95.0`, components `rustfmt` and `clippy`. |
 | `crates/ulua_compiler` | Parse, check, typed IR, and Luau emission. Safe Rust only (`#![forbid(unsafe_code)]`). No native code. |
 | `crates/ulua` | The runtime and the C ABI. Crate types `rlib`, `staticlib`, `cdylib`. `build.rs` compiles Luau and the shim. |
@@ -175,6 +175,9 @@ ABI and prints one JSON line per entry:
 - `status` is `ok`, `rejected`, `failed` (a trap or a limit of a run),
   or `internal`.
 - With `--emit-luau <dir>`, it writes the generated Luau of each
-  compiled entry to `<dir>/<name>.luau`.
+  compiled entry to `<dir>/<name>.luau`. The generated Luau stays
+  internal (invariant 6): the C ABI has no accessor for it. The runner
+  calls the Rust function of `ulua_compiler` for this file only. The
+  compile and the run use the C ABI.
 - It runs `ulua_instance_new`, then the export `main` with no
   arguments. It uses the default limits.

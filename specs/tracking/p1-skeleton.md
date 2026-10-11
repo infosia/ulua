@@ -34,6 +34,20 @@ Status: open. Contracts: `pipeline.md` Rev 0, `abi.md` Rev 0,
 - [ ] P0 carry-over N3 (`a25`), N4 (`a26`), N5 (surface.md Rev 5).
 - [ ] Phase Review with no open CRITICAL or MAJOR finding.
 
+## S1 record
+
+- Codex task; all Cargo commands offline. 19 tests. `gate.sh full`:
+  every step passes except `luau-witnesses`, which fails on the 28
+  P1 entries of S2 only. a01 passes; 69 later-phase entries are
+  rejected; no `internal`.
+- Contract answers during S1: the runner emits witness Luau through
+  `ulua_compiler` (pipeline.md §8); crates.io `oxc_index 5.0.0` stays
+  as the fork states (pipeline.md §1); codes `host:output` and
+  `internal` (abi.md §3).
+- Provisional constants (S3 measures): compiler stack 8 MiB; source
+  ceiling 1 MiB; nesting ceiling 128; minimum run stack 4 MiB; default
+  instance memory 64 MiB; default steps 1,000,000.
+
 ## Measurements
 
 ## Failures before the fix

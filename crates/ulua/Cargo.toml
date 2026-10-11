@@ -1,0 +1,15 @@
+[package]
+name = "ulua"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+ulua_compiler = { path = "../ulua_compiler" }
+
+[build-dependencies]
+cc.workspace = true
