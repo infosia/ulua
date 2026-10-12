@@ -2,6 +2,26 @@
 use super::*;
 use crate::ir::{Expr, ExprKind};
 impl Checker<'_> {
+    fn reject_proto_key(&self, key: &PropertyKey<'_>, span: Span) -> Result<(), Diagnostic> {
+        let proto = match key {
+            PropertyKey::StaticIdentifier(n) => n.name == "__proto__",
+            PropertyKey::StringLiteral(s) => s.value == "__proto__",
+            _ => false,
+        };
+        if proto {
+            return Err(self.error(span, "C1", "A field named __proto__ is rejected"));
+        }
+        Ok(())
+    }
+    pub(super) fn reject_proto_type(&self, literal: &TSTypeLiteral<'_>) -> Result<(), Diagnostic> {
+        for member in &literal.members {
+            if let TSSignature::TSPropertySignature(p) = member {
+                self.reject_proto_key(&p.key, p.span)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn field_key(&mut self, name: &str) -> usize {
         let next = self.fields.len();
         *self.fields.entry(name.to_owned()).or_insert(next)
@@ -45,9 +65,10 @@ impl Checker<'_> {
                 if a.type_parameters.is_some() || a.declare {
                     return Err(self.error(a.span, "C11", "Invalid object alias"));
                 }
-                if !matches!(&a.type_annotation, TSType::TSTypeLiteral(_)) {
+                let TSType::TSTypeLiteral(literal) = &a.type_annotation else {
                     return Err(self.error(a.span, "C11", "Alias needs an object type literal"));
-                }
+                };
+                self.reject_proto_type(literal)?;
                 let ty = self.types.reserve_record();
                 if self.aliases.insert(a.id.name.to_string(), ty).is_some() {
                     return Err(self.error(a.span, "C11", "Duplicate type alias"));
@@ -116,14 +137,12 @@ impl Checker<'_> {
             let ObjectPropertyKind::ObjectProperty(p) = entry else {
                 return Err(self.error(entry.span(), "C11", "Object spread is rejected"));
             };
+            self.reject_proto_key(&p.key, p.span)?;
             let PropertyKey::StaticIdentifier(n) = &p.key else {
                 return Err(self.error(p.span, "C11", "Object key needs an identifier"));
             };
             if p.computed || p.shorthand || p.method || p.kind != PropertyKind::Init {
                 return Err(self.error(p.span, "C11", "Object literal needs key: value entries"));
-            }
-            if n.name == "__proto__" {
-                return Err(self.unsupported(p.span));
             }
             let key = self.field_key(n.name.as_str());
             if !seen.insert(key) {

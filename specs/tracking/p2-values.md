@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100`; retired `r05` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100`, `r101`, `r102`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -228,6 +228,26 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.5 implementation record
+
+- Codex task, commit `e506cce`. Structural records with generated field
+  keys; strict null tests; object identity; C16 as a flow fact
+  (`checker/narrowing.rs`); canonical type identities.
+- At the contract pin `2285494`, `a14`, `a15`, and `a40` gave
+  `unsupported`.
+- Direct tests: 81 accepted programs equal to `node`; 48 rejects. `tsc`
+  gives TS2339 that names `never` in 2 programs, and no other code.
+- Random: 480 programs; 240 accepted, each equal to `node` and passing
+  `tsc` and `luau-analyze`; 40 programs give TS2339 that names `never`;
+  240 rejected (C16 120, C11 40, C1 40, C6 40).
+- Growth: 11 shapes; largest time ratio 3.936, largest output factor
+  26.972 (record functions); Debug cost 5.978 s. Recursive types: ratio
+  13.158 before canonical identities, 2.843 after.
+- Reported gaps, closed by contract Rev 28 (`b4c9c3d`): a narrowed
+  `const` read in a nested function declaration gives TS18047 (C16.4,
+  `r101`); `{ __proto__: 1 }.__proto__` prints `[object Object]` under
+  `node` and `1` in Luau (C1.6, `r102`).
 
 ### P2.4 implementation record
 

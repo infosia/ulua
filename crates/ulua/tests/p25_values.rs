@@ -205,14 +205,6 @@ fn narrowing_limits_and_closed_record_forms_reject() {
         assert!(matches!(code, "syntax" | "C11" | "C2"), "{program}: {code}");
         count += 1;
     }
-    let proto = "type P={__proto__:number};export function main():void{const p:P={__proto__:1};print(`${p.__proto__}`);}";
-    assert_eq!(
-        compile(proto.as_bytes(), Limits::default())
-            .unwrap_err()
-            .code,
-        "unsupported"
-    );
-    count += 1;
     eprintln!("P2.5 direct rejects={count}");
 }
 #[test]
@@ -304,4 +296,62 @@ fn seeded_records_and_nullable_values_match_node() {
         s.count + rejected,
         s.count
     );
+}
+
+#[test]
+fn proto_fields_reject_in_types_and_literal_keys() {
+    for key in [
+        "__proto__",
+        "\"__proto__\"",
+        "'__proto__'",
+        r"__pr\u006fto__",
+        r"'__pr\u006fto__'",
+    ] {
+        for program in [
+            format!("type T={{{key}:number}};export function main():void{{}}"),
+            format!("export function main():void{{const t:{{{key}:number}}={{{key}:1}};}}"),
+            format!("function read(t:{{{key}:number}}):void{{}}export function main():void{{}}"),
+            format!("export function main():void{{const t={{{key}:1}};}}"),
+        ] {
+            let diagnostic = compile(program.as_bytes(), Limits::default()).unwrap_err();
+            assert_eq!(diagnostic.code, "C1", "{program}: {diagnostic:?}");
+            assert!(diagnostic.message.contains("__proto__"), "{diagnostic:?}");
+        }
+    }
+    for program in [
+        "export function main():void{const __proto__=1;const t={__proto__};}",
+        r"export function main():void{const __proto__=1;const t={__pr\u006fto__};}",
+        include_str!("../../../corpus/reject/r102-proto-field.ts"),
+    ] {
+        assert_eq!(
+            compile(program.as_bytes(), Limits::default())
+                .unwrap_err()
+                .code,
+            "C1",
+            "{program}"
+        );
+    }
+}
+
+#[test]
+fn const_narrowing_continues_into_arrows_only() {
+    let declaration =
+        include_str!("../../../corpus/reject/r101-const-narrowing-function-declaration.ts");
+    assert_eq!(
+        compile(declaration.as_bytes(), Limits::default())
+            .unwrap_err()
+            .code,
+        "C16"
+    );
+    let arrow = declaration.replace(
+        "function inner(): number {\n    return x.value;\n  }",
+        "const inner = (): number => {\n    return x.value;\n  };",
+    );
+    assert_ne!(
+        arrow, declaration,
+        "The paired fixture must replace the declaration"
+    );
+    let mut suite = Suite::named("P2.5 const arrow");
+    suite.source(&arrow, Some("3\n"));
+    suite.finish();
 }

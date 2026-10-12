@@ -137,7 +137,8 @@ impl Checker<'_> {
             TSType::TSNullKeyword(_) => {
                 return Err(self.error(t.span(), "C2", "Null type needs a union"));
             }
-            TSType::TSTypeLiteral(_) => {
+            TSType::TSTypeLiteral(literal) => {
+                self.reject_proto_type(literal)?;
                 return Err(self.error(t.span(), "C11", "Object type needs a module alias"));
             }
             _ => return Err(self.error(t.span(), "C11", "Type is outside the closed surface")),
