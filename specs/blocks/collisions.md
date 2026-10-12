@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 34, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 35, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -17,7 +17,8 @@ function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
 P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
-contradicted references, P2.5 review 6).
+contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
+element read, P2.5 review 7).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -347,7 +348,7 @@ Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
 Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`,
-`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`.
+`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`.
 
 ## C7. Equality
 
@@ -499,13 +500,18 @@ and 6 in `a31`:
 3. An index read `xs[i]` reads `xs`, then evaluates `i`, then reads the
    element.
 4. An assignment `o.f = e` or `xs[i] = e` evaluates `o` (or `xs` and
-   `i`), then `e`, then stores. The C6 check runs at the store.
+   `i`), then `e`, then stores. The C6 check runs at the store. When
+   `o` (or `xs`) is an element read `ys[j]`, the read of `ys[j]` takes
+   its value before `e`, and its `index-out-of-range` trap runs after
+   `e`, at the store: `node` reads `undefined` there and throws at the
+   store. Measured: `xs[0].f = h()` on an empty `xs` prints the output
+   of `h` before the trap in both.
 5. A compound assignment `t op= e` evaluates the target reference,
    reads the old value, evaluates `e`, then stores.
 6. `xs.push(e)` evaluates `xs`, then `e`, then reads the length of
    `xs`, then stores. `xs[#xs + 1] = e` reads the length before `e`.
 
-Accept: `a18`, `a31`.
+Accept: `a18`, `a31`. Trap: `t07`.
 
 ## C13. Construction
 
