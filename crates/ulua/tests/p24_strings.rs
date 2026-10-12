@@ -1,6 +1,8 @@
 //! Direct string member witnesses: Node for ASCII, fixed byte values for UTF-8.
 //! Measured Debug cost: 6.76 seconds for all behaviour cases and their external witnesses.
 //! Large allocation and search limit tests require the measurements feature.
+//! Adversarial search cost is measured and printed, not bounded by wall-clock assertions.
+//! Round 12 adversarial Debug cost: 0.449 seconds; individual searches: 22.442 to 70.921 ms.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -398,6 +400,7 @@ fn string_traps_leave_the_instance_usable() {
 fn adversarial_searches_use_the_step_limit_and_recover() {
     use std::time::Instant;
     use ulua::*;
+    let test_start = Instant::now();
     for (needle, expression) in [
         ("'a'.repeat(2097152)+'b'", "s.includes(t)"),
         ("'a'.repeat(2097152)+'b'", "s.indexOf(t)"),
@@ -420,11 +423,11 @@ fn adversarial_searches_use_the_step_limit_and_recover() {
         let (status, code, _) = script.call(script.index("main"), &[]);
         let elapsed = start.elapsed();
         assert_eq!((status, code.as_str()), (ULUA_FAILED, "limit:steps"));
-        assert!(elapsed.as_secs_f64() < 10.0, "{expression}: {elapsed:?}");
         eprintln!("P2.4 search limit: needle={needle} expression={expression} time={elapsed:?}");
         let (status, code, value) = script.call(script.index("good"), &[]);
         assert_eq!((status, code.as_str(), value.number), (ULUA_OK, "", 7.0));
     }
+    eprintln!("P2.4 adversarial search cost: {:?}", test_start.elapsed());
 }
 
 #[test]

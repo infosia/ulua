@@ -240,6 +240,14 @@ Reviewer: fresh agent, diff `917e951..f4d934c`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Th
 
 One concurrent run also failed at `p25_growth.rs:356` (`luau-analyze` over the ceiling outputs); 38 later runs did not reproduce it; the message is lost.
 
+Fix (Codex): the wall-clock budgets of `p25_growth.rs` (12 s; measured
+9.164 s alone) and `p24_strings.rs` (10 s per search; measured 22 to 71
+ms) are gone; ratio assertions stay. 4 concurrent copies × 10: 40 of 40
+pass, 24.4 to 25.1 s each, ratios 4.01 to 4.51. The analyzer call has
+no timeout and a per-process output path; a failure now prints its
+status, path, stdout, and stderr. The `:356` failure did not recur; its
+cause is open.
+
 ### P2.5 Phase Review round 11
 
 Reviewer: fresh agent, diff `917e951..215a26b`. 0 CRITICAL, 1 MAJOR, 0 MINOR. The round 10 resolution holds: nested-body narrowing attacks (stored arrows called after writes, recursion, callbacks, loops, two levels, per-iteration captures) found no unsound program; 20,000 random nested-body programs, 3,638 accepted, 0 differences; cost ratios 2.9 to 3.3.
