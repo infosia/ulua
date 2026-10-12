@@ -253,6 +253,18 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.6 Phase Review round 2
+
+Reviewer: fresh agent, diff `4a8a817..29a8f0f`. 0 CRITICAL, 0 MAJOR, 3 MINOR. The round 1 resolution holds (every `this` form at the D18 positions; contextual forms accepted and `tsc`-clean). C13 paths, construction order, C10 with classes, private access, nominal relation, and limits checked.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `p26_rejects.rs:47-54` drops its accept control; nothing compiles it | MINOR | the control is compiled and asserted |
+| `p26_tests.rs` `class_initializer_depth_has_a_limit_diagnostic` asserts only inside `if let Err`; it passes when every depth compiles | MINOR | the test asserts the boundary (43 accepted, 44 `limit:nesting-depth`) |
+| `luau-analyze` time on 64 KiB of `class Bn{}`: 0.44 s to 9.08 s from 16 to 64 KiB (ratio 20.6); each class emits two Luau type aliases, used or not | MINOR | emit the aliases of a class only when a type refers to them; measure |
+
+Observation (over-rejection, consistent with C10.3): a method that calls a function declaration that reaches its own class gives C10; `tsc` and `node` accept it.
+
 ### P2.6 Phase Review round 1
 
 Reviewer: fresh agent, diff `4a8a817..a97e939`. 0 CRITICAL, 2 MAJOR, 2 MINOR. About 40 C13 programs found no read of an unassigned field; nominal classes, C12 call order, lexical `this`, `private`, member names, C10 order, and limits hold.
