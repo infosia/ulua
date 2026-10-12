@@ -56,7 +56,8 @@ function parseHeader(entry) {
   const m = NAME.exec(entry.file);
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
-  if (entry.dir !== "reject" && header.tsc !== "accepts") fail(entry.id, "accept and trap entries state tsc: accepts");
+  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845)(, TS(2367|2845))?$/.test(header.tsc || ""))
+    fail(entry.id, "accept and trap entries state tsc: accepts or tsc: equality TS2367[, TS2845]");
   if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
@@ -74,6 +75,8 @@ function parseHeader(entry) {
 
 function expectedCodes(tscHeader) {
   if (tscHeader === "accepts") return [];
+  const eq = /^equality (TS\d+(?:, TS\d+)*)$/.exec(tscHeader || "");
+  if (eq) return eq[1].split(", ").map((c) => Number(c.slice(2)));
   const m = /^errors (TS\d+(?:, TS\d+)*)$/.exec(tscHeader || "");
   return m ? m[1].split(", ").map((c) => Number(c.slice(2))) : null;
 }
@@ -89,13 +92,48 @@ function tscCodes(files) {
   const prelude = config.fileNames.filter((f) => f.includes(`${path.sep}prelude${path.sep}`));
   const program = ts.createProgram([...prelude, ...files], config.options);
   const byFile = new Map(files.map((f) => [path.resolve(f), new Set()]));
+  const atEquality = new Map(files.map((f) => [path.resolve(f), true]));
+  const checker = program.getTypeChecker();
   const other = [];
   for (const d of ts.getPreEmitDiagnostics(program)) {
     const key = d.file ? path.resolve(d.file.fileName) : null;
-    if (key && byFile.has(key)) byFile.get(key).add(d.code);
-    else other.push(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+    if (key && byFile.has(key)) {
+      byFile.get(key).add(d.code);
+      if (!isAcceptedEquality(d, checker)) atEquality.set(key, false);
+    } else other.push(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   }
-  return { byFile, other };
+  return { byFile, atEquality, other };
+}
+
+// CLAUDE.md invariant 3, collisions.md C7: TS2367 or TS2845 on an
+// equality expression whose operands have one primitive type, with
+// literal types widened.
+function isAcceptedEquality(d, checker) {
+  if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
+  const kinds = new Set([
+    ts.SyntaxKind.EqualsEqualsEqualsToken,
+    ts.SyntaxKind.ExclamationEqualsEqualsToken,
+    ts.SyntaxKind.EqualsEqualsToken,
+    ts.SyntaxKind.ExclamationEqualsToken,
+  ]);
+  let node = null;
+  const visit = (n) => {
+    if (n.getStart(d.file) <= d.start && d.start + d.length <= n.getEnd()) {
+      if (ts.isBinaryExpression(n) && kinds.has(n.operatorToken.kind)) node = n;
+      ts.forEachChild(n, visit);
+    }
+  };
+  visit(d.file);
+  if (!node || node.getStart(d.file) !== d.start || node.getEnd() !== d.start + d.length) return false;
+  const kind = (e) => {
+    const t = checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(e));
+    if (t.flags & ts.TypeFlags.NumberLike) return "number";
+    if (t.flags & ts.TypeFlags.StringLike) return "string";
+    if (t.flags & ts.TypeFlags.BooleanLike) return "boolean";
+    return null;
+  };
+  const left = kind(node.left);
+  return left !== null && left === kind(node.right);
 }
 
 async function runNode(entry) {
@@ -173,15 +211,17 @@ for (const e of [...accept, ...reject, ...trap]) {
 // tsc: accept and trap entries together, then reject entries together.
 for (const group of [[...accept, ...trap], reject]) {
   if (group.length === 0) continue;
-  const { byFile, other } = tscCodes(group.map((e) => e.path));
+  const { byFile, atEquality, other } = tscCodes(group.map((e) => e.path));
   for (const msg of other) fail("tsc", msg);
   for (const e of group) {
     const want = expectedCodes(headers.get(e.id).tsc);
     const got = [...byFile.get(path.resolve(e.path))].sort((a, b) => a - b);
     if (want === null) {
-      fail(e.id, `tsc header is not 'accepts' or 'errors TSnnnn, ...'; measured [${got.map((c) => `TS${c}`).join(", ")}]`);
+      fail(e.id, `tsc header is not 'accepts', 'equality TSnnnn, ...', or 'errors TSnnnn, ...'; measured [${got.map((c) => `TS${c}`).join(", ")}]`);
       continue;
     }
+    if (/^equality /.test(headers.get(e.id).tsc) && !atEquality.get(path.resolve(e.path)))
+      fail(e.id, "a tsc diagnostic is not TS2367 or TS2845 on an equality of one primitive type");
     if (got.join(",") !== [...want].sort((a, b) => a - b).join(",")) {
       fail(e.id, `tsc codes [${got.map((c) => `TS${c}`).join(", ")}], header states ${headers.get(e.id).tsc}`);
     }
