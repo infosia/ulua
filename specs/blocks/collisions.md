@@ -190,7 +190,8 @@ character is `js-comparable: no C5`.
      `endsWith(needle, endPosition?)`, with byte offsets and the
      ECMAScript clamps; an empty needle matches as ECMAScript says;
    - `charAt(i)`: the code point that starts at byte `i`, or `""` out
-     of range; `charCodeAt(i)`: the byte value 0 to 255; `codePointAt(i)`
+     of range; `charCodeAt(i)`: the byte value at `i`, where `i` is a
+     code-point boundary (0 to 127, or a leading byte 194 to 244); `codePointAt(i)`
      and `at(i)` (a negative `i` counts from the end): the code point
      that starts at byte `i`;
    - `split(sep, limit?)` with a string separator: no match gives the
@@ -214,8 +215,11 @@ character is `js-comparable: no C5`.
    A number argument converts as ECMAScript ToIntegerOrInfinity
    converts it (C6.9).
 3. Traps (divergences; JavaScript gives a value):
-   - a position or a result boundary that is not on a UTF-8 code-point
-     boundary traps `string-boundary` (for example `"é".slice(1)`);
+   - a position argument or a result boundary that is not on a UTF-8
+     code-point boundary traps `string-boundary` (for example
+     `"é".slice(1)`). A comparison window of `startsWith`, `endsWith`,
+     `includes`, or a search that would end inside a code point is no
+     match and does not trap (`"café".endsWith("e")` is `false`);
    - `charCodeAt`, `codePointAt`, and `at` outside the string trap
      `index-out-of-range` (JavaScript gives NaN or `undefined`);
    - `repeat` with a negative or infinite count traps
@@ -236,7 +240,7 @@ character is `js-comparable: no C5`.
 5. Byte operations keep the prelude name `Utf8.byteLength`, equal to
    `length`.
 
-Accept: `a11`, `a12`, `a19`, `a37`, `a38`. Reject: `r09`, `r10`, `r18`, `r34`, `r37`.
+Accept: `a11`, `a12`, `a19`, `a37`, `a38`, `a39`. Reject: `r09`, `r10`, `r18`, `r34`, `r37`.
 Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
 `retired:r29-string-slice`, `retired:r30-string-index-of`,
 `retired:r31-string-trim`, `retired:r32-string-position-argument`,

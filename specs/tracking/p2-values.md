@@ -15,7 +15,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
-| P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
+| P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
 | P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
@@ -163,6 +163,23 @@ Position arguments, search semantics, join, return values, traps, the
 | The helper selection falls back to a default body (`_ =>`) | MINOR | A total match |
 | A prelude doc comment sits before the wrong declaration | MINOR | Fixed |
 | C6.9 does not give the comparator parameters | MINOR | Fixed |
+
+### P2.4 Phase Review round 1
+
+Reviewer: fresh agent, diff `4ac7702..c83c521`. 1 CRITICAL, 1 MAJOR, 6
+MINOR. 152 ASCII edge cases equal `node`; non-ASCII results equal the
+byte rule; no Luau pattern from script text; no `internal`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `string.find` in plain mode is O(n*m) and holds one step: `"a".repeat(4194304).includes("a".repeat(2097152) + "b")` runs 104 s at the default limits | CRITICAL | pipeline.md Rev 18: searches are linear Luau loops (§5.17.2); a library call does O(1) work or work in proportion to its allocation (§6.3) |
+| `startsWith`/`endsWith` trap when the comparison window ends inside a code point (`"café".endsWith("e")`) | MAJOR | C5.3: a window inside a code point is no match; `a39` |
+| The trim helper and its dependencies enter every module that uses a string member (name matched by substring) | MINOR | Fix |
+| 4 of 5 new stress shapes pass `luau-analyze` without the typed writes | MINOR | Remove them; keep `string-iteration` |
+| `lastIndexOf` searches forward from 0 (`"a b ".repeat(60000).lastIndexOf(" ")` gives `limit:steps`) | MINOR | Backward search (§5.17.2) |
+| `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
+| C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
+| `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
 ### P2.4 implementation record
 

@@ -18,6 +18,7 @@ Rev 14: §5.16 array methods (P2.3).
 Rev 15: §5.15.2 literal blocks, §6.0 limit positions, §3.10 final check (P2.2 review 3).
 Rev 16: §5.7 loop locals end with their loop (P2.3).
 Rev 17: §5.17 strings (P2.4).
+Rev 18: §5.17.2 linear Luau-loop search, §6.3 library call rule (P2.4 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -333,9 +334,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        generated prelude helper, as array methods do (§5.16.1 and
        §5.16.2): only used helpers, C12 order, ToIntegerOrInfinity
        for number arguments.
-    2. A helper works on byte offsets with `string.sub` and with
-       `string.find` in plain mode; it never uses a Luau pattern built
-       from script text. A boundary check tests that the byte at an
+    2. A helper works on byte offsets with `string.sub` and
+       `string.byte`; it never uses a Luau pattern built from script
+       text. A substring search (`indexOf`, `lastIndexOf`, `includes`,
+       `split`, `replace`, `replaceAll`) is a linear-time algorithm
+       written as a Luau loop (for example Knuth-Morris-Pratt, forward
+       or backward), so its work counts toward `max_steps` (§6.3);
+       `lastIndexOf` searches backward from its position. A boundary check tests that the byte at an
        offset is not a continuation byte (`0x80` to `0xBF`).
     3. `s.length` lowers to `#s`. `+` with a `number` operand calls the
        C4.5 format function; with a `boolean` operand it writes `true`
@@ -377,7 +382,11 @@ necessary and that this table does not name is a contract question.
 1. A zero limit is a zero limit. It is never "no limit".
 2. The library has a ceiling for `max_source_bytes` and
    `max_nesting_depth`. A request above the ceiling uses the ceiling.
-3. `max_steps` counts interrupt callbacks. Each allocation also
+3. `max_steps` counts interrupt callbacks. A helper calls a Luau
+   library function only if the call does O(1) work, or work in
+   proportion to the bytes that it allocates; a search or a scan is a
+   Luau loop. So no library call holds a step beyond a constant time
+   plus its allocation charge. Each allocation also
    charges `ceil(bytes / ALLOCATION_STEP_BYTES)` steps. At the limit the
    allocator returns null and the run gives `limit:steps` with the
    message `Step limit exceeded`. A reallocation to an equal or smaller

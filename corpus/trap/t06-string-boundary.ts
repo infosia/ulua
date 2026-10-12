@@ -3,7 +3,7 @@
 // rule: C5
 // phase: P2.4
 // tsc: accepts
-// js-comparable: yes
+// js-comparable: no C5
 // trap: string-boundary
 export function main(): void {
   print("ok");
