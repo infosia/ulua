@@ -213,6 +213,22 @@ allocations 33.5 MB. Growth test 8.56 s Debug. Random: 640 programs;
 512 accepted (448 equal to `node`, 64 trap per C6), 128 rejected with
 C7; each accepted passes `tsc` and `luau-analyze`.
 
+### P2.2 Phase Review round 2
+
+Reviewer: fresh agent, diff `4d8a9b9..b783b31`. 1 MAJOR, 1 MINOR.
+400 random array programs: 194 equal to `node`, 206 trap per C6 with
+the `node` prefix; 0 differences; `tsc` and `luau-analyze` pass.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The densest-shape table is not the worst case: a fresh arrow per array literal pays one typed temporary declaration each; over spilled bindings with a 3-digit alias the ratio is 71.69 (4,699,351 B), above the recorded 63.14 | MAJOR | pipeline.md Rev 13: the output bound is a compiler limit, `limit:output` at the crossing statement; no margin claim |
+| C6.7 says other members wait for the P2 array slice | MINOR | C6.7 text: a later revision with the user |
+
+The class: a measured maximum is only a lower bound of the worst
+case; each review found a denser shape (56.7, 62.7, 63.1, 71.7). The
+bound becomes a limit diagnostic, so no accepted program reaches
+`internal` through it.
+
 ## Failures before the fix
 
 ## Gaps

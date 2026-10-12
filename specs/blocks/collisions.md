@@ -220,9 +220,9 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
    the live length of that array. A later assignment to the binding
    `xs` does not change the iteration (C12).
 7. The accepted members are `length` and `push` (surface.md §6). Every
-   other member is rejected until the P2 array slice. A member whose
-   TypeScript result includes `undefined`, such as `pop` and `find`,
-   stays rejected then too.
+   other member is rejected. A later revision opens a member with the
+   user. A member whose TypeScript result includes `undefined`, such as
+   `pop` and `find`, stays rejected (D16).
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
