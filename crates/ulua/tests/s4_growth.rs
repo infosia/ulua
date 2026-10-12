@@ -2,7 +2,7 @@
 //! Dense fixtures cover every P1, P2.1, and P2.2 emitted construct.
 //! Ratios above 6.5 use the minimum of two runs per size.
 //! Largest measured output ratio: 71.687759 (spillD); this measurement does not prove a margin.
-//! Measured Debug cost: 8.87 seconds, with serial ABI timing and two joined size-check workers.
+//! Measured Debug cost: 9.94 seconds, with serial ABI timing and two joined size-check workers.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
 #[path = "../src/p22_inputs.rs"]

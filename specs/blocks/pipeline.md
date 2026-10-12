@@ -272,9 +272,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        A constant element (a literal, `-` of a numeric literal) is
        written in place and takes no temporary. The other elements are
        evaluated in blocks of at most 32 temporaries; after each block
-       the lowering appends the block to the array. So the
-       temporaries of one literal are at most 32 plus the array local,
-       whatever its width. A literal of any width inside the source
+       the lowering appends the block to the array. So the values that
+       a literal holds across its elements are at most 32 plus the
+       array local, whatever its width; each element keeps the
+       temporaries of its own expression. A literal of any width inside the source
        ceiling needs no width bound.
     The checks of rules 3 to 5 run in generated helper functions of the
     chunk prelude, one call per element access, so the emitted size of

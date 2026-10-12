@@ -1,6 +1,6 @@
 # P2 value representations
 
-Status: open; P2.1 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
+Status: open; P2.1 and P2.2 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
 `corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
 Decisions: D15, D16 (`plan.md` §8).
 
@@ -51,12 +51,13 @@ Source of the method set: the owner's prior project, with one change:
 
 - [x] `pipeline.md` §4.8 and §5.15 implemented.
 - [x] P2.2 entries pass in full; later slices stay `unsupported`.
-- [ ] The array members stay `length` and `push` (C6.7). Further
-  members are a user decision for a later revision.
+- [x] The array members of P2.2 are `length` and `push`; P2.3 adds the
+  methods of C6.9 (the owner's prior project as the source).
 - [x] Growth shapes for arrays (literals, nested arrays, many index
   operations, `for…of` over large arrays) and products with P2.1 shapes.
 - [x] `luau-analyze` passes on the generated modules and the stress set.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 4).
 
 ## Exit checklist (P2.1)
 
@@ -271,6 +272,27 @@ checks offset, line, and column. A counter and text-length mismatch is
 20.3), computed literal 4.00 (44.3), nested 3.99 (43.6), module
 computed 3.96 (40.3). Array method calls of C6.9 give `unsupported`
 until P2.3. `gate.sh full`: 76 entries in P2.2 or earlier.
+
+### P2.2 Phase Review round 4
+
+Reviewer: fresh agent. No CRITICAL, no MAJOR, 2 MINOR. Literals of
+31,000 constants, 12,000 calls, and 6,000 nested pairs compile and agree
+with `node`; 1,500 index operations, 40-level index chains and nested
+literals, and 20 nested `for…of` compile; limit positions hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| §5.15.2 claims at most 32 temporaries per literal; each element keeps the temporaries of its own expression | MINOR | §5.15.2 text |
+| `s4_growth.rs` states 8.87 s; it measures 9.83 to 9.94 s | MINOR | Comment states 9.94 s |
+
+Note: 67 `for (let i = 0; ...)` loops in one function (3.3 KB) give
+`limit:temporaries` (the P1 gap of sequential loop locals). Arrays make
+this form common; the gap is proposed for an earlier slice than P6.
+
+### P2.2 close
+
+`sh tools/gate.sh full` passes: 76 entries in P2.2 or earlier, 25
+generated modules, 13 stress modules. Running tasks at the close: none.
 
 ## Failures before the fix
 
