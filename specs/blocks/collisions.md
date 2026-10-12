@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 37, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 38, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -115,12 +115,14 @@ Accept: `a01`, `a05`, `a09`, `a15`, `a16`, `a49`. Reject: `r19`, `r43`, `r53`, `
 - An optional chain has exactly one optional step and no step after it:
   `a?.f` or `a?.m(args)` (surface.md §3). It is accepted in two
   positions only: `a?.f` as the left operand of `??`, and `a?.m(args)`
-  as an expression statement. In any other position its type includes
+  as an expression statement. An arrow expression body is not an
+  expression statement: `(): void => r.d?.m()` gives TS2322 when `m`
+  returns a value. In any other position its type includes
   `undefined`. A step after the optional step, as in `a?.f.g`, is
   rejected: JavaScript skips the whole chain when `a` is `null`.
 
 Accept: `a08`, `a14`, `a15`, `a40`. Reject: `r02`, `r03`, `r04`, `r12`, `r13`,
-`r14`, `r48`, `r63`. Retired by P2.5: `retired:r05-strict-null-equality`.
+`r14`, `r48`, `r63`, `r118`. Retired by P2.5: `retired:r05-strict-null-equality`.
 
 ## C3. Truth tests are `boolean`
 
@@ -474,7 +476,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`, `r116`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`, `r116`, `r117`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order

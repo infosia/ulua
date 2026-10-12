@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 20, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 21, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -10,7 +10,8 @@ for function results, default scope, P2.1 review 2; Rev 11: function types
 at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
-reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6).
+reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
+optional calls as arrow bodies, P2.6 review).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -88,7 +89,7 @@ rejected, also where `tsc` accepts it.
 | `ConditionalExpression` | A `boolean` test. Both branches have one type `T`, or one branch is `null` and the result is `T \| null`. |
 | `AssignmentExpression` | Only as an `ExpressionStatement` or a `for` update; its value is never used. Operators `=`; `+=` on numbers or on two strings; `-=`, `*=`, `/=`, `%=` on numbers. The target is an `IdentifierReference` of a `let` binding or a parameter, a `StaticMemberExpression` of a field (not a method), or a `ComputedMemberExpression` of an array element. |
 | `UpdateExpression` | `++`, `--`, prefix or postfix, only as an `ExpressionStatement` or a `for` update. The target is a `number` binding, parameter, or field, as for `AssignmentExpression`. |
-| `ChainExpression` | Exactly one optional step and no step after it: `a?.f`, or `a?.m(args)`. `a` has type `T \| null`. Only as the left operand of `??` (`a?.f`), or as an `ExpressionStatement` (`a?.m(args)`). |
+| `ChainExpression` | Exactly one optional step and no step after it: `a?.f`, or `a?.m(args)`. `a` has type `T \| null`. Only as the left operand of `??` (`a?.f`), or as an `ExpressionStatement` (`a?.m(args)`). `a?.m(args)` is never an arrow expression body: `tsc` types it `R \| undefined` (D16). |
 
 Every value flow uses the assignability of collisions.md C1: an
 argument to its parameter, the `push` argument to the element type, an
@@ -137,8 +138,11 @@ A reference is an `IdentifierReference`, `this`, an element read `e[k]` or
 `e` is a reference or a reference in parentheses. `tsc` ignores the
 parentheses and narrows `o?.f` as it narrows `o.f`. A
 narrowable reference form is a reference of type `boolean` or
-`T | null`, or `(e)`, `!e`, `c ? a : b`, `a && b`, `a || b`, or `a ?? b`
-where `e`, `a`, or `b` is a narrowable reference form.
+`T | null`, `this`, or `(e)`, `!e`, `c ? a : b`, `a && b`, `a || b`, or
+`a ?? b` where `e`, `a`, or `b` is a narrowable reference form. `tsc`
+gives `this` the polymorphic type `this`, and a later flow of another
+instance of the class gives TS2322 or TS2345 (`let t = this; t = new
+A();`, `const xs = [this]; xs.push(new A());`).
 
 A `number` or `string` reference narrows only to a fresh literal, which
 widens, or to `never` after a contradictory comparison; the `never`
