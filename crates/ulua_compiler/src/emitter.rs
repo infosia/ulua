@@ -197,6 +197,21 @@ impl<'a> Emitter<'a> {
         self.write(&location, value, &ty);
         Ok(())
     }
+    fn write_binding_slot(&mut self, id: usize, slot: usize) -> Result<(), Diagnostic> {
+        let ty = self.module.bindings[id]
+            .ty
+            .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?;
+        if ty == self.slots[slot].ty {
+            self.joins.clear(id);
+            let location = self.location(id)?;
+            self.capture(&location);
+            // Both locals have this declared type. A redundant cast expands large alias graphs.
+            self.line(format!("{location} = {}", self.temp(slot)));
+            Ok(())
+        } else {
+            self.write_binding(id, self.temp(slot))
+        }
+    }
     fn capture(&mut self, location: &str) {
         let name = location.split('.').next().unwrap_or(location);
         if let Some(context) = self.context {

@@ -30,7 +30,8 @@ const randomFiles = new Set(files.filter(f => {
 const randomCodes = new Map();
 const randomAffected = new Set();
 for (const d of diagnostics) {
-  if (!isAcceptedEquality(d, checker)) throw Error(ts.formatDiagnosticsWithColorAndContext([d], {
+  // Invariant 3 treats TS2321 and TS2563 as tsc resource limits.
+  if (d.code !== 2321 && d.code !== 2563 && !isAcceptedEquality(d, checker)) throw Error(ts.formatDiagnosticsWithColorAndContext([d], {
     getCanonicalFileName: f => f, getCurrentDirectory: () => root, getNewLine: () => "\n",
   }));
   codes.set(d.code, (codes.get(d.code) || 0) + 1);
@@ -56,7 +57,11 @@ for (const file of files) {
   const output = [];
   const exports = {};
   new Function("exports", "print", js)(exports, s => output.push(s));
-  exports.main();
+  let thrown = null;
+  try { exports.main(); } catch (error) { thrown = error; }
+  const trapFile = file.replace(/\.ts$/, ".trap");
+  const expectedTrap = fs.existsSync(trapFile) ? fs.readFileSync(trapFile, "utf8") : null;
+  if ((thrown?.name ?? null) !== expectedTrap) throw Error(`${file}\n${source}\nNode trap: ${thrown}\nExpected trap: ${expectedTrap}`);
   const actual = output.map(s => s+"\n").join("");
   const expected = fs.readFileSync(file.replace(/\.ts$/, ".expected"), "utf8");
   if (actual !== expected) throw Error(`${file}\n${source}\nNode: ${actual}\nUlua: ${expected}`);

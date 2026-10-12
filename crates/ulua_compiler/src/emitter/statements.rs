@@ -67,7 +67,7 @@ impl Emitter<'_> {
             }
             S::Declare(id, e) => {
                 let v = self.expression(e, depth)?;
-                self.write_binding(*id, self.temp(v))?;
+                self.write_binding_slot(*id, v)?;
                 self.release(v);
             }
             S::Assign(id, op, e) => {
@@ -100,9 +100,10 @@ impl Emitter<'_> {
                 }
             }
             S::Field(a, key, op, e) => {
-                let receiver = self.expression(a, depth)?;
+                let (receiver, deferred) = self.access_receiver(a, depth)?;
                 let target = format!("{}.__ulua_k{key}", self.temp(receiver));
                 let old = if op.is_some() {
+                    self.access_receiver_check(receiver, deferred);
                     let slot = self.slot(&e.ty)?;
                     self.write_slot(slot, &target);
                     Some(slot)
@@ -110,6 +111,9 @@ impl Emitter<'_> {
                     None
                 };
                 let value = self.expression(e, depth)?;
+                if op.is_none() {
+                    self.access_receiver_check(receiver, deferred);
+                }
                 let result = if let (Some(op), Some(old)) = (op, old) {
                     if *op == "%" {
                         self.capture("__ulua_fmod");

@@ -237,7 +237,17 @@ Reviewer: fresh agent, diff `917e951..5759969`. 0 CRITICAL, 1 MAJOR, 2 MINOR. Th
 |---|---|---|
 | A record of 3,000 fields (36 KB) is accepted and fails `luau-analyze` ("Code is too complex to typecheck"); a hand-written Luau table type passes at 2,982 fields and fails at 2,983 | MAJOR | `pipeline.md` §6 `limit:fields` = 1024 |
 | Two rings of recursive aliases with coprime lengths (25, 26) give TS2321 in `tsc`; Ulua accepts, `node` agrees | MINOR | Invariant 3 names TS2321 as a `tsc` resource limit |
-| `xs[0].f = h()` on an empty `xs` traps before `h`; `node` prints `h`, then throws at the store | MINOR | C12.4, `t07` |
+| `xs[0].f = h()` on an empty `xs` traps before `h`; `node` prints `h`, then throws at the store | MINOR | C12.7 (a missing element traps where `node` throws), `t07` |
+
+Fix (Codex): `limit:fields` counts each object type with its nested
+anonymous types at each position, memoized per type id and saturated
+at 1,025; 1,024 passes and 1,025 gives `limit:fields` for flat, nested,
+array, nullable, and function-type paths. The 64 KB combined shapes
+(flat, nested, and recursive aliases and literals) pass `tsc` and
+`luau-analyze`; three nested 1,024-field literals failed `luau-analyze`
+before the nested count. C12.7: 28 trap forms and 14 normal forms equal
+`node`. Boundary tests 1.579 s; growth test 9.064 s Debug, largest
+ratio 4.045. gate full: PASS, 132 entries.
 
 ### P2.5 Phase Review round 6
 

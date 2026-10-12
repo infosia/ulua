@@ -1,8 +1,8 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
-//! Round 6 measured Debug cost: 8.860 seconds. The largest ratio is 4.022.
-//! Condition ratios: conditional 3.650, alternating logical 3.786, conditional with wrappers 3.601.
-//! Logical with wrappers: 3.722. Nullable conditional: 3.711. Continue product: 3.876.
+//! Round 7 measured Debug cost: 9.064 seconds. The largest ratio is 4.045.
+//! Condition ratios: conditional 3.624, alternating logical 3.881, conditional with wrappers 3.632.
+//! Logical with wrappers: 3.734. Nullable conditional: 3.649. Continue product: 3.883.
 //! A conditional test gives no facts. The nullable shape uses a separate null guard in its body.
 //! Round 2 ABI times compare 16 KiB and 64 KiB. Before uses the handoff HEAD.
 //! Debug ybreak: 888.475/13581.536 ms -> 28.809/112.749 ms; ratios 15.286 -> 3.914.
@@ -21,7 +21,7 @@
 mod support;
 use std::{path::PathBuf, process::Command, time::Instant};
 use support::Script;
-use ulua_compiler::{Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_BYTES, compile};
+use ulua_compiler::{FIELD_BOUND, Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_BYTES, compile};
 const SHAPES: &[&str] = &[
     "fields",
     "literals",
@@ -176,7 +176,7 @@ fn make(shape: &str, bytes: usize) -> String {
         }
         "fields" | "field-product" => {
             let fields = if shape == "fields" {
-                bytes / 48
+                (bytes / 48).min(FIELD_BOUND)
             } else {
                 bytes / 160
             };

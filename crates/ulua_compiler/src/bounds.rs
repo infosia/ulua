@@ -15,3 +15,6 @@ pub const LOCAL_BUDGET: usize = 176;
 /// Upvalues per generated function, including relayed captures and library locals.
 /// The pinned compiler accepts 200; reserve eight upvalues below that ceiling.
 pub const UPVALUE_BUDGET: usize = 192;
+
+/// Fields per object type or class, including nested anonymous types. Alias names end the count.
+pub const FIELD_BOUND: usize = 1024;

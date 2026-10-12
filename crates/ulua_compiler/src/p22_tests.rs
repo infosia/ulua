@@ -127,7 +127,7 @@ fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
     assert!(out.contains("local __ulua_trap: (number) -> () = (...)"));
     assert!(!out.contains("getfenv"));
     assert!(out.contains("__ulua_get(__ulua_t"));
-    assert_eq!(out.matches("then __ulua_trap(1) end").count(), 2);
+    assert_eq!(out.matches("__ulua_trap(1)").count(), 2);
 }
 
 #[test]

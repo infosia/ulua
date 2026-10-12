@@ -1,4 +1,5 @@
 //! Interned type identities. Signatures store child identities, never child trees.
+mod field_counts;
 mod partition;
 use std::{collections::HashMap, rc::Rc};
 
@@ -89,6 +90,9 @@ pub(crate) struct Types {
     arrays: HashMap<Type, Type>,
     nullable: HashMap<Type, Type>,
     records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
+    anonymous_records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
+    named_records: std::collections::HashSet<Type>,
+    field_counts: Vec<usize>,
     function_content: std::cell::RefCell<HashMap<Type, bool>>,
 }
 
@@ -103,36 +107,57 @@ impl Types {
             arrays: HashMap::new(),
             nullable: HashMap::new(),
             records: HashMap::new(),
+            anonymous_records: HashMap::new(),
+            named_records: Default::default(),
+            field_counts: vec![0; 6],
             canonical: (0..6).map(Type).collect(),
             function_content: Default::default(),
         }
     }
 
     pub(crate) fn intern(&mut self, params: Vec<Type>, result: Type, required: usize) -> Type {
+        let params = params
+            .into_iter()
+            .map(|ty| self.count_identity(ty))
+            .collect();
+        let result = self.count_identity(result);
         let signature = FunctionType {
-            params: params.into_iter().map(|ty| self.canonical[ty.0]).collect(),
-            result: self.canonical[result.0],
+            params,
+            result,
             required,
         };
         if let Some(ty) = self.functions.get(&signature) {
             return *ty;
         }
-        let ty = Type(self.nodes.len());
-        self.canonical.push(ty);
+        let canonical_params: Vec<_> = signature
+            .params
+            .iter()
+            .map(|ty| self.identity(*ty))
+            .collect();
+        let canonical_result = self.identity(result);
+        let identity = if canonical_params != signature.params || canonical_result != result {
+            Some(self.intern(canonical_params, canonical_result, required))
+        } else {
+            None
+        };
         let signature = Rc::new(signature);
-        self.nodes.push(Node::Function(Rc::clone(&signature)));
+        let ty = self.add_counted(Node::Function(Rc::clone(&signature)), identity);
         self.functions.insert(signature, ty);
         ty
     }
 
     pub(crate) fn array(&mut self, element: Type) -> Type {
-        let element = self.canonical[element.0];
+        let element = self.count_identity(element);
         if let Some(ty) = self.arrays.get(&element) {
             return *ty;
         }
-        let ty = Type(self.nodes.len());
-        self.canonical.push(ty);
-        self.nodes.push(Node::Array(element));
+        let canonical = self.identity(element);
+        let identity = if canonical != element {
+            Some(self.array(canonical))
+        } else {
+            None
+        };
+        let ty = self.add_counted(Node::Array(element), identity);
         self.arrays.insert(element, ty);
         ty
     }
@@ -154,16 +179,20 @@ impl Types {
         }
     }
     pub(crate) fn nullable(&mut self, inner: Type) -> Type {
-        let inner = self.canonical[inner.0];
+        let inner = self.count_identity(inner);
         if inner == Type::Null || self.inner(inner).is_some() {
             return inner;
         }
         if let Some(ty) = self.nullable.get(&inner) {
             return *ty;
         }
-        let ty = Type(self.nodes.len());
-        self.canonical.push(ty);
-        self.nodes.push(Node::Nullable(inner));
+        let canonical = self.identity(inner);
+        let identity = if canonical != inner {
+            Some(self.nullable(canonical))
+        } else {
+            None
+        };
+        let ty = self.add_counted(Node::Nullable(inner), identity);
         self.nullable.insert(inner, ty);
         ty
     }
@@ -171,25 +200,45 @@ impl Types {
         let ty = Type(self.nodes.len());
         self.canonical.push(ty);
         self.nodes.push(Node::Record(Rc::new(vec![])));
+        self.field_counts.push(0);
+        self.named_records.insert(ty);
         ty
     }
     pub(crate) fn define_record(&mut self, ty: Type, mut fields: Vec<(usize, Type)>) {
         fields.sort_unstable_by_key(|f| f.0);
-        self.nodes[ty.0] = Node::Record(Rc::new(fields));
+        let node = Node::Record(Rc::new(fields));
+        self.field_counts[ty.0] = self.count_node(&node);
+        self.nodes[ty.0] = node;
     }
     pub(crate) fn record(&mut self, mut fields: Vec<(usize, Type)>) -> Type {
         for (_, ty) in &mut fields {
-            *ty = self.canonical[ty.0];
+            *ty = self.count_identity(*ty);
         }
         fields.sort_unstable_by_key(|f| f.0);
-        if let Some(ty) = self.records.get(&fields) {
+        if let Some(ty) = self.anonymous_records.get(&fields) {
             return *ty;
         }
-        let ty = Type(self.nodes.len());
-        self.canonical.push(ty);
+        let canonical: Vec<_> = fields
+            .iter()
+            .map(|(key, ty)| (*key, self.identity(*ty)))
+            .collect();
+        let identity = if let Some(ty) = self.records.get(&canonical) {
+            *ty
+        } else {
+            let canonical = Rc::new(canonical);
+            let ty = self.add_counted(Node::Record(Rc::clone(&canonical)), None);
+            self.records.insert(canonical, ty);
+            ty
+        };
+        let separate = self.named_records.contains(&identity)
+            || self.fields(identity) != Some(fields.as_slice());
         let fields = Rc::new(fields);
-        self.nodes.push(Node::Record(Rc::clone(&fields)));
-        self.records.insert(fields, ty);
+        let ty = if separate {
+            self.add_counted(Node::Record(Rc::clone(&fields)), Some(identity))
+        } else {
+            identity
+        };
+        self.anonymous_records.insert(fields, ty);
         ty
     }
     pub(crate) fn fields(&self, ty: Type) -> Option<&[(usize, Type)]> {
@@ -207,6 +256,12 @@ impl Types {
     }
     pub(crate) fn identity(&self, ty: Type) -> Type {
         self.canonical[ty.0]
+    }
+    pub(crate) fn identities(&self) -> impl Iterator<Item = (Type, Type)> + '_ {
+        self.canonical
+            .iter()
+            .enumerate()
+            .map(|(id, identity)| (Type(id), *identity))
     }
     pub(crate) fn equal(&self, a: Type, b: Type) -> bool {
         self.canonical[a.0] == self.canonical[b.0]

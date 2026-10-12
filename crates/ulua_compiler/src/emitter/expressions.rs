@@ -14,7 +14,8 @@ impl Emitter<'_> {
         match &expr.kind {
             E::Null => self.write_slot(dest, "nil"),
             E::Object(fields) => {
-                self.write_slot(dest, "{}");
+                // The checked constructor assigns every field; its empty table has no inferred field graph.
+                self.write_slot(dest, "{} :: any");
                 for (key, entry) in fields {
                     let slot = self.expression(entry, depth)?;
                     self.write(
@@ -24,9 +25,12 @@ impl Emitter<'_> {
                     );
                     self.release(slot);
                 }
+                // Restore the complete declared type after the individually typed stores.
+                self.write_slot(dest, format!("{} :: any", self.temp(dest)));
             }
             E::Field(receiver, key) => {
-                let slot = self.expression(receiver, depth)?;
+                let (slot, deferred) = self.access_receiver(receiver, depth)?;
+                self.access_receiver_check(slot, deferred);
                 self.write_slot(dest, format!("{}.__ulua_k{key}", self.temp(slot)));
                 self.release(slot);
             }
@@ -276,8 +280,9 @@ impl Emitter<'_> {
                 self.array_literal(dest, entries, depth)?;
             }
             E::Index(a, i) => {
-                let a = self.expression(a, depth)?;
+                let (a, deferred) = self.access_receiver(a, depth)?;
                 let i = self.expression(i, depth)?;
+                self.access_receiver_check(a, deferred);
                 self.capture("__ulua_get");
                 self.write_slot(
                     dest,

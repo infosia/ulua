@@ -25,8 +25,11 @@ local function __ulua_format(__ulua_n: number): string
     local __ulua_s: string = (__ulua_gsub(__ulua_tostring(__ulua_n), "e([+-])0*(%d)", "e%1%2")) :: string
     return __ulua_s
 end
-local function __ulua_get<T>(a: {T}, i: number): T
-    if not (i >= 0 and i < #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end
+local function __ulua_get<T>(a: {T}, i: number, deferred: boolean?): T
+    if not (i >= 0 and i < #a and __ulua_fmod(i, 1) == 0) then
+        if deferred then return nil :: any end
+        __ulua_trap(1)
+    end
     return a[i + 1]
 end
 local function __ulua_set<T>(a: {T}, i: number, v: T): ()

@@ -2,6 +2,40 @@
 use super::*;
 use crate::ir::{Expr, ExprKind as E, Statement};
 impl Emitter<'_> {
+    // An element that supplies an access object keeps its value until that access checks it.
+    pub(super) fn access_receiver(
+        &mut self,
+        receiver: &Expr,
+        depth: u32,
+    ) -> Result<(usize, bool), Diagnostic> {
+        if let E::Index(a, i) = &receiver.kind {
+            self.offset = receiver.start as usize;
+            let depth = self.guard(depth)?;
+            let (a, deferred) = self.access_receiver(a, depth)?;
+            let i = self.expression(i, depth)?;
+            self.access_receiver_check(a, deferred);
+            self.offset = receiver.start as usize;
+            let slot = self.slot(&receiver.ty)?;
+            self.capture("__ulua_get");
+            self.write_slot(
+                slot,
+                format!("__ulua_get({}, {}, true)", self.temp(a), self.temp(i)),
+            );
+            self.release(a);
+            self.release(i);
+            return Ok((slot, true));
+        }
+        Ok((self.expression(receiver, depth)?, false))
+    }
+    pub(super) fn access_receiver_check(&mut self, receiver: usize, deferred: bool) {
+        if deferred {
+            self.capture("__ulua_trap");
+            self.line(format!(
+                "if {} == nil then __ulua_trap(1) end",
+                self.temp(receiver)
+            ));
+        }
+    }
     pub(super) fn array_literal(
         &mut self,
         dest: usize,
@@ -59,9 +93,10 @@ impl Emitter<'_> {
         e: &Expr,
         depth: u32,
     ) -> Result<(), Diagnostic> {
-        let a = self.expression(a, depth)?;
+        let (a, deferred) = self.access_receiver(a, depth)?;
         let i = self.expression(i, depth)?;
         let old = if op.is_some() {
+            self.access_receiver_check(a, deferred);
             self.capture("__ulua_get");
             let old = self.slot(&e.ty)?;
             self.write_slot(
@@ -73,6 +108,9 @@ impl Emitter<'_> {
             None
         };
         let value = self.expression(e, depth)?;
+        if op.is_none() {
+            self.access_receiver_check(a, deferred);
+        }
         let result = if let (Some(op), Some(old)) = (op, old) {
             if op == "%" {
                 self.capture("__ulua_fmod");

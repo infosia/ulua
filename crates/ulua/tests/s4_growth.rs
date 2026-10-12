@@ -1,8 +1,8 @@
 //! Growth gate: full ABI timing at n and 4n; output checks always use the source ceiling.
 //! Dense fixtures cover P1 and P2.1 to P2.4 emitted constructs.
 //! Ratios above 6.5 use the minimum of two runs per size.
-//! Largest measured output ratio: 63.167435; this measurement does not prove a margin.
-//! Measured P2.4 Debug cost: 9.86 seconds, with serial ABI timing and two joined size-check workers.
+//! Largest measured output ratio: 63.167526; this measurement does not prove a margin.
+//! Measured P2.5 Debug cost: 10.002 seconds, with serial ABI timing and two joined size-check workers.
 //! D17 removes five equality-state shapes. Nested writes and spilled logic still measure emitter joins.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]

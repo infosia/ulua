@@ -20,8 +20,8 @@ use oxc_parser::{ParseOptions, Parser};
 use oxc_span::SourceType;
 
 pub use bounds::{
-    ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND, TEMPORARY_BOUND,
-    UPVALUE_BUDGET,
+    ARGUMENT_BOUND, FIELD_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND,
+    TEMPORARY_BOUND, UPVALUE_BUDGET,
 };
 
 /// Source ceiling in bytes.

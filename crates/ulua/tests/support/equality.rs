@@ -26,6 +26,14 @@ impl Suite {
         }
     }
     pub fn source(&mut self, source: &str, golden: Option<&str>) {
+        self.run(source, golden, None);
+    }
+    // The shared equality targets compile this method; only the store-order target uses it.
+    #[allow(dead_code)]
+    pub fn source_trap(&mut self, source: &str, golden: &str, kind: &str, node_kind: &str) {
+        self.run(source, Some(golden), Some((kind, node_kind)));
+    }
+    fn run(&mut self, source: &str, golden: Option<&str>, trap: Option<(&str, &str)>) {
         let compiled = ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
             .unwrap_or_else(|d| panic!("{source}: {d:?}"));
         let mut script = Script::new(source);
@@ -38,7 +46,8 @@ impl Suite {
             ULUA_OK
         );
         let (status, code, _) = script.call(script.index("main"), &[]);
-        assert_eq!((status, code), (ULUA_OK, String::new()), "{source}");
+        let expected = trap.map_or((ULUA_OK, ""), |(kind, _)| (ULUA_FAILED, kind));
+        assert_eq!((status, code.as_str()), expected, "{source}");
         let output: String = lines.iter().map(|s| format!("{s}\n")).collect();
         if let Some(golden) = golden {
             assert_eq!(output, golden, "{source}");
@@ -47,6 +56,9 @@ impl Suite {
         std::fs::write(path.with_extension("ts"), source).unwrap();
         std::fs::write(path.with_extension("luau"), compiled.luau).unwrap();
         std::fs::write(path.with_extension("expected"), output).unwrap();
+        if let Some((_, node_kind)) = trap {
+            std::fs::write(path.with_extension("trap"), node_kind).unwrap();
+        }
         self.count += 1;
     }
     pub fn finish(&self) {

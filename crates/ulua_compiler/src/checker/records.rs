@@ -68,6 +68,9 @@ impl Checker<'_> {
                 let TSType::TSTypeLiteral(literal) = &a.type_annotation else {
                     return Err(self.error(a.span, "C11", "Alias needs an object type literal"));
                 };
+                if let Some(member) = literal.members.get(crate::FIELD_BOUND) {
+                    return Err(self.error(member.span(), "limit:fields", "Field limit exceeded"));
+                }
                 self.reject_proto_type(literal)?;
                 let ty = self.types.reserve_record();
                 if self.aliases.insert(a.id.name.to_string(), ty).is_some() {
@@ -129,6 +132,9 @@ impl Checker<'_> {
         depth: u32,
         expected: Option<Type>,
     ) -> Result<(Type, ExprKind), Diagnostic> {
+        if let Some(entry) = object.properties.get(crate::FIELD_BOUND) {
+            return Err(self.error(entry.span(), "limit:fields", "Field limit exceeded"));
+        }
         let expected = expected.map(|ty| self.types.inner(ty).unwrap_or(ty));
         let mut entries = vec![];
         let mut fields = vec![];
@@ -159,8 +165,16 @@ impl Checker<'_> {
             entries.push((key, value));
         }
         let ty = self.types.record(fields);
+        if self.types.field_count(ty) > crate::FIELD_BOUND {
+            return Err(self.error(
+                object.span,
+                "limit:fields",
+                "Field limit includes nested anonymous object types",
+            ));
+        }
         if let Some(expected) = expected {
             self.flow(&ty, Some(&expected), object.span)?;
+            return Ok((expected, ExprKind::Object(entries)));
         }
         Ok((ty, ExprKind::Object(entries)))
     }

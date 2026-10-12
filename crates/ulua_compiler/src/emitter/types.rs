@@ -7,12 +7,14 @@ use std::{collections::HashMap, fmt::Write};
 
 pub(super) struct FunctionTypes {
     names: HashMap<Type, String>,
+    identities: HashMap<Type, Type>,
     next_name: usize,
     pub(super) declarations: String,
 }
 impl FunctionTypes {
     pub(super) fn new(module: &ir::Module) -> Result<Self, Diagnostic> {
         let mut types = Self {
+            identities: module.types.identities().collect(),
             names: [
                 Type::Null,
                 Type::Number,
@@ -117,6 +119,8 @@ impl FunctionTypes {
     ) -> Result<(), Diagnostic> {
         let mut pending = vec![(ty, false)];
         while let Some((ty, emit)) = pending.pop() {
+            // Count-specific views keep the same emitted identity as their structural type.
+            let ty = module.types.identity(ty);
             if !emit {
                 if self.names.contains_key(&ty) {
                     continue;
@@ -182,7 +186,11 @@ impl FunctionTypes {
         Ok(())
     }
     pub(super) fn luau(&self, ty: &Type) -> String {
-        self.names.get(ty).cloned().unwrap_or_default()
+        self.identities
+            .get(ty)
+            .and_then(|ty| self.names.get(ty))
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
