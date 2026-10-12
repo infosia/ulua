@@ -500,20 +500,21 @@ and 6 in `a31`:
 3. An index read `xs[i]` reads `xs`, then evaluates `i`, then reads the
    element.
 4. An assignment `o.f = e` or `xs[i] = e` evaluates `o` (or `xs` and
-   `i`), then `e`, then stores. The C6 check runs at the store. When
-   `o` (or `xs`) is an element read `ys[j]`, the read of `ys[j]` takes
-   its value before `e`, and its `index-out-of-range` trap runs after
-   `e`, at the store: `node` reads `undefined` there and throws at the
-   store. Measured: `xs[0].f = h()` on an empty `xs` prints the output
-   of `h` before the trap in both. Only the receiver of the store
-   defers its trap. An element read deeper in the receiver traps where
-   it reads: `node` throws at the next access, before `e`
-   (`zs[0][1].f = h()` with `zs = []` throws before `h`; with
-   `zs = [[]]` it throws after `h`).
+   `i`), then `e`, then stores. The C6 check runs at the store.
 5. A compound assignment `t op= e` evaluates the target reference,
    reads the old value, evaluates `e`, then stores.
 6. `xs.push(e)` evaluates `xs`, then `e`, then reads the length of
    `xs`, then stores. `xs[#xs + 1] = e` reads the length before `e`.
+7. An element read `ys[j]` that is the object of a further access
+   (`ys[j].f`, `ys[j][k]`, `ys[j].f(a)`, or the target of a store; not
+   `?.`) takes its value without a check. When `j` is out of range,
+   the trap `index-out-of-range` runs where `node` throws a `TypeError`
+   on the `undefined` value: for a read, after the key `k` is evaluated
+   (a compound assignment reads the old value before its right side);
+   for a call, before the arguments; for a store, after the right
+   side. Measured: `xs[0].f = h()` on an empty `xs` prints the output
+   of `h` before the trap in both; `zs[i(0)][i(1)].f = h()` with
+   `zs = []` evaluates `i(0)` and `i(1)` and throws before `h`.
 
 Accept: `a18`, `a31`. Trap: `t07`.
 
