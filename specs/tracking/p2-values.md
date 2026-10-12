@@ -1,6 +1,6 @@
 # P2 value representations
 
-Status: open. Contracts: `pipeline.md` Rev 9, `abi.md` Rev 4,
+Status: open; P2.1 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
 `corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
 Decisions: D15, D16 (`plan.md` §8).
 
@@ -38,7 +38,8 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   pinned by a test at and past the bound.
 - [x] P2.1 entries pass in full; later slices stay `unsupported`.
 - [x] `luau-analyze` passes on the generated modules and the stress set.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 4).
 
 ## Measurements
 
@@ -135,8 +136,31 @@ cost 8.18 s Debug. Random: 640 programs, 425 accepted, each passes
 `tsc`, `node`, `luau-analyze`; no `internal`.
 Codex reported that `luau-analyze` failed in its own shell with the
 default stack and passed with `ulimit -s 65520`. The primary gate run
-with `ulimit -s` 8,176 KB passes. Gap: the stack need of `luau-analyze`
-on the stress set is not measured.
+with `ulimit -s` 8,176 KB passes. Round 4 measured the stack need of
+`luau-analyze`; see below.
+
+### P2.1 Phase Review round 4
+
+Reviewer: fresh agent, diff `b4e42f3..3d6200b`. No CRITICAL, no
+MAJOR, 2 MINOR. About 90 probes and 1,200 random programs: each
+accepted program passes `tsc`, `node`, `luau-analyze`; no `internal`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| §3.10 names a deep type; the product shapes use a wide type. A 45-level type read by many references measures 3.78 ms / 13.64 ms at 16 / 64 KiB (ratio 3.6), heap 10.3 MB | MINOR | §3.10 text names a wide type; the deep measurement is recorded here |
+| The tracking header names `pipeline.md` Rev 9 | MINOR | Header fixed |
+
+`luau-analyze` stack: the analyzer checks modules on up to 8 worker
+threads with a fixed 512 KiB stack on macOS; `ulimit -s` does not
+change it. Measured worker need: corpus and stress modules at most
+32 KiB; the deepest accepted nesting modules at most 64 KiB. The main
+thread needs 47 to 79 KB. The full run passes at `ulimit -s` 1024 and
+8176, 4 runs each. The gate does not depend on the default stack.
+
+### P2.1 close
+
+`sh tools/gate.sh full` passes: 63 entries in P2.1 or earlier, 17
+generated modules, 13 stress modules. Running tasks at the close: none.
 
 ## Failures before the fix
 

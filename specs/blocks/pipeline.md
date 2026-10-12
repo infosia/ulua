@@ -100,7 +100,7 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     The compiler stores each distinct type once and refers to it by an
     id. A type read, a type copy, a type equality test, and a type hash
     cost O(1). The growth shapes include the product of two sizes: a
-    deep type read by many references, and every later pair that a
+    wide type read by many references, and every later pair that a
     slice adds.
     The generated Luau has at most `OUTPUT_FACTOR` bytes per source
     byte, plus a fixed prelude. The emitter checks the bound on each
