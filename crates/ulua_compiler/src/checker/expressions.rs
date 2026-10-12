@@ -133,8 +133,23 @@ impl Checker<'_> {
                         )
                     }
                     "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" => {
-                        if op == "+" && a.ty == Type::String && r.ty == Type::String {
-                            return Err(self.unsupported(b.span));
+                        if op == "+"
+                            && (a.ty == Type::String || r.ty == Type::String)
+                            && matches!(a.ty, Type::String | Type::Number | Type::Boolean)
+                            && matches!(r.ty, Type::String | Type::Number | Type::Boolean)
+                        {
+                            return self.finish_expr(
+                                e,
+                                statement,
+                                Type::String,
+                                ExprKind::Template(vec![a, r]),
+                            );
+                        }
+                        if matches!(op, "<" | ">" | "<=" | ">=")
+                            && a.ty == Type::String
+                            && r.ty == Type::String
+                        {
+                            return Err(self.error(b.span, "C5", "String ordering is rejected"));
                         }
                         if a.ty != Type::Number || r.ty != Type::Number {
                             return Err(self.error(b.span, "C4", "Numeric operands are required"));
@@ -227,11 +242,15 @@ impl Checker<'_> {
                     return Err(self.unsupported(m.span));
                 }
                 let a = self.expr(&m.object, depth, false)?;
-                if self.types.element(a.ty).is_none() {
+                if self.types.element(a.ty).is_none() && a.ty != Type::String {
                     return Err(self.unsupported(m.span));
                 }
                 if m.property.name != "length" {
-                    return Err(self.error(m.span, "C6", "Array member has no value lowering"));
+                    return Err(self.error(
+                        m.span,
+                        if a.ty == Type::String { "C5" } else { "C6" },
+                        "Member has no value lowering",
+                    ));
                 }
                 (Type::Number, ExprKind::Length(Box::new(a)))
             }
@@ -242,9 +261,18 @@ impl Checker<'_> {
                     && call.type_arguments.is_none()
                 {
                     // Array receiver precedes its argument. Other member families remain later slices.
-                    if !matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "Utf8") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                    if !matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "Utf8" | "String") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
                     {
                         let receiver = self.expr(&m.object, depth, false)?;
+                        if receiver.ty == Type::String {
+                            let method = self.string_method(
+                                call,
+                                m.property.name.as_str(),
+                                receiver,
+                                depth,
+                            )?;
+                            return self.finish_expr(e, statement, method.ty, method.kind);
+                        }
                         if let Some(element) = self.types.element(receiver.ty) {
                             if m.property.name != "push" {
                                 let method = self.array_method(
@@ -281,6 +309,24 @@ impl Checker<'_> {
                         return Err(self.unsupported(m.span));
                     }
                 }
+                if let Expression::StaticMemberExpression(m) = &call.callee
+                    && matches!(&m.object, Expression::Identifier(n) if n.name == "Utf8" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    if m.property.name != "byteLength" || call.arguments.len() != 1 {
+                        return Err(self.error(call.span, "C11", "Unknown Utf8 call"));
+                    }
+                    let arg = call.arguments[0]
+                        .as_expression()
+                        .ok_or_else(|| self.error(call.span, "C11", "Spread is rejected"))?;
+                    let value = self.expr(arg, depth, false)?;
+                    self.flow(&value.ty, Some(&Type::String), arg.span())?;
+                    return self.finish_expr(
+                        e,
+                        statement,
+                        Type::Number,
+                        ExprKind::Length(Box::new(value)),
+                    );
+                }
                 if call.arguments.len() > crate::ARGUMENT_BOUND {
                     return Err(self.error(
                         call.span,
@@ -312,11 +358,14 @@ impl Checker<'_> {
                     }
                 } else {
                     if let Expression::StaticMemberExpression(m) = &call.callee
-                        && matches!(&m.object, Expression::Identifier(n) if n.name == "Math")
+                        && matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "String"))
                     {
                         return Err(self.error(
                             m.span,
-                            if m.property.name == "pow" {
+                            if matches!(&m.object, Expression::Identifier(n) if n.name == "String")
+                            {
+                                "C5"
+                            } else if m.property.name == "pow" {
                                 "C4"
                             } else {
                                 "C11"
@@ -458,6 +507,9 @@ impl Checker<'_> {
         span: Span,
     ) -> Result<(Expr, Expr, Type), Diagnostic> {
         let a = self.expr(object, depth, false)?;
+        if a.ty == Type::String {
+            return Err(self.error(span, "C5", "String index is rejected"));
+        }
         let element = self
             .types
             .element(a.ty)

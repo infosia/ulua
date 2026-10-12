@@ -12,6 +12,7 @@ mod methods;
 mod round6_tests;
 #[cfg(test)]
 mod round7_tests;
+mod strings;
 mod types;
 
 use oxc_allocator::Allocator;

@@ -13,6 +13,12 @@ const files = fs.readdirSync(directory).filter(f => /^case-\d+\.ts$/.test(f)).ma
 const prelude = config.fileNames.filter(f => f.includes(`${path.sep}prelude${path.sep}`));
 const program = ts.createProgram([...prelude, ...files], config.options);
 const checker = program.getTypeChecker();
+// Parse the witness source without executing its corpus runner.
+const witnessSource = fs.readFileSync(path.join(root, "tools/witness/corpus.mjs"), "utf8");
+const witnessAst = ts.createSourceFile("corpus.mjs", witnessSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+const predicate = witnessAst.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === "isAcceptedEquality");
+if (!predicate) throw Error("Corpus equality predicate is missing");
+const isAcceptedEquality = new Function("ts", `return (${predicate.getText(witnessAst)});`)(ts);
 const diagnostics = ts.getPreEmitDiagnostics(program);
 const codes = new Map();
 const affected = new Set();
@@ -58,32 +64,3 @@ for (const file of files) {
 console.log(`${label} witnesses: node=${node} tsc=${files.length} diagnostic_programs=${affected.size} codes=${JSON.stringify([...codes].sort())} other_codes=[]`);
 console.log(`${label} random tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
 console.log(`${label} exception control: ordinary TS2322/TS2345 and mixed TS2367 denied; never TS2322/TS2345 allowed`);
-
-function isAcceptedEquality(d, checker) {
-  if (d.code === 2322 || d.code === 2345) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-  if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
-  const kinds = new Set([
-    ts.SyntaxKind.EqualsEqualsEqualsToken,
-    ts.SyntaxKind.ExclamationEqualsEqualsToken,
-    ts.SyntaxKind.EqualsEqualsToken,
-    ts.SyntaxKind.ExclamationEqualsToken,
-  ]);
-  let node = null;
-  const visit = (n) => {
-    if (n.getStart(d.file) <= d.start && d.start + d.length <= n.getEnd()) {
-      if (ts.isBinaryExpression(n) && kinds.has(n.operatorToken.kind)) node = n;
-      ts.forEachChild(n, visit);
-    }
-  };
-  visit(d.file);
-  if (!node || node.getStart(d.file) !== d.start || node.getEnd() !== d.start + d.length) return false;
-  const kind = (e) => {
-    const t = checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(e));
-    if (t.flags & ts.TypeFlags.NumberLike) return "number";
-    if (t.flags & ts.TypeFlags.StringLike) return "string";
-    if (t.flags & ts.TypeFlags.BooleanLike) return "boolean";
-    return null;
-  };
-  const left = kind(node.left);
-  return left !== null && left === kind(node.right);
-}

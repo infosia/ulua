@@ -8,6 +8,7 @@ mod methods;
 mod order;
 mod statements;
 mod strict;
+mod strings;
 use crate::{
     Diagnostic,
     ir::{self, Type},

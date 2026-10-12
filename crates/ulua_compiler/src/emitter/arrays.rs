@@ -100,6 +100,7 @@ impl Emitter<'_> {
         depth: u32,
     ) -> Result<(), Diagnostic> {
         self.joins.enter();
+        let string = a.ty == Type::String;
         let a = self.expression(a, depth)?;
         let counter = self.slot(&Type::Number)?;
         self.write_slot(counter, "1");
@@ -114,9 +115,29 @@ impl Emitter<'_> {
             if let Some(entry) = parts.first() {
                 self.statement(entry, depth)?;
             }
-            self.write_binding(id, format!("{}[{}]", self.temp(a), self.temp(counter)))?;
-            // Increment before the body, so continue reaches the next step.
-            self.write_slot(counter, format!("{} + 1", self.temp(counter)));
+            if string {
+                self.capture("__ulua_str_charAt_0");
+                self.capture("__ulua_str_next_0");
+                self.write_binding(
+                    id,
+                    format!(
+                        "__ulua_str_charAt_0({}, {} - 1)",
+                        self.temp(a),
+                        self.temp(counter)
+                    ),
+                )?;
+                self.write_slot(
+                    counter,
+                    format!(
+                        "__ulua_str_next_0({}, {} - 1) + 1",
+                        self.temp(a),
+                        self.temp(counter)
+                    ),
+                );
+            } else {
+                self.write_binding(id, format!("{}[{}]", self.temp(a), self.temp(counter)))?;
+                self.write_slot(counter, format!("{} + 1", self.temp(counter)));
+            }
             self.loops.push(Loop { tail: None });
             for s in parts.iter().skip(1) {
                 self.statement(s, depth)?;

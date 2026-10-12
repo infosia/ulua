@@ -35,10 +35,17 @@ impl Checker<'_> {
             v.span,
         )?;
         let receiver = self.expr(&f.right, depth, false)?;
-        let element = self
-            .types
-            .element(receiver.ty)
-            .ok_or_else(|| self.error(f.span, "C6", "For-of requires an array"))?;
+        let element = if receiver.ty == Type::String {
+            self.methods
+                .insert((ir::Method::String(crate::strings::StringMethod::CharAt), 0));
+            self.methods
+                .insert((ir::Method::String(crate::strings::StringMethod::Next), 0));
+            Type::String
+        } else {
+            self.types
+                .element(receiver.ty)
+                .ok_or_else(|| self.error(f.span, "C6", "For-of requires an array or string"))?
+        };
         self.bindings[id].ty = Some(element);
         self.loops += 1;
         let body = self.statement(&f.body, depth)?;

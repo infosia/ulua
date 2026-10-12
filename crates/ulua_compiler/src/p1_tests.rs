@@ -69,8 +69,6 @@ fn c4_numbers_and_template_types() {
     for s in [
         "const x = -'x';",
         "const x = true * 1;",
-        "const x = 'x' + 1;",
-        "let x = 'x'; x += 1;",
         "const x = ~1;",
         "const x = 1 << 2;",
         "const x: bigint = 1;",
@@ -181,9 +179,6 @@ fn later_phase_forms_stay_unsupported() {
     for s in [
         "const x = null;",
         "const x = {};",
-        "print('x' + 'y');",
-        "let s = 'x'; s += 'y';",
-        "print('x'.includes('x'));",
         "const x: number | null = 1;",
     ] {
         reject(&body(s), "unsupported");

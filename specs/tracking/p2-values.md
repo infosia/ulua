@@ -164,6 +164,24 @@ Position arguments, search semantics, join, return values, traps, the
 | A prelude doc comment sits before the wrong declaration | MINOR | Fixed |
 | C6.9 does not give the comparator parameters | MINOR | Fixed |
 
+### P2.4 implementation record
+
+- Codex task. String members as prelude helpers; the shim traps
+  `string-boundary` and `invalid-argument`; C4.6 concatenation.
+- Direct tests: 2,781 accepted cases; 2,600 equal to `node` (ASCII), 94
+  equal to the byte rule, 87 traps; each passes `tsc` and
+  `luau-analyze`. Huge `repeat` and `pad*` end with `limit:steps` or
+  `limit:memory` and recover.
+- Random: 384 programs; 344 accepted (280 equal to `node`, 64 equal to
+  the byte rule), 40 rejected.
+- Growth: string members 3.24, member chains 3.22, concatenation 3.96
+  (output 41.1), mixed concatenation 3.94, iteration 3.71; growth test
+  9.86 s Debug.
+- The stress set grows from 13 to 18 modules; the review checks the
+  admission rule (§5.11) for the new ones.
+- The equality test reads the witness predicate from
+  `tools/witness/corpus.mjs` instead of a copy.
+
 ### P2.3 implementation record
 
 - Codex task. Array methods of C6.9 as prelude helpers; `pop`,

@@ -7,6 +7,7 @@ pub(crate) mod methods;
 mod output;
 mod statements;
 mod storage;
+mod strings;
 mod types;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,

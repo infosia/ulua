@@ -30,7 +30,7 @@ fn positions(method: M) -> bool {
 }
 
 pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize), Diagnostic> {
-    let mut out = String::new();
+    let (mut out, string_locals) = super::strings::prelude(methods);
     let position = methods.iter().any(|(m, _)| positions(*m));
     let integer = position
         || methods
@@ -47,7 +47,11 @@ pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize),
         if !method.arities().contains(&arity) {
             return Err(invalid());
         }
+        if matches!(method, M::String(_)) {
+            continue;
+        }
         let (generic, parameters, result, body) = match method {
+            M::String(_) => return Err(invalid()),
             M::IndexOf
             | M::LastIndexOf
             | M::Includes
@@ -85,7 +89,7 @@ pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize),
             name(method, arity)
         ));
     }
-    Ok((out, methods.len() + utilities))
+    Ok((out, methods.len() + utilities + string_locals))
 }
 
 fn invalid() -> Diagnostic {
@@ -109,6 +113,7 @@ fn form(generic: &str, parameters: &str, result: &str, body: &str) -> Helper {
 
 fn plain(method: M) -> Result<Helper, Diagnostic> {
     let (parameters, result, body) = match method {
+        M::String(_) => return Err(invalid()),
         M::IndexOf | M::Includes => {
             let equality = if method == M::Includes {
                 "a[i + 1] == v or (a[i + 1] ~= a[i + 1] and v ~= v)"
@@ -348,6 +353,7 @@ fn callback(method: M, arity: usize) -> Result<Helper, Diagnostic> {
         _ => return Err(invalid()),
     };
     let (generic, callback_result, result, initial, step, finish) = match method {
+        M::String(_) => return Err(invalid()),
         M::ForEach => ("<T, U...>", "U...", "()", "", "", ""),
         M::Map => (
             "<T, U>",

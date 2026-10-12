@@ -1,8 +1,8 @@
 //! Growth gate: full ABI timing at n and 4n; output checks always use the source ceiling.
-//! Dense fixtures cover P1 and P2.1 to P2.3 emitted constructs.
+//! Dense fixtures cover P1 and P2.1 to P2.4 emitted constructs.
 //! Ratios above 6.5 use the minimum of two runs per size.
 //! Largest measured output ratio: 63.167435; this measurement does not prove a margin.
-//! Measured Debug cost: 9.75 seconds, with serial ABI timing and two joined size-check workers.
+//! Measured P2.4 Debug cost: 9.86 seconds, with serial ABI timing and two joined size-check workers.
 //! D17 removes five equality-state shapes. Nested writes and spilled logic still measure emitter joins.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
@@ -21,6 +21,8 @@ mod review;
 #[path = "../src/p21_inputs.rs"]
 #[allow(dead_code)]
 mod functions;
+#[path = "../src/p24_inputs.rs"]
+mod strings;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -41,9 +43,12 @@ fn full_pipeline_growth_stays_below_eight() {
         .chain(functions::SHAPES)
         .chain(arrays::SHAPES)
         .chain(methods::SHAPES)
+        .chain(strings::SHAPES)
     {
         let make = |bytes| {
-            if methods::SHAPES.contains(shape) {
+            if strings::SHAPES.contains(shape) {
+                strings::source(shape, bytes)
+            } else if methods::SHAPES.contains(shape) {
                 methods::source(shape, bytes)
             } else if arrays::SHAPES.contains(shape) {
                 arrays::source(shape, bytes)
@@ -81,6 +86,7 @@ fn full_pipeline_growth_stays_below_eight() {
         assert_eq!(large.len(), 4 * n);
         // Dense fixtures replace sparse output samples. Keep independent type and spill stress cases.
         if methods::SHAPES.contains(shape)
+            || strings::SHAPES.contains(shape)
             || shape.starts_with("type-product-")
             || shape.starts_with("spilled-")
             || matches!(

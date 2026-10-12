@@ -5,6 +5,8 @@ use ulua_compiler::{Limits, SOURCE_CEILING};
 #[allow(dead_code)]
 #[path = "../../ulua/src/p21_inputs.rs"]
 mod p21;
+#[path = "../../ulua/src/p24_inputs.rs"]
+mod p24;
 #[path = "../../ulua/src/s5_inputs.rs"]
 mod s5;
 pub(crate) const FORMS: &[&str] = &[
@@ -24,6 +26,9 @@ pub(crate) const FORMS: &[&str] = &[
 ];
 
 pub(crate) fn source(form: &str) -> Result<String, String> {
+    if p24::SHAPES.contains(&form) {
+        return Ok(p24::source(form, SOURCE_CEILING as usize));
+    }
     if p21::SHAPES.contains(&form) {
         return Ok(p21::source(form, SOURCE_CEILING as usize));
     }
@@ -66,7 +71,7 @@ pub(crate) fn source(form: &str) -> Result<String, String> {
 
 pub(crate) fn emit(directory: &Path) -> Result<(), String> {
     std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
-    for form in FORMS {
+    for form in FORMS.iter().chain(p24::SHAPES) {
         let source = source(form)?;
         let compiled = ulua_compiler::compile(source.as_bytes(), Limits::default())
             .map_err(|d| format!("{form}: {} at {}: {}", d.code, d.offset, d.message))?;

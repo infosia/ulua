@@ -82,6 +82,14 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         code = SHIM_ARRAY_MODIFIED;
         message(error, "Array modified");
     }
+    if (!vm->flag && vm->trap_kind == 3) {
+        code = SHIM_STRING_BOUNDARY;
+        message(error, "String boundary");
+    }
+    if (!vm->flag && vm->trap_kind == 4) {
+        code = SHIM_INVALID_ARGUMENT;
+        message(error, "Invalid argument");
+    }
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);

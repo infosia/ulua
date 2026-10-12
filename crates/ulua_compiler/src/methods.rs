@@ -1,6 +1,7 @@
-//! Closed array method kinds. Callback arities remain explicit in the checked form.
+//! Closed array and string method kinds. Callback arities remain explicit in the checked form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Method {
+    String(crate::strings::StringMethod),
     IndexOf,
     LastIndexOf,
     Includes,
@@ -64,6 +65,7 @@ impl Method {
 
     pub(crate) fn name(self) -> &'static str {
         match self {
+            Self::String(m) => m.name(),
             Self::IndexOf => "indexOf",
             Self::LastIndexOf => "lastIndexOf",
             Self::Includes => "includes",
@@ -95,6 +97,7 @@ impl Method {
 
     pub(crate) fn arities(self) -> std::ops::RangeInclusive<usize> {
         match self {
+            Self::String(_) => 0..=0,
             Self::IndexOf
             | Self::LastIndexOf
             | Self::Includes

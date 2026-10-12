@@ -117,7 +117,7 @@ impl Checker<'_> {
                     }
                     let (array, index, element) =
                         self.index(&m.object, &m.expression, depth, m.span)?;
-                    let value = self.expr_as(&a.right, depth, false, Some(element))?;
+                    let mut value = self.expr_as(&a.right, depth, false, Some(element))?;
                     let mut op = match a.operator.as_str() {
                         "=" => None,
                         "+=" => Some("+"),
@@ -133,7 +133,11 @@ impl Checker<'_> {
                             ));
                         }
                     };
-                    if op == Some("+") && element == Type::String && value.ty == Type::String {
+                    if op == Some("+")
+                        && element == Type::String
+                        && matches!(value.ty, Type::String | Type::Number | Type::Boolean)
+                    {
+                        value = string_value(value);
                         op = Some("..");
                     }
                     if op.is_some()
@@ -188,8 +192,8 @@ impl Checker<'_> {
                     });
                 };
                 let id = self.target(n)?;
-                let value = self.expr_as(&a.right, depth, false, self.bindings[id].ty)?;
-                let op = match a.operator.as_str() {
+                let mut value = self.expr_as(&a.right, depth, false, self.bindings[id].ty)?;
+                let mut op = match a.operator.as_str() {
                     "=" => None,
                     "+=" => Some("+"),
                     "-=" => Some("-"),
@@ -199,12 +203,14 @@ impl Checker<'_> {
                     _ => return Err(self.error(a.span, "C4", "Assignment operator is rejected")),
                 };
                 if op == Some("+")
-                    && value.ty == Type::String
                     && self.bindings[id].ty == Some(Type::String)
+                    && matches!(value.ty, Type::String | Type::Number | Type::Boolean)
                 {
-                    return Err(self.unsupported(a.span));
+                    value = string_value(value);
+                    op = Some("..");
                 }
                 if op.is_some()
+                    && op != Some("..")
                     && (value.ty != Type::Number || self.bindings[id].ty != Some(Type::Number))
                 {
                     return Err(self.error(a.span, "C4", "Compound assignment requires numbers"));
@@ -402,4 +408,13 @@ fn boolean_initializer(mut e: &Expression<'_>) -> bool {
     }
     matches!(e, Expression::BooleanLiteral(_))
         || matches!(e, Expression::BinaryExpression(b) if matches!(b.operator.as_str(), "<" | ">" | "<=" | ">=" | "===" | "!==" | "==" | "!="))
+}
+
+fn string_value(value: Expr) -> Expr {
+    Expr {
+        start: value.start,
+        bare_true: false,
+        ty: Type::String,
+        kind: ExprKind::Template(vec![value]),
+    }
 }
