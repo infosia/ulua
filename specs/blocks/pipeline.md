@@ -11,6 +11,7 @@ Rev 7: §5.14 functions as values, `limit:upvalues` (P2.1).
 Rev 8: §5.14.3 parentheses for an optional function type (P2.1 review).
 Rev 9: §5.14.3 nested aliases (P2.1 review 2).
 Rev 10: §3.10 interned types and product shapes (P2.1 review 3).
+Rev 11: §4.8 traps, §5.15 arrays (P2.2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -136,6 +137,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 7. Each instance is one `lua_State` from `lua_newstate` with the
    budget allocator, `luaL_openlibs`, and `luaL_sandbox`. Each call
    runs on a thread from `luaL_sandboxthread`.
+8. **Traps.** The generated code raises a trap through one native
+   function of the shim, read once into a generated local. The
+   function takes the trap kind as a small integer, records it in the
+   instance, and raises a Luau error. The shim maps the recorded kind to
+   the code `trap:<kind>` (corpus.md §6). A script cannot call the
+   function by name: every script name is generated (§5.2). The
+   message holds no position of the generated Luau.
 
 ## 5. Emission
 
@@ -240,6 +248,29 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     7. Luau allows 2^15 closures per function. A 65,536-byte source
        holds fewer function expressions, so no bound is needed; P2.1
        records the count.
+15. **Arrays (P2.2).**
+    1. `T[]` lowers to the Luau type `{T}`. A function element type is
+       in parentheses where Luau needs them (§5.14.3).
+    2. An array literal lowers to a table constructor of its elements,
+       each through the C12 temporaries in source order.
+    3. A read `xs[i]` evaluates `xs`, then `i` (C12). It traps
+       `index-out-of-range` unless `i` is an integer in `[0, #xs)`; the
+       test runs on `i` before `i + 1` (C6.1, C6.2). It then reads key
+       `i + 1`.
+    4. A write `xs[i] = e` evaluates `xs`, `i`, then `e`. Then it traps
+       unless `i` is an integer in `[0, #xs]`, with `#xs` read after
+       `e` (C6.3). It stores at key `i + 1`.
+    5. A compound write `xs[i] op= e` reads the element with the rule 3
+       check, evaluates `e`, and stores with the rule 4 check.
+    6. `xs.length` lowers to `#xs`. No element is `nil` (C6.5) and no
+       write makes a hole (rule 4), so the border is the length.
+    7. `xs.push(e)` evaluates `xs`, then `e`, then reads `#xs`, then
+       stores at key `#xs + 1` (C12.6).
+    8. `for (const x of xs)` evaluates `xs` once into a temporary. It
+       keeps a numeric counter from 1 and reads the live length before
+       each step (C6.6). The binding `x` follows §5.14.1: a captured
+       binding is a new local per step.
+    9. An array value never crosses the C ABI (`abi.md` §4).
 
 ## 6. Limits
 

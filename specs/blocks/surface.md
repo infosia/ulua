@@ -1,12 +1,13 @@
 # Accepted surface
 
-Status: Rev 10, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 11, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
 C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
-for function results, default scope, P2.1 review 2).
+for function results, default scope, P2.1 review 2; Rev 11: function types
+at any depth of an arrow result, P2.2).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -77,7 +78,7 @@ rejected, also where `tsc` accepts it.
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
 | `CallExpression` | The callee is an `IdentifierReference` of a function declaration, or of a binding or a parameter of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
-| `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type is a function type has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
+| `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type contains a function type at any depth (a function, or an array of functions) has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
 | `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). |
 | `LogicalExpression` | `&&`, `\|\|` on two booleans. `a ?? b` with `a: T \| null` and `b` assignable to `T` or `T \| null`. |

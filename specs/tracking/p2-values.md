@@ -32,6 +32,17 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 - A phase that exposes the `buffer` library classifies Luau errors by
   source location, not by text.
 
+## Exit checklist (P2.2)
+
+- [ ] `pipeline.md` §4.8 and §5.15 implemented.
+- [ ] P2.2 entries pass in full; later slices stay `unsupported`.
+- [ ] The array members stay `length` and `push` (C6.7). Further
+  members are a user decision for a later revision.
+- [ ] Growth shapes for arrays (literals, nested arrays, many index
+  operations, `for…of` over large arrays) and products with P2.1 shapes.
+- [ ] `luau-analyze` passes on the generated modules and the stress set.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
 ## Exit checklist (P2.1)
 
 - [x] `pipeline.md` §5.14 implemented; `UPVALUE_BUDGET` measured and
