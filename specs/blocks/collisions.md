@@ -403,7 +403,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r97`, `r98`.
 
 ## C12. Evaluation order
 

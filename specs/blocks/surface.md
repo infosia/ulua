@@ -1,13 +1,13 @@
 # Accepted surface
 
-Status: Rev 12, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 13, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
 C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
 for function results, default scope, P2.1 review 2; Rev 11: function types
-at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3).
+at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -112,6 +112,24 @@ its target.
 | `TSTypeReference` | The name of a type alias or a class declaration. No type arguments, no qualified name. |
 | `TSTypeLiteral` | Only as the body of a `TSTypeAliasDeclaration`. Members are `TSPropertySignature`s with an identifier key and a type annotation: not optional, not computed, no index signatures, no method signatures. |
 | `TSParenthesizedType` | Around a type. |
+
+### Inferred types from references (D18)
+
+`tsc` infers a type at three positions: the initializer of a `let`
+without a type annotation, an element of an array literal without a
+contextual type, and the expression body of an arrow without a result
+type annotation. At these positions `tsc` takes the narrowed type of a
+reference, for example a literal type or `never` after a comparison or
+a truth test, and a later write of a wider value gives TS2322 or
+TS2345. The compiler does not track narrowing (D17). So a *reference
+form* at one of these positions is rejected with C11; a type
+annotation, or a contextual type, accepts it. A reference form is an
+`IdentifierReference`, `(e)`, `!e`, `c ? a : b`, `a && b`, or `a || b`
+where `e`, `a`, or `b` is a reference form. Measured: `const s = "a"; if
+(s === "b") { let t = s; t = "c"; }` gives TS2322 (`s` is `never`
+there); `if (b) { const xs = [b];
+xs.push(false); }` gives TS2345; `let t: string = s` and `const xs:
+boolean[] = [b]` give no error.
 
 ## 6. Library
 

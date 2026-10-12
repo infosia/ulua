@@ -14,7 +14,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 |---|---|---|
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
-| P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `t04`, `t05`; `r90` to `r96`; `r24` becomes `r24-array-find` (P2.2) |
+| P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `t04`, `t05`; `r90` to `r98`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
 | P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
@@ -71,6 +71,18 @@ Source of the method set: the owner's prior project, with one change:
   (round 4).
 
 ## Measurements
+
+### P2.3 Phase Review round 2 (with D17)
+
+Reviewer: fresh agent, diff `9a74af7..963fea7`. 1 MAJOR, 2 MINOR. The
+D17 type rule, C12 order, the kept flow parts, and the P2.3 round 1
+fixes hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A narrowed reference copied into an unannotated `let` or array literal gives TS2322 or TS2345 at a later write: `if (s === "b") { let t = s; t = "c"; }`, `if (b === true) { const xs = [b]; xs.push(false); }`; the truth-test form `if (b) { ... }` existed before D17 | MAJOR | D18 (owner): a reference form at an inference position needs a type annotation (surface.md Rev 13) |
+| `d17_equality.rs` states no cost (1.23 s) | MINOR | Cost statement |
+| The witness predicate reads the narrowed `tsc` type; the compiler reads declared types (a false alarm is possible, no hole) | MINOR | Note; no case found |
 
 ### P2.3 Phase Review round 1
 
