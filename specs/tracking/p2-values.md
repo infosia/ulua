@@ -42,6 +42,8 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   and edge rules; `sort` stability; the `array-modified` trap.
 - [ ] Growth shapes for method calls (many calls, long arrays are a
   run cost, not a compile cost); `luau-analyze` passes.
+- [ ] §5.7 loop locals end with their loop, after the measurement it
+  names; 200 sequential `for (let i...)` loops in one function compile.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 Source of the method set: the owner's prior project, with one change:

@@ -16,6 +16,7 @@ Rev 12: §4.8 chunk argument, §3.10 densest shapes, §5.15 helpers (P2.2 review
 Rev 13: §3.10 `limit:output` (P2.2 review 2).
 Rev 14: §5.16 array methods (P2.3).
 Rev 15: §5.15.2 literal blocks, §6.0 limit positions, §3.10 final check (P2.2 review 3).
+Rev 16: §5.7 loop locals end with their loop (P2.3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -180,6 +181,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    scopes: parameters, bindings, temporaries (C12), loop copies (C9.2),
    and generated locals. The count includes nested blocks. The budget
    is `LOCAL_BUDGET` = 176, below the Luau limit of 200 (§7).
+   P2.3 changes the count of loop copies and loop generated locals:
+   the emitter declares them in a block around their loop, so they end
+   with the loop, and the count is the largest number of such locals
+   live at one point, not their sum. P2.3 first measures, with the
+   pinned Luau, that a local in an ended block does not count toward
+   the limit of 200 (the P1 gap of sequential loops). If the
+   measurement contradicts this, the P1 count stays.
 8. **Spill table.** If the count exceeds `LOCAL_BUDGET`, the function
    declares one generated table local at its entry. Each binding past
    the budget, in source order, is a distinct generated field of that
