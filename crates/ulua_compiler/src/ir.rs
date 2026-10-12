@@ -9,6 +9,7 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
+    pub(crate) methods: std::collections::BTreeSet<(&'static str, usize)>,
     pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,
     pub(crate) functions: Vec<Function>,
@@ -51,6 +52,7 @@ pub(crate) enum ExprKind {
     Index(Box<Expr>, Box<Expr>),
     Length(Box<Expr>),
     Push(Box<Expr>, Box<Expr>),
+    Method(&'static str, usize, Box<Expr>, Vec<Expr>),
 }
 pub(crate) enum Statement {
     Located(u32, Box<Statement>),
@@ -156,6 +158,10 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
             | ExprKind::Push(a, b) => {
                 expressions.push(a);
                 expressions.push(b);
+            }
+            ExprKind::Method(_, _, a, args) => {
+                expressions.push(a);
+                expressions.extend(args);
             }
             ExprKind::Conditional(t, a, b) => {
                 expressions.push(t);

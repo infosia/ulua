@@ -78,6 +78,10 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         code = SHIM_INDEX;
         message(error, "Index out of range");
     }
+    if (!vm->flag && vm->trap_kind == 2) {
+        code = SHIM_ARRAY_MODIFIED;
+        message(error, "Array modified");
+    }
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);

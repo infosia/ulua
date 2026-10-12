@@ -235,8 +235,9 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
      `findIndex`, `findLastIndex`, `flatMap` (the callback returns an
      array), `reduce(f, init)` and `reduceRight(f, init)` with `init`
      required, and `sort(cmp)` with the comparator required.
-   - A callback takes `(v)` or `(v, i)`. The third parameter, the
-     array, is rejected.
+   - A callback takes `(v)` or `(v, i)`; the callback of `reduce` and
+     `reduceRight` takes `(acc, v)` or `(acc, v, i)`. The parameter
+     after the index, the array, is rejected.
    - A number argument (`from`, `start`, `end`, `count`, `target`,
      `i`) is converted as ECMAScript ToIntegerOrInfinity converts it:
      NaN is 0, a fraction truncates toward 0. A negative position is

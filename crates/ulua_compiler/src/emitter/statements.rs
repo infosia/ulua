@@ -147,9 +147,13 @@ impl Emitter<'_> {
             }
             S::For(init, test, update, body, ids) => {
                 self.joins.enter();
+                let generated_before = self.generated_live;
+                self.line("do");
+                self.indent += 1;
                 self.statements(init, depth)?;
                 self.offset = self.statement_offset;
-                let tail = self.generated("boolean", "true")?;
+                let tail = self.generated()?;
+                self.line(format!("local {tail}: boolean = true"));
                 let mut copies = vec![];
                 let mut previous = vec![];
                 for id in ids {
@@ -157,10 +161,7 @@ impl Emitter<'_> {
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    let local = self.generated(&self.function_types.luau(ty), initial(ty))?;
-                    if let Some(generated) = self.generated.last_mut() {
-                        generated.3 = false;
-                    }
+                    let local = self.generated()?;
                     let head = self.location(*id)?;
                     copies.push((head, local.clone(), self.function_types.luau(ty)));
                     previous.push((*id, self.copies.insert(*id, local)));
@@ -223,6 +224,9 @@ impl Emitter<'_> {
                 }
                 self.indent -= 1;
                 self.line("end");
+                self.indent -= 1;
+                self.line("end");
+                self.generated_live = generated_before;
                 self.joins.leave();
             }
             S::Break => {

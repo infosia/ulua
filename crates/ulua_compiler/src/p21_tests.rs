@@ -354,7 +354,15 @@ fn each_nested_body_has_its_own_temporary_budget() {
     accept(&body(&format!(
         "{loops}function f():void{{{loops}}}const g=():void=>{{{loops}}};f();g();"
     )));
-    let loops = "for(;false;){}".repeat(crate::TEMPORARY_BOUND + 1);
+    let head = (0..32)
+        .map(|i| format!("i{i}=0"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let loops = format!(
+        "{}{}",
+        format!("for(let {head};false;){{").repeat(5),
+        "}".repeat(5)
+    );
     reject(
         &body(&format!("const g=():void=>{{{loops}}};g();")),
         "limit:temporaries",

@@ -13,7 +13,7 @@ use std::{ffi::CStr, ptr, time::Instant};
 use ulua::*;
 use ulua_compiler::{
     ARGUMENT_BOUND, DEPTH_CEILING, LOCAL_BUDGET, PARAMETER_BOUND, SOURCE_CEILING,
-    TEMPLATE_PART_BOUND, TEMPORARY_BOUND,
+    TEMPLATE_PART_BOUND,
 };
 
 struct Script {
@@ -249,25 +249,36 @@ fn compiler_bounds() {
         inputs::template(TEMPLATE_PART_BOUND.div_ceil(2)),
         "limit:template-parts",
     );
-    // One shared condition slot plus one generated local per for loop.
+    // Ended loops release generated locals. Nested loops retain their live copies.
+    Script::new(&inputs::loops(200));
+    let head = (0..32)
+        .map(|i| format!("i{i}=0"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let nested = |heads: usize, tails: usize| {
+        format!(
+            "{}{}{}",
+            format!("for(let {head};false;){{").repeat(heads),
+            "for(;false;){".repeat(tails),
+            "}".repeat(heads + tails)
+        )
+    };
+    let module = |body| format!("export function main():void{{{body}}}");
+    // 132 generated locals, two shared slots, and two tails reach 136.
     pair(
-        inputs::loops(TEMPORARY_BOUND - 1),
-        inputs::loops(TEMPORARY_BOUND),
+        module(nested(4, 2)),
+        module(nested(4, 3)),
         "limit:temporaries",
     );
-    // Default-parameter copies belong to the same non-spill count as loop locals.
-    let with_loops = |count| {
+    // Defaults add 32 copies. Three heads and three tails reach the same bound.
+    let defaults = |tails| {
         inputs::parameters(PARAMETER_BOUND, true, false).replacen(
             ":void {}",
-            &format!(":void {{{}}}", "for (;false;) {}".repeat(count)),
+            &format!(":void {{{}}}", nested(3, tails)),
             1,
         )
     };
-    pair(
-        with_loops(TEMPORARY_BOUND - PARAMETER_BOUND - 2),
-        with_loops(TEMPORARY_BOUND - PARAMETER_BOUND - 1),
-        "limit:temporaries",
-    );
+    pair(defaults(3), defaults(4), "limit:temporaries");
     let at = inputs::bindings(LOCAL_BUDGET - 1);
     let past = inputs::bindings(LOCAL_BUDGET);
     // Both sides compile through luau_compile. The next binding uses a typed spill table.

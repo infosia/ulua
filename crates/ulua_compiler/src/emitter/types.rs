@@ -83,7 +83,7 @@ impl FunctionTypes {
                     expressions.push(a);
                     expressions.push(b);
                 }
-                E::Call(c, args) => {
+                E::Method(_, _, c, args) | E::Call(c, args) => {
                     expressions.push(c);
                     expressions.extend(args);
                 }

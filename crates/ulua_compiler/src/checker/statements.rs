@@ -171,7 +171,26 @@ impl Checker<'_> {
                 if let AssignmentTarget::StaticMemberExpression(m) = &a.left {
                     let receiver = self.expr(&m.object, depth, false)?;
                     if self.types.element(receiver.ty).is_some() {
-                        return Err(self.error(m.span, "C6", "Array properties are read-only"));
+                        if m.property.name == "length"
+                            && a.operator.as_str() == "="
+                            && matches!(&a.right, Expression::NumericLiteral(n) if n.value == 0.0)
+                        {
+                            // Check the literal's strict-module syntax before this special lowering.
+                            self.expr(&a.right, depth, false)?;
+                            self.methods.insert(("clear", 0));
+                            return Ok(S::Eval(Expr {
+                                wide: false,
+                                bare_true: false,
+                                start: a.span.start,
+                                ty: Type::Void,
+                                kind: ExprKind::Method("clear", 0, Box::new(receiver), vec![]),
+                            }));
+                        }
+                        return Err(self.error(
+                            m.span,
+                            "C6",
+                            "Only literal zero can clear array length",
+                        ));
                     }
                 }
                 let AssignmentTarget::AssignmentTargetIdentifier(n) = &a.left else {

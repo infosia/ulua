@@ -1,8 +1,8 @@
 //! Growth gate: full ABI timing at n and 4n; output checks always use the source ceiling.
-//! Dense fixtures cover every P1, P2.1, and P2.2 emitted construct.
+//! Dense fixtures cover P1 and P2.1 to P2.3 emitted constructs.
 //! Ratios above 6.5 use the minimum of two runs per size.
-//! Largest measured output ratio: 71.687759 (spillD); this measurement does not prove a margin.
-//! Measured Debug cost: 9.94 seconds, with serial ABI timing and two joined size-check workers.
+//! Largest measured output ratio: 63.167435; this measurement does not prove a margin.
+//! Measured Debug cost: 10.22 seconds, with serial ABI timing and two joined size-check workers.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
 #[path = "../src/p22_inputs.rs"]
@@ -14,6 +14,8 @@ mod dense;
 mod inputs;
 #[path = "support/growth_joins.rs"]
 mod joins;
+#[path = "../src/p23_inputs.rs"]
+mod methods;
 #[path = "../src/s6_inputs.rs"]
 mod review;
 // This test uses the compile operation only.
@@ -40,9 +42,12 @@ fn full_pipeline_growth_stays_below_eight() {
         .chain(joins::SHAPES)
         .chain(functions::SHAPES)
         .chain(arrays::SHAPES)
+        .chain(methods::SHAPES)
     {
         let make = |bytes| {
-            if arrays::SHAPES.contains(shape) {
+            if methods::SHAPES.contains(shape) {
+                methods::source(shape, bytes)
+            } else if arrays::SHAPES.contains(shape) {
                 arrays::source(shape, bytes)
             } else if functions::SHAPES.contains(shape) {
                 functions::source(shape, bytes)
@@ -79,7 +84,8 @@ fn full_pipeline_growth_stays_below_eight() {
         assert_eq!(small.len(), n);
         assert_eq!(large.len(), 4 * n);
         // Dense fixtures replace sparse output samples. Keep independent type, join, and spill stress cases.
-        if shape.starts_with("type-product-")
+        if methods::SHAPES.contains(shape)
+            || shape.starts_with("type-product-")
             || shape.starts_with("join-")
             || shape.starts_with("alias-chain")
             || shape.starts_with("spilled-")

@@ -14,6 +14,7 @@ pub(super) struct Emission {
 }
 
 pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
+    let (method_prelude, method_locals) = methods::prelude(&module.methods);
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
     let mut groups = vec![0; size];
@@ -65,9 +66,10 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     let empty = HashMap::new();
     for owner in std::iter::once(0).chain(module.functions.iter().map(|f| f.binding + 1)) {
         let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
+        probe.overhead = if owner == 0 { 10 + method_locals } else { 0 };
         let (parameters, overhead) = if owner == 0 {
             probe.statements(&module.body, 0)?;
-            (vec![], 10)
+            (vec![], 10 + method_locals)
         } else {
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
@@ -107,6 +109,9 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     ] {
         context.locals[0].insert(name.into());
     }
+    for &(method, arity) in &module.methods {
+        context.locals[0].insert(methods::name(method, arity));
+    }
     let mut chunk = Emitter::new(module, 0, &locations, &owners[0], &types);
     chunk.context = Some(&context);
     chunk.indent = 0;
@@ -119,6 +124,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     }
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
+    out.push_str(&method_prelude);
     out.push_str(&types.declarations);
     if let Some(layout) = &context.layouts[0] {
         out.push_str(&layout.headers);

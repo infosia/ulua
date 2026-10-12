@@ -222,7 +222,9 @@ impl Checker<'_> {
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
             let value = self.expr_as(e, body_depth, true, result)?;
-            if value.ty == Type::Void && !matches!(value.kind, ExprKind::Call(..)) {
+            if value.ty == Type::Void
+                && !matches!(value.kind, ExprKind::Call(..) | ExprKind::Method(..))
+            {
                 return Err(self.error(e.span(), "C11", "Void arrow body must be a call"));
             }
             if let Some(result) = &result {

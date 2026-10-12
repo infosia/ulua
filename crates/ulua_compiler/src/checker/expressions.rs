@@ -90,8 +90,12 @@ impl Checker<'_> {
                 let required = match op {
                     "-" => Type::Number,
                     "!" => Type::Boolean,
-                    "~" => return Err(self.error(u.span, "C4", "Bitwise operators are rejected")),
-                    _ => return Err(self.error(u.span, "C8", "Unary operator has no lowering")),
+                    "~" => {
+                        return Err(self.error(u.span, "C4", "Bitwise operators are rejected"));
+                    }
+                    _ => {
+                        return Err(self.error(u.span, "C8", "Unary operator has no lowering"));
+                    }
                 };
                 let a = self.expr(&u.argument, depth, false)?;
                 if a.ty != required {
@@ -252,38 +256,14 @@ impl Checker<'_> {
                         let receiver = self.expr(&m.object, depth, false)?;
                         if let Some(element) = self.types.element(receiver.ty) {
                             if m.property.name != "push" {
-                                if matches!(
+                                let method = self.array_method(
+                                    call,
                                     m.property.name.as_str(),
-                                    "indexOf"
-                                        | "lastIndexOf"
-                                        | "includes"
-                                        | "join"
-                                        | "slice"
-                                        | "concat"
-                                        | "fill"
-                                        | "reverse"
-                                        | "splice"
-                                        | "unshift"
-                                        | "copyWithin"
-                                        | "at"
-                                        | "pop"
-                                        | "shift"
-                                        | "forEach"
-                                        | "map"
-                                        | "filter"
-                                        | "some"
-                                        | "every"
-                                        | "findIndex"
-                                        | "findLastIndex"
-                                        | "flatMap"
-                                        | "reduce"
-                                        | "reduceRight"
-                                        | "sort"
-                                        | "flat"
-                                ) {
-                                    return Err(self.unsupported(call.span));
-                                }
-                                return Err(self.error(m.span, "C6", "Array method is rejected"));
+                                    receiver,
+                                    element,
+                                    depth,
+                                )?;
+                                return self.finish_expr(e, statement, method.ty, method.kind);
                             }
                             if !statement {
                                 return Err(self.error(
@@ -462,6 +442,15 @@ impl Checker<'_> {
                 ));
             }
         };
+        self.finish_expr(e, statement, ty, kind)
+    }
+    fn finish_expr(
+        &self,
+        e: &Expression<'_>,
+        statement: bool,
+        ty: Type,
+        kind: ExprKind,
+    ) -> Result<Expr, Diagnostic> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }

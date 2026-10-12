@@ -72,6 +72,22 @@ Source of the method set: the owner's prior project, with one change:
 
 ## Measurements
 
+### P2.3 implementation record
+
+- Codex task. Array methods of C6.9 as prelude helpers; `pop`,
+  `shift`, `at` traps; `array-modified`.
+- §5.7 measurement: the pinned Luau (O0 and O1) accepts 200 live locals
+  and rejects 201; 1,000 ended blocks pass. 200 sequential `for` loops
+  in one function compile and print 600, equal to `node`. The new
+  boundary: 136 accepted, 137 rejected.
+- Direct tests: 1,643 cases; 1,472 equal to `node`, 171 trap as the
+  contract states; each accepted case passes `tsc` and `luau-analyze`.
+- Random: 320 programs; 280 accepted (206 equal, 74 trap), 40 rejected.
+- Growth: new shapes 3.59 to 3.91 per 4x, output 11.6 to 14.3; growth
+  test 10.21 s Debug.
+- Contract gap found: the index parameter of the `reduce` callback;
+  C6.9 now states `(acc, v)` or `(acc, v, i)`.
+
 ### P2.2 implementation record
 
 - Codex task. The shim trap function, checked array reads and writes,

@@ -2,6 +2,7 @@
 mod arrays;
 mod equality;
 mod expressions;
+mod methods;
 use equality::Equality;
 mod functions;
 mod order;
@@ -17,6 +18,7 @@ use std::collections::HashMap;
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
+    methods: std::collections::BTreeSet<(&'static str, usize)>,
     pub(super) bindings: Vec<ir::Binding>,
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,
@@ -214,6 +216,7 @@ pub(crate) fn check(
 ) -> Result<ir::Module, Diagnostic> {
     let mut c = Checker {
         source,
+        methods: Default::default(),
         bindings: vec![],
         scopes: vec![HashMap::new()],
         owner: 0,
@@ -298,6 +301,7 @@ pub(crate) fn check(
         captured[id] |= owner != c.bindings[id].owner;
     }
     Ok(ir::Module {
+        methods: c.methods,
         types: c.types,
         captured,
         bindings: c.bindings,

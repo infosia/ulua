@@ -110,6 +110,31 @@ impl Emitter<'_> {
                     self.release(arg);
                 }
             }
+            E::Method(name, arity, receiver, arguments) => {
+                let a = self.expression(receiver, depth)?;
+                let mut slots = vec![a];
+                for arg in arguments {
+                    slots.push(self.expression(arg, depth)?);
+                }
+                let helper = methods::name(name, *arity);
+                self.capture(&helper);
+                let call = format!(
+                    "{helper}({})",
+                    slots
+                        .iter()
+                        .map(|s| self.temp(*s))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                if expr.ty == Type::Void {
+                    self.line(call);
+                } else {
+                    self.write_slot(dest, call);
+                }
+                for slot in slots {
+                    self.release(slot);
+                }
+            }
             E::Array(entries) => {
                 self.array_literal(dest, entries, depth)?;
             }

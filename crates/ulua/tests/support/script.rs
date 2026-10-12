@@ -67,6 +67,9 @@ impl Script {
         index
     }
     pub fn instance(&mut self, limits: RunLimits) -> (Status, String) {
+        self.instance_with_host(limits, &Host::default())
+    }
+    pub fn instance_with_host(&mut self, limits: RunLimits, host: &Host) -> (Status, String) {
         let mut d = Diagnostic::default();
         // SAFETY: The fixture owns both pointers and serializes their lifetime transitions.
         unsafe {
@@ -75,7 +78,7 @@ impl Script {
             let status = ulua_instance_new(
                 self.context,
                 self.module,
-                &Host::default(),
+                host,
                 &limits,
                 &mut self.instance,
                 &mut d,

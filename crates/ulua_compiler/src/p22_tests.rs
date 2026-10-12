@@ -88,59 +88,23 @@ fn array_literal_width_does_not_consume_the_temporary_budget() {
 }
 
 #[test]
-fn array_methods_wait_for_p23_and_other_members_keep_c6() {
+fn rejected_array_members_keep_c6() {
     for method in [
-        "indexOf",
-        "lastIndexOf",
-        "includes",
-        "join",
-        "slice",
-        "concat",
-        "fill",
-        "reverse",
-        "splice",
-        "unshift",
-        "copyWithin",
-        "at",
-        "pop",
-        "shift",
-        "forEach",
-        "map",
-        "filter",
-        "some",
-        "every",
-        "findIndex",
-        "findLastIndex",
-        "flatMap",
-        "reduce",
-        "reduceRight",
-        "sort",
-        "flat",
+        "find", "findLast", "flat", "unknown", "entries", "keys", "values", "toString",
     ] {
         assert_eq!(
             check(&format!("const xs=[1];xs.{method}();"))
                 .unwrap_err()
                 .code,
-            "unsupported",
-            "{method}"
+            "C6"
         );
+    }
+    for method in ["push", "map", "pop", "slice", "sort", "reduce"] {
         assert_eq!(
             check(&format!("const xs=[1];const m=xs.{method};"))
                 .unwrap_err()
                 .code,
-            "C6",
-            "{method}"
-        );
-    }
-    for method in [
-        "find", "findLast", "unknown", "entries", "keys", "values", "toString",
-    ] {
-        assert_eq!(
-            check(&format!("const xs=[1];xs.{method}();"))
-                .unwrap_err()
-                .code,
-            "C6",
-            "{method}"
+            "C6"
         );
     }
 }

@@ -3,6 +3,7 @@ mod arrays;
 mod expressions;
 mod functions;
 mod joins;
+pub(crate) mod methods;
 mod output;
 mod statements;
 mod storage;
@@ -70,7 +71,9 @@ struct Emitter<'a> {
     output: Option<&'a output::Output>,
     credited: usize,
     copies: HashMap<usize, String>,
-    generated: Vec<(String, String, String, bool)>,
+    generated_count: usize,
+    generated_live: usize,
+    generated_peak: usize,
     overhead: usize,
     storage_offset: usize,
     loops: Vec<Loop>,
@@ -105,7 +108,9 @@ impl<'a> Emitter<'a> {
             output: None,
             credited: 0,
             copies: HashMap::new(),
-            generated: vec![],
+            generated_count: 0,
+            generated_live: 0,
+            generated_peak: 0,
             overhead: if owner == 0 { 10 } else { 0 },
             storage_offset: 0,
             loops: vec![],
@@ -219,7 +224,7 @@ impl<'a> Emitter<'a> {
         }
     }
     fn reserve_temporary(&self) -> Result<(), Diagnostic> {
-        if self.slots.len() + self.generated.len() + self.overhead >= TEMPORARY_BOUND {
+        if self.slots.len() + self.generated_live + self.overhead >= TEMPORARY_BOUND {
             return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
         }
         Ok(())
@@ -232,12 +237,13 @@ impl<'a> Emitter<'a> {
             s.busy = false;
         }
     }
-    fn generated(&mut self, ty: &str, value: &str) -> Result<String, Diagnostic> {
+    fn generated(&mut self) -> Result<String, Diagnostic> {
         self.reserve_temporary()?;
         self.storage_offset = self.offset;
-        let name = format!("__ulua_g{}_{}", self.owner, self.generated.len());
-        self.generated
-            .push((name.clone(), ty.into(), value.into(), true));
+        let name = format!("__ulua_g{}_{}", self.owner, self.generated_count);
+        self.generated_live += 1;
+        self.generated_peak = self.generated_peak.max(self.generated_live);
+        self.generated_count += 1;
         Ok(name)
     }
     fn headers(&self, declarations: &str) -> String {
@@ -249,8 +255,9 @@ impl<'a> Emitter<'a> {
 }
 
 pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
-    let bound =
-        crate::OUTPUT_PRELUDE_BYTES.saturating_add(factor.saturating_mul(module.source.len()));
+    let bound = crate::OUTPUT_PRELUDE_BYTES
+        .saturating_add(methods::prelude(&module.methods).0.len())
+        .saturating_add(factor.saturating_mul(module.source.len()));
     functions::emit(module, bound)
 }
 

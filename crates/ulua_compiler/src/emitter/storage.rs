@@ -13,8 +13,8 @@ impl Emitter<'_> {
         groups: &[usize],
     ) -> Result<Layout, Diagnostic> {
         self.offset = self.storage_offset;
-        let fixed = parameters.len() + self.slots.len() + self.generated.len() + overhead;
-        if self.slots.len() + self.generated.len() + overhead > TEMPORARY_BOUND {
+        let fixed = parameters.len() + self.slots.len() + self.generated_peak + overhead;
+        if self.slots.len() + self.generated_peak + overhead > TEMPORARY_BOUND {
             return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
         }
         let ids: Vec<_> = self
@@ -152,11 +152,6 @@ impl Emitter<'_> {
                 self.function_types.luau(&slot.ty),
                 initial(&slot.ty)
             );
-        }
-        for (name, ty, value, entry) in &self.generated {
-            if *entry {
-                let _ = writeln!(layout.headers, "local {name}: {ty} = ({value}) :: {ty}");
-            }
         }
         Ok(layout)
     }

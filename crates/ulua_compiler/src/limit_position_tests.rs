@@ -15,27 +15,34 @@ fn position(source: &str, marker: &str, code: &str, error: Diagnostic) {
 
 #[test]
 fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
-    for (prefix, count, suffix) in [
-        ("export function main():void{\n".into(), 135, "}"),
+    let head = (0..32)
+        .map(|i| format!("i{i}=0"))
+        .collect::<Vec<_>>()
+        .join(",");
+    for (prefix, heads, tails, suffix) in [
+        ("export function main():void{".into(), 4, 2, "}"),
         (
             format!(
-                "function f({}):void{{\n",
+                "function f({}):void{{",
                 (0..32)
                     .map(|i| format!("p{i}:number=1"))
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            102,
+            3,
+            3,
             "}export function main():void{}",
         ),
     ] {
         let source = format!(
-            "{prefix}{}\n  for(;false;){{}}\n  print('later');\n{suffix}",
-            "for(;false;){}".repeat(count)
+            "{prefix}{}{}for(;false;){{print('later');}}{}{suffix}",
+            format!("for(let {head};false;){{").repeat(heads),
+            "for(;false;){".repeat(tails),
+            "}".repeat(heads + tails)
         );
         position(
             &source,
-            "for(;false;){}\n  print",
+            "for(;false;){print",
             "limit:temporaries",
             compile(source.as_bytes(), Limits::default()).unwrap_err(),
         );

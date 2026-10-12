@@ -8,7 +8,7 @@ pub const ARGUMENT_BOUND: usize = 32;
 pub const TEMPLATE_PART_BOUND: usize = 1025;
 /// Non-spill locals per function, including library locals and default-parameter copies.
 pub const TEMPORARY_BOUND: usize = 136;
-/// Locals per function before bindings spill; includes all nested scopes.
+/// Locals per function before bindings spill; loop locals count by their live maximum.
 /// The measured native ceiling is 200. Reserve 24 locals and 79 registers.
 pub const LOCAL_BUDGET: usize = 176;
 /// Distinct tested references per true or false set of a boolean binding initializer.

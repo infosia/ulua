@@ -59,12 +59,33 @@ fn spill_tables_share_the_local_budget_with_parameters_and_loop_storage() {
         .split("\nend) ::")
         .next()
         .unwrap();
-    let locals = body
+    let mut scopes = vec![];
+    let mut live = 32;
+    let mut maximum = live;
+    for line in body.lines().map(str::trim) {
+        if line.starts_with("local ") {
+            live += 1;
+            maximum = maximum.max(live);
+        }
+        if line == "do" || line == "repeat" || line.ends_with(" do") || line.ends_with(" then") {
+            scopes.push(live);
+        } else if line == "end" || line == "until true" {
+            live = scopes.pop().unwrap();
+        } else if line == "else" {
+            live = *scopes.last().unwrap();
+        }
+    }
+    assert!(scopes.is_empty());
+    assert_eq!(maximum, ulua_compiler::LOCAL_BUDGET);
+    // Default copies use 32 binding declarations. The other local bindings do not spill.
+    let bindings = body
         .lines()
-        .filter(|line| line.starts_with("    local "))
+        .filter(|line| line.trim().starts_with("local __ulua_b"))
         .count()
-        + 32;
-    assert_eq!(locals, ulua_compiler::LOCAL_BUDGET);
-    assert_eq!(generated.matches("local __ulua_spill").count(), 8);
+        - 32;
+    assert_eq!(
+        generated.matches("local __ulua_spill").count(),
+        (5000 - bindings).div_ceil(128)
+    );
     let _script = support::Script::new(&source);
 }
