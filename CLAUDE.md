@@ -57,8 +57,9 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    (`collisions.md` C7), `tsc` can give TS2367 or TS2845; these two
    codes at that position are outside this rule. After such an
    equality, a null test (`collisions.md` C2), or an assignment of
-   `null`, `tsc` can narrow a reference to `never`. A TS2322, TS2345, or TS2339 whose message
-   names the type `never` is outside this rule.
+   `null`, `tsc` can narrow a reference to `never`. A `tsc`
+   diagnostic whose message names the type `never` is outside this
+   rule.
    Every other `tsc` diagnostic fails the program.
 4. **Values keep their native Luau representation.** A value of
    TypeScript type `T` is the plain Luau value of the Luau type that
