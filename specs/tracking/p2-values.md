@@ -1,6 +1,6 @@
 # P2 value representations
 
-Status: open; P2.1 and P2.2 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
+Status: open; P2.1, P2.2, P2.3 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
 `corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
 Decisions: D15, D16 (`plan.md` §8).
 
@@ -35,16 +35,17 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.3)
 
-- [ ] collisions.md C6.9 and pipeline.md §5.16 implemented; the prelude
+- [x] collisions.md C6.9 and pipeline.md §5.16 implemented; the prelude
   declares `pop`, `shift`, `at` with result `T` and `findLastIndex`.
-- [ ] P2.3 entries pass in full; later slices stay `unsupported`.
-- [ ] Each method has a direct test against `node` for its position
+- [x] P2.3 entries pass in full; later slices stay `unsupported`.
+- [x] Each method has a direct test against `node` for its position
   and edge rules; `sort` stability; the `array-modified` trap.
-- [ ] Growth shapes for method calls (many calls, long arrays are a
-  run cost, not a compile cost); `luau-analyze` passes.
-- [ ] §5.7 loop locals end with their loop, after the measurement it
+- [x] Growth shapes for method calls; `luau-analyze` passes.
+- [x] §5.7 loop locals end with their loop, after the measurement it
   names; 200 sequential `for (let i...)` loops in one function compile.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] D17 and D18 implemented with their corpus entries.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 4).
 
 Source of the method set: the owner's prior project, with one change:
 `find` and `findLast` stay rejected (D16).
@@ -71,6 +72,24 @@ Source of the method set: the owner's prior project, with one change:
   (round 4).
 
 ## Measurements
+
+### P2.3 Phase Review round 4
+
+Reviewer: fresh agent, diff `9a74af7..64cce70`. No CRITICAL, no
+MAJOR, 3 MINOR. No accepted probe gives a `tsc` code outside
+invariant 3; the `never` exception matched only contradictory
+equalities; D18 code matches its text; P2.3 methods and D17 hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The witness predicate rejects TS2845 when an operand is narrowed to `never` (`n === NaN` after `n === 1 && n === 2`) | MINOR | `corpus.mjs` counts a `never` operand as either type; corpus.md text |
+| A member read on a reference narrowed to `never` gives TS2339 (`s.length` after `s === "a"` and `s === "b"`); unreachable while string members and records are `unsupported` | MINOR | Gap for P2.4 and P2.5 |
+| The predicate has a second copy in `crates/ulua/tests/support/equality.mjs` | MINOR | Gap: the test imports the witness predicate (next implementation task) |
+
+### P2.3 close
+
+`sh tools/gate.sh full` passes: corpus 36 accept, 87 reject, 5 trap.
+Running tasks at the close: none.
 
 ### P2.3 Phase Review round 3 (with D17 and D18)
 
@@ -372,6 +391,13 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 ## Failures before the fix
 
 ## Gaps
+
+- P2.4 and P2.5: after a contradictory accepted equality, a member read
+  on the `never` reference gives TS2339; the contract decides it before
+  string members or record fields open.
+- The witness predicate has a copy in `crates/ulua/tests/support/
+  equality.mjs`; the next implementation task makes the test import
+  `tools/witness/corpus.mjs`'s predicate.
 
 - P2.2 and P2.5: an arrow whose inferred result contains a function
   type at any depth (array element, nullable member, record field)

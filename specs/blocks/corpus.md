@@ -69,8 +69,8 @@ Each entry starts with `//` header lines, in this order:
   prelude and every accept and trap entry reports zero errors, except
   the codes of an `equality` header: each such diagnostic lies on a
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
-  `number`, `string`, or `boolean` type (literal types widened) for
-  TS2367 and TS2845; each TS2322 or TS2345 names the type `never` in its
+  `number`, `string`, or `boolean` type (literal types widened; an
+  operand narrowed to `never` counts as either) for TS2367 and TS2845; each TS2322 or TS2345 names the type `never` in its
   message; and the codes equal the codes of the header. One
   program over the prelude and every reject entry reports, per file,
   the codes that its header states.

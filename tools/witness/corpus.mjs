@@ -129,13 +129,17 @@ function isAcceptedEquality(d, checker) {
   if (!node || node.getStart(d.file) !== d.start || node.getEnd() !== d.start + d.length) return false;
   const kind = (e) => {
     const t = checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(e));
+    // A contradictory accepted equality narrows an operand to `never`.
+    if (t.flags & ts.TypeFlags.Never) return "never";
     if (t.flags & ts.TypeFlags.NumberLike) return "number";
     if (t.flags & ts.TypeFlags.StringLike) return "string";
     if (t.flags & ts.TypeFlags.BooleanLike) return "boolean";
     return null;
   };
   const left = kind(node.left);
-  return left !== null && left === kind(node.right);
+  const right = kind(node.right);
+  if (left === null || right === null) return false;
+  return left === right || left === "never" || right === "never";
 }
 
 async function runNode(entry) {
