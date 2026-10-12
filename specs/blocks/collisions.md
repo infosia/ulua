@@ -474,7 +474,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`, `r116`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order

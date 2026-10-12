@@ -17,7 +17,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
 | P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`, `a47`, `a48`, `a49`, `a50`, `t07`; retired `r05` |
-| P2.6 | Classes | `a16`, `a18`, `a21`, `a44`, `a45`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59`, `r112`, `r113`, `r114` |
+| P2.6 | Classes | `a16`, `a18`, `a21`, `a44`, `a45`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59`, `r112`, `r113`, `r114`, `r116` |
 | P2.7 | Exceptions | contract and entries to write |
 
 ## Carry-over into P2
