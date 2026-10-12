@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 27, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 28, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -12,7 +12,8 @@ set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
 closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
 P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4; Rev 27: C1.5 structural object
-types (D19), C2 strict null tests, C7 object identity, P2.5).
+types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
+function declarations, P2.5 implementation).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -77,9 +78,13 @@ results, and object fields.
    its first argument (C14). A class instance seen through an object
    type, or an object literal seen through a class type, selects the
    wrong call form.
+6. A field named `__proto__` is rejected, in an object type and in an
+   object literal. `node` reads `{ __proto__: 1 }.__proto__` as the
+   prototype object and prints `[object Object]`. The Luau table field
+   holds `1`.
 
 Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`, `r84`,
-`r54`.
+`r54`, `r102`.
 
 ## C2. Absence — `T | null` only
 
@@ -602,11 +607,13 @@ says `T`. The checker narrows only where nothing else can run a write:
 3. The narrowing ends at the next assignment to `x` on that path.
 4. The narrowing of a `let` binding or a parameter does not continue
    into a nested function or arrow body. The body can run after a later
-   assignment. The narrowing of a `const` binding continues.
+   assignment. The narrowing of a `const` binding continues into an
+   arrow body. It does not continue into a nested function declaration:
+   the declaration is hoisted, and `tsc` gives TS18047 there.
 5. A field, an element, and every other reference are never narrowed.
    Copy the value into a `const` to narrow it.
 
-Accept: `a14`. Reject: `r67`, `r68`, `r69`.
+Accept: `a14`. Reject: `r67`, `r68`, `r69`, `r101`.
 
 ## Open items
 
