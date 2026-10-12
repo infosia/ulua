@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 22, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 23, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -9,7 +9,9 @@ Rev 17: C7 rule 4 as a flow fact, round 5; Rev 18: aliased conditions,
 literal conditions, strict-mode early errors, round 6; Rev 19:
 `ALIAS_TEST_BOUND`, round 7; Rev 20: nested bodies inherit the tested
 set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
-closures inside a declaration, C15 closures note, P2.1 review 2).
+closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
+C6.3 divergence text, C7 array literal operands and `for…of` bindings,
+P2.2 review).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -203,8 +205,12 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
    outside the element type.
 3. A write with an integer index in `[0, length]` is accepted. An index
    equal to `length` appends. Any other index traps with
-   `index-out-of-range`. JavaScript makes a hole, which reads as
-   `undefined`. The check runs at the store, after the right side is
+   `index-out-of-range`. This is a divergence. Measured with `node`:
+   an integer index above `length` makes a hole, which reads as
+   `undefined`; a negative, non-integer, NaN, infinite, or very large
+   index (`-1`, `0.5`, `NaN`, `Infinity`, `1e300`, `2^32`) writes a
+   property that is not an element, and `length` does not change. The
+   Luau run traps in each case. The check runs at the store, after the right side is
    evaluated, against the length at that time (C12).
 4. `length` lowers to `#xs`. A write to `length` is rejected.
 5. An element type that includes `null` is rejected. A `nil` element
@@ -243,14 +249,16 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
   1. `===`, `!==`, `==`, and `!=` do not take `boolean` operands. Write `!`, `&&`,
      `||`, or `?:`.
   2. An operand that is `NaN` (in parentheses or not) is rejected: `tsc`
-     gives TS2845.
+     gives TS2845. An operand that is an array literal (in parentheses
+     or not) is rejected: `tsc` gives TS2839, because the comparison is
+     by identity and the literal is a new array.
   3. At least one operand is *wide*. A wide operand is one of these
      forms:
      - a call to a function that declares its result type;
      - a binary `+`, `-`, `*`, `/`, or `%` expression;
      - `-e`, where `e` without its parentheses is not a numeric literal;
-     - a reference to a `let` binding or a parameter that is not
-       *tested* at that point;
+     - a reference to a `let` binding, a parameter, or a `for…of`
+       binding that is not *tested* at that point;
      - a reference to a `const` binding that is not *tested* at that
        point, if its initializer is wide;
      - `(e)`, where `e` is wide.
@@ -299,7 +307,7 @@ Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
      §3.10).
 
 Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`, `r76`, `r77`, `r79`, `r80`, `r83`.
+`r74`, `r76`, `r77`, `r79`, `r80`, `r83`, `r89`.
 
 ## C8. Forms outside the subset
 
@@ -400,7 +408,8 @@ Where the plain Luau form reads a value later, the lowering copies the
 value into a temporary at the JavaScript point. Where the plain Luau form
 evaluates a part earlier, the lowering orders the statements.
 
-Instances of the rule, each pinned in `a18`:
+Instances of the rule, each pinned in `a18`; P2.2 also pins 3, 4, 5,
+and 6 in `a31`:
 
 1. A binary operator reads its left operand before it evaluates the
    right operand.
@@ -415,7 +424,7 @@ Instances of the rule, each pinned in `a18`:
 6. `xs.push(e)` evaluates `xs`, then `e`, then reads the length of
    `xs`, then stores. `xs[#xs + 1] = e` reads the length before `e`.
 
-Accept: `a18`.
+Accept: `a18`, `a31`.
 
 ## C13. Construction
 

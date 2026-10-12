@@ -12,6 +12,7 @@ Rev 8: §5.14.3 parentheses for an optional function type (P2.1 review).
 Rev 9: §5.14.3 nested aliases (P2.1 review 2).
 Rev 10: §3.10 interned types and product shapes (P2.1 review 3).
 Rev 11: §4.8 traps, §5.15 arrays (P2.2).
+Rev 12: §4.8 chunk argument, §3.10 densest shapes, §5.15 helpers (P2.2 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -102,7 +103,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     id. A type read, a type copy, a type equality test, and a type hash
     cost O(1). The growth shapes include the product of two sizes: a
     wide type read by many references, and every later pair that a
-    slice adds.
+    slice adds. For each source construct, the growth test also
+    measures its densest repetition (the shortest source form, nested
+    or chained where the construct allows it) at the source ceiling,
+    with generated names at their longest. The output check of the
+    growth test runs at the ceiling.
     The generated Luau has at most `OUTPUT_FACTOR` bytes per source
     byte, plus a fixed prelude. The emitter checks the bound on each
     module. A module over the bound gives `internal`. §7 records the
@@ -138,7 +143,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    budget allocator, `luaL_openlibs`, and `luaL_sandbox`. Each call
    runs on a thread from `luaL_sandboxthread`.
 8. **Traps.** The generated code raises a trap through one native
-   function of the shim, read once into a generated local. The
+   function of the shim. The shim passes the function as the first
+   argument of the chunk; the chunk reads it from `...` into a
+   generated local. The chunk calls no `getfenv` and reads no global
+   for it: `getfenv` turns off the Luau safe-environment
+   optimizations. The
    function takes the trap kind as a small integer, records it in the
    instance, and raises a Luau error. The shim maps the recorded kind to
    the code `trap:<kind>` (corpus.md §6). A script cannot call the
@@ -253,6 +262,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        in parentheses where Luau needs them (§5.14.3).
     2. An array literal lowers to a table constructor of its elements,
        each through the C12 temporaries in source order.
+    The checks of rules 3 to 5 run in generated helper functions of the
+    chunk prelude, one call per element access, so the emitted size of
+    one access is a small constant.
     3. A read `xs[i]` evaluates `xs`, then `i` (C12). It traps
        `index-out-of-range` unless `i` is an integer in `[0, #xs)`; the
        test runs on `i` before `i + 1` (C6.1, C6.2). It then reads key

@@ -13,7 +13,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | Slice | Family | Entries |
 |---|---|---|
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
-| P2.2 | Arrays | `a09`, `a13`, `a17`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64` |
+| P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
 | P2.4 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
 | P2.5 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
@@ -185,6 +185,23 @@ thread needs 47 to 79 KB. The full run passes at `ulimit -s` 1024 and
 
 `sh tools/gate.sh full` passes: 63 entries in P2.1 or earlier, 17
 generated modules, 13 stress modules. Running tasks at the close: none.
+
+### P2.2 Phase Review round 1
+
+Reviewer: fresh agent, diff `4d8a9b9..182995b`. 2 MAJOR, 4 MINOR, 2
+notes. Index checks, evaluation order, aliasing, closures in `for…of`,
+traps, and budgets agree with `node` or trap as C6 states.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The output bound is reachable: each `[i]` (3 bytes) emits about 230 bytes; chained compound writes inside an arrow after 100 functions exceed 80 and give `internal`. The gate measured output at 32 KiB and had no chained-index shape | MAJOR | pipeline.md Rev 12: helper calls per access (§5.15), densest shape per construct at the ceiling (§3.10) |
+| `a === [5, 2]` compiles; `tsc` gives TS2839 | MAJOR | C7 rule 2; `r89` |
+| C6.3 says JavaScript makes a hole for every out-of-range write; for a negative, non-integer, NaN, infinite, or huge index it writes a property and keeps `length` | MINOR | C6.3 states the divergence with the measured cases |
+| `pipeline.md` §7 states a prelude of 843 B; it is 921 B | MINOR | Updated after the fix |
+| `p22_tests.rs:61-62` repeats an assertion; no test compiles a module-level literal at the budget | MINOR | Fix |
+| C12.3, C12.4, C12.6 have no active entry in P2.2 (`a18` is P2.5) | MINOR | `a31` |
+| Note: the prelude calls `getfenv()`, which turns off the Luau safe-environment optimizations | note | §4.8: the trap function is a chunk argument |
+| Note: `for (const x of xs) if (x === 2)` gives C7 | note | C7 rule 3: a `for…of` binding is wide |
 
 ## Failures before the fix
 
