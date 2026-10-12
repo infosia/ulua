@@ -23,6 +23,9 @@ impl Emitter<'_> {
     pub(super) fn statements(&mut self, body: &[S], depth: u32) -> Result<(), Diagnostic> {
         for s in body {
             self.statement(s, depth)?;
+            if ir::abrupt(s, true) {
+                break;
+            }
         }
         Ok(())
     }
@@ -257,6 +260,47 @@ impl Emitter<'_> {
                 self.generated_live = generated_before;
                 self.joins.leave();
             }
+            S::Try(a, b, f) => self.try_statement(
+                a,
+                b.as_ref(),
+                f.as_deref(),
+                ir::abrupt(s, false),
+                ir::abrupt(s, true),
+                depth,
+            )?,
+            S::Throw(e) => {
+                let value = self.expression(e, depth)?;
+                self.line(format!("error({}, 0)", self.temp(value)));
+                self.release(value);
+            }
+            S::ErrorField(a, key, op, e) => {
+                let receiver = self.expression(a, depth)?;
+                let old = if op.is_some() {
+                    let slot = self.slot(&Type::String)?;
+                    self.write_slot(slot, format!("{}.{}", self.temp(receiver), key));
+                    Some(slot)
+                } else {
+                    None
+                };
+                let value = self.expression(e, depth)?;
+                let result = if let Some(old) = old {
+                    format!("{} .. {}", self.temp(old), self.temp(value))
+                } else {
+                    self.temp(value)
+                };
+                self.write(
+                    &format!("{}.{}", self.temp(receiver), key),
+                    result,
+                    "string",
+                );
+                self.release(receiver);
+                self.release(value);
+                if let Some(old) = old {
+                    self.release(old);
+                }
+            }
+            S::Break if self.crosses_protection() => self.jump_completion(3),
+            S::Continue if self.crosses_protection() => self.jump_completion(4),
             S::Break => {
                 if let Some(Loop {
                     tail: Some(tail), ..
@@ -283,10 +327,18 @@ impl Emitter<'_> {
             S::Return(value) => {
                 if let Some(e) = value {
                     let v = self.expression(e, depth)?;
-                    self.line(format!("do return {} end", self.temp(v)));
+                    if self.protected.is_empty() {
+                        self.line(format!("do return {} end", self.temp(v)));
+                    } else {
+                        self.line(format!("do return 1, {}, 0 end", self.temp(v)));
+                    }
                     self.release(v);
                 } else {
-                    self.line("do return end");
+                    if self.protected.is_empty() {
+                        self.line("do return end");
+                    } else {
+                        self.line("do return 1, nil, 0 end");
+                    }
                 }
             }
         }

@@ -484,3 +484,8 @@ mod p22_tests;
 
 #[cfg(test)]
 mod p23_tests;
+
+#[cfg(test)]
+mod p27_shapes;
+#[cfg(test)]
+mod p27_tests;

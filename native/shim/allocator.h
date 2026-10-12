@@ -13,6 +13,8 @@ struct ulua_vm {
     int flag;
     int trap_kind;
     int exports;
+    int errors;
+    char exception[256];
     bool charging;
 #ifdef ULUA_MEASUREMENTS
     uint64_t allocation_bytes;

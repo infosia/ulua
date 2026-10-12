@@ -196,6 +196,30 @@ impl Checker<'_> {
                             "Only literal zero can clear array length",
                         ));
                     }
+                    if receiver.ty == Type::Error {
+                        let key = exceptions::field(m.property.name.as_str()).ok_or_else(|| {
+                            self.error(m.span, "C17", "Error has only name and message")
+                        })?;
+                        let mut value = self.expr_as(&a.right, depth, false, Some(Type::String))?;
+                        if a.operator.as_str() == "+="
+                            && matches!(value.ty, Type::String | Type::Number | Type::Boolean)
+                        {
+                            value = string_value(value);
+                        }
+                        self.flow(&value.ty, Some(&Type::String), a.span)?;
+                        let op = match a.operator.as_str() {
+                            "=" => None,
+                            "+=" => Some(".."),
+                            _ => {
+                                return Err(self.error(
+                                    a.span,
+                                    "C17",
+                                    "Error field assignment needs a string",
+                                ));
+                            }
+                        };
+                        return Ok(S::ErrorField(receiver, key, op, value));
+                    }
                     self.nullable_use(m.span, &[receiver.ty])?;
                     let key = self.field_key(m.property.name.as_str());
                     self.reject_method_value(receiver.ty, key, m.span)?;
@@ -440,6 +464,15 @@ impl Checker<'_> {
                 self.reachable = false;
                 S::Continue
             }
+            Statement::ThrowStatement(t) => {
+                let value = self.catch_value(&t.argument, depth)?;
+                if !matches!(value.ty, Type::Error | Type::Unknown) {
+                    return Err(self.error(t.span, "C17", "Throw needs an Error value"));
+                }
+                self.reachable = false;
+                S::Throw(value)
+            }
+            Statement::TryStatement(t) => self.try_statement(t, depth)?,
             Statement::ReturnStatement(r) => {
                 if self.in_constructor && r.argument.is_some() {
                     return Err(self.error(r.span, "C11", "A constructor return has no argument"));
@@ -484,7 +517,8 @@ pub(super) fn returns(body: &[S]) -> bool {
                 pending.extend(body.iter().map(Work::Form));
             }
             Work::Form(s) => match s.form() {
-                S::Return(_) => values.push(true),
+                S::Return(_) | S::Throw(_) => values.push(true),
+                S::Try(_, _, _) => values.push(ir::abrupt(s, false)),
                 S::Block(b) => pending.push(Work::Body(b)),
                 S::If(_, a, Some(b)) => {
                     pending.push(Work::Both);

@@ -73,6 +73,16 @@ pub(crate) fn check<'a>(
                         }
                     }
                 }
+                Statement::ThrowStatement(n) => pending.push((Node::Expression(&n.argument), next)),
+                Statement::TryStatement(n) => {
+                    pending.extend(n.block.body.iter().map(|s| (Node::Statement(s), next + 1)));
+                    if let Some(c) = &n.handler {
+                        pending.extend(c.body.body.iter().map(|s| (Node::Statement(s), next + 1)));
+                    }
+                    if let Some(f) = &n.finalizer {
+                        pending.extend(f.body.iter().map(|s| (Node::Statement(s), next + 1)));
+                    }
+                }
                 Statement::ReturnStatement(n) => {
                     if let Some(e) = &n.argument {
                         pending.push((Node::Expression(e), next));

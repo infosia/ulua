@@ -20,11 +20,20 @@ pub(crate) fn nodes(module: &Module) -> usize {
             Statement::Declare(_, e) | Statement::Assign(_, _, e) | Statement::Eval(e) => {
                 expressions.push(e)
             }
-            Statement::Field(a, _, _, e) => expressions.extend([a, e]),
+            Statement::Field(a, _, _, e) | Statement::ErrorField(a, _, _, e) => {
+                expressions.extend([a, e])
+            }
             Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
                 statements.push(b);
+            }
+            Statement::Try(a, b, f) => {
+                statements.push(a);
+                if let Some((_, b)) = b {
+                    statements.push(b);
+                }
+                statements.extend(f.iter().map(|s| s.as_ref()));
             }
             Statement::Block(b) => statements.extend(b),
             Statement::If(e, a, b) => {
@@ -42,14 +51,18 @@ pub(crate) fn nodes(module: &Module) -> usize {
                 statements.extend(update.iter().map(|s| s.as_ref()));
                 statements.push(body);
             }
-            Statement::Return(Some(e)) => expressions.push(e),
+            Statement::Return(Some(e)) | Statement::Throw(e) => expressions.push(e),
             _ => {}
         }
     }
     while let Some(e) = expressions.pop() {
         count += 1;
         match &e.kind {
-            ExprKind::Field(a, _)
+            ExprKind::Error(_, a)
+            | ExprKind::InstanceOf(a, _)
+            | ExprKind::ErrorField(a, _)
+            | ExprKind::OptionalErrorField(a, _)
+            | ExprKind::Field(a, _)
             | ExprKind::OptionalField(a, _)
             | ExprKind::OptionalLength(a)
             | ExprKind::Unary(_, a)

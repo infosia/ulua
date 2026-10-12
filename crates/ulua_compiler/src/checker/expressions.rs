@@ -76,7 +76,15 @@ impl Checker<'_> {
                     let ty = self.bindings[id]
                         .ty
                         .ok_or_else(|| self.error(n.span, "C10", "Binding is not initialized"))?;
-                    (self.read_type(id, ty, n.span.start), ExprKind::Read(id))
+                    let ty = self.read_type(id, ty, n.span.start);
+                    if ty == Type::Unknown && !self.catch_use {
+                        return Err(self.error(
+                            n.span,
+                            "C17",
+                            "Catch binding needs an instanceof test",
+                        ));
+                    }
+                    (ty, ExprKind::Read(id))
                 } else {
                     match n.name.as_str() {
                         "Infinity" => (Type::Number, ExprKind::Number(f64::INFINITY)),
@@ -128,6 +136,9 @@ impl Checker<'_> {
                     required,
                     ExprKind::Unary(if op == "!" { "not" } else { "-" }, Box::new(a)),
                 )
+            }
+            Expression::BinaryExpression(b) if b.operator.as_str() == "instanceof" => {
+                return self.instance_of(e, b, depth, statement);
             }
             Expression::BinaryExpression(b) => {
                 let op = b.operator.as_str();
@@ -331,6 +342,17 @@ impl Checker<'_> {
                     ));
                 }
                 let a = self.expr(&m.object, depth, false)?;
+                if a.ty == Type::Error {
+                    let key = exceptions::field(m.property.name.as_str()).ok_or_else(|| {
+                        self.error(m.span, "C17", "Error has only name and message")
+                    })?;
+                    return self.finish_expr(
+                        e,
+                        statement,
+                        Type::String,
+                        ExprKind::ErrorField(Box::new(a), key),
+                    );
+                }
                 if self.types.element(a.ty).is_none() && a.ty != Type::String {
                     if self.types.contains_null(a.ty) {
                         return Err(self.error(
@@ -357,6 +379,10 @@ impl Checker<'_> {
                 (Type::Number, ExprKind::Length(Box::new(a)))
             }
             Expression::CallExpression(call) => {
+                if matches!(&call.callee, Expression::Identifier(n) if exceptions::family(n.name.as_str()).is_some() && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    return Err(self.error(call.span, "C17", "Error construction needs new"));
+                }
                 let mut field_callee = None;
                 if let Expression::StaticMemberExpression(m) = &call.callee
                     && !m.optional
@@ -610,7 +636,13 @@ impl Checker<'_> {
             Expression::ChainExpression(_) => {
                 return Err(self.error(e.span(), "C2", "Optional field only precedes coalescing"));
             }
-            Expression::NewExpression(new) => self.new_instance(new, depth)?,
+            Expression::NewExpression(new) => {
+                if let Some(value) = self.new_error(new, depth)? {
+                    value
+                } else {
+                    self.new_instance(new, depth)?
+                }
+            }
             Expression::ThisExpression(this) => self.this(this.span)?,
             _ => {
                 return Err(self.error(
@@ -622,7 +654,7 @@ impl Checker<'_> {
         };
         self.finish_expr(e, statement, ty, kind)
     }
-    fn finish_expr(
+    pub(super) fn finish_expr(
         &mut self,
         e: &Expression<'_>,
         statement: bool,

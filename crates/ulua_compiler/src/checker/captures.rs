@@ -70,6 +70,38 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                 }
                 Statement::VariableDeclaration(d) => variables(d, scope, &mut names, &mut pending),
                 Statement::ExpressionStatement(e) => pending.push(Work::Expr(&e.expression, scope)),
+                Statement::ThrowStatement(t) => pending.push(Work::Expr(&t.argument, scope)),
+                Statement::TryStatement(t) => {
+                    let block = Scope {
+                        span: t.block.span,
+                        ..scope
+                    };
+                    pending.extend(t.block.body.iter().map(|s| Work::Statement(s, block)));
+                    if let Some(c) = &t.handler {
+                        let block = Scope {
+                            span: c.body.span,
+                            ..scope
+                        };
+                        if let Some(p) = &c.param
+                            && let BindingPattern::BindingIdentifier(n) = &p.pattern
+                        {
+                            names.push(Name {
+                                name: n.name.to_string(),
+                                scope: block,
+                                start: p.span.start,
+                                mutable: false,
+                            });
+                        }
+                        pending.extend(c.body.body.iter().map(|s| Work::Statement(s, block)));
+                    }
+                    if let Some(f) = &t.finalizer {
+                        let block = Scope {
+                            span: f.span,
+                            ..scope
+                        };
+                        pending.extend(f.body.iter().map(|s| Work::Statement(s, block)));
+                    }
+                }
                 Statement::ReturnStatement(r) => {
                     if let Some(e) = &r.argument {
                         pending.push(Work::Expr(e, scope));

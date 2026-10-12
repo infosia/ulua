@@ -14,6 +14,7 @@ pub(super) struct Emission {
 }
 
 pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
+    let library_locals = LIBRARY_LOCALS + if module.exceptions { 4 } else { 0 };
     let (method_prelude, method_locals) = methods::prelude(&module.methods)?;
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
@@ -35,6 +36,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     for ids in &mut owners {
         ids.sort_by_key(|id| module.bindings[*id].start);
     }
+    let mut catch_ids = std::collections::HashSet::new();
     let mut work: Vec<_> = module.body.iter().collect();
     for f in &module.functions {
         work.extend(&f.initializers);
@@ -47,6 +49,14 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
                 for &id in ids {
                     groups[id] = key;
                 }
+            }
+            S::Try(a, b, f) => {
+                work.push(a);
+                if let Some((id, b)) = b {
+                    catch_ids.extend(id.iter().copied());
+                    work.push(b);
+                }
+                work.extend(f.iter().map(|s| s.as_ref()));
             }
             S::Block(b) => work.extend(b),
             S::If(_, a, b) => {
@@ -62,19 +72,22 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
             _ => {}
         }
     }
+    for ids in &mut owners {
+        ids.retain(|id| !catch_ids.contains(id));
+    }
     let types = types::FunctionTypes::new(module)?;
     let mut locations = HashMap::new();
     let empty = HashMap::new();
     for owner in std::iter::once(0).chain(module.functions.iter().map(|f| f.binding + 1)) {
         let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
         probe.overhead = if owner == 0 {
-            LIBRARY_LOCALS + method_locals
+            library_locals + method_locals
         } else {
             0
         };
         let (parameters, overhead) = if owner == 0 {
             probe.statements(&module.body, 0)?;
-            (vec![], LIBRARY_LOCALS + method_locals)
+            (vec![], library_locals + method_locals)
         } else {
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
@@ -102,6 +115,10 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         }
     }
     for name in [
+        "__ulua_register",
+        "__ulua_errors",
+        "__ulua_error",
+        "__ulua_instance",
         "__ulua_concat",
         "__ulua_print",
         "__ulua_fmod",
@@ -131,6 +148,9 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     }
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
+    if module.exceptions {
+        out.push_str(prelude::EXCEPTIONS);
+    }
     out.push_str(&method_prelude);
     out.push_str(&types.declarations);
     if let Some(layout) = &context.layouts[0] {

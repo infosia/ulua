@@ -207,6 +207,8 @@ mod tests {
                     panic!("method call");
                 };
                 let mut c = Checker {
+                    catch_use: false,
+                    uses_exceptions: false,
                     source: source.as_bytes(),
                     aliases: Default::default(),
                     classes: Default::default(),

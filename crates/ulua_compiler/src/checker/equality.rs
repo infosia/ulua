@@ -43,8 +43,10 @@ impl Checker<'_> {
             return Err(self.error(span, "C2", "Null test requires a nullable operand"));
         }
         if self.types.equal(a.ty, b.ty)
-            && (matches!(a.ty, Type::Number | Type::String | Type::Boolean)
-                || self.types.element(a.ty).is_some()
+            && (matches!(
+                a.ty,
+                Type::Number | Type::String | Type::Boolean | Type::Error
+            ) || self.types.element(a.ty).is_some()
                 || self.types.fields(a.ty).is_some())
         {
             return Ok(());

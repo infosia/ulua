@@ -40,3 +40,19 @@ local function __ulua_set<T>(a: {T}, i: number, v: T): ()
     a[i + 1] = v
 end
 "#;
+
+pub(super) const EXCEPTIONS: &str = r#"local __ulua_register: (any) -> () = select(2, ...)
+type __ulua_Error = {name: string, message: string}
+local __ulua_errors: {[__ulua_Error]: string} = setmetatable({}, {__mode = "k"})
+__ulua_register(__ulua_errors)
+local function __ulua_error(kind: string, message: string): __ulua_Error
+    local value: __ulua_Error = {name = kind, message = message}
+    __ulua_errors[value] = kind
+    return value
+end
+local function __ulua_instance(value: unknown, kind: string): boolean
+    if typeof(value) ~= "table" then return false end
+    local actual = __ulua_errors[value :: __ulua_Error]
+    return actual ~= nil and (kind == "Error" or actual == kind)
+end
+"#;

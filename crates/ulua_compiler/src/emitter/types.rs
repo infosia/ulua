@@ -20,6 +20,8 @@ impl FunctionTypes {
         let mut types = Self {
             identities: module.types.identities().collect(),
             names: [
+                Type::Error,
+                Type::Unknown,
                 Type::Null,
                 Type::Number,
                 Type::Boolean,
@@ -54,11 +56,18 @@ impl FunctionTypes {
         while let Some(statement) = statements.pop() {
             match statement.form() {
                 S::Declare(_, e) | S::Assign(_, _, e) | S::Eval(e) => expressions.push(e),
-                S::Field(a, _, _, e) => expressions.extend([a, e]),
+                S::Field(a, _, _, e) | S::ErrorField(a, _, _, e) => expressions.extend([a, e]),
                 S::Element(a, i, _, e) => expressions.extend([a, i, e]),
                 S::ForOf(_, a, b) => {
                     expressions.push(a);
                     statements.push(b);
+                }
+                S::Try(a, b, f) => {
+                    statements.push(a);
+                    if let Some((_, b)) = b {
+                        statements.push(b);
+                    }
+                    statements.extend(f.iter().map(|s| s.as_ref()));
                 }
                 S::Block(body) => statements.extend(body),
                 S::If(e, a, b) => {
@@ -76,7 +85,7 @@ impl FunctionTypes {
                     statements.extend(update.iter().map(|s| s.as_ref()));
                     statements.push(body);
                 }
-                S::Return(Some(e)) => expressions.push(e),
+                S::Return(Some(e)) | S::Throw(e) => expressions.push(e),
                 _ => {}
             }
         }
@@ -84,6 +93,10 @@ impl FunctionTypes {
             types.add(expression.ty, module, 0, expression.start)?;
             match &expression.kind {
                 E::OptionalLength(a)
+                | E::Error(_, a)
+                | E::InstanceOf(a, _)
+                | E::ErrorField(a, _)
+                | E::OptionalErrorField(a, _)
                 | E::Field(a, _)
                 | E::OptionalField(a, _)
                 | E::Unary(_, a)

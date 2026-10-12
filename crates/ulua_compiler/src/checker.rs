@@ -4,6 +4,7 @@ mod captures;
 mod classes;
 mod construction;
 mod equality;
+mod exceptions;
 mod expressions;
 mod functions;
 mod inference;
@@ -25,6 +26,8 @@ use std::collections::HashMap;
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
+    catch_use: bool,
+    uses_exceptions: bool,
     aliases: HashMap<String, Type>,
     classes: HashMap<Type, classes::ClassInfo>,
     class_bindings: std::collections::HashSet<usize>,
@@ -144,6 +147,12 @@ impl Checker<'_> {
                 };
                 if r.type_arguments.is_some() {
                     return Err(self.error(r.span, "C11", "Type arguments are rejected"));
+                }
+                if !self.aliases.contains_key(n.name.as_str())
+                    && exceptions::family(n.name.as_str()).is_some()
+                {
+                    self.uses_exceptions = true;
+                    return Ok(Type::Error);
                 }
                 *self
                     .aliases
@@ -276,6 +285,8 @@ pub(crate) fn check(
     let writes = captures::resolve(program);
     let mut c = Checker {
         source,
+        catch_use: false,
+        uses_exceptions: false,
         aliases: HashMap::new(),
         classes: HashMap::new(),
         class_bindings: Default::default(),
@@ -400,6 +411,7 @@ pub(crate) fn check(
         captured[id] |= owner != c.bindings[id].owner;
     }
     Ok(ir::Module {
+        exceptions: c.uses_exceptions,
         methods: c.methods,
         types: c.types,
         captured,

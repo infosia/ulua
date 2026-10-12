@@ -48,6 +48,42 @@ static int trap(lua_State* state) {
     vm->trap_kind = luaL_checkinteger(state, 1);
     luaL_error(state, "Script trap");
 }
+static int register_errors(lua_State* state) {
+    ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    vm->errors = lua_ref(state, 1);
+    return 0;
+}
+static void raise_call_error(lua_State* state, ulua_vm* vm) {
+    // This function runs inside load or call, below the native protection boundary.
+    const int error_index = lua_gettop(state);
+    if (!vm->flag && !vm->trap_kind && lua_istable(state, error_index) && vm->errors) {
+        lua_getref(state, vm->errors);
+        lua_pushvalue(state, error_index);
+        lua_rawget(state, -2);
+        if (!lua_isnil(state, -1)) {
+            lua_rawgetfield(state, error_index, "name");
+            size_t name_size = 0;
+            const char* name = lua_tolstring(state, -1, &name_size);
+            lua_rawgetfield(state, error_index, "message");
+            size_t text_size = 0;
+            const char* text = lua_tolstring(state, -1, &text_size);
+            if (name && text) {
+                size_t n = name_size > 255 ? 255 : name_size;
+                while (n && n < name_size && (static_cast<unsigned char>(name[n]) & 0xc0) == 0x80) --n;
+                std::memcpy(vm->exception, name, n);
+                if (n < 255) vm->exception[n++] = ':';
+                if (n < 255) vm->exception[n++] = ' ';
+                size_t m = text_size > 255 - n ? 255 - n : text_size;
+                while (m && m < text_size && (static_cast<unsigned char>(text[m]) & 0xc0) == 0x80) --m;
+                std::memcpy(vm->exception + n, text, m);
+                vm->exception[n + m] = 0;
+                vm->flag = SHIM_UNCAUGHT;
+            }
+        }
+        lua_settop(state, error_index);
+    }
+    lua_error(state);
+}
 static int setup(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, 1));
     luaL_openlibs(state);
@@ -90,6 +126,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         code = SHIM_INVALID_ARGUMENT;
         message(error, "Invalid argument");
     }
+    if (code == SHIM_UNCAUGHT) message(error, vm->exception);
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);
@@ -109,7 +146,8 @@ static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
     lua_pushcfunction(state, trap, "__ulua_trap");
-    lua_call(state, 1, 1);
+    lua_pushcfunction(state, register_errors, "register_errors");
+    if (lua_pcall(state, 2, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
     return 0;
@@ -132,7 +170,8 @@ static int call(lua_State* state) {
         if (value->type == ULUA_TYPE_NUMBER) lua_pushnumber(state, value->number);
         else lua_pushboolean(state, value->boolean);
     }
-    lua_call(state, static_cast<int>(args->count), args->result_type == ULUA_TYPE_VOID ? 0 : 1);
+    if (lua_pcall(state, static_cast<int>(args->count), args->result_type == ULUA_TYPE_VOID ? 0 : 1, 0) != LUA_OK)
+        raise_call_error(state, args->vm);
     ulua_value value = {};
     value.type = args->result_type;
     if (value.type == ULUA_TYPE_NUMBER) {

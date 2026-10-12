@@ -17,6 +17,8 @@ impl Type {
     pub(crate) const Void: Self = Self(3);
     pub(crate) const StringParts: Self = Self(4);
     pub(crate) const Null: Self = Self(5);
+    pub(crate) const Error: Self = Self(6);
+    pub(crate) const Unknown: Self = Self(7);
 
     pub(crate) fn tag(&self) -> u32 {
         match *self {
@@ -44,7 +46,7 @@ mod tests {
                 outer
             );
         }
-        assert_eq!(types.nodes.len(), 8);
+        assert_eq!(types.nodes.len(), 10);
         assert_eq!(types.functions.len(), 2);
         assert_eq!(std::mem::size_of::<Type>(), std::mem::size_of::<usize>());
         let Node::Function(stored) = &types.nodes[outer.0] else {
@@ -113,10 +115,19 @@ pub(crate) struct Types {
 impl Types {
     pub(crate) fn new() -> Self {
         Self {
-            nodes: ["number", "boolean", "string", "()", "{string}", "nil"]
-                .into_iter()
-                .map(Node::Primitive)
-                .collect(),
+            nodes: [
+                "number",
+                "boolean",
+                "string",
+                "()",
+                "{string}",
+                "nil",
+                "__ulua_Error",
+                "unknown",
+            ]
+            .into_iter()
+            .map(Node::Primitive)
+            .collect(),
             functions: HashMap::new(),
             function_views: HashMap::new(),
             array_views: HashMap::new(),
@@ -126,10 +137,10 @@ impl Types {
             records: HashMap::new(),
             anonymous_records: HashMap::new(),
             named_records: Default::default(),
-            field_counts: vec![0; 6],
-            depths: vec![0; 6],
+            field_counts: vec![0; 8],
+            depths: vec![0; 8],
             depths_ready: false,
-            canonical: (0..6).map(Type).collect(),
+            canonical: (0..8).map(Type).collect(),
             function_content: Default::default(),
         }
     }

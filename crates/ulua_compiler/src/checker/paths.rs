@@ -67,6 +67,11 @@ impl Join {
         }
         self.previous = Some(head);
     }
+    pub(super) fn invalidate(&mut self, id: usize) {
+        if self.previous.is_some() {
+            self.merged.insert(id, None);
+        }
+    }
     pub(super) fn finish(&self, facts: &mut Facts) -> Option<usize> {
         let head = self.previous?;
         facts.travel(head);

@@ -14,6 +14,7 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
+    pub(crate) exceptions: bool,
     pub(crate) methods: std::collections::BTreeSet<(Method, usize)>,
     pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,
@@ -55,6 +56,10 @@ pub(crate) struct Expr {
 }
 pub(crate) enum ExprKind {
     Null,
+    Error(&'static str, Box<Expr>),
+    InstanceOf(Box<Expr>, &'static str),
+    ErrorField(Box<Expr>, &'static str),
+    OptionalErrorField(Box<Expr>, &'static str),
     Object(Vec<(usize, Expr)>),
     Field(Box<Expr>, usize),
     OptionalField(Box<Expr>, usize),
@@ -102,6 +107,13 @@ pub(crate) enum Statement {
         Box<Statement>,
         Vec<usize>,
     ),
+    Try(
+        Box<Statement>,
+        Option<(Option<usize>, Box<Statement>)>,
+        Option<Box<Statement>>,
+    ),
+    Throw(Expr),
+    ErrorField(Expr, &'static str, Option<&'static str>, Expr),
     Break,
     Continue,
     Return(Option<Expr>),
@@ -118,11 +130,22 @@ impl Statement {
 
 // Nested loop exits do not exit this loop. The work list avoids another recursive walk.
 pub(crate) fn loop_break(body: &Statement) -> bool {
+    loop_jump(body, false)
+}
+fn loop_jump(body: &Statement, continuing: bool) -> bool {
     let mut pending = vec![body];
     while let Some(s) = pending.pop() {
         match s {
             Statement::Located(_, s) => pending.push(s),
             Statement::Break => return true,
+            Statement::Continue if continuing => return true,
+            Statement::Try(a, b, f) => {
+                pending.push(a);
+                if let Some((_, b)) = b {
+                    pending.push(b);
+                }
+                pending.extend(f.iter().map(|s| s.as_ref()));
+            }
             Statement::Block(b) => pending.extend(b),
             Statement::If(_, a, b) => {
                 pending.push(a);
@@ -150,11 +173,20 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 }
                 expressions.push(e);
             }
-            Statement::Field(a, _, _, e) => expressions.extend([a, e]),
+            Statement::Field(a, _, _, e) | Statement::ErrorField(a, _, _, e) => {
+                expressions.extend([a, e])
+            }
             Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
                 statements.push(b);
+            }
+            Statement::Try(a, b, f) => {
+                statements.push(a);
+                if let Some((_, b)) = b {
+                    statements.push(b);
+                }
+                statements.extend(f.iter().map(|s| s.as_ref()));
             }
             Statement::Block(b) => statements.extend(b),
             Statement::If(e, a, b) => {
@@ -172,7 +204,7 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 statements.extend(update.iter().map(|s| s.as_ref()));
                 statements.push(body);
             }
-            Statement::Return(Some(e)) => expressions.push(e),
+            Statement::Return(Some(e)) | Statement::Throw(e) => expressions.push(e),
             _ => {}
         }
     }
@@ -181,7 +213,11 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
             ExprKind::Read(id) => {
                 ids.push(*id);
             }
-            ExprKind::Field(a, _)
+            ExprKind::Error(_, a)
+            | ExprKind::InstanceOf(a, _)
+            | ExprKind::ErrorField(a, _)
+            | ExprKind::OptionalErrorField(a, _)
+            | ExprKind::Field(a, _)
             | ExprKind::OptionalField(a, _)
             | ExprKind::Unary(_, a)
             | ExprKind::Length(a) => expressions.push(a),
@@ -219,4 +255,24 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
         }
     }
     ids
+}
+
+// Checked depth bounds this walk. Jumps terminate a block, but do not cover a function return.
+pub(crate) fn abrupt(s: &Statement, jumps: bool) -> bool {
+    match s.form() {
+        Statement::Return(_) | Statement::Throw(_) => true,
+        Statement::Break | Statement::Continue => jumps,
+        Statement::Block(body) => body.iter().any(|s| abrupt(s, jumps)),
+        Statement::If(_, a, Some(b)) => abrupt(a, jumps) && abrupt(b, jumps),
+        Statement::Try(_, _, Some(f)) if !jumps && loop_jump(f, true) => false,
+        Statement::Try(a, b, f) => {
+            f.as_ref().is_some_and(|f| abrupt(f, jumps))
+                || (abrupt(a, jumps) && b.as_ref().is_none_or(|(_, b)| abrupt(b, jumps)))
+        }
+        Statement::While(test, body) => test.bare_true && !loop_break(body),
+        Statement::For(_, test, _, body, _) => {
+            test.as_ref().is_none_or(|t| t.bare_true) && !loop_break(body)
+        }
+        _ => false,
+    }
 }

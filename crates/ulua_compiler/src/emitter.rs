@@ -1,5 +1,6 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
 mod arrays;
+mod exceptions;
 mod expressions;
 mod functions;
 mod joins;
@@ -80,6 +81,7 @@ struct Emitter<'a> {
     overhead: usize,
     storage_offset: usize,
     loops: Vec<Loop>,
+    protected: Vec<usize>,
     joins: joins::Joins,
     context: Option<&'a functions::Emission>,
     upvalues: std::collections::HashSet<String>,
@@ -114,9 +116,14 @@ impl<'a> Emitter<'a> {
             generated_count: 0,
             generated_live: 0,
             generated_peak: 0,
-            overhead: if owner == 0 { LIBRARY_LOCALS } else { 0 },
+            overhead: if owner == 0 {
+                LIBRARY_LOCALS + if module.exceptions { 4 } else { 0 }
+            } else {
+                0
+            },
             storage_offset: 0,
             loops: vec![],
+            protected: vec![],
             joins: joins::Joins::default(),
             context: None,
             upvalues: std::collections::HashSet::new(),
@@ -215,6 +222,14 @@ impl<'a> Emitter<'a> {
     }
     fn capture(&mut self, location: &str) {
         let name = location.split('.').next().unwrap_or(location);
+        if name
+            .strip_prefix("__ulua_caught")
+            .and_then(|id| id.parse::<usize>().ok())
+            .and_then(|id| self.module.bindings.get(id))
+            .is_some_and(|b| b.owner == self.owner)
+        {
+            return;
+        }
         if let Some(context) = self.context {
             if context.locals[self.owner].contains(name)
                 || name.starts_with(&format!("__ulua_g{}_", self.owner))

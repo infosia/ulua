@@ -314,6 +314,26 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.7 implementation record
+
+- Codex task (fresh agent), 34 files. Error family, weak-keyed class
+  table, `throw`, `try`/`catch`/`finally` as protected closures with
+  completion values, stop re-raise with `error(v, 0)`, uncaught
+  exception at the ABI without context poisoning.
+- At the contract pin `915b04e`, every P2.7 entry gave C11.
+- Direct tests: 8 stop kinds × 3 positions (try, catch, finally) report
+  the code that each has without a `try`; the 20 `finally` cases; an
+  uncaught exception followed by another call on the same instance.
+- Depth: 21 nested `try` statements pass `luau-analyze -j1` and Luau;
+  the next gives `limit:nesting-depth`.
+- Growth (state and output ratios): sequential 3.964 / 4.025, nested
+  3.062 / 3.339, loop 3.982 / 4.145.
+- Random: 240 programs equal to `node`, `tsc`, and `luau-analyze`.
+- Test costs: direct 0.58 s, narrowing 0.42 s, stops 0.04 s, growth
+  0.38 s, state 0.16 s, random 1.75 s.
+- gate full: PASS, 163 entries; `cargo-test` 213 s, Luau witnesses
+  56 s.
+
 ### P2.6 Phase Review round 4
 
 Reviewer: fresh agent, diff `4a8a817..9ec2739`. 0 CRITICAL, 0 MAJOR, 0 MINOR. The round 3 resolution holds: the forwarding alias line is load-bearing; every analyzer call passes `-j1`. Random class graphs: 4,500 programs, 4,342 accepted (158 `limit:type-depth`), 0 `tsc` errors, 0 `luau-analyze` failures, 0 `node` differences; 66 of 400 emit a forwarding alias.

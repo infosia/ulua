@@ -110,6 +110,22 @@ impl Checker<'_> {
                 }
                 unknown
             }
+            E::InstanceOf(a, _) => {
+                if let E::Read(id) = a.kind
+                    && self.bindings[id].ty == Some(Type::Unknown)
+                {
+                    let mark = self.facts.mark();
+                    self.facts.set(id, Some(Narrowing::Known(true)));
+                    let yes = self.current_edge(true);
+                    self.facts.restore(mark);
+                    return Flow {
+                        logical: false,
+                        yes,
+                        no: base,
+                    };
+                }
+                unknown
+            }
             E::Logical(and, a, b) => {
                 let a = a.flow.unwrap_or(unknown);
                 let b = b.flow.unwrap_or(unknown);
@@ -223,10 +239,26 @@ impl Checker<'_> {
             }
         }
     }
+    // A finalizer writes after a pending break or continue has recorded its incoming facts.
+    pub(super) fn finalizer_jumps(&mut self, span: Span) {
+        let begin = self.assignments.partition_point(|a| a.1 < span.start);
+        let end = self.assignments.partition_point(|a| a.1 < span.end);
+        for (start, _) in &self.assignments[begin..end] {
+            if let Some(id) = self.binding_starts.get(start) {
+                for context in &mut self.loop_facts {
+                    context.exit.invalidate(*id);
+                    context.next.invalidate(*id);
+                }
+            }
+        }
+    }
     pub(super) fn read_type(&mut self, id: usize, ty: Type, _offset: u32) -> Type {
         // C16.8: an unreachable point has no incoming narrowing, even if the log retains a path.
         if !self.reachable {
             return ty;
+        }
+        if ty == Type::Unknown && self.facts.get(id).is_some_and(|n| n.value()) {
+            return Type::Error;
         }
         let binding = &self.bindings[id];
         if binding.mutable && (binding.owner == 0 || self.captured_writes.contains(&binding.start))
@@ -260,7 +292,7 @@ impl Checker<'_> {
 }
 pub(super) fn exits(s: &S) -> bool {
     match s.form() {
-        S::Return(_) | S::Break | S::Continue => true,
+        S::Return(_) | S::Throw(_) | S::Break | S::Continue => true,
         S::Block(body) => body.iter().any(exits),
         S::If(_, a, Some(b)) => exits(a) && exits(b),
         _ => false,

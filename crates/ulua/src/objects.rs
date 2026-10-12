@@ -145,6 +145,7 @@ pub(crate) unsafe fn finish(
         7 => (crate::ULUA_FAILED, "trap:array-modified"),
         8 => (crate::ULUA_FAILED, "trap:string-boundary"),
         9 => (crate::ULUA_FAILED, "trap:invalid-argument"),
+        10 => (crate::ULUA_FAILED, "trap:uncaught-exception"),
         _ => (crate::ULUA_INTERNAL, "internal"),
     };
     let bytes: Vec<u8> = error

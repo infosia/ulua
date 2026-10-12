@@ -12,6 +12,43 @@ impl Emitter<'_> {
         })?;
         let target = self.temp(dest);
         match &expr.kind {
+            E::Error(kind, message) => {
+                self.capture("__ulua_error");
+                let value = self.expression(message, depth)?;
+                self.write_slot(
+                    dest,
+                    format!("__ulua_error({}, {})", quote(kind), self.temp(value)),
+                );
+                self.release(value);
+            }
+            E::InstanceOf(value, kind) => {
+                self.capture("__ulua_instance");
+                let value = self.expression(value, depth)?;
+                self.write_slot(
+                    dest,
+                    format!("__ulua_instance({}, {})", self.temp(value), quote(kind)),
+                );
+                self.release(value);
+            }
+            E::ErrorField(value, key) => {
+                let value = self.expression(value, depth)?;
+                self.write_slot(
+                    dest,
+                    format!("({} :: __ulua_Error).{key}", self.temp(value)),
+                );
+                self.release(value);
+            }
+            E::OptionalErrorField(value, key) => {
+                let value = self.expression(value, depth)?;
+                self.write_slot(
+                    dest,
+                    format!(
+                        "if {0} ~= nil then ({0} :: __ulua_Error).{key} else nil",
+                        self.temp(value)
+                    ),
+                );
+                self.release(value);
+            }
             E::Null => self.write_slot(dest, "nil"),
             E::Object(fields) => {
                 // The checked constructor assigns every field; its empty table has no inferred field graph.

@@ -256,6 +256,17 @@ impl Checker<'_> {
                 kind: ExprKind::OptionalLength(Box::new(receiver)),
             });
         }
+        if inner == Type::Error {
+            let key = exceptions::field(m.property.name.as_str())
+                .ok_or_else(|| self.error(m.span, "C17", "Error has only name and message"))?;
+            return Ok(Expr {
+                flow: None,
+                bare_true: false,
+                start: chain.span.start,
+                ty: self.types.nullable(Type::String),
+                kind: ExprKind::OptionalErrorField(Box::new(receiver), key),
+            });
+        }
         let key = self.field_key(m.property.name.as_str());
         self.reject_method_value(inner, key, m.span)?;
         let field = self
