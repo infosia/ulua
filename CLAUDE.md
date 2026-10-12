@@ -195,7 +195,8 @@ for one concept, no hedging.
     cost of the change.
 15. **A gate's cost is part of its design.** A gate test states what it
     costs, and the cost is measured. A cost that no reason covers comes
-    out before the test lands.
+    out before the test lands. A gate assertion never depends on
+    wall-clock time or machine load: assert ratios, not budgets.
 16. **A hidden cost is rejected.** If the cost of a form depends on
     something that the source does not show, reject the form with a
     diagnostic that names the cause.
