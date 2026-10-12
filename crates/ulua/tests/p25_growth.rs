@@ -1,8 +1,8 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
-//! Round 8 measured Debug cost: 9.108 seconds. The largest ratio is 3.995.
-//! Condition ratios: conditional 3.616, alternating logical 3.842, conditional with wrappers 3.725.
-//! Logical with wrappers: 3.674. Nullable conditional: 3.771. Continue product: 3.881.
+//! Round 9 measured Debug cost: 9.095 seconds. The largest ratio is 3.982.
+//! Condition ratios: conditional 3.567, alternating logical 3.815, conditional with wrappers 3.596.
+//! Logical with wrappers: 3.772. Nullable conditional: 3.734. Continue product: 3.883.
 //! A conditional test gives no facts. The nullable shape uses a separate null guard in its body.
 //! Round 2 ABI times compare 16 KiB and 64 KiB. Before uses the handoff HEAD.
 //! Debug ybreak: 888.475/13581.536 ms -> 28.809/112.749 ms; ratios 15.286 -> 3.914.
@@ -223,17 +223,28 @@ fn make(shape: &str, bytes: usize) -> String {
             unit = "if(x!=null){const f=():()=>number=>():number=>x.v;const g=f();g();}".into();
         }
         "recursive-product" => {
-            let count = bytes / 72;
+            // Repeated bounded components keep this accepted shape below the type-depth limit.
             declarations.clear();
-            for (prefix, count) in [("A", count), ("C", count + 1)] {
-                for i in 0..count {
-                    declarations.push_str(&format!(
-                        "type {prefix}{i}={{v:{prefix}{}}};",
-                        (i + 1) % count
-                    ));
+            let mut group = 0;
+            loop {
+                let mut component = String::new();
+                for (prefix, count) in [("A", 23), ("C", 24)] {
+                    for i in 0..count {
+                        component.push_str(&format!(
+                            "type {prefix}{group}_{i}={{v:{prefix}{group}_{}}};",
+                            (i + 1) % count
+                        ));
+                    }
                 }
+                component.push_str(&format!(
+                    "function same{group}(a:A{group}_0,b:C{group}_0):boolean{{return a===b;}}"
+                ));
+                if declarations.len() + component.len() + 35 > bytes {
+                    break;
+                }
+                declarations.push_str(&component);
+                group += 1;
             }
-            declarations.push_str("function same(a:A0,b:C0):boolean{return a===b;}");
             unit = "".into();
         }
         "break-product" => {

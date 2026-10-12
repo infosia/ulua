@@ -172,6 +172,20 @@ impl Checker<'_> {
             fields.push((key, contextual.unwrap_or(value.ty)));
             entries.push((key, value));
         }
+        if let Some(expected) = expected {
+            // A contextual literal uses that type, including its recursive component.
+            let exact = self.types.fields(expected).is_some_and(|expected_fields| {
+                expected_fields.len() == fields.len()
+                    && fields
+                        .iter()
+                        .all(|(key, _)| self.types.field(expected, *key).is_some())
+            });
+            if !exact {
+                return Err(self.error(object.span, "C1", "Value types do not agree"));
+            }
+            self.checked_type_depth(expected, object.span)?;
+            return Ok((expected, ExprKind::Object(entries)));
+        }
         let ty = self.types.record(fields);
         self.checked_type_depth(ty, object.span)?;
         if self.types.field_count(ty) > crate::FIELD_BOUND {
@@ -180,10 +194,6 @@ impl Checker<'_> {
                 "limit:fields",
                 "Field limit includes nested anonymous object types",
             ));
-        }
-        if let Some(expected) = expected {
-            self.flow(&ty, Some(&expected), object.span)?;
-            return Ok((expected, ExprKind::Object(entries)));
         }
         Ok((ty, ExprKind::Object(entries)))
     }

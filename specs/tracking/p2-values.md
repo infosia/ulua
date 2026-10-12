@@ -237,6 +237,12 @@ Reviewer: fresh agent, diff `917e951..5a0258c`. 0 CRITICAL, 1 MAJOR, 0 MINOR. Th
 |---|---|---|
 | A recursive alias group counts as one step: a direct ring of 170 aliases (6,389 B) and a nullable ring of 250 are accepted and fail `luau-analyze` ("Code is too complex", TypeOnceVisitor recursion limit); a ring of 130 under a chain of 47 fails | MAJOR | `pipeline.md` §6: a group counts its size |
 
+Fix (Codex): a component counts its size plus its outgoing depth. Rings
+of 48 pass and 49 give `limit:type-depth`; ring plus chain at k = 1, 2,
+16, 47, 48 hold; the reviewer shapes give `limit:type-depth` in 5 to 44
+ms. Boundary tests 2.099 s; growth test 9.095 s Debug, largest ratio
+3.982. gate full: PASS, 132 entries.
+
 ### P2.5 Phase Review round 8
 
 Reviewer: fresh agent, diff `917e951..8db6110`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 7 resolution holds: `limit:fields` at 1,024 and 1,025 in every path; 40 C12.7 trap forms and 12 normal forms equal `node`; random campaign of about 1,650 programs, about 1,550 accepted, 0 differences outside the named C6 divergence.

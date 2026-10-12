@@ -1,6 +1,6 @@
 //! C15 type-link depth: 48 passes the analyzer; 49 gives limit:type-depth.
-//! Recursive alias components contribute one step. Shared branches use cached depths.
-//! Measured Debug cost: 1.979 seconds, including ABI execution, tsc, and fifteen analyzer witnesses.
+//! Recursive alias components contribute their alias count. Shared branches use cached depths.
+//! Measured Debug cost: 2.099 seconds, including ABI execution, tsc, and twenty-nine analyzer witnesses.
 //! Ceiling groups: direct 26, branching 20, nullable 48, array 48, function 41, anonymous 58, array values 63.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
@@ -93,12 +93,23 @@ fn source(shape: &str, depth: usize, groups: usize) -> String {
     }
     format!("{aliases}export function main():void{{{body}}}")
 }
-fn ring(above: usize) -> String {
+fn ring(shape: &str, count: usize, above: usize) -> String {
     let mut aliases = String::new();
-    for i in 0..100 {
-        aliases.push_str(&format!("type R{i}={{n:R{}|null}};", (i + 1) % 100));
+    for i in 0..count {
+        let next = format!("R{}", (i + 1) % count);
+        let child = match shape {
+            "nullable" => format!("{next}|null"),
+            "array" => format!("{next}[]"),
+            _ => next,
+        };
+        aliases.push_str(&format!("type R{i}={{n{i}:{child};v{i}:number}};"));
     }
-    let mut body = "const c0:R0={n:null};".to_owned();
+    // A direct ring has no finite literal initializer. Its declarations still reach the checker bound.
+    let mut body = match shape {
+        "nullable" => "const c0:R0={n0:null,v0:0};".to_owned(),
+        "array" => "const c0:R0={n0:[],v0:0};".to_owned(),
+        _ => String::new(),
+    };
     for i in 1..=above {
         aliases.push_str(&format!(
             "type A{i}={{a:{}}};",
@@ -108,7 +119,9 @@ fn ring(above: usize) -> String {
                 format!("A{}", i - 1)
             }
         ));
-        body.push_str(&format!("const c{i}:A{i}={{a:c{}}};", i - 1));
+        if shape != "direct" {
+            body.push_str(&format!("const c{i}:A{i}={{a:c{}}};", i - 1));
+        }
     }
     format!("{aliases}export function main():void{{{body}}}")
 }
@@ -162,13 +175,51 @@ fn type_depth_bound_and_ceiling_combinations() {
         );
         Script::compile(&past, CompileLimits::default(), "limit:type-depth");
     }
-    paths.push(check(&directory, "recursive-ring-100-plus-47", &ring(47)));
-    assert_eq!(
-        compile(ring(48).as_bytes(), Limits::default())
-            .unwrap_err()
-            .code,
-        "limit:type-depth"
-    );
+    for shape in ["direct", "nullable", "array"] {
+        for count in [1, 2, 16, 47, 48] {
+            let above = TYPE_DEPTH_BOUND - count;
+            let name = format!("ring-{shape}-{count}-plus-{above}");
+            paths.push(check(&directory, &name, &ring(shape, count, above)));
+            let past = ring(shape, count, above + 1);
+            let diagnostic = compile(past.as_bytes(), Limits::default())
+                .expect_err("A ring plus a chain of depth 49 must reach the limit");
+            assert_eq!(diagnostic.code, "limit:type-depth", "{name}");
+            let past = ring(shape, 49, 0);
+            assert_eq!(
+                compile(past.as_bytes(), Limits::default())
+                    .expect_err("A ring of 49 must reach the limit")
+                    .code,
+                "limit:type-depth"
+            );
+        }
+    }
+    for (shape, count, above) in [
+        ("direct", 170, 0),
+        ("nullable", 250, 0),
+        ("array", 250, 0),
+        ("direct", 130, 47),
+        ("nullable", 130, 47),
+        ("direct", 1500, 0),
+    ] {
+        let mut source = ring(shape, count, above);
+        if count == 1500 {
+            source.extend(std::iter::repeat_n(
+                ' ',
+                SOURCE_CEILING as usize - source.len(),
+            ));
+        }
+        let now = Instant::now();
+        let diagnostic = compile(source.as_bytes(), Limits::default())
+            .expect_err("The reviewer ring must reach the limit");
+        assert_eq!(diagnostic.code, "limit:type-depth");
+        Script::compile(&source, CompileLimits::default(), "limit:type-depth");
+        eprintln!(
+            "P2.5 rejected ring {shape}: aliases={count} above={above} bytes={} code={} cost={:.3}ms",
+            source.len(),
+            diagnostic.code,
+            now.elapsed().as_secs_f64() * 1000.0
+        );
+    }
     // Signature syntax reaches the nesting limit first. Value chains still reach the type bound.
     let mut maximum = 0;
     for levels in 1..=49 {

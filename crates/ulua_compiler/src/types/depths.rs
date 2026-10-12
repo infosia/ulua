@@ -1,4 +1,4 @@
-//! Cached type-link depths. Recursive components contribute one step.
+//! Cached type-link depths. Recursive components contribute their alias count.
 use super::{Node, Type, Types};
 use crate::TYPE_DEPTH_BOUND;
 
@@ -82,17 +82,27 @@ impl Types {
         let mut depths = vec![0; groups.len()];
         // Components are in parent-first order. Every outgoing component already has its depth.
         for group in (0..groups.len()).rev() {
-            let mut depth = usize::from(groups[group].len() > 1);
+            let aliases = groups[group]
+                .iter()
+                .filter(|id| self.named_records.contains(&Type(**id)))
+                .count();
+            let mut outgoing = None;
+            let mut recursive = false;
             for id in &groups[group] {
                 for child in &edges[*id] {
                     let target = component[*child];
-                    depth = depth.max(if target == group {
-                        1
+                    if target == group {
+                        recursive = true;
                     } else {
-                        depths[target] + 1
-                    });
+                        outgoing = Some(outgoing.unwrap_or(0).max(depths[target]));
+                    }
                 }
             }
+            let depth = if recursive {
+                aliases.max(1).saturating_add(outgoing.unwrap_or(0))
+            } else {
+                outgoing.map_or(0, |depth| depth + 1)
+            };
             depths[group] = depth.min(TYPE_DEPTH_BOUND + 1);
         }
         self.depths = component.into_iter().map(|group| depths[group]).collect();
@@ -103,6 +113,44 @@ impl Types {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn component_weights_count_aliases_and_keep_outgoing_depth() {
+        for count in [1, 16, 48, 49, 250] {
+            for link in 0..4 {
+                let mut types = Types::new();
+                let ring: Vec<_> = (0..count).map(|_| types.reserve_record()).collect();
+                let leaf = types.record(vec![(1000, Type::Number)]);
+                let outgoing = types.array(leaf);
+                for i in 0..count {
+                    let next = ring[(i + 1) % count];
+                    let next = match link {
+                        1 => types.nullable(next),
+                        2 => types.array(next),
+                        3 => types.intern(vec![Type::Number], next, 1),
+                        _ => next,
+                    };
+                    types.define_record(ring[i], vec![(i, next)]);
+                }
+                types.seal_aliases();
+                for ty in &ring {
+                    assert_eq!(types.depth(*ty), count.min(TYPE_DEPTH_BOUND + 1));
+                }
+                assert_eq!(types.depth(outgoing), 2);
+            }
+        }
+        let mut types = Types::new();
+        let a = types.reserve_record();
+        let b = types.reserve_record();
+        let leaf = types.record(vec![(1000, Type::Number)]);
+        let outgoing = types.array(leaf);
+        let next = types.nullable(b);
+        types.define_record(a, vec![(0, next), (1, outgoing)]);
+        types.define_record(b, vec![(2, a)]);
+        types.seal_aliases();
+        assert_eq!(types.depth(a), 4);
+        assert_eq!(types.depth(b), 4);
+        assert_eq!(types.depth(next), 4);
+    }
     #[test]
     fn equal_recursive_types_keep_their_source_depths() {
         for reverse in [false, true] {
@@ -143,19 +191,19 @@ mod tests {
     #[test]
     fn recursive_components_and_shared_branches_have_cached_depths() {
         let mut types = Types::new();
-        let ring: Vec<_> = (0..100).map(|_| types.reserve_record()).collect();
+        let ring: Vec<_> = (0..16).map(|_| types.reserve_record()).collect();
         for i in 0..ring.len() {
             let next = types.nullable(ring[(i + 1) % ring.len()]);
             types.define_record(ring[i], vec![(0, next)]);
         }
         let mut root = ring[0];
-        for _ in 0..47 {
+        for _ in 0..32 {
             let parent = types.reserve_record();
             types.define_record(parent, vec![(1, root), (2, root)]);
             root = parent;
         }
         types.seal_aliases();
-        assert_eq!(types.depth(ring[0]), 1);
+        assert_eq!(types.depth(ring[0]), 16);
         assert_eq!(types.depth(root), 48);
         assert_eq!(types.depth(Type::Number), 0);
         let mut root = types.identity(root);
