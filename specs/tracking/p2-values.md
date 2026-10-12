@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`, `a47`, `a48`, `t07`; retired `r05` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`, `a47`, `a48`, `a49`, `a50`, `t07`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -228,6 +228,15 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.5 Phase Review round 13
+
+Reviewer: fresh agent, diff `917e951..2d8ce0a`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 12 resolution holds (no wall-clock assertion; 3 growth copies and 1 witness-time copy at the same time pass). Random campaign 23,000 programs, 4,133 accepted, 0 differences.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Two equal aliases do not relate through an array, `T \| null`, or a function type: with `type P = { v: number }`, `type Q = { v: number }`, `type R = { xs: Q[] }`, `const ys: P[] = r.xs` gives C1; `tsc` accepts; adding an unrelated field `ys: P[]` to `R` makes it pass. `seal_aliases` rebuilds only the record map | MAJOR | implementation (C1.5 already requires it), `a49` |
+| `o.v++` on a record field gives `unsupported`; surface.md §3 accepts a field target | MINOR | implementation, `a50` |
 
 ### P2.5 Phase Review round 12
 

@@ -88,7 +88,7 @@ results, and object fields.
    prototype object and prints `[object Object]`. The Luau table field
    holds `1`.
 
-Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`, `r84`,
+Accept: `a01`, `a05`, `a09`, `a15`, `a16`, `a49`. Reject: `r19`, `r43`, `r53`, `r84`,
 `r54`, `r102`.
 
 ## C2. Absence — `T | null` only
@@ -516,7 +516,7 @@ and 6 in `a31`:
    of `h` before the trap in both; `zs[i(0)][i(1)].f = h()` with
    `zs = []` evaluates `i(0)` and `i(1)` and throws before `h`.
 
-Accept: `a18`, `a31`. Trap: `t07`.
+Accept: `a18`, `a31`, `a50`. Trap: `t07`.
 
 ## C13. Construction
 
