@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 33, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 34, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -16,7 +16,8 @@ types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__pro
 function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
 P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
-C16.9 logical tests, P2.5 review 5).
+C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
+contradicted references, P2.5 review 6).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -649,12 +650,22 @@ says `T`. The checker narrows only where nothing else can run a write:
    `!false`, `!!true`, `(true) || c`, and `c ? true : true` have both.
    A null test never ends an edge, also when it contradicts a
    narrowing: `tsc` keeps that edge and narrows the reference to
-   `never` there. On that edge the other narrowings stay. A loop never
+   `never` there. On that edge the other narrowings stay, and the
+   reference has no fact of its own: at a join it keeps the narrowing
+   of the other edges (`x != null || x != null` narrows `x`). The edge
+   does not occur at run time, because the narrowed reference does not
+   change between the two tests (rules 2 and 3).
+   `tsc` composes `a ?? b` as `a || b`, and a literal that is an
+   operand of `??` keeps both edges. JavaScript also reaches the false
+   edge when `a` is `false`. So a `??` of type `boolean` whose right
+   operand, composed by this rule, lacks a true or a false edge is
+   rejected (C16): `bn ?? (true || c)` is rejected, `bn ?? true` is
+   accepted. Ulua narrows nothing through a `??` test. A loop never
    ends normally when its test is absent or has no false edge, and no
    `break` of the loop is reachable. These are the `tsc` edges,
    measured.
 
-Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`.
+Accept: `a14`, `a42`, `a43`, `a46`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`.
 
 ## Open items
 

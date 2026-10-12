@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `a42`, `a43`; retired `r05` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -228,6 +228,17 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.5 Phase Review round 6
+
+Reviewer: fresh agent, diff `917e951..b7b9183`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 5 resolution holds. Edge grid: 190 depth-1 tests in 20 contexts and 18 random grids of 4,000; whole-function campaign 100,000 programs, 15,850 accepted; records campaign 16,000, 2,672 accepted; 0 defects outside the findings. Cost ratios 0.99 to 3.52.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `tsc` composes `bn ?? (true \|\| c)` as `\|\|` and ends its false edge; Ulua keeps it (629 of 24,000 grid programs accepted, `tsc` TS18047) | MAJOR | C16.9: a boolean `??` whose right operand lacks an edge is rejected, `r115` |
+| `x != null \|\| x != null` loses the narrowing at the join; `tsc` accepts | MINOR | C16.9: a contradicted reference has no fact of its own at a join, `a46` |
+
+Measured: `tsc` keeps both edges of a literal operand of `??` (`if (bn ?? true) { return; } x.v` passes). `tsc` narrows on the `??` false edge through the right operand, which JavaScript also reaches when the left operand is `false`; Ulua narrows nothing through a `??` test.
 
 ### P2.5 Phase Review round 5
 
