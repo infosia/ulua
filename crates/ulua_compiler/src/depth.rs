@@ -109,6 +109,10 @@ pub(crate) fn check<'a>(
                         }
                     }
                 }
+                Statement::ForOfStatement(n) => {
+                    pending.push((Node::Expression(&n.right), next));
+                    pending.push((Node::Statement(&n.body), next));
+                }
                 // Later-phase nodes stop before the recursive checker and emitter.
                 _ => {}
             },
@@ -148,6 +152,23 @@ pub(crate) fn check<'a>(
                 }
                 Expression::AssignmentExpression(n) => {
                     pending.push((Node::Expression(&n.right), next));
+                    match &n.left {
+                        AssignmentTarget::ComputedMemberExpression(m) => {
+                            pending.push((Node::Expression(&m.object), next));
+                            pending.push((Node::Expression(&m.expression), next));
+                        }
+                        AssignmentTarget::StaticMemberExpression(m) => {
+                            pending.push((Node::Expression(&m.object), next))
+                        }
+                        _ => {}
+                    }
+                }
+                Expression::ArrayExpression(a) => {
+                    for item in &a.elements {
+                        if let Some(e) = item.as_expression() {
+                            pending.push((Node::Expression(e), next));
+                        }
+                    }
                 }
                 Expression::BinaryExpression(n) => {
                     pending.push((Node::Expression(&n.left), next));

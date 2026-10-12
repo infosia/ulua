@@ -1,4 +1,5 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
+mod arrays;
 mod equality;
 mod expressions;
 use equality::Equality;
@@ -76,6 +77,16 @@ impl Checker<'_> {
                 }
                 return Err(self.error(t.span(), "C2", "Only T | null is a union"));
             }
+            TSType::TSArrayType(a) => {
+                let element = unparen(&a.element_type);
+                if matches!(element, TSType::TSNullKeyword(_))
+                    || matches!(element, TSType::TSUnionType(u) if u.types.iter().any(|t| matches!(unparen(t), TSType::TSNullKeyword(_))))
+                {
+                    return Err(self.error(a.span, "C6", "Array elements must exclude null"));
+                }
+                let element = self.ty(&a.element_type, false, depth)?;
+                self.types.array(element)
+            }
             TSType::TSFunctionType(f) => {
                 if f.type_parameters.is_some() || f.this_param.is_some() {
                     return Err(self.error(f.span, "C11", "Invalid function type"));
@@ -85,10 +96,9 @@ impl Checker<'_> {
                 self.types.intern(params, result, required)
             }
             TSType::TSParenthesizedType(p) => return self.ty(&p.type_annotation, result, depth),
-            TSType::TSNullKeyword(_)
-            | TSType::TSArrayType(_)
-            | TSType::TSTypeReference(_)
-            | TSType::TSTypeLiteral(_) => return Err(self.unsupported(t.span())),
+            TSType::TSNullKeyword(_) | TSType::TSTypeReference(_) | TSType::TSTypeLiteral(_) => {
+                return Err(self.unsupported(t.span()));
+            }
             _ => return Err(self.error(t.span(), "C11", "Type is outside the closed surface")),
         })
     }

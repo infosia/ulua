@@ -23,7 +23,7 @@ impl Checker<'_> {
                 .init
                 .as_ref()
                 .ok_or_else(|| self.error(v.span, "C8", "Missing initializer"))?;
-            let value = self.expr(initializer, depth, false)?;
+            let value = self.expr_as(initializer, depth, false, self.bindings[id].ty)?;
             if d.kind == VariableDeclarationKind::Let
                 && v.type_annotation.is_none()
                 && value.ty == Type::Boolean
@@ -126,6 +126,50 @@ impl Checker<'_> {
         let depth = self.descend(depth, e.span())?;
         match e {
             Expression::AssignmentExpression(a) => {
+                if let AssignmentTarget::ComputedMemberExpression(m) = &a.left {
+                    if m.optional {
+                        return Err(self.unsupported(m.span));
+                    }
+                    let (array, index, element) =
+                        self.index(&m.object, &m.expression, depth, m.span)?;
+                    let value = self.expr_as(&a.right, depth, false, Some(element))?;
+                    let mut op = match a.operator.as_str() {
+                        "=" => None,
+                        "+=" => Some("+"),
+                        "-=" => Some("-"),
+                        "*=" => Some("*"),
+                        "/=" => Some("/"),
+                        "%=" => Some("%"),
+                        _ => {
+                            return Err(self.error(
+                                a.span,
+                                "C4",
+                                "Assignment operator is rejected",
+                            ));
+                        }
+                    };
+                    if op == Some("+") && element == Type::String && value.ty == Type::String {
+                        op = Some("..");
+                    }
+                    if op.is_some()
+                        && op != Some("..")
+                        && (element != Type::Number || value.ty != Type::Number)
+                    {
+                        return Err(self.error(
+                            a.span,
+                            "C4",
+                            "Compound assignment requires numbers",
+                        ));
+                    }
+                    self.flow(&value.ty, Some(&element), a.span)?;
+                    return Ok(S::Element(array, index, op, value));
+                }
+                if let AssignmentTarget::StaticMemberExpression(m) = &a.left {
+                    let receiver = self.expr(&m.object, depth, false)?;
+                    if self.types.element(receiver.ty).is_some() {
+                        return Err(self.error(m.span, "C6", "Array properties are read-only"));
+                    }
+                }
                 let AssignmentTarget::AssignmentTargetIdentifier(n) = &a.left else {
                     return Err(match &a.left {
                         AssignmentTarget::StaticMemberExpression(_)
@@ -136,7 +180,7 @@ impl Checker<'_> {
                     });
                 };
                 let id = self.target(n)?;
-                let value = self.expr(&a.right, depth, false)?;
+                let value = self.expr_as(&a.right, depth, false, self.bindings[id].ty)?;
                 let op = match a.operator.as_str() {
                     "=" => None,
                     "+=" => Some("+"),
@@ -161,6 +205,22 @@ impl Checker<'_> {
                 Ok(S::Assign(id, op, value))
             }
             Expression::UpdateExpression(u) => {
+                if let SimpleAssignmentTarget::StaticMemberExpression(m) = &u.argument {
+                    let receiver = self.expr(&m.object, depth, false)?;
+                    if self.types.element(receiver.ty).is_some() {
+                        return Err(self.error(m.span, "C6", "Array properties are read-only"));
+                    }
+                }
+                if matches!(
+                    u.argument,
+                    SimpleAssignmentTarget::ComputedMemberExpression(_)
+                ) {
+                    return Err(self.error(
+                        u.span,
+                        "C11",
+                        "Element updates are outside the surface",
+                    ));
+                }
                 let SimpleAssignmentTarget::AssignmentTargetIdentifier(n) = &u.argument else {
                     return Err(match &u.argument {
                         SimpleAssignmentTarget::StaticMemberExpression(_)
@@ -323,16 +383,14 @@ impl Checker<'_> {
                 let value = r
                     .argument
                     .as_ref()
-                    .map(|e| self.expr(e, depth, false))
+                    .map(|e| self.expr_as(e, depth, false, Some(self.result)))
                     .transpose()?;
                 let ty = value.as_ref().map_or(&Type::Void, |v| &v.ty);
                 self.flow(ty, Some(&self.result), r.span)?;
                 self.reachable = false;
                 S::Return(value)
             }
-            Statement::ForOfStatement(_) => {
-                return Err(self.unsupported(s.span()));
-            }
+            Statement::ForOfStatement(f) => return self.for_of(f, depth),
             Statement::SwitchStatement(_)
             | Statement::DoWhileStatement(_)
             | Statement::ForInStatement(_)

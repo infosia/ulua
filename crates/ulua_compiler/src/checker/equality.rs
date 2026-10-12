@@ -206,6 +206,9 @@ pub(super) struct LoopFlow {
 }
 impl Checker<'_> {
     pub(super) fn is_wide(&self, source: &Expression<'_>, value: &Expr) -> bool {
+        if self.types.element(value.ty).is_some() && matches!(value.kind, E::Read(_)) {
+            return true;
+        }
         match source {
             Expression::CallExpression(_) => true,
             Expression::BinaryExpression(b) => {
@@ -260,11 +263,12 @@ impl Checker<'_> {
         depth: u32,
         region: &Region,
         join: &mut Join,
+        expected: Option<Type>,
     ) -> Result<Expr, Diagnostic> {
         let checkpoint = self.equality.checkpoint();
         let entry = self.reachable;
         self.enter_region(region);
-        let out = self.expr(e, depth, false);
+        let out = self.expr_as(e, depth, false, expected);
         join.edge(&self.equality, self.reachable);
         self.equality.restore(checkpoint);
         self.reachable = entry;

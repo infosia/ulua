@@ -51,7 +51,7 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
                 work.push(a);
                 work.extend(b.iter().map(|b| b.as_ref()));
             }
-            S::While(_, b) => work.push(b),
+            S::While(_, b) | S::ForOf(_, _, b) => work.push(b),
             S::For(init, _, update, b, _) => {
                 work.extend(init);
                 work.extend(update.iter().map(|s| s.as_ref()));
@@ -67,7 +67,7 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
         let (parameters, overhead) = if owner == 0 {
             probe.statements(&module.body, 0)?;
-            (vec![], 7)
+            (vec![], 8)
         } else {
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
@@ -100,6 +100,7 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         "__ulua_gsub",
         "__ulua_huge",
         "__ulua_format",
+        "__ulua_trap",
     ] {
         context.locals[0].insert(name.into());
     }

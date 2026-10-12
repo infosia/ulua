@@ -45,6 +45,11 @@ impl FunctionTypes {
         while let Some(statement) = statements.pop() {
             match statement.form() {
                 S::Declare(_, e) | S::Assign(_, _, e) | S::Eval(e) => expressions.push(e),
+                S::Element(a, i, _, e) => expressions.extend([a, i, e]),
+                S::ForOf(_, a, b) => {
+                    expressions.push(a);
+                    statements.push(b);
+                }
                 S::Block(body) => statements.extend(body),
                 S::If(e, a, b) => {
                     expressions.push(e);
@@ -68,8 +73,8 @@ impl FunctionTypes {
         while let Some(expression) = expressions.pop() {
             types.add(expression.ty, module, 0, expression.start)?;
             match &expression.kind {
-                E::Unary(_, a) => expressions.push(a),
-                E::Binary(_, a, b) | E::Logical(_, a, b) => {
+                E::Unary(_, a) | E::Length(a) => expressions.push(a),
+                E::Binary(_, a, b) | E::Logical(_, a, b) | E::Index(a, b) | E::Push(a, b) => {
                     expressions.push(a);
                     expressions.push(b);
                 }
@@ -82,7 +87,7 @@ impl FunctionTypes {
                     expressions.push(c);
                     expressions.extend(args);
                 }
-                E::Template(parts) => expressions.extend(parts),
+                E::Template(parts) | E::Array(parts) => expressions.extend(parts),
                 _ => {}
             }
         }
@@ -95,6 +100,31 @@ impl FunctionTypes {
         depth: u32,
         offset: u32,
     ) -> Result<(), Diagnostic> {
+        if self.names.contains_key(&ty) {
+            return Ok(());
+        }
+        if let Some(element) = module.types.element(ty) {
+            let depth = depth + 1;
+            if depth >= module.depth {
+                return Err(Diagnostic::at(
+                    &module.source,
+                    offset as usize,
+                    "internal",
+                    "Emitter type depth limit exceeded after checked input",
+                ));
+            }
+            self.add(element, module, depth, offset)?;
+            // A composite alias keeps repeated array references constant-size too.
+            let name = format!("__ulua_fn{}", self.next_name);
+            let _ = writeln!(
+                self.declarations,
+                "type {name} = {{{}}}",
+                self.luau(&element)
+            );
+            self.names.insert(ty, name);
+            self.next_name += 1;
+            return Ok(());
+        }
         let Some(ir::FunctionType {
             params,
             result,

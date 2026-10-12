@@ -1,11 +1,14 @@
 //! Growth gate: source ceiling shapes, 8 KiB and 32 KiB, through the full ABI.
 //! Ratios above 6.5 use the minimum of two runs per size. Lower ratios retain ample margin.
-//! Measured Debug cost: 8.18 seconds with all four type products (16/64 KiB, widths 15/31).
-//! Product time ratios: 3.882 / 3.768 / 3.857 / 3.768 (assign / declare / call / self).
-//! Measured Release cost: 2.41 seconds. Product time ratios: 3.702 / 3.672 / 3.656 / 3.734.
-//! Product output ratios: 10.141 / 10.381 / 11.935 / 10.141 at 65,536 bytes.
+//! Measured Debug cost: 7.45 seconds over 50 shapes, including eight array shapes.
+//! Array time ratios: 3.83 to 4.02; the largest array output ratio at the ceiling is 54.529.
+//! Measured Release cost: 2.37 seconds. Maximum ratios: Debug 6.415, Release 6.375.
+//! Normal output checks use 4n bytes. Analyzer export also emits every shape at the source ceiling.
 //! The largest output ratio is 62.671; 1.25 times this ratio stays below 80.
 // This test uses the source and graph generators only.
+#[allow(dead_code)]
+#[path = "../src/p22_inputs.rs"]
+mod arrays;
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
@@ -35,9 +38,12 @@ fn full_pipeline_growth_stays_below_eight() {
         .chain(review::SHAPES)
         .chain(joins::SHAPES)
         .chain(functions::SHAPES)
+        .chain(arrays::SHAPES)
     {
         let make = |bytes| {
-            if functions::SHAPES.contains(shape) {
+            if arrays::SHAPES.contains(shape) {
+                arrays::source(shape, bytes)
+            } else if functions::SHAPES.contains(shape) {
                 functions::source(shape, bytes)
             } else if joins::SHAPES.contains(shape) {
                 joins::source(shape, bytes)
@@ -50,14 +56,19 @@ fn full_pipeline_growth_stays_below_eight() {
             }
         };
         // The review type occupies about 12.7 KiB. Product shapes use 16/64 KiB.
-        let n = if shape.starts_with("type-product-") {
+        let n = if shape.starts_with("type-product-") || *shape == "array-wide-function-product" {
             16 * 1024
         } else {
             n
         };
         let small = make(n);
         let large = make(4 * n);
-        let ceiling = make(64 * 1024);
+        // Analyzer export needs the ceiling. The ordinary timing gate avoids a second large compile.
+        let ceiling = if std::env::var_os("ULUA_GROWTH_OUTPUT_DIR").is_some() {
+            make(64 * 1024)
+        } else {
+            large.clone()
+        };
         assert_eq!(small.len(), n);
         assert_eq!(large.len(), 4 * n);
         let generated = std::thread::Builder::new()
@@ -66,7 +77,9 @@ fn full_pipeline_growth_stays_below_eight() {
                 let source = ceiling.clone();
                 move || {
                     let result = ulua_compiler::compile(source.as_bytes(), Limits::default());
-                    if let Some(code) = functions::diagnostic(shape) {
+                    if let Some(code) =
+                        functions::diagnostic(shape).or_else(|| arrays::diagnostic(shape))
+                    {
                         assert_eq!(result.unwrap_err().code, code);
                         String::new()
                     } else {
@@ -100,7 +113,9 @@ fn full_pipeline_growth_stays_below_eight() {
             let script = Script::compile(
                 source,
                 ulua::CompileLimits::default(),
-                functions::diagnostic(shape).unwrap_or(""),
+                functions::diagnostic(shape)
+                    .or_else(|| arrays::diagnostic(shape))
+                    .unwrap_or(""),
             );
             let elapsed = now.elapsed();
             drop(script);

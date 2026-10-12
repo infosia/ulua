@@ -74,12 +74,14 @@ pub(crate) struct FunctionType {
 enum Node {
     Primitive(&'static str),
     Function(Rc<FunctionType>),
+    Array(Type),
 }
 
 pub(crate) struct Types {
     nodes: Vec<Node>,
     // The index and table share one stored signature allocation.
     functions: HashMap<Rc<FunctionType>, Type>,
+    arrays: HashMap<Type, Type>,
 }
 
 impl Types {
@@ -90,6 +92,7 @@ impl Types {
                 .map(Node::Primitive)
                 .collect(),
             functions: HashMap::new(),
+            arrays: HashMap::new(),
         }
     }
 
@@ -107,6 +110,31 @@ impl Types {
         self.nodes.push(Node::Function(Rc::clone(&signature)));
         self.functions.insert(signature, ty);
         ty
+    }
+
+    pub(crate) fn array(&mut self, element: Type) -> Type {
+        if let Some(ty) = self.arrays.get(&element) {
+            return *ty;
+        }
+        let ty = Type(self.nodes.len());
+        self.nodes.push(Node::Array(element));
+        self.arrays.insert(element, ty);
+        ty
+    }
+
+    pub(crate) fn element(&self, ty: Type) -> Option<Type> {
+        match self.nodes.get(ty.0) {
+            Some(Node::Array(element)) => Some(*element),
+            _ => None,
+        }
+    }
+
+    // The checker bounds the depth of every array chain.
+    pub(crate) fn contains_function(&self, mut ty: Type) -> bool {
+        while let Some(element) = self.element(ty) {
+            ty = element;
+        }
+        self.function(ty).is_some()
     }
 
     pub(crate) fn function(&self, ty: Type) -> Option<&FunctionType> {
@@ -144,6 +172,10 @@ impl Types {
                 Part::Ty(ty) => {
                     if let Some(text) = self.primitive(ty) {
                         out.push_str(text);
+                    } else if let Some(element) = self.element(ty) {
+                        pending.push(Part::Text("}"));
+                        pending.push(Part::Ty(element));
+                        pending.push(Part::Text("{"));
                     } else if let Some(f) = self.function(ty) {
                         pending.push(Part::Ty(f.result));
                         pending.push(Part::Text(") -> "));

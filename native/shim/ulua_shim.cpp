@@ -43,11 +43,18 @@ static int output(lua_State* state) {
     }
     return 0;
 }
+static int trap(lua_State* state) {
+    ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    vm->trap_kind = luaL_checkinteger(state, 1);
+    luaL_error(state, "Script trap");
+}
 static int setup(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, 1));
     luaL_openlibs(state);
     lua_pushcfunction(state, output, "print");
     lua_setglobal(state, "print");
+    lua_pushcfunction(state, trap, "__ulua_trap");
+    lua_setglobal(state, "__ulua_trap");
     luaL_sandbox(state);
     vm->thread = lua_newthread(state);
     lua_ref(state, -1);
@@ -69,6 +76,11 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     int code = run_error_code(status, text);
     if (vm->flag) code = vm->flag;
     if (code == SHIM_STEPS) message(error, "Step limit exceeded");
+    if (!vm->flag && vm->trap_kind == 1) {
+        code = SHIM_INDEX;
+        message(error, "Index out of range");
+    }
+    vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);
     // Collection also has a native protection boundary.
@@ -198,6 +210,7 @@ extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua
     try {
         vm->steps = 0;
         vm->flag = 0;
+        vm->trap_kind = 0;
         vm->charging = true;
 #ifdef ULUA_MEASUREMENTS
         vm->allocation_bytes = 0;

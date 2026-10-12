@@ -180,12 +180,10 @@ fn c11_closed_surface_positions_and_targets() {
 fn later_phase_forms_stay_unsupported() {
     for s in [
         "const x = null;",
-        "const x = [];",
         "const x = {};",
         "print('x' + 'y');",
         "let s = 'x'; s += 'y';",
         "print('x'.includes('x'));",
-        "const x: number[] = [];",
         "const x: number | null = 1;",
     ] {
         reject(&body(s), "unsupported");

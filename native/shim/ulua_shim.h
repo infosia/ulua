@@ -2,7 +2,7 @@
 #define ULUA_SHIM_H
 #include "ulua.h"
 /* Private shim statuses: memory, steps, stack, host, internal. */
-enum { SHIM_OK=0, SHIM_MEMORY=1, SHIM_STEPS=2, SHIM_STACK=3, SHIM_HOST=4, SHIM_INTERNAL=5 };
+enum { SHIM_OK=0, SHIM_MEMORY=1, SHIM_STEPS=2, SHIM_STACK=3, SHIM_HOST=4, SHIM_INTERNAL=5, SHIM_INDEX=6 };
 /* S4 measures the maximum allocated bytes per charged step in Release. */
 #define ALLOCATION_STEP_BYTES 256u
 struct ulua_vm;

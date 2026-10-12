@@ -142,7 +142,7 @@ impl Checker<'_> {
         self.default_scopes.push((self.scopes.len(), names));
         for (p, (id, default)) in params.items.iter().zip(&mut out) {
             if let Some(e) = &p.initializer {
-                let value = self.expr(e, depth, false)?;
+                let value = self.expr_as(e, depth, false, self.bindings[*id].ty)?;
                 self.flow(&value.ty, self.bindings[*id].ty.as_ref(), p.span)?;
                 *default = Some(value);
             }
@@ -221,14 +221,14 @@ impl Checker<'_> {
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
-            let value = self.expr(e, body_depth, true)?;
+            let value = self.expr_as(e, body_depth, true, result)?;
             if value.ty == Type::Void && !matches!(value.kind, ExprKind::Call(..)) {
                 return Err(self.error(e.span(), "C11", "Void arrow body must be a call"));
             }
             if let Some(result) = &result {
                 self.flow(&value.ty, Some(result), a.span)?;
             }
-            if result.is_none() && self.types.function(value.ty).is_some() {
+            if result.is_none() && self.types.contains_function(value.ty) {
                 return Err(self.error(a.span, "C11", "Function result needs an annotation"));
             }
             let result = result.unwrap_or(value.ty);

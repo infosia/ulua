@@ -26,7 +26,7 @@ impl Emitter<'_> {
         }
         Ok(())
     }
-    fn statement(&mut self, s: &S, depth: u32) -> Result<(), Diagnostic> {
+    pub(super) fn statement(&mut self, s: &S, depth: u32) -> Result<(), Diagnostic> {
         if let S::Located(offset, _) = s {
             self.offset = *offset as usize;
         }
@@ -91,6 +91,8 @@ impl Emitter<'_> {
                     self.release(v);
                 }
             }
+            S::Element(a, i, op, e) => self.element(a, i, *op, e, depth)?,
+            S::ForOf(id, a, body) => self.for_of(*id, a, body, depth)?,
             S::Eval(e) => {
                 let v = self.expression(e, depth)?;
                 self.release(v);

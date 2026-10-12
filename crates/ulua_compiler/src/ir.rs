@@ -47,6 +47,10 @@ pub(crate) enum ExprKind {
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
     Template(Vec<Expr>),
+    Array(Vec<Expr>),
+    Index(Box<Expr>, Box<Expr>),
+    Length(Box<Expr>),
+    Push(Box<Expr>, Box<Expr>),
 }
 pub(crate) enum Statement {
     Located(u32, Box<Statement>),
@@ -54,6 +58,8 @@ pub(crate) enum Statement {
     Function(usize),
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
+    Element(Expr, Expr, Option<&'static str>, Expr),
+    ForOf(usize, Expr, Box<Statement>),
     Eval(Expr),
     Block(Vec<Statement>),
     If(Expr, Box<Statement>, Option<Box<Statement>>),
@@ -113,6 +119,11 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 }
                 expressions.push(e);
             }
+            Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
+            Statement::ForOf(_, a, b) => {
+                expressions.push(a);
+                statements.push(b);
+            }
             Statement::Block(b) => statements.extend(b),
             Statement::If(e, a, b) => {
                 expressions.push(e);
@@ -138,8 +149,11 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
             ExprKind::Read(id) => {
                 ids.push(*id);
             }
-            ExprKind::Unary(_, a) => expressions.push(a),
-            ExprKind::Binary(_, a, b) | ExprKind::Logical(_, a, b) => {
+            ExprKind::Unary(_, a) | ExprKind::Length(a) => expressions.push(a),
+            ExprKind::Binary(_, a, b)
+            | ExprKind::Logical(_, a, b)
+            | ExprKind::Index(a, b)
+            | ExprKind::Push(a, b) => {
                 expressions.push(a);
                 expressions.push(b);
             }
@@ -152,7 +166,7 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 expressions.push(c);
                 expressions.extend(args);
             }
-            ExprKind::Template(parts) => expressions.extend(parts),
+            ExprKind::Template(parts) | ExprKind::Array(parts) => expressions.extend(parts),
             _ => {}
         }
     }

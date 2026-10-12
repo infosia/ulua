@@ -11,6 +11,7 @@ struct ulua_vm {
     uint64_t max_steps;
     uint64_t steps;
     int flag;
+    int trap_kind;
     int exports;
     bool charging;
 #ifdef ULUA_MEASUREMENTS

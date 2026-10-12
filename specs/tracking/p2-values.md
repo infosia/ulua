@@ -34,13 +34,13 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.2)
 
-- [ ] `pipeline.md` §4.8 and §5.15 implemented.
-- [ ] P2.2 entries pass in full; later slices stay `unsupported`.
+- [x] `pipeline.md` §4.8 and §5.15 implemented.
+- [x] P2.2 entries pass in full; later slices stay `unsupported`.
 - [ ] The array members stay `length` and `push` (C6.7). Further
   members are a user decision for a later revision.
-- [ ] Growth shapes for arrays (literals, nested arrays, many index
+- [x] Growth shapes for arrays (literals, nested arrays, many index
   operations, `for…of` over large arrays) and products with P2.1 shapes.
-- [ ] `luau-analyze` passes on the generated modules and the stress set.
+- [x] `luau-analyze` passes on the generated modules and the stress set.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Exit checklist (P2.1)
@@ -53,6 +53,19 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   (round 4).
 
 ## Measurements
+
+### P2.2 implementation record
+
+- Codex task. The shim trap function, checked array reads and writes,
+  `length`, `push`, `for…of`, array types in the type table.
+- Trap tests through the ABI: the output before the trap arrives; no
+  poison; the next call works.
+- Growth: 50 shapes; array shapes 3.83 to 4.02 per 4x (Debug); largest
+  6.42 Debug, 6.38 Release; cost 7.45 s Debug, 2.37 s Release.
+- Random: 550 programs; 444 run to completion, 26 trap as C6 states,
+  80 rejected; each of the 470 accepted passes `tsc`, matches `node`
+  (before a trap), and passes `luau-analyze`.
+- `gate.sh full`: 73 entries in P2.2 or earlier; 23 generated modules.
 
 ### P2.1 implementation record
 

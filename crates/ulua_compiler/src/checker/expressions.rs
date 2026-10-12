@@ -19,6 +19,15 @@ impl Checker<'_> {
         depth: u32,
         statement: bool,
     ) -> Result<Expr, Diagnostic> {
+        self.expr_as(e, depth, statement, None)
+    }
+    pub(super) fn expr_as(
+        &mut self,
+        e: &Expression<'_>,
+        depth: u32,
+        statement: bool,
+        expected: Option<Type>,
+    ) -> Result<Expr, Diagnostic> {
         let depth = self.descend(depth, e.span())?;
         let (ty, kind) = match e {
             Expression::NumericLiteral(n) => {
@@ -72,7 +81,7 @@ impl Checker<'_> {
                 }
             }
             Expression::ParenthesizedExpression(p) => {
-                let mut value = self.expr(&p.expression, depth, statement)?;
+                let mut value = self.expr_as(&p.expression, depth, statement, expected)?;
                 value.bare_true = false;
                 return Ok(value);
             }
@@ -162,7 +171,7 @@ impl Checker<'_> {
                 join.edge(&self.equality, self.reachable);
                 self.equality.restore(checkpoint);
                 self.reachable = entry;
-                let b = self.edge_expr(&l.right, depth, &ids, &mut join)?;
+                let b = self.edge_expr(&l.right, depth, &ids, &mut join, None)?;
                 self.reachable = self.equality.finish(join);
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
@@ -179,8 +188,8 @@ impl Checker<'_> {
                 }
                 let [t, f] = self.equality.regions(&test);
                 let mut join = self.equality.join();
-                let a = self.edge_expr(&c.consequent, depth, &t, &mut join)?;
-                let b = self.edge_expr(&c.alternate, depth, &f, &mut join)?;
+                let a = self.edge_expr(&c.consequent, depth, &t, &mut join, expected)?;
+                let b = self.edge_expr(&c.alternate, depth, &f, &mut join, expected)?;
                 self.reachable = self.equality.finish(join);
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
@@ -188,7 +197,86 @@ impl Checker<'_> {
                     ExprKind::Conditional(Box::new(test), Box::new(a), Box::new(b)),
                 )
             }
+            Expression::ArrayExpression(a) => {
+                let mut element = expected.and_then(|ty| self.types.element(ty));
+                let mut entries = vec![];
+                for entry in &a.elements {
+                    let e = entry.as_expression().ok_or_else(|| {
+                        self.error(entry.span(), "C6", "Array holes and spreads are rejected")
+                    })?;
+                    let value = self.expr_as(e, depth, false, element)?;
+                    if let Some(element) = element {
+                        self.flow(&value.ty, Some(&element), e.span())?;
+                    } else {
+                        element = Some(value.ty);
+                    }
+                    entries.push(value);
+                }
+                let element = element.ok_or_else(|| {
+                    self.error(a.span, "C1", "An empty array needs an element type")
+                })?;
+                (self.types.array(element), ExprKind::Array(entries))
+            }
+            Expression::ComputedMemberExpression(m) => {
+                if m.optional {
+                    return Err(self.unsupported(m.span));
+                }
+                let (a, i, element) = self.index(&m.object, &m.expression, depth, m.span)?;
+                (element, ExprKind::Index(Box::new(a), Box::new(i)))
+            }
+            Expression::StaticMemberExpression(m) => {
+                if m.optional {
+                    return Err(self.unsupported(m.span));
+                }
+                let a = self.expr(&m.object, depth, false)?;
+                if self.types.element(a.ty).is_none() {
+                    return Err(self.unsupported(m.span));
+                }
+                if m.property.name != "length" {
+                    return Err(self.error(m.span, "C6", "Array member has no value lowering"));
+                }
+                (Type::Number, ExprKind::Length(Box::new(a)))
+            }
             Expression::CallExpression(call) => {
+                if let Expression::StaticMemberExpression(m) = &call.callee
+                    && !m.optional
+                    && !call.optional
+                    && call.type_arguments.is_none()
+                {
+                    // Array receiver precedes its argument. Other member families remain later slices.
+                    if !matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "Utf8") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                    {
+                        let receiver = self.expr(&m.object, depth, false)?;
+                        if let Some(element) = self.types.element(receiver.ty) {
+                            if m.property.name != "push" {
+                                return Err(self.error(m.span, "C6", "Array method is rejected"));
+                            }
+                            if !statement {
+                                return Err(self.error(
+                                    call.span,
+                                    "C11",
+                                    "Push is a statement only",
+                                ));
+                            }
+                            if call.arguments.len() != 1 {
+                                return Err(self.error(call.span, "C1", "Push needs one argument"));
+                            }
+                            let arg = call.arguments[0].as_expression().ok_or_else(|| {
+                                self.error(call.span, "C11", "Spread arguments are rejected")
+                            })?;
+                            let value = self.expr_as(arg, depth, false, Some(element))?;
+                            self.flow(&value.ty, Some(&element), arg.span())?;
+                            return Ok(Expr {
+                                wide: false,
+                                bare_true: false,
+                                start: call.span.start,
+                                ty: Type::Void,
+                                kind: ExprKind::Push(Box::new(receiver), Box::new(value)),
+                            });
+                        }
+                        return Err(self.unsupported(m.span));
+                    }
+                }
                 if call.arguments.len() > crate::ARGUMENT_BOUND {
                     return Err(self.error(
                         call.span,
@@ -272,7 +360,7 @@ impl Checker<'_> {
                     let a = arg.as_expression().ok_or_else(|| {
                         self.error(arg.span(), "C11", "Spread arguments are rejected")
                     })?;
-                    let value = self.expr(a, depth, false)?;
+                    let value = self.expr_as(a, depth, false, Some(*ty))?;
                     self.flow(&value.ty, Some(ty), arg.span())?;
                     args.push(value);
                 }
@@ -327,11 +415,8 @@ impl Checker<'_> {
                 return Err(self.error(e.span(), "C8", "Expression has no lowering"));
             }
             Expression::ArrowFunctionExpression(a) => self.arrow(a, depth)?,
-            Expression::ArrayExpression(_)
-            | Expression::ObjectExpression(_)
+            Expression::ObjectExpression(_)
             | Expression::NullLiteral(_)
-            | Expression::StaticMemberExpression(_)
-            | Expression::ComputedMemberExpression(_)
             | Expression::NewExpression(_)
             | Expression::ChainExpression(_)
             | Expression::ThisExpression(_) => return Err(self.unsupported(e.span())),
@@ -355,5 +440,23 @@ impl Checker<'_> {
         };
         value.wide = self.is_wide(e, &value);
         Ok(value)
+    }
+    pub(super) fn index(
+        &mut self,
+        object: &Expression<'_>,
+        index: &Expression<'_>,
+        depth: u32,
+        span: Span,
+    ) -> Result<(Expr, Expr, Type), Diagnostic> {
+        let a = self.expr(object, depth, false)?;
+        let element = self
+            .types
+            .element(a.ty)
+            .ok_or_else(|| self.error(span, "C6", "Index requires an array"))?;
+        let i = self.expr(index, depth, false)?;
+        if i.ty != Type::Number {
+            return Err(self.error(span, "C6", "Array index requires a number"));
+        }
+        Ok((a, i, element))
     }
 }

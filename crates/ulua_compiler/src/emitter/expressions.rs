@@ -110,6 +110,50 @@ impl Emitter<'_> {
                     self.release(arg);
                 }
             }
+            E::Array(entries) => {
+                let mut values = vec![];
+                for entry in entries {
+                    values.push(self.expression(entry, depth)?);
+                }
+                self.write_slot(
+                    dest,
+                    format!(
+                        "{{{}}}",
+                        values
+                            .iter()
+                            .map(|v| self.temp(*v))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                );
+                for v in values {
+                    self.release(v);
+                }
+            }
+            E::Index(a, i) => {
+                let a = self.expression(a, depth)?;
+                let i = self.expression(i, depth)?;
+                self.index_check(a, i, false);
+                self.write_slot(dest, format!("{}[{} + 1]", self.temp(a), self.temp(i)));
+                self.release(a);
+                self.release(i);
+            }
+            E::Length(a) => {
+                let a = self.expression(a, depth)?;
+                self.write_slot(dest, format!("#{}", self.temp(a)));
+                self.release(a);
+            }
+            E::Push(a, e) => {
+                let a = self.expression(a, depth)?;
+                let e = self.expression(e, depth)?;
+                self.write(
+                    &format!("{0}[#{0} + 1]", self.temp(a)),
+                    self.temp(e),
+                    &self.function_types.luau(&self.slots[e].ty),
+                );
+                self.release(a);
+                self.release(e);
+            }
             E::Template(parts) => {
                 if parts.len() > 16 {
                     self.capture("__ulua_concat");
