@@ -12,7 +12,10 @@ impl Checker<'_> {
             while let Expression::ParenthesizedExpression(p) = operand {
                 operand = &p.expression;
             }
-            if matches!(operand, Expression::ArrayExpression(_)) {
+            if matches!(
+                operand,
+                Expression::ArrayExpression(_) | Expression::ObjectExpression(_)
+            ) {
                 return Err(self.error(span, "C7", "Array literal equality operands are rejected"));
             }
         }
@@ -24,9 +27,21 @@ impl Checker<'_> {
         a: &Expr,
         b: &Expr,
     ) -> Result<(), Diagnostic> {
-        if a.ty == b.ty
+        if matches!(a.kind, ir::ExprKind::Null) || matches!(b.kind, ir::ExprKind::Null) {
+            let other = if matches!(a.kind, ir::ExprKind::Null) {
+                b
+            } else {
+                a
+            };
+            if self.types.inner(self.original_type(other)).is_some() {
+                return Ok(());
+            }
+            return Err(self.error(span, "C2", "Null test requires a nullable operand"));
+        }
+        if self.types.equal(a.ty, b.ty)
             && (matches!(a.ty, Type::Number | Type::String | Type::Boolean)
-                || self.types.element(a.ty).is_some())
+                || self.types.element(a.ty).is_some()
+                || self.types.fields(a.ty).is_some())
         {
             return Ok(());
         }

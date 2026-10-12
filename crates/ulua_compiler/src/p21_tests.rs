@@ -211,7 +211,19 @@ fn parameter_defaults_form_one_trailing_suffix() {
 fn optional_function_parameters_keep_the_function_result_required() {
     let source = "function test(n:number,f:(a:number)=>boolean=(a:number):boolean=>a>1):boolean{return f(n);}export function main():void{print(`${test(2)} ${test(0)} ${test(0,(a:number):boolean=>a===0)}`);}";
     let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
-    assert!(compiled.luau.contains("(number, (__ulua_fn0)?) -> boolean"));
+    let callback = compiled
+        .luau
+        .lines()
+        .find(|line| line.ends_with(" = (number) -> boolean"))
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap();
+    assert!(
+        compiled
+            .luau
+            .contains(&format!("(number, ({callback})?) -> boolean"))
+    );
     accept(
         "function outer(f:(g:(n:number)=>number)=>((n:number)=>number)=(g:(n:number)=>number):(n:number)=>number=>g):(n:number)=>number{return f((n:number):number=>n);}export function main():void{const g=outer();print(`${g(1)}`);}",
     );

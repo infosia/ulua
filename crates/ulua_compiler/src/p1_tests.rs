@@ -176,14 +176,20 @@ fn c11_closed_surface_positions_and_targets() {
 }
 #[test]
 fn later_phase_forms_stay_unsupported() {
+    reject(
+        "class Box { value:number=1; } export function main():void{}",
+        "unsupported",
+    );
+    reject(&body("const x = new Box();"), "unsupported");
     for s in [
         "const x = null;",
         "const x = {};",
         "const x: number | null = 1;",
     ] {
-        reject(&body(s), "unsupported");
+        accept(&body(s));
     }
 }
+
 #[test]
 fn c14_decoded_numbers_templates_and_generated_names() {
     let c = accept(&body(

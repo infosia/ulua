@@ -14,6 +14,7 @@ impl FunctionTypes {
     pub(super) fn new(module: &ir::Module) -> Result<Self, Diagnostic> {
         let mut types = Self {
             names: [
+                Type::Null,
                 Type::Number,
                 Type::Boolean,
                 Type::String,
@@ -45,6 +46,7 @@ impl FunctionTypes {
         while let Some(statement) = statements.pop() {
             match statement.form() {
                 S::Declare(_, e) | S::Assign(_, _, e) | S::Eval(e) => expressions.push(e),
+                S::Field(a, _, _, e) => expressions.extend([a, e]),
                 S::Element(a, i, _, e) => expressions.extend([a, i, e]),
                 S::ForOf(_, a, b) => {
                     expressions.push(a);
@@ -73,8 +75,17 @@ impl FunctionTypes {
         while let Some(expression) = expressions.pop() {
             types.add(expression.ty, module, 0, expression.start)?;
             match &expression.kind {
-                E::Unary(_, a) | E::Length(a) => expressions.push(a),
-                E::Binary(_, a, b) | E::Logical(_, a, b) | E::Index(a, b) | E::Push(a, b) => {
+                E::OptionalLength(a)
+                | E::Field(a, _)
+                | E::OptionalField(a, _)
+                | E::Unary(_, a)
+                | E::Length(a) => expressions.push(a),
+                E::OptionalPush(a, b)
+                | E::Coalesce(a, b)
+                | E::Binary(_, a, b)
+                | E::Logical(_, a, b)
+                | E::Index(a, b)
+                | E::Push(a, b) => {
                     expressions.push(a);
                     expressions.push(b);
                 }
@@ -83,10 +94,14 @@ impl FunctionTypes {
                     expressions.push(a);
                     expressions.push(b);
                 }
-                E::Method(_, _, c, args) | E::Call(c, args) => {
+                E::OptionalMethod(_, _, c, args)
+                | E::OptionalCall(c, _, args)
+                | E::Method(_, _, c, args)
+                | E::Call(c, args) => {
                     expressions.push(c);
                     expressions.extend(args);
                 }
+                E::Object(fields) => expressions.extend(fields.iter().map(|f| &f.1)),
                 E::Template(parts) | E::Array(parts) => expressions.extend(parts),
                 _ => {}
             }
@@ -97,81 +112,73 @@ impl FunctionTypes {
         &mut self,
         ty: Type,
         module: &ir::Module,
-        depth: u32,
-        offset: u32,
+        _depth: u32,
+        _offset: u32,
     ) -> Result<(), Diagnostic> {
-        if self.names.contains_key(&ty) {
-            return Ok(());
-        }
-        if let Some(element) = module.types.element(ty) {
-            let depth = depth + 1;
-            if depth >= module.depth {
-                return Err(Diagnostic::at(
-                    &module.source,
-                    offset as usize,
-                    "internal",
-                    "Emitter type depth limit exceeded after checked input",
-                ));
-            }
-            self.add(element, module, depth, offset)?;
-            // A composite alias keeps repeated array references constant-size too.
-            let name = format!("__ulua_fn{}", self.next_name);
-            let _ = writeln!(
-                self.declarations,
-                "type {name} = {{{}}}",
-                self.luau(&element)
-            );
-            self.names.insert(ty, name);
-            self.next_name += 1;
-            return Ok(());
-        }
-        let Some(ir::FunctionType {
-            params,
-            result,
-            required,
-        }) = module.types.function(ty)
-        else {
-            return Ok(());
-        };
-        if self.names.contains_key(&ty) {
-            return Ok(());
-        }
-        let depth = depth + 1;
-        if depth >= module.depth {
-            return Err(Diagnostic::at(
-                &module.source,
-                offset as usize,
-                "internal",
-                "Emitter type depth limit exceeded after checked input",
-            ));
-        }
-        for parameter in params {
-            self.add(*parameter, module, depth, offset)?;
-        }
-        self.add(*result, module, depth, offset)?;
-        let parameters = params
-            .iter()
-            .enumerate()
-            .map(|(i, parameter)| {
-                let name = self.luau(parameter);
-                if i < *required {
-                    name
-                } else if module.types.function(*parameter).is_some() {
-                    format!("({name})?")
-                } else {
-                    format!("{name}?")
+        let mut pending = vec![(ty, false)];
+        while let Some((ty, emit)) = pending.pop() {
+            if !emit {
+                if self.names.contains_key(&ty) {
+                    continue;
                 }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let name = format!("__ulua_fn{}", self.next_name);
-        let _ = writeln!(
-            self.declarations,
-            "type {name} = ({parameters}) -> {}",
-            self.luau(result)
-        );
-        self.names.insert(ty, name);
-        self.next_name += 1;
+                let name = format!("__ulua_fn{}", self.next_name);
+                self.next_name += 1;
+                self.names.insert(ty, name);
+                pending.push((ty, true));
+                if let Some(inner) = module.types.inner(ty).or_else(|| module.types.element(ty)) {
+                    pending.push((inner, false));
+                }
+                if let Some(fields) = module.types.fields(ty) {
+                    pending.extend(fields.iter().map(|f| (f.1, false)));
+                }
+                if let Some(f) = module.types.function(ty) {
+                    pending.push((f.result, false));
+                    pending.extend(f.params.iter().map(|ty| (*ty, false)));
+                }
+                continue;
+            }
+            let name = self.luau(&ty);
+            let definition = if let Some(inner) = module.types.inner(ty) {
+                let inner_name = self.luau(&inner);
+                if module.types.function(inner).is_some() {
+                    format!("({inner_name})?")
+                } else {
+                    format!("{inner_name}?")
+                }
+            } else if let Some(element) = module.types.element(ty) {
+                format!("{{{}}}", self.luau(&element))
+            } else if let Some(fields) = module.types.fields(ty) {
+                format!(
+                    "{{{}}}",
+                    fields
+                        .iter()
+                        .map(|(key, ty)| format!("__ulua_k{key}: {}", self.luau(ty)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else if let Some(f) = module.types.function(ty) {
+                let parameters = f
+                    .params
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ty)| {
+                        let name = self.luau(ty);
+                        if i < f.required {
+                            name
+                        } else if module.types.function(*ty).is_some() {
+                            format!("({name})?")
+                        } else {
+                            format!("{name}?")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({parameters}) -> {}", self.luau(&f.result))
+            } else {
+                continue;
+            };
+            let _ = writeln!(self.declarations, "type {name} = {definition}");
+        }
         Ok(())
     }
     pub(super) fn luau(&self, ty: &Type) -> String {
@@ -215,7 +222,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unchecked_type_depth_reports_internal_at_the_binding() {
+    fn type_alias_work_list_does_not_recurse_through_dependencies() {
         let source = "export function main():void{}function f(g:()=>()=>number):void{}";
         let allocator = oxc_allocator::Allocator::default();
         let parsed =
@@ -224,8 +231,8 @@ mod tests {
             crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
                 .unwrap();
         module.depth = 2;
-        let error = FunctionTypes::new(&module).err().unwrap();
-        assert_eq!(error.code, "internal");
-        assert_eq!(error.offset, source.find("function f").unwrap() as u64);
+        let types = FunctionTypes::new(&module).unwrap();
+        assert_eq!(types.declarations.lines().count(), 4);
+        assert!(types.declarations.contains("() -> number"));
     }
 }

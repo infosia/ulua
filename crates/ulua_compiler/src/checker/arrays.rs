@@ -1,6 +1,6 @@
 //! Array iteration uses one receiver and a fresh constant binding per step.
 use super::*;
-use crate::ir::Statement as S;
+use crate::ir::{Expr, Statement as S};
 impl Checker<'_> {
     pub(super) fn for_of(&mut self, f: &ForOfStatement<'_>, depth: u32) -> Result<S, Diagnostic> {
         let ForStatementLeft::VariableDeclaration(d) = &f.left else {
@@ -47,9 +47,18 @@ impl Checker<'_> {
                 .ok_or_else(|| self.error(f.span, "C6", "For-of requires an array or string"))?
         };
         self.bindings[id].ty = Some(element);
+        self.loop_writes(f.body.span());
+        self.enter_loop();
         self.loops += 1;
         let body = self.statement(&f.body, depth)?;
         self.loops -= 1;
+        let zero_or_exhausted = Expr {
+            bare_true: false,
+            start: f.span.start,
+            ty: Type::Boolean,
+            kind: crate::ir::ExprKind::Boolean(false),
+        };
+        self.leave_loop(Some(&zero_or_exhausted));
         self.scopes.pop();
         // Entry makes captured storage local to each execution of the loop body.
         let body = S::Block(vec![S::Entry(vec![id]), body]);

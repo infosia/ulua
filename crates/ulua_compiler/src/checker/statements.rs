@@ -62,6 +62,8 @@ impl Checker<'_> {
         statements: &[Statement<'_>],
         depth: u32,
     ) -> Result<Vec<S>, Diagnostic> {
+        let entry_mark = self.facts.mark();
+        let entry_reachable = self.reachable;
         let mut declarations = vec![];
         for s in statements {
             match s {
@@ -88,9 +90,15 @@ impl Checker<'_> {
                 out.push(self.statement(s, depth)?);
             }
         }
+        let final_reachable = self.reachable;
+        let final_facts = self.facts.changes(entry_mark);
+        self.facts.restore(entry_mark);
+        self.reachable = entry_reachable;
         for (id, f) in declarations {
             self.function_body(id, f, false, depth)?;
         }
+        self.facts.apply(final_facts);
+        self.reachable = final_reachable;
         Ok(out)
     }
     fn test(&mut self, e: &Expression<'_>, depth: u32) -> Result<Expr, Diagnostic> {
@@ -154,6 +162,9 @@ impl Checker<'_> {
                     return Ok(S::Element(array, index, op, value));
                 }
                 if let AssignmentTarget::StaticMemberExpression(m) = &a.left {
+                    if m.optional {
+                        return Err(self.error(m.span, "C2", "Optional write is rejected"));
+                    }
                     let receiver = self.expr(&m.object, depth, false)?;
                     if self.types.element(receiver.ty).is_some() {
                         if m.property.name == "length"
@@ -181,6 +192,47 @@ impl Checker<'_> {
                             "Only literal zero can clear array length",
                         ));
                     }
+                    self.nullable_use(m.span, &[receiver.ty])?;
+                    let key = self.field_key(m.property.name.as_str());
+                    let field_ty = self
+                        .types
+                        .field(receiver.ty, key)
+                        .ok_or_else(|| self.error(m.span, "C1", "Unknown object field"))?;
+                    let mut value = self.expr_as(&a.right, depth, false, Some(field_ty))?;
+                    let mut op = match a.operator.as_str() {
+                        "=" => None,
+                        "+=" => Some("+"),
+                        "-=" => Some("-"),
+                        "*=" => Some("*"),
+                        "/=" => Some("/"),
+                        "%=" => Some("%"),
+                        _ => {
+                            return Err(self.error(
+                                a.span,
+                                "C4",
+                                "Assignment operator is rejected",
+                            ));
+                        }
+                    };
+                    if op == Some("+")
+                        && field_ty == Type::String
+                        && matches!(value.ty, Type::String | Type::Number | Type::Boolean)
+                    {
+                        value = string_value(value);
+                        op = Some("..");
+                    }
+                    if op.is_some()
+                        && op != Some("..")
+                        && (field_ty != Type::Number || value.ty != Type::Number)
+                    {
+                        return Err(self.error(
+                            a.span,
+                            "C4",
+                            "Compound assignment requires numbers",
+                        ));
+                    }
+                    self.flow(&value.ty, Some(&field_ty), a.span)?;
+                    return Ok(S::Field(receiver, key, op, value));
                 }
                 let AssignmentTarget::AssignmentTargetIdentifier(n) = &a.left else {
                     return Err(match &a.left {
@@ -216,6 +268,7 @@ impl Checker<'_> {
                     return Err(self.error(a.span, "C4", "Compound assignment requires numbers"));
                 }
                 self.flow(&value.ty, self.bindings[id].ty.as_ref(), a.span)?;
+                self.facts.set(id, None);
                 Ok(S::Assign(id, op, value))
             }
             Expression::UpdateExpression(u) => {
@@ -263,13 +316,13 @@ impl Checker<'_> {
                     },
                 ))
             }
-            Expression::CallExpression(_) if !update => Ok(S::Eval(self.expr(e, depth, true)?)),
+            Expression::CallExpression(_) | Expression::ChainExpression(_) if !update => {
+                Ok(S::Eval(self.expr(e, depth, true)?))
+            }
             Expression::TaggedTemplateExpression(_) | Expression::SequenceExpression(_) => {
                 Err(self.error(e.span(), "C8", "Expression has no lowering"))
             }
-            Expression::NewExpression(_) | Expression::ChainExpression(_) => {
-                Err(self.unsupported(e.span()))
-            }
+            Expression::NewExpression(_) => Err(self.unsupported(e.span())),
             _ => Err(self.error(e.span(), "C11", "Invalid statement expression")),
         }
     }
@@ -281,19 +334,41 @@ impl Checker<'_> {
             Statement::ExpressionStatement(e) => self.effect(&e.expression, depth, false)?,
             Statement::IfStatement(i) => {
                 let test = self.test(&i.test, depth)?;
+                let mark = self.facts.mark();
+                let incoming = self.reachable;
+                self.reachable = incoming && self.edge(&test, true);
                 let a = self.statement(&i.consequent, depth)?;
+                let first_reachable = self.reachable && !narrowing::exits(&a);
+                let first = self.facts.changes(mark);
+                self.facts.restore(mark);
+                self.reachable = incoming && self.edge(&test, false);
                 let b = i
                     .alternate
                     .as_ref()
                     .map(|s| self.statement(s, depth))
                     .transpose()?;
+                let second_reachable = self.reachable && !b.as_ref().is_some_and(narrowing::exits);
+                let second = self.facts.changes(mark);
+                self.facts.restore(mark);
+                if !first_reachable {
+                    self.facts.apply(second);
+                } else if !second_reachable {
+                    self.facts.apply(first);
+                } else {
+                    self.facts.merge(first, second);
+                }
+                self.reachable = first_reachable || second_reachable;
                 S::If(test, Box::new(a), b.map(Box::new))
             }
             Statement::WhileStatement(w) => {
+                self.loop_writes(w.span);
                 let test = self.test(&w.test, depth)?;
+                self.enter_loop();
+                self.reachable = self.reachable && self.edge(&test, true);
                 self.loops += 1;
                 let body = self.statement(&w.body, depth)?;
                 self.loops -= 1;
+                self.leave_loop(Some(&test));
                 S::While(test, Box::new(body))
             }
             Statement::ForStatement(f) => {
@@ -319,7 +394,12 @@ impl Checker<'_> {
                         }
                     })
                     .collect();
+                self.loop_writes(f.span);
                 let test = f.test.as_ref().map(|e| self.test(e, depth)).transpose()?;
+                self.enter_loop();
+                if let Some(test) = &test {
+                    self.reachable = self.reachable && self.edge(test, true);
+                }
                 self.loops += 1;
                 let body = self.statement(&f.body, depth)?;
                 self.loops -= 1;
@@ -328,11 +408,19 @@ impl Checker<'_> {
                     .as_ref()
                     .map(|e| self.effect(e, depth, true).map(Box::new))
                     .transpose()?;
+                self.leave_loop(test.as_ref());
                 self.scopes.pop();
                 S::For(init, test, update, Box::new(body), ids)
             }
-            Statement::BreakStatement(b) if b.label.is_none() && self.loops != 0 => S::Break,
-            Statement::ContinueStatement(c) if c.label.is_none() && self.loops != 0 => S::Continue,
+            Statement::BreakStatement(b) if b.label.is_none() && self.loops != 0 => {
+                self.break_edge();
+                self.reachable = false;
+                S::Break
+            }
+            Statement::ContinueStatement(c) if c.label.is_none() && self.loops != 0 => {
+                self.reachable = false;
+                S::Continue
+            }
             Statement::ReturnStatement(r) => {
                 let value = r
                     .argument
@@ -341,6 +429,7 @@ impl Checker<'_> {
                     .transpose()?;
                 let ty = value.as_ref().map_or(&Type::Void, |v| &v.ty);
                 self.flow(ty, Some(&self.result), r.span)?;
+                self.reachable = false;
                 S::Return(value)
             }
             Statement::ForOfStatement(f) => return self.for_of(f, depth),

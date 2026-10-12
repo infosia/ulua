@@ -35,6 +35,15 @@ pub(crate) struct Expr {
     pub(crate) kind: ExprKind,
 }
 pub(crate) enum ExprKind {
+    Null,
+    Object(Vec<(usize, Expr)>),
+    Field(Box<Expr>, usize),
+    OptionalField(Box<Expr>, usize),
+    OptionalLength(Box<Expr>),
+    OptionalMethod(Method, usize, Box<Expr>, Vec<Expr>),
+    OptionalPush(Box<Expr>, Box<Expr>),
+    OptionalCall(Box<Expr>, usize, Vec<Expr>),
+    Coalesce(Box<Expr>, Box<Expr>),
     Number(f64),
     Boolean(bool),
     String(String),
@@ -59,6 +68,7 @@ pub(crate) enum Statement {
     Function(usize),
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
+    Field(Expr, usize, Option<&'static str>, Expr),
     Element(Expr, Expr, Option<&'static str>, Expr),
     ForOf(usize, Expr, Box<Statement>),
     Eval(Expr),
@@ -120,6 +130,7 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 }
                 expressions.push(e);
             }
+            Statement::Field(a, _, _, e) => expressions.extend([a, e]),
             Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
@@ -150,15 +161,22 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
             ExprKind::Read(id) => {
                 ids.push(*id);
             }
-            ExprKind::Unary(_, a) | ExprKind::Length(a) => expressions.push(a),
-            ExprKind::Binary(_, a, b)
+            ExprKind::Field(a, _)
+            | ExprKind::OptionalField(a, _)
+            | ExprKind::Unary(_, a)
+            | ExprKind::Length(a) => expressions.push(a),
+            ExprKind::OptionalPush(a, b)
+            | ExprKind::Coalesce(a, b)
+            | ExprKind::Binary(_, a, b)
             | ExprKind::Logical(_, a, b)
             | ExprKind::Index(a, b)
             | ExprKind::Push(a, b) => {
                 expressions.push(a);
                 expressions.push(b);
             }
-            ExprKind::Method(_, _, a, args) => {
+            ExprKind::OptionalMethod(_, _, a, args)
+            | ExprKind::OptionalCall(a, _, args)
+            | ExprKind::Method(_, _, a, args) => {
                 expressions.push(a);
                 expressions.extend(args);
             }
@@ -171,6 +189,7 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
                 expressions.push(c);
                 expressions.extend(args);
             }
+            ExprKind::Object(fields) => expressions.extend(fields.iter().map(|f| &f.1)),
             ExprKind::Template(parts) | ExprKind::Array(parts) => expressions.extend(parts),
             _ => {}
         }

@@ -1,11 +1,14 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod arrays;
+mod captures;
 mod equality;
 mod expressions;
 mod functions;
 mod inference;
 mod methods;
+mod narrowing;
 mod order;
+mod records;
 mod statements;
 mod strict;
 mod strings;
@@ -19,13 +22,21 @@ use std::collections::HashMap;
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
+    aliases: HashMap<String, Type>,
+    fields: HashMap<String, usize>,
+    facts: narrowing::Facts,
+    assignments: Vec<(u32, u32)>,
+    captured_writes: std::collections::HashSet<u32>,
+    binding_starts: HashMap<u32, usize>,
     methods: std::collections::BTreeSet<(ir::Method, usize)>,
     pub(super) bindings: Vec<ir::Binding>,
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,
     result: Type,
     types: ir::Types,
+    reachable: bool,
     loops: usize,
+    loop_facts: Vec<narrowing::LoopFacts>,
     limit: u32,
     references: Vec<(usize, usize, u32)>,
     functions: Vec<ir::Function>,
@@ -72,9 +83,23 @@ impl Checker<'_> {
                 if u.types.len() == 2
                     && u.types
                         .iter()
-                        .any(|t| matches!(t, TSType::TSNullKeyword(_)))
+                        .any(|t| matches!(unparen(t), TSType::TSNullKeyword(_)))
                 {
-                    return Err(self.unsupported(t.span()));
+                    let inner = u
+                        .types
+                        .iter()
+                        .find(|t| !matches!(unparen(t), TSType::TSNullKeyword(_)))
+                        .ok_or_else(|| {
+                            self.error(t.span(), "C2", "Union needs a non-null member")
+                        })?;
+                    if matches!(
+                        unparen(inner),
+                        TSType::TSUnionType(_) | TSType::TSVoidKeyword(_)
+                    ) {
+                        return Err(self.error(t.span(), "C2", "Invalid nullable member"));
+                    }
+                    let inner = self.ty(inner, false, depth)?;
+                    return Ok(self.types.nullable(inner));
                 }
                 return Err(self.error(t.span(), "C2", "Only T | null is a union"));
             }
@@ -97,8 +122,23 @@ impl Checker<'_> {
                 self.types.intern(params, result, required)
             }
             TSType::TSParenthesizedType(p) => return self.ty(&p.type_annotation, result, depth),
-            TSType::TSNullKeyword(_) | TSType::TSTypeReference(_) | TSType::TSTypeLiteral(_) => {
-                return Err(self.unsupported(t.span()));
+            TSType::TSTypeReference(r) => {
+                let TSTypeName::IdentifierReference(n) = &r.type_name else {
+                    return Err(self.error(r.span, "C11", "Qualified type name is rejected"));
+                };
+                if r.type_arguments.is_some() {
+                    return Err(self.error(r.span, "C11", "Type arguments are rejected"));
+                }
+                *self
+                    .aliases
+                    .get(n.name.as_str())
+                    .ok_or_else(|| self.error(r.span, "C11", "Unknown type name"))?
+            }
+            TSType::TSNullKeyword(_) => {
+                return Err(self.error(t.span(), "C2", "Null type needs a union"));
+            }
+            TSType::TSTypeLiteral(_) => {
+                return Err(self.error(t.span(), "C11", "Object type needs a module alias"));
             }
             _ => return Err(self.error(t.span(), "C11", "Type is outside the closed surface")),
         })
@@ -117,6 +157,7 @@ impl Checker<'_> {
         if scope.insert(name.into(), id).is_some() {
             return Err(self.error(span, "C11", "Duplicate declaration"));
         }
+        self.binding_starts.insert(binding.start, id);
         self.bindings.push(binding);
         Ok(id)
     }
@@ -210,15 +251,24 @@ pub(crate) fn check(
     source: &[u8],
     limit: u32,
 ) -> Result<ir::Module, Diagnostic> {
+    let writes = captures::resolve(program);
     let mut c = Checker {
         source,
+        aliases: HashMap::new(),
+        fields: HashMap::new(),
+        facts: Default::default(),
+        assignments: writes.assignments,
+        captured_writes: writes.captured,
+        binding_starts: HashMap::new(),
         methods: Default::default(),
         bindings: vec![],
         scopes: vec![HashMap::new()],
         owner: 0,
         result: Type::Void,
         types: ir::Types::new(),
+        reachable: true,
         loops: 0,
+        loop_facts: vec![],
         limit,
         references: vec![],
         functions: vec![],
@@ -230,6 +280,7 @@ pub(crate) fn check(
     if !program.directives.is_empty() {
         return Err(c.error(program.span, "C11", "Module directives are rejected"));
     }
+    c.aliases(program)?;
     let mut declarations = Vec::new();
     for s in &program.body {
         match s {
@@ -246,7 +297,8 @@ pub(crate) fn check(
             Statement::TSInterfaceDeclaration(_) => {
                 return Err(c.error(s.span(), "C8", "Interface declarations have no lowering"));
             }
-            Statement::ClassDeclaration(_) | Statement::TSTypeAliasDeclaration(_) => {
+            Statement::TSTypeAliasDeclaration(_) => {}
+            Statement::ClassDeclaration(_) => {
                 return Err(c.unsupported(s.span()));
             }
             _ => return Err(c.error(s.span(), "C11", "Module statements must be declarations")),

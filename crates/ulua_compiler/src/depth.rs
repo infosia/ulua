@@ -170,6 +170,27 @@ pub(crate) fn check<'a>(
                         _ => {}
                     }
                 }
+                Expression::ObjectExpression(o) => {
+                    for entry in &o.properties {
+                        if let ObjectPropertyKind::ObjectProperty(p) = entry {
+                            pending.push((Node::Expression(&p.value), next));
+                        }
+                    }
+                }
+                Expression::ChainExpression(c) => match &c.expression {
+                    ChainElement::StaticMemberExpression(m) => {
+                        pending.push((Node::Expression(&m.object), next))
+                    }
+                    ChainElement::CallExpression(c) => {
+                        pending.push((Node::Expression(&c.callee), next));
+                        for arg in &c.arguments {
+                            if let Some(e) = arg.as_expression() {
+                                pending.push((Node::Expression(e), next));
+                            }
+                        }
+                    }
+                    _ => {}
+                },
                 Expression::ArrayExpression(a) => {
                     for item in &a.elements {
                         if let Some(e) = item.as_expression() {

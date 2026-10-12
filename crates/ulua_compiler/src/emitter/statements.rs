@@ -99,6 +99,30 @@ impl Emitter<'_> {
                     self.release(v);
                 }
             }
+            S::Field(a, key, op, e) => {
+                let receiver = self.expression(a, depth)?;
+                let target = format!("{}.__ulua_k{key}", self.temp(receiver));
+                let old = if op.is_some() {
+                    let slot = self.slot(&e.ty)?;
+                    self.write_slot(slot, &target);
+                    Some(slot)
+                } else {
+                    None
+                };
+                let value = self.expression(e, depth)?;
+                let result = if let (Some(op), Some(old)) = (op, old) {
+                    if *op == "%" {
+                        self.capture("__ulua_fmod");
+                    }
+                    self.binary(op, &self.temp(old), &self.temp(value))
+                } else {
+                    self.temp(value)
+                };
+                self.write(&target, result, &self.function_types.luau(&e.ty));
+                for slot in [Some(receiver), Some(value), old].into_iter().flatten() {
+                    self.release(slot);
+                }
+            }
             S::Element(a, i, op, e) => self.element(a, i, *op, e, depth)?,
             S::ForOf(id, a, body) => self.for_of(*id, a, body, depth)?,
             S::Eval(e) => {

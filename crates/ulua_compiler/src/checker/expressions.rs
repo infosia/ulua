@@ -8,7 +8,12 @@ impl Checker<'_> {
         to: Option<&Type>,
         span: Span,
     ) -> Result<(), Diagnostic> {
-        if !to.is_some_and(|to| from == to) {
+        if !to.is_some_and(|to| self.types.assignable(*from, *to)) {
+            if self.types.contains_null(*from)
+                && to.is_some_and(|ty| !self.types.contains_null(*ty))
+            {
+                return Err(self.error(span, "C16", "Nullable value needs a stable null test"));
+            }
             return Err(self.error(span, "C1", "Value types do not agree"));
         }
         Ok(())
@@ -64,7 +69,7 @@ impl Checker<'_> {
                     let ty = self.bindings[id]
                         .ty
                         .ok_or_else(|| self.error(n.span, "C10", "Binding is not initialized"))?;
-                    (ty, ExprKind::Read(id))
+                    (self.read_type(id, ty, n.span.start), ExprKind::Read(id))
                 } else {
                     match n.name.as_str() {
                         "Infinity" => (Type::Number, ExprKind::Number(f64::INFINITY)),
@@ -99,6 +104,7 @@ impl Checker<'_> {
                 };
                 let a = self.expr(&u.argument, depth, false)?;
                 if a.ty != required {
+                    self.nullable_use(u.span, &[a.ty])?;
                     return Err(self.error(
                         u.span,
                         if op == "!" { "C3" } else { "C4" },
@@ -152,6 +158,7 @@ impl Checker<'_> {
                             return Err(self.error(b.span, "C5", "String ordering is rejected"));
                         }
                         if a.ty != Type::Number || r.ty != Type::Number {
+                            self.nullable_use(b.span, &[a.ty, r.ty])?;
                             return Err(self.error(b.span, "C4", "Numeric operands are required"));
                         }
                         let op = match op {
@@ -180,11 +187,39 @@ impl Checker<'_> {
             }
             Expression::LogicalExpression(l) => {
                 let op = l.operator.as_str();
+                let a = if op == "??" {
+                    if let Expression::ChainExpression(chain) = &l.left {
+                        self.optional_field(chain, depth)?
+                    } else {
+                        self.expr(&l.left, depth, false)?
+                    }
+                } else {
+                    self.expr(&l.left, depth, false)?
+                };
                 if op == "??" {
-                    return Err(self.unsupported(l.span));
+                    let original = self.original_type(&a);
+                    let inner = self.types.inner(original).ok_or_else(|| {
+                        self.error(l.span, "C2", "Coalescing requires a nullable left operand")
+                    })?;
+                    let b = self.expr_as(&l.right, depth, false, expected.or(Some(inner)))?;
+                    let nullable = self.types.nullable(inner);
+                    self.flow(&b.ty, Some(&nullable), l.span)?;
+                    let ty = if self.types.contains_null(b.ty) {
+                        nullable
+                    } else {
+                        inner
+                    };
+                    return self.finish_expr(
+                        e,
+                        statement,
+                        ty,
+                        ExprKind::Coalesce(Box::new(a), Box::new(b)),
+                    );
                 }
-                let a = self.expr(&l.left, depth, false)?;
+                let mark = self.facts.mark();
+                self.edge(&a, op == "&&");
                 let b = self.expr(&l.right, depth, false)?;
+                self.facts.restore(mark);
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -198,11 +233,19 @@ impl Checker<'_> {
                 if test.ty != Type::Boolean {
                     return Err(self.error(c.span, "C3", "Boolean condition is required"));
                 }
+                let mark = self.facts.mark();
+                self.edge(&test, true);
                 let a = self.expr_as(&c.consequent, depth, false, expected)?;
+                self.facts.restore(mark);
+                self.edge(&test, false);
                 let b = self.expr_as(&c.alternate, depth, false, expected)?;
-                self.flow(&a.ty, Some(&b.ty), c.span)?;
+                self.facts.restore(mark);
+                let ty = self
+                    .types
+                    .join(a.ty, b.ty)
+                    .ok_or_else(|| self.error(c.span, "C1", "Conditional types do not agree"))?;
                 (
-                    a.ty,
+                    ty,
                     ExprKind::Conditional(Box::new(test), Box::new(a), Box::new(b)),
                 )
             }
@@ -215,6 +258,9 @@ impl Checker<'_> {
                         self.error(entry.span(), "C6", "Array holes and spreads are rejected")
                     })?;
                     let value = self.expr_as(e, depth, false, contextual_element)?;
+                    if self.types.contains_null(value.ty) {
+                        return Err(self.error(e.span(), "C6", "Array elements must exclude null"));
+                    }
                     if contextual_element.is_none() {
                         self.inferred_reference(e, value.ty)?;
                     }
@@ -232,18 +278,38 @@ impl Checker<'_> {
             }
             Expression::ComputedMemberExpression(m) => {
                 if m.optional {
-                    return Err(self.unsupported(m.span));
+                    return Err(self.error(
+                        m.span,
+                        "C2",
+                        "Optional step needs a terminal chain position",
+                    ));
                 }
                 let (a, i, element) = self.index(&m.object, &m.expression, depth, m.span)?;
                 (element, ExprKind::Index(Box::new(a), Box::new(i)))
             }
             Expression::StaticMemberExpression(m) => {
                 if m.optional {
-                    return Err(self.unsupported(m.span));
+                    return Err(self.error(
+                        m.span,
+                        "C2",
+                        "Optional step needs a terminal chain position",
+                    ));
                 }
                 let a = self.expr(&m.object, depth, false)?;
                 if self.types.element(a.ty).is_none() && a.ty != Type::String {
-                    return Err(self.unsupported(m.span));
+                    if self.types.contains_null(a.ty) {
+                        return Err(self.error(
+                            m.span,
+                            "C16",
+                            "Nullable receiver needs a stable null test",
+                        ));
+                    }
+                    let key = self.field_key(m.property.name.as_str());
+                    let ty = self
+                        .types
+                        .field(a.ty, key)
+                        .ok_or_else(|| self.error(m.span, "C1", "Unknown object field"))?;
+                    return self.finish_expr(e, statement, ty, ExprKind::Field(Box::new(a), key));
                 }
                 if m.property.name != "length" {
                     return Err(self.error(
@@ -255,12 +321,13 @@ impl Checker<'_> {
                 (Type::Number, ExprKind::Length(Box::new(a)))
             }
             Expression::CallExpression(call) => {
+                let mut field_callee = None;
                 if let Expression::StaticMemberExpression(m) = &call.callee
                     && !m.optional
                     && !call.optional
                     && call.type_arguments.is_none()
                 {
-                    // Array receiver precedes its argument. Other member families remain later slices.
+                    // Freeze an object function field before the arguments.
                     if !matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "Utf8" | "String") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
                     {
                         let receiver = self.expr(&m.object, depth, false)?;
@@ -306,7 +373,18 @@ impl Checker<'_> {
                                 kind: ExprKind::Push(Box::new(receiver), Box::new(value)),
                             });
                         }
-                        return Err(self.unsupported(m.span));
+                        self.nullable_use(m.span, &[receiver.ty])?;
+                        let key = self.field_key(m.property.name.as_str());
+                        let ty = self
+                            .types
+                            .field(receiver.ty, key)
+                            .ok_or_else(|| self.error(m.span, "C1", "Unknown object field"))?;
+                        field_callee = Some(Expr {
+                            bare_true: false,
+                            start: m.span.start,
+                            ty,
+                            kind: ExprKind::Field(Box::new(receiver), key),
+                        });
                     }
                 }
                 if let Expression::StaticMemberExpression(m) = &call.callee
@@ -337,7 +415,9 @@ impl Checker<'_> {
                 if call.optional || call.type_arguments.is_some() {
                     return Err(self.unsupported(call.span));
                 }
-                let callee = if let Expression::Identifier(n) = &call.callee {
+                let callee = if let Some(callee) = field_callee {
+                    callee
+                } else if let Expression::Identifier(n) = &call.callee {
                     self.default_reference(n.name.as_str(), n.span)?;
                     if matches!(n.name.as_str(), "print" | "String")
                         && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str()))
@@ -379,8 +459,10 @@ impl Checker<'_> {
                         {
                             self.expr(&call.callee, depth, false)?
                         }
-                        Expression::StaticMemberExpression(_)
-                        | Expression::ComputedMemberExpression(_) => {
+                        Expression::StaticMemberExpression(_) => {
+                            self.expr(&call.callee, depth, false)?
+                        }
+                        Expression::ComputedMemberExpression(_) => {
                             return Err(self.unsupported(call.callee.span()));
                         }
                         _ => {
@@ -392,6 +474,7 @@ impl Checker<'_> {
                         }
                     }
                 };
+                self.nullable_use(call.span, &[callee.ty])?;
                 let Some(signature) = self.types.signature(callee.ty) else {
                     return Err(self.error(
                         call.span,
@@ -466,11 +549,18 @@ impl Checker<'_> {
                 return Err(self.error(e.span(), "C8", "Expression has no lowering"));
             }
             Expression::ArrowFunctionExpression(a) => self.arrow(a, depth, expected)?,
-            Expression::ObjectExpression(_)
-            | Expression::NullLiteral(_)
-            | Expression::NewExpression(_)
-            | Expression::ChainExpression(_)
-            | Expression::ThisExpression(_) => return Err(self.unsupported(e.span())),
+            Expression::ObjectExpression(o) => self.object(o, depth, expected)?,
+            Expression::NullLiteral(_) => (Type::Null, ExprKind::Null),
+            Expression::ChainExpression(c) if statement => {
+                let value = self.optional_call(c, depth)?;
+                return self.finish_expr(e, statement, value.ty, value.kind);
+            }
+            Expression::ChainExpression(_) => {
+                return Err(self.error(e.span(), "C2", "Optional field only precedes coalescing"));
+            }
+            Expression::NewExpression(_) | Expression::ThisExpression(_) => {
+                return Err(self.unsupported(e.span()));
+            }
             _ => {
                 return Err(self.error(
                     e.span(),

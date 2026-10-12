@@ -12,6 +12,138 @@ impl Emitter<'_> {
         })?;
         let target = self.temp(dest);
         match &expr.kind {
+            E::Null => self.write_slot(dest, "nil"),
+            E::Object(fields) => {
+                self.write_slot(dest, "{}");
+                for (key, entry) in fields {
+                    let slot = self.expression(entry, depth)?;
+                    self.write(
+                        &format!("{}.__ulua_k{key}", self.temp(dest)),
+                        self.temp(slot),
+                        &self.function_types.luau(&entry.ty),
+                    );
+                    self.release(slot);
+                }
+            }
+            E::Field(receiver, key) => {
+                let slot = self.expression(receiver, depth)?;
+                self.write_slot(dest, format!("{}.__ulua_k{key}", self.temp(slot)));
+                self.release(slot);
+            }
+            E::OptionalField(receiver, key) => {
+                let slot = self.expression(receiver, depth)?;
+                self.write_slot(
+                    dest,
+                    format!(
+                        "if {0} ~= nil then {0}.__ulua_k{key} else nil",
+                        self.temp(slot)
+                    ),
+                );
+                self.release(slot);
+            }
+            E::OptionalLength(receiver) => {
+                let slot = self.expression(receiver, depth)?;
+                self.write_slot(
+                    dest,
+                    format!("if {0} ~= nil then #{0} else nil", self.temp(slot)),
+                );
+                self.release(slot);
+            }
+            E::OptionalMethod(method, arity, receiver, args) => {
+                let slot = self.expression(receiver, depth)?;
+                self.line(format!("if {} ~= nil then", self.temp(slot)));
+                self.indent += 1;
+                let inner = self
+                    .module
+                    .types
+                    .inner(receiver.ty)
+                    .ok_or_else(|| self.limit("internal", "Missing optional receiver type"))?;
+                let narrowed = self.slot(&inner)?;
+                self.write_slot(narrowed, self.temp(slot));
+                let mut slots = vec![narrowed];
+                for arg in args {
+                    slots.push(self.expression(arg, depth)?);
+                }
+                let helper = methods::name(*method, *arity);
+                self.capture(&helper);
+                self.line(format!(
+                    "{helper}({})",
+                    slots
+                        .iter()
+                        .map(|s| self.temp(*s))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+                for slot in slots {
+                    self.release(slot);
+                }
+                self.release(slot);
+                self.indent -= 1;
+                self.line("end");
+            }
+            E::OptionalPush(receiver, value) => {
+                let slot = self.expression(receiver, depth)?;
+                self.line(format!("if {} ~= nil then", self.temp(slot)));
+                self.indent += 1;
+                let value = self.expression(value, depth)?;
+                self.write(
+                    &format!("{0}[#{0}+1]", self.temp(slot)),
+                    self.temp(value),
+                    &self.function_types.luau(&self.slots[value].ty),
+                );
+                self.release(value);
+                self.release(slot);
+                self.indent -= 1;
+                self.line("end");
+            }
+            E::OptionalCall(receiver, key, args) => {
+                let slot = self.expression(receiver, depth)?;
+                self.line(format!("if {} ~= nil then", self.temp(slot)));
+                self.indent += 1;
+                let ty = self
+                    .module
+                    .types
+                    .inner(receiver.ty)
+                    .and_then(|ty| self.module.types.field(ty, *key))
+                    .ok_or_else(|| self.limit("internal", "Missing optional function type"))?;
+                let callee = self.slot(&ty)?;
+                self.write_slot(callee, format!("{}.__ulua_k{key}", self.temp(slot)));
+                let mut slots = vec![];
+                for arg in args {
+                    slots.push(self.expression(arg, depth)?);
+                }
+                self.line(format!(
+                    "{}({})",
+                    self.temp(callee),
+                    slots
+                        .iter()
+                        .map(|s| self.temp(*s))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+                for slot in slots {
+                    self.release(slot);
+                }
+                self.release(callee);
+                self.release(slot);
+                self.indent -= 1;
+                self.line("end");
+            }
+            E::Coalesce(a, b) => {
+                let slot = self.expression(a, depth)?;
+                self.line(format!("if {} ~= nil then", self.temp(slot)));
+                self.indent += 1;
+                self.write_slot(dest, self.temp(slot));
+                self.indent -= 1;
+                self.line("else");
+                self.indent += 1;
+                let fallback = self.expression(b, depth)?;
+                self.write_slot(dest, self.temp(fallback));
+                self.release(fallback);
+                self.indent -= 1;
+                self.line("end");
+                self.release(slot);
+            }
             E::Number(n) => {
                 if n.is_infinite() {
                     self.capture("__ulua_huge");
@@ -235,6 +367,7 @@ impl Emitter<'_> {
                 }
                 Some(number(*n))
             }
+            E::Null => Some("nil".into()),
             E::Boolean(b) => Some(b.to_string()),
             E::String(s) => Some(quote(s)),
             E::Read(id) => Some(self.read_binding(*id)?),

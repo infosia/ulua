@@ -207,19 +207,27 @@ mod tests {
                 };
                 let mut c = Checker {
                     source: source.as_bytes(),
+                    aliases: Default::default(),
+                    fields: Default::default(),
+                    facts: Default::default(),
+                    assignments: vec![],
+                    captured_writes: Default::default(),
+                    binding_starts: Default::default(),
                     methods: Default::default(),
                     bindings: vec![],
                     scopes: vec![HashMap::new()],
                     owner: 0,
                     result: Type::Void,
                     types: ir::Types::new(),
+                    reachable: true,
                     loops: 0,
+                    loop_facts: vec![],
                     limit: crate::DEPTH_CEILING,
                     references: vec![],
                     functions: vec![],
                     default_scopes: vec![],
                 };
-                // Build the violating signature directly. The surface still rejects null.
+                // Build the violating signature directly, independent of array admission.
                 let element = match shape {
                     "null" => Type::Null,
                     "nullable" => c.types.nullable(Type::Number),

@@ -163,7 +163,7 @@ impl Checker<'_> {
             .and_then(|ty| self.types.function(ty))
             .map(|f| f.result)
             .ok_or_else(|| self.unsupported(f.span))?;
-        let state = self.enter_function(id, result);
+        let state = self.enter_function(id, result, false);
         let b = f.body.as_ref().ok_or_else(|| self.unsupported(f.span))?;
         let parameters = self.parameters(&f.params, &b.statements, depth)?;
         if !b.directives.is_empty() {
@@ -221,7 +221,7 @@ impl Checker<'_> {
             a.span,
         )?;
         self.scopes.pop();
-        let state = self.enter_function(id, result.unwrap_or(Type::Void));
+        let state = self.enter_function(id, result.unwrap_or(Type::Void), true);
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
@@ -275,17 +275,29 @@ impl Checker<'_> {
         Ok((ty, ExprKind::Closure(id)))
     }
 
-    fn enter_function(&mut self, id: usize, result: Type) -> FunctionState {
+    fn enter_function(&mut self, id: usize, result: Type, inherit: bool) -> FunctionState {
         let state = FunctionState {
+            reachable: std::mem::replace(&mut self.reachable, true),
+            fact_mark: self.facts.mark(),
+            fact_floor: self.facts.floor,
+            loop_facts: std::mem::take(&mut self.loop_facts),
             owner: self.owner,
             result: std::mem::replace(&mut self.result, result),
             loops: std::mem::replace(&mut self.loops, 0),
         };
+        // Stock tsc discards outer const facts at a named declaration (TS18047).
+        if !inherit {
+            self.facts.floor = self.facts.serial + 1;
+        }
         self.owner = id + 1;
         self.scopes.push(HashMap::new());
         state
     }
     fn leave_function(&mut self, state: FunctionState) {
+        self.reachable = state.reachable;
+        self.facts.restore(state.fact_mark);
+        self.facts.floor = state.fact_floor;
+        self.loop_facts = state.loop_facts;
         self.scopes.pop();
         self.owner = state.owner;
         self.result = state.result;
@@ -293,6 +305,10 @@ impl Checker<'_> {
     }
 }
 struct FunctionState {
+    reachable: bool,
+    fact_mark: usize,
+    fact_floor: u64,
+    loop_facts: Vec<narrowing::LoopFacts>,
     owner: usize,
     result: Type,
     loops: usize,

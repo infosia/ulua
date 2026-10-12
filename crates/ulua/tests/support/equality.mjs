@@ -24,7 +24,7 @@ const codes = new Map();
 const affected = new Set();
 const randomFiles = new Set(files.filter(f => {
   const source = fs.readFileSync(f, "utf8");
-  return source.startsWith("function identity(") || source.startsWith("// D18 random\n");
+  return source.startsWith("function identity(") || source.startsWith("// D18 random\n") || source.startsWith("// P2.5 random\n");
 }));
 const randomCodes = new Map();
 const randomAffected = new Set();

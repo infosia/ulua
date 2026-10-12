@@ -1,4 +1,4 @@
-//! D18 checks forms that can preserve a narrowed boolean reference type.
+//! D18 checks forms that preserve a narrowed boolean or nullable reference type.
 use super::*;
 
 impl Checker<'_> {
@@ -7,14 +7,63 @@ impl Checker<'_> {
         e: &Expression<'_>,
         ty: Type,
     ) -> Result<(), Diagnostic> {
-        if reference_form(e, ty) {
+        let nullable = self.nullable_reference(e);
+        if reference_form(e, ty) || nullable {
             return Err(self.error(
                 e.span(),
                 "C11",
-                "An inferred type cannot come from a boolean reference; add a type annotation",
+                if nullable {"An inferred type cannot come from a narrowable reference; add a type annotation"} else {"An inferred type cannot come from a boolean reference; add a type annotation"},
             ));
         }
         Ok(())
+    }
+    fn nullable_reference(&self, e: &Expression<'_>) -> bool {
+        match e {
+            Expression::Identifier(_)
+            | Expression::StaticMemberExpression(_)
+            | Expression::ComputedMemberExpression(_) => {
+                reference(e)
+                    && self
+                        .reference_type(e)
+                        .is_some_and(|ty| self.types.inner(ty).is_some())
+            }
+            Expression::ParenthesizedExpression(p) => self.nullable_reference(&p.expression),
+            Expression::UnaryExpression(u) if u.operator.as_str() == "!" => {
+                self.nullable_reference(&u.argument)
+            }
+            Expression::ConditionalExpression(c) => {
+                self.nullable_reference(&c.consequent) || self.nullable_reference(&c.alternate)
+            }
+            Expression::LogicalExpression(l) => {
+                self.nullable_reference(&l.left)
+                    || self.nullable_reference(&l.right)
+                    || (l.operator.as_str() == "??"
+                        && (reference_form(&l.left, Type::Boolean)
+                            || reference_form(&l.right, Type::Boolean)))
+            }
+            _ => false,
+        }
+    }
+    fn reference_type(&self, e: &Expression<'_>) -> Option<Type> {
+        match e {
+            Expression::Identifier(n) => self
+                .scopes
+                .iter()
+                .rev()
+                .find_map(|s| s.get(n.name.as_str()))
+                .and_then(|id| self.bindings[*id].ty),
+            Expression::ParenthesizedExpression(p) => self.reference_type(&p.expression),
+            Expression::ComputedMemberExpression(m) => {
+                self.types.element(self.reference_type(&m.object)?)
+            }
+            Expression::StaticMemberExpression(m) => {
+                let ty = self.reference_type(&m.object)?;
+                let ty = self.types.inner(ty).unwrap_or(ty);
+                self.types
+                    .field(ty, *self.fields.get(m.property.name.as_str())?)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -35,7 +84,7 @@ fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
         Expression::ConditionalExpression(c) => {
             reference_form(&c.consequent, ty) || reference_form(&c.alternate, ty)
         }
-        Expression::LogicalExpression(l) if matches!(l.operator.as_str(), "&&" | "||") => {
+        Expression::LogicalExpression(l) if matches!(l.operator.as_str(), "&&" | "||" | "??") => {
             reference_form(&l.left, ty) || reference_form(&l.right, ty)
         }
         _ => false,
