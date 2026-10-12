@@ -15,6 +15,7 @@ export function main(): void {
   print(`${xs.findIndex((v: number): boolean => v > 4)} ${xs.findLastIndex((v: number): boolean => v > 4)} ${xs.findIndex((v: number): boolean => v > 9)}`);
   print(xs.flatMap((v: number, i: number): number[] => [v, i]).join());
   print(`${xs.reduce((a: number, v: number): number => a * 10 + v, 0)} ${xs.reduceRight((a: number, v: number): number => a * 10 + v, 0)}`);
+  print(`${xs.reduce((a: number, v: number, i: number): number => a + v * i, 0)} ${xs.reduceRight((a: number, v: number, i: number): number => a * 2 + v + i, 0)}`);
   const pairs: number[][] = [[1, 0], [0, 1], [1, 2], [0, 3], [1, 4]];
   pairs.sort((a: number[], b: number[]): number => a[0] - b[0]);
   print(pairs.map((p: number[]): string => `${p[0]}${p[1]}`).join(" "));
