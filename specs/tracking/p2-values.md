@@ -229,6 +229,14 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.5 Phase Review round 9
+
+Reviewer: fresh agent, diff `917e951..5a0258c`. 0 CRITICAL, 1 MAJOR, 0 MINOR. The round 8 resolution holds (depth 48 and 49 in 10 shapes; 35 C12.7 helper forms equal `node`); random campaign 1,000 programs, 809 accepted, 0 differences; cost ratios 1.8 to 3.0.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A recursive alias group counts as one step: a direct ring of 170 aliases (6,389 B) and a nullable ring of 250 are accepted and fail `luau-analyze` ("Code is too complex", TypeOnceVisitor recursion limit); a ring of 130 under a chain of 47 fails | MAJOR | `pipeline.md` §6: a group counts its size |
+
 ### P2.5 Phase Review round 8
 
 Reviewer: fresh agent, diff `917e951..8db6110`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 7 resolution holds: `limit:fields` at 1,024 and 1,025 in every path; 40 C12.7 trap forms and 12 normal forms equal `node`; random campaign of about 1,650 programs, about 1,550 accepted, 0 differences outside the named C6 divergence.
