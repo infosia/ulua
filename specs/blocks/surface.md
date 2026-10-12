@@ -142,7 +142,10 @@ narrowable reference form is a reference of type `boolean` or
 `a ?? b` where `e`, `a`, or `b` is a narrowable reference form. `tsc`
 gives `this` the polymorphic type `this`, and a later flow of another
 instance of the class gives TS2322 or TS2345 (`let t = this; t = new
-A();`, `const xs = [this]; xs.push(new A());`).
+A();`, `const xs = [this]; xs.push(new A());`). A form over `this` also
+needs an annotation as the initializer of a `const`: `const u = this;
+let t = u; t = new A();` gives TS2322. So no binding other than `this`
+has the type `this`.
 
 A `number` or `string` reference narrows only to a fresh literal, which
 widens, or to `never` after a contradictory comparison; the `never`
