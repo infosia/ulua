@@ -18,7 +18,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
 | P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`, `a47`, `a48`, `a49`, `a50`, `t07`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`, `a44`, `a45`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59`, `r112`, `r113`, `r114`, `r116`, `r117`, `r118` |
-| P2.7 | Exceptions | `a51`, `a52`, `a53`; `r119` to `r123`; `t08`, `t09` |
+| P2.7 | Exceptions | `a51` to `a54`; `r119` to `r123`; `t08`, `t09` |
 
 ## Carry-over into P2
 
@@ -313,6 +313,18 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.7 Phase Review round 1
+
+Reviewer: fresh agent, diff `1ac5397..3fafd70`. 1 CRITICAL, 1 MAJOR, 3 MINOR. Stops are never caught: 130 stack, 2,759 memory, and 3,501 step sweeps report the stop code, run no catch or finally, and leave the instance usable. 965 random `finally` programs match `node`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A `try` block such as `{ if (c) { break; } return x; }` counts as terminating; the emitter returns the value slot without the tag check, so `break` and `continue` leave the function with `nil`: `ULUA_INTERNAL` then `ULUA_POISONED`, or a `number` function returns `nil` with status 0 | CRITICAL | C17.9 states the jump; `a54` |
+| `luau-analyze -j1` time for `try{a++;}finally{}` repeated in one function: 0.13 s at 100, 6.4 s at 400, 65 s at 800 (about n³); 64 KiB holds about 3,000 | MAJOR | pipeline.md §4.9: ratio at most 12 per 4x, else a C15 bound |
+| A catch binding used in `instanceof` adds one to the enclosing function's upvalue count: 195 such statements give `limit:upvalues`; the Luau has no such upvalue | MINOR | implementation |
+| C17.1 named C11 for Error misuse; the implementation and `r122`, `r123` use C17 | MINOR | C17.1 names C17 |
+| C17.9 said one closure per `try` entry; each block that runs allocates one | MINOR | C17.9 text |
 
 ### P2.7 implementation record
 

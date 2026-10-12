@@ -184,6 +184,14 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    does not poison the context. Measured: `error(v, 0)` and
    `lua_error` request no allocation in the measured stops; nested
    protected calls reach "C stack overflow" at 198.
+   The lowering keeps the `luau-analyze -j1` time of `try` shapes
+   (sequential, nested, in loops, with `catch` and `finally`) within a
+   ratio of 12 for 4 times the input, measured from 16 KiB to 64 KiB
+   (the witness bound of P2.5). If no lowering form reaches it, a C15
+   bound on `try` statements per generated function takes its place,
+   with a measured value and a limit diagnostic. Measured at `3fafd70`:
+   `try{a++;}finally{}` repeated in one function takes 0.13 s at 100,
+   6.4 s at 400, and 65 s at 800 statements.
 
 ## 5. Emission
 

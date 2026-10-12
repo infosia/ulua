@@ -713,7 +713,7 @@ are in `tracking/p2-values.md` (P2.7 Step 0).
    table of them (C1, C14.1). `new C()` sets `message` to `""`;
    `new C(m)` sets it to `m`; each sets `name` to the class name. A
    second constructor argument, a call without `new`, and every other
-   member (`stack`, `cause`) are rejected (C11). The seven names denote
+   member (`stack`, `cause`) are rejected (C17). The seven names denote
    one static type: a value of one class flows to a binding of
    another, as `tsc` relates them structurally.
 2. **Identity.** `x instanceof C`, with `C` a class of the family,
@@ -765,8 +765,14 @@ are in `tracking/p2-values.md` (P2.7 Step 0).
    `trap:uncaught-exception`. The diagnostic message is the `name`,
    `": "`, and the `message` of the value. `node` prints the same
    value and exits with status 1.
-9. **Cost and limits.** Each entry into a `try` statement allocates
-   one closure: a cost that the source shows (principle 16). A `try`,
+9. **Cost and limits.** Each `try`, `catch`, and `finally` block that
+   runs allocates one closure: a cost that the source shows (principle
+   16). A `break` or `continue` in a `try` or `catch` block that leaves
+   the statement to an outer loop is a jump of the statement: the
+   statement completes with that jump, also when the block ends with a
+   `return`. The time of `luau-analyze -j1` over the output of `try`
+   shapes grows at most 12 times for 4 times the input (`pipeline.md`
+   §4.9). A `try`,
    a `catch`, and a `finally` block each count as a nesting term of
    `limit:nesting-depth` and add their generated closure to the Luau
    nesting. Measured: `luau-analyze` reports "Code is too complex" for
@@ -779,7 +785,7 @@ are in `tracking/p2-values.md` (P2.7 Step 0).
    block, the same holds for the bindings that the `try` block or the
    `catch` block assigns.
 
-Accept: `a51`, `a52`, `a53`. Reject: `r119`, `r120`, `r121`, `r122`,
+Accept: `a51`, `a52`, `a53`, `a54`. Reject: `r119`, `r120`, `r121`, `r122`,
 `r123`. Trap: `t08`, `t09`.
 
 ## Open items
