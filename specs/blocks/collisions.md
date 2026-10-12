@@ -317,7 +317,7 @@ Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `
   `retired:r77-test-in-for-update`, `retired:r79-aliased-condition`,
   `retired:r80-literal-condition-edge`, `retired:r83-alias-test-bound`.
 
-Accept: `a10`, `a14`, `a28`, `a29`, `a35`. Reject: `r16`, `r89`, `r95`.
+Accept: `a10`, `a14`, `a28`, `a29`, `a35`, `a36`. Reject: `r16`, `r89`, `r95`.
 
 ## C8. Forms outside the subset
 
@@ -403,7 +403,8 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r97`, `r98`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`.
+Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order
 

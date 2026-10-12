@@ -56,8 +56,8 @@ function parseHeader(entry) {
   const m = NAME.exec(entry.file);
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
-  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845)(, TS(2367|2845))?$/.test(header.tsc || ""))
-    fail(entry.id, "accept and trap entries state tsc: accepts or tsc: equality TS2367[, TS2845]");
+  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845|2322|2345)(, TS(2367|2845|2322|2345))*$/.test(header.tsc || ""))
+    fail(entry.id, "accept and trap entries state tsc: accepts or tsc: equality <codes of invariant 3>");
   if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
@@ -107,8 +107,10 @@ function tscCodes(files) {
 
 // CLAUDE.md invariant 3, collisions.md C7: TS2367 or TS2845 on an
 // equality expression whose operands have one primitive type, with
-// literal types widened.
+// literal types widened; or TS2322 or TS2345 that names `never`, the
+// narrowing that a contradictory accepted equality leaves.
 function isAcceptedEquality(d, checker) {
+  if (d.code === 2322 || d.code === 2345) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
   const kinds = new Set([
     ts.SyntaxKind.EqualsEqualsEqualsToken,
@@ -221,7 +223,7 @@ for (const group of [[...accept, ...trap], reject]) {
       continue;
     }
     if (/^equality /.test(headers.get(e.id).tsc) && !atEquality.get(path.resolve(e.path)))
-      fail(e.id, "a tsc diagnostic is not TS2367 or TS2845 on an equality of one primitive type");
+      fail(e.id, "a tsc diagnostic is outside invariant 3: not TS2367 or TS2845 on an accepted equality, nor TS2322 or TS2345 that names never");
     if (got.join(",") !== [...want].sort((a, b) => a - b).join(",")) {
       fail(e.id, `tsc codes [${got.map((c) => `TS${c}`).join(", ")}], header states ${headers.get(e.id).tsc}`);
     }

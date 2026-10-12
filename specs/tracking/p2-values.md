@@ -14,7 +14,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 |---|---|---|
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
-| P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `t04`, `t05`; `r90` to `r98`; `r24` becomes `r24-array-find` (P2.2) |
+| P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
 | P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
@@ -71,6 +71,20 @@ Source of the method set: the owner's prior project, with one change:
   (round 4).
 
 ## Measurements
+
+### P2.3 Phase Review round 3 (with D17 and D18)
+
+Reviewer: fresh agent, diff `9a74af7..98079a6`. 2 MAJOR. D18 matches
+its text; contextual types accept; P2.3 methods and D17 hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| D18 omits element and member reads: `if (bs[i]) { const ys = [bs[i]]; ys.push(false); }` gives TS2345 and compiles | MAJOR | D18 reference forms include access paths; `r99` |
+| A compound write to a reference that a contradictory accepted equality narrowed to `never` gives TS2322: `if (k === 1) { if (k === 2) { k *= 2; } }` | MAJOR | Owner decision: TS2322 and TS2345 that name `never` are inside invariant 3's exception; D18 narrows to boolean reference forms; `a36`; `r97` retired |
+
+Information from the review: D18 as first written rejected `let best =
+Infinity;`, `let acc = n;`, and array or function references; the
+revision accepts number, string, array, and function references.
 
 ### P2.3 Phase Review round 2 (with D17)
 

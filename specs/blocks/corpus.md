@@ -1,9 +1,10 @@
 # Corpus contract
 
-Status: Rev 4, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 5, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
-`phase`; Rev 4 adds the `equality` `tsc` header, D17).
+`phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
+codes to it).
 
 ## 1. Layout
 
@@ -40,9 +41,9 @@ Each entry starts with `//` header lines, in this order:
 ```
 
 - `tsc` is measured, never assumed. An accept or trap entry states
-  `tsc: accepts`, or `tsc: equality TS2367[, TS2845]` when `tsc` gives
-  those codes only at equality expressions that the compiler accepts
-  (CLAUDE.md invariant 3, collisions.md C7). A reject entry states the result of `tsc` on
+  `tsc: accepts`, or `tsc: equality <codes>` with codes from TS2367,
+  TS2845, TS2322, and TS2345 when `tsc` gives them only where CLAUDE.md
+  invariant 3 allows (collisions.md C7). A reject entry states the result of `tsc` on
   that file alone with the project options.
 - `rule` names collision ids (`C1`, `C2`, ...) of `collisions.md`.
 - `phase` names the phase from which the Luau witnesses check the entry
@@ -68,8 +69,9 @@ Each entry starts with `//` header lines, in this order:
   prelude and every accept and trap entry reports zero errors, except
   the codes of an `equality` header: each such diagnostic lies on a
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
-  `number`, `string`, or `boolean` type (literal types widened), and
-  the codes equal the codes of the header. One
+  `number`, `string`, or `boolean` type (literal types widened) for
+  TS2367 and TS2845; each TS2322 or TS2345 names the type `never` in its
+  message; and the codes equal the codes of the header. One
   program over the prelude and every reject entry reports, per file,
   the codes that its header states.
 - `node`: the gate runs each entry with `js-comparable: yes`. Each such

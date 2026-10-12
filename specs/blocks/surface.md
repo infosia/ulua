@@ -1,13 +1,14 @@
 # Accepted surface
 
-Status: Rev 13, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 14, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
 C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
 for function results, default scope, P2.1 review 2; Rev 11: function types
-at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18).
+at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
+references, access paths, P2.3 review 3).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -119,17 +120,26 @@ its target.
 without a type annotation, an element of an array literal without a
 contextual type, and the expression body of an arrow without a result
 type annotation. At these positions `tsc` takes the narrowed type of a
-reference, for example a literal type or `never` after a comparison or
-a truth test, and a later write of a wider value gives TS2322 or
-TS2345. The compiler does not track narrowing (D17). So a *reference
-form* at one of these positions is rejected with C11; a type
-annotation, or a contextual type, accepts it. A reference form is an
-`IdentifierReference`, `(e)`, `!e`, `c ? a : b`, `a && b`, or `a || b`
-where `e`, `a`, or `b` is a reference form. Measured: `const s = "a"; if
-(s === "b") { let t = s; t = "c"; }` gives TS2322 (`s` is `never`
-there); `if (b) { const xs = [b];
-xs.push(false); }` gives TS2345; `let t: string = s` and `const xs:
-boolean[] = [b]` give no error.
+reference. A `boolean` reference narrows to `true` or `false` after a
+truth test or a comparison, and a later write of the other value gives
+TS2322 or TS2345. The compiler does not track narrowing (D17). So a
+*boolean reference form* at one of these positions is rejected with
+C11; a type annotation, or a contextual type, accepts it.
+
+A reference is an `IdentifierReference`, an element read `e[k]`, or a
+member read `e.f` (`length` included) where `e` is a reference. A
+boolean reference form is a reference of type `boolean`, or `(e)`,
+`!e`, `c ? a : b`, `a && b`, or `a || b` where `e`, `a`, or `b` is a
+boolean reference form.
+
+A `number` or `string` reference narrows only to a fresh literal, which
+widens, or to `never` after a contradictory comparison; the `never`
+case is inside invariant 3's exception (TS2322 or TS2345 that names
+`never`). So it needs no annotation. Measured: `if (b) { const xs =
+[b]; xs.push(false); }` and `if (bs[i]) { const ys = [bs[i]];
+ys.push(false); }` give TS2345; `const s = "a"; if (s === "b") { let t
+= s; t = "c"; }` gives TS2367 and TS2322 that names `never`; `let acc =
+n` for a `number` parameter gives no error.
 
 ## 6. Library
 

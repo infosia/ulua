@@ -55,8 +55,10 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    its own limits, as `node` has under invariant 5. At an equality
    expression that the compiler accepts by its type rule
    (`collisions.md` C7), `tsc` can give TS2367 or TS2845; these two
-   codes at that position are outside this rule. Every other `tsc`
-   diagnostic fails the program.
+   codes at that position are outside this rule. After such an
+   equality `tsc` can narrow a reference to `never`; a TS2322 or
+   TS2345 whose message names the type `never` is outside this rule.
+   Every other `tsc` diagnostic fails the program.
 4. **Values keep their native Luau representation.** A value of
    TypeScript type `T` is the plain Luau value of the Luau type that
    `T` lowers to. A lowering can replace an operation with a fixed Luau
