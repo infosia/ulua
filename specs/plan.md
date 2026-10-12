@@ -132,6 +132,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D14 | License: MIT OR Apache-2.0, at the user's option | 2026-10-11 | `LICENSE-MIT`, `LICENSE-APACHE`, `README.md` |
 | D15 | Where `tsc` acceptance depends on literal types or narrowing, the checker accepts a restrictive structural subset instead of a model of `tsc`. A later revision opens a form when a program needs it | 2026-10-11 | `collisions.md` C7 Rev 14; `tracking/p1-skeleton.md` round 4 |
 | D16 | `undefined` is rejected. No accepted form and no library call gives `undefined` under `node`; a call whose miss is `undefined` under `node` is not in the library | 2026-10-12 | `collisions.md` C2; `tracking/p1-skeleton.md` |
+| D17 | Equality acceptance is type-based (C7): one primitive type, or arrays with identical element types; no literal-type or narrowing rule. TS2367 and TS2845 at an accepted equality are outside invariant 3. D15 no longer covers equality | 2026-10-12 | `collisions.md` C7 Rev 25; `tracking/equality-measurements.md` |
 
 ## 9. Corrections and revisions
 

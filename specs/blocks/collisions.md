@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 24, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 25, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -11,7 +11,7 @@ literal conditions, strict-mode early errors, round 6; Rev 19:
 set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
 closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
-P2.2 review; Rev 24: C6.9 array methods, P2.3).
+P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -282,74 +282,32 @@ Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `
 - `===` and `!==` between function values are rejected. The Luau
   compiler reuses a closure that captures no upvalue, so two closures
   that JavaScript keeps distinct can compare equal.
-- `tsc` gives TS2367 when the types of the two operands do not overlap.
-  A literal type, a union of literal types, or a reference that `tsc`
-  narrows to one makes this possible. The checker does not model these
-  types. It accepts only operand pairs where `tsc` cannot give a literal
-  type to both. The rules below are restrictive on purpose; a later
-  revision opens a form when a program needs it.
-  1. `===`, `!==`, `==`, and `!=` do not take `boolean` operands. Write `!`, `&&`,
-     `||`, or `?:`.
-  2. An operand that is `NaN` (in parentheses or not) is rejected: `tsc`
-     gives TS2845. An operand that is an array literal (in parentheses
-     or not) is rejected: `tsc` gives TS2839, because the comparison is
-     by identity and the literal is a new array.
-  3. At least one operand is *wide*. A wide operand is one of these
-     forms:
-     - a call to a function that declares its result type;
-     - a binary `+`, `-`, `*`, `/`, or `%` expression;
-     - `-e`, where `e` without its parentheses is not a numeric literal;
-     - a reference to a `let` binding, a parameter, or a `for…of`
-       binding that is not *tested* at that point;
-     - a reference to a `const` binding that is not *tested* at that
-       point, if its initializer is wide;
-     - `(e)`, where `e` is wide.
-     Every other form is not wide: literals, `-` of a numeric literal,
-     templates, `?:`, `&&`, `||`, `!`, and tested references.
-  4. A reference `x` is *tested* at a point if `tsc` can narrow it by an
-     equality on every control-flow path to that point. For a
-     condition `g`, *T*(g) is the set of references that `g` true can
-     narrow, and *F*(g) is the set for `g` false:
-     - `x === e`, `e === x`, `x == e`, or `e == x`, where `e` is not
-       wide: *T* = {x};
-     - `x !== e`, `e !== x`, `x != e`, or `e != x`, where `e` is not
-       wide: *F* = {x};
-     - `!g`: *T* and *F* of `g` swap;
-     - `a && b`, `a || b`: the union of the sets of `a` and `b`;
-     - `(g)`: the sets of `g`;
-     - a read of a `boolean` binding (`const` or `let`): the sets of
-       its initializer. `tsc` narrows through an aliased condition.
-       The checker stores these sets with the binding, flattened. Each
-       set holds at most 8 references (`ALIAS_TEST_BOUND`); a larger
-       set gives C7. So a declaration and each read cost O(1), also
-       for a chain of aliases (pipeline.md §3.10).
-     A condition that is the literal `true`, with or without
-     parentheses, has no false edge. The literal `false` has no true
-     edge. A join counts only the edges that exist. At a point that no
-     edge reaches, every reference is tested.
-     The checker computes the tested set as a forward flow fact over
-     the control-flow graph of the function. The true edge of a
-     condition adds *T*(g); its false edge adds *F*(g). Conditions are
-     those of `if`, `while`, `for`, `?:`, and the left operands of `&&`
-     and `||`. At a join, a reference is tested if it is tested on each
-     incoming edge. The joins are: the end of an `if`; the end of a
-     block; a loop exit, from the false edge of the test and from each
-     `break`; the `for` update, from the end of the body and from each
-     `continue`; and the loop test, from the loop entry. A `return`,
-     `break`, or `continue` edge does not reach the next statement. An
-     absent `for` test has no false edge. A
-     loop test joins the entry edge only, so a test that the body adds
-     does not reach the next iteration's test. An assignment does not
-     end a test. The body of a nested function or arrow starts with
-     the tested set of the point where it is created: `tsc` keeps the
-     narrowing of a parameter, a `let`, or a `const` inside a callback
-     (`if (p === 1) { take(() => p === 2); }` gives TS2367). The fact
-     is a set per point; the checker updates it in
-     time O(1) amortized per reference and per edge (pipeline.md
-     §3.10).
+- The operands of `===`, `!==`, `==`, and `!=` have one type:
+  `number`, `string`, or `boolean`; or two arrays with identical element
+  types, compared by identity; or a `null` operand under C2. Each other
+  pair is rejected, a mixed `number` and `string` pair included.
+- An operand that is an array literal (in parentheses or not) is
+  rejected: the comparison is by identity, and `tsc` gives TS2839.
+- `NaN` is an ordinary `number` operand: `NaN === x` is `false` in both
+  JavaScript and Luau.
+- The rule is type-based (D17). It does not depend on the shape of an
+  operand or on an earlier comparison. `tsc` can still give TS2367 (the
+  literal types of the operands do not overlap) or TS2845 (a comparison
+  with `NaN`) at an accepted equality. CLAUDE.md invariant 3 allows
+  exactly these two codes at an accepted equality expression; the
+  corpus witness checks the position and the operand types of each
+  (corpus.md §4). Measured: 30 programs that the earlier structural
+  rule rejected run equal to `node`; 20 of them show TS2367 or TS2845
+  and no other diagnostic (`tracking/equality-measurements.md`).
+- Retired with the structural rule: `r17`, `r70`, `r71`, `r72`, `r73`,
+  `r74`, `r76`, `r77`, `r79`, `r80`, `r83` (`retired:r17-loose-equality`,
+  `retired:r70-constant-equality`, `retired:r71-boolean-let-equality`,
+  `retired:r72-tested-reference-equality`, `retired:r73-nan-equality`,
+  `retired:r74-template-equality`, `retired:r76-test-after-block`,
+  `retired:r77-test-in-for-update`, `retired:r79-aliased-condition`,
+  `retired:r80-literal-condition-edge`, `retired:r83-alias-test-bound`).
 
-Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`, `r76`, `r77`, `r79`, `r80`, `r83`, `r89`.
+Accept: `a10`, `a14`, `a28`, `a29`, `a35`. Reject: `r16`, `r89`, `r95`.
 
 ## C8. Forms outside the subset
 

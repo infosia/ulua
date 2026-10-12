@@ -52,7 +52,11 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    type-checks under stock `tsc` with the Ulua prelude. The Ulua
    compiler then narrows the accepted set. A `tsc` resource limit
    (TS2563, a `tsc` stack overflow) is outside this rule: `tsc` has
-   its own limits, as `node` has under invariant 5.
+   its own limits, as `node` has under invariant 5. At an equality
+   expression that the compiler accepts by its type rule
+   (`collisions.md` C7), `tsc` can give TS2367 or TS2845; these two
+   codes at that position are outside this rule. Every other `tsc`
+   diagnostic fails the program.
 4. **Values keep their native Luau representation.** A value of
    TypeScript type `T` is the plain Luau value of the Luau type that
    `T` lowers to. A lowering can replace an operation with a fixed Luau
