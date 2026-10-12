@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 35, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 36, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -625,7 +625,11 @@ says `T`. The checker narrows only where nothing else can run a write:
 2. `x` is a `const` binding, or a `let` binding or a parameter that no
    function or arrow assigns. A module-level `let` is never narrowed.
 3. The narrowing ends at the next assignment to `x` on that path.
-4. The narrowing of a `let` binding or a parameter does not continue
+4. A null test inside a nested function or arrow body narrows a `let`
+   binding or a parameter of an enclosing function, within that body,
+   when rule 2 holds for it: the enclosing activation does not run
+   between the test and the read. The narrowing of a `let` binding or
+   a parameter does not continue
    into a nested function or arrow body. The body can run after a later
    assignment. The narrowing of a `const` binding continues into an
    arrow body. It does not continue into a nested function declaration:
@@ -676,7 +680,7 @@ says `T`. The checker narrows only where nothing else can run a write:
    `break` of the loop is reachable. These are the `tsc` edges,
    measured.
 
-Accept: `a14`, `a42`, `a43`, `a46`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`.
+Accept: `a14`, `a42`, `a43`, `a46`, `a47`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`.
 
 ## Open items
 
