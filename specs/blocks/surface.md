@@ -10,7 +10,7 @@ for function results, default scope, P2.1 review 2; Rev 11: function types
 at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
-reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, P2.6).
+reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -37,7 +37,7 @@ C16 only, not the `tsc` type.
 | `TSTypeAliasDeclaration` | Module level only. No type parameters. The type is a `TSTypeLiteral` of §5. |
 | `ClassDeclaration` | Module level only. No `extends`, `implements`, type parameters, or decorators. Members: `PropertyDefinition` and `MethodDefinition` of this table. |
 | `PropertyDefinition` | An identifier key, not computed, not `static`, not `declare`, not `readonly`, not `#private`. A type annotation is required. An initializer is optional (C13). Modifier: `private`: a read or a write of the member outside the class body gives C11 (`tsc` TS2341); inside the class body, also through another instance of the class, it is accepted. At run time the modifier has no effect. |
-| `MethodDefinition` | Kind `constructor` (at most one) or `method`. An identifier key, not computed, not `static`, not `get` or `set`, not `#private`. Parameters as for `FunctionDeclaration`. A method has a result type annotation. Modifier: `private`, as for `PropertyDefinition`. |
+| `MethodDefinition` | Kind `constructor` (at most one) or `method`. An identifier key, not computed, not `static`, not `get` or `set`, not `#private`. Parameters as for `FunctionDeclaration`. A method has a result type annotation. Modifier: `private`, as for `PropertyDefinition`; a constructor has no modifier. A `ReturnStatement` in a constructor has no argument: `return e` changes the value of `new` in JavaScript. |
 
 ## 2. Statements
 
