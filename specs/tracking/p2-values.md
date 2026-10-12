@@ -1,6 +1,6 @@
 # P2 value representations
 
-Status: open; P2.1, P2.2, P2.3 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
+Status: open; P2.1 to P2.4 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
 `corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
 Decisions: D15, D16 (`plan.md` §8).
 
@@ -35,15 +35,16 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.4)
 
-- [ ] collisions.md C4.6 and C5 (byte semantics, the member list, the
+- [x] collisions.md C4.6 and C5 (byte semantics, the member list, the
   traps) and pipeline.md §5.17 implemented; the prelude declares `at`
   and `codePointAt` on `String`.
-- [ ] P2.4 entries pass in full; later slices stay `unsupported`.
-- [ ] Each member has a direct test: ASCII against `node`; non-ASCII
+- [x] P2.4 entries pass in full; later slices stay `unsupported`.
+- [x] Each member has a direct test: ASCII against `node`; non-ASCII
   against the byte rule; each trap.
-- [ ] Growth shapes for string members and concatenation;
+- [x] Growth shapes for string members and concatenation;
   `luau-analyze` passes.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 2).
 
 Source of the member set: the owner's prior project (byte measures).
 Changes: case mapping and normalization stay rejected (no Unicode data
@@ -174,6 +175,24 @@ work in proportion to its allocation (`table.insert` at the end,
 exact name; 14 stress modules (19.97 s analyzer). `p24_strings.rs`
 6.76 s Debug; the large-input tests run under `measurements` (6.75 s).
 2,889 cases equal `node`.
+
+### P2.4 Phase Review round 2
+
+Reviewer: fresh agent, diff `4ac7702..0c1ef44`. No CRITICAL, no MAJOR,
+1 MINOR (this note lacked the gate line). 12 hostile run-time shapes
+(KMP worst cases, `replaceAll("")`, trims and `for…of` over 8 MB,
+`padStart(1e15)`, `repeat(1e12)`, self-concatenation) end with
+`limit:steps` or `limit:memory` in at most 60 ms at the default limits
+(about 60 ns per step). Search members: 9,000 ASCII cases equal `node`;
+4,095 non-ASCII cases equal an independent byte-rule reference. The
+reviewer stopped one line of inquiry (GC and runtime internals outside
+the string helpers); see Gaps.
+
+### P2.4 close
+
+`sh tools/gate.sh full` passes: `cargo-test` 43 s, `luau-witnesses`
+23 s (95 entries in P2.4 or earlier, 40 generated modules, 14 stress
+modules); hygiene passes. Running tasks at the close: none.
 
 ### P2.4 Phase Review round 1
 
@@ -453,6 +472,10 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 ## Failures before the fix
 
 ## Gaps
+
+- P5: a review of GC work and runtime internals outside the generated
+  helpers against the run-time bound of §6.3 (a P2.4 reviewer did not
+  finish this line).
 
 - P2.4 and P2.5: after a contradictory accepted equality, a member read
   on the `never` reference gives TS2339; the contract decides it before
