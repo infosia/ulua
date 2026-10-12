@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 31, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 32, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -15,7 +15,7 @@ P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D
 types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
 function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
 P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
-unreachable points, P2.5 review 3).
+unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -631,8 +631,16 @@ says `T`. The checker narrows only where nothing else can run a write:
    exit, after a loop that never ends normally, and a `for` update that
    no edge reaches. `tsc` gives a read there the declared type
    (TS18047).
+9. Only these end an edge: `return`, `break`, `continue`, a loop
+   that never ends normally, and a test that is the literal `true` or
+   `false` with no parentheses and no `!` (the false edge of `true`,
+   the true edge of `false`). A null test never ends an edge, also
+   when it contradicts a narrowing: `tsc` keeps that edge and narrows
+   the reference to `never` there. On that edge the other narrowings
+   stay. A loop never ends normally when its test is absent or the
+   literal `true`, and no `break` of the loop is reachable.
 
-Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`.
+Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`.
 
 ## Open items
 

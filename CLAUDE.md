@@ -56,8 +56,8 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    expression that the compiler accepts by its type rule
    (`collisions.md` C7), `tsc` can give TS2367 or TS2845; these two
    codes at that position are outside this rule. After such an
-   equality, or after an assignment of `null`, `tsc` can narrow a
-   reference to `never`. A TS2322, TS2345, or TS2339 whose message
+   equality, a null test (`collisions.md` C2), or an assignment of
+   `null`, `tsc` can narrow a reference to `never`. A TS2322, TS2345, or TS2339 whose message
    names the type `never` is outside this rule.
    Every other `tsc` diagnostic fails the program.
 4. **Values keep their native Luau representation.** A value of
