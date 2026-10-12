@@ -197,6 +197,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     emitter::emit(
         &Module {
             types,
+            methods: Default::default(),
             captured: vec![true, false],
             bindings: vec![
                 Binding {

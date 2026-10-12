@@ -127,16 +127,95 @@ mod tests {
 
     #[test]
     fn a_single_member_emits_only_its_dependencies() {
-        let source = "export function main():void{print('x'.concat('y'));}";
-        let luau = compile(source.as_bytes(), Limits::default()).unwrap().luau;
-        assert!(luau.contains("local function __ulua_str_concat_0"));
-        for unused in [
-            "__ulua_str_slice_0",
-            "__ulua_str_repeat_0",
-            "local function __ulua_sb",
-            "local function __ulua_si",
+        for (call, expected) in [
+            ("concat('y')", vec!["__ulua_str_concat_0"]),
+            (
+                "slice(0)",
+                vec![
+                    "__ulua_si",
+                    "__ulua_sq",
+                    "__ulua_sb",
+                    "__ulua_sp",
+                    "__ulua_su",
+                    "__ulua_ss",
+                    "__ulua_str_slice_0",
+                ],
+            ),
+            (
+                "indexOf('y')",
+                vec![
+                    "__ulua_si",
+                    "__ulua_sq",
+                    "__ulua_sb",
+                    "__ulua_sc",
+                    "__ulua_sf",
+                    "__ulua_str_indexOf_0",
+                ],
+            ),
+            (
+                "lastIndexOf('y')",
+                vec![
+                    "__ulua_si",
+                    "__ulua_sq",
+                    "__ulua_sb",
+                    "__ulua_sc",
+                    "__ulua_sf",
+                    "__ulua_str_lastIndexOf_0",
+                ],
+            ),
+            (
+                "startsWith('y')",
+                vec![
+                    "__ulua_si",
+                    "__ulua_sq",
+                    "__ulua_sb",
+                    "__ulua_sc",
+                    "__ulua_se",
+                    "__ulua_str_startsWith_0",
+                ],
+            ),
+            (
+                "trim()",
+                vec![
+                    "__ulua_sn",
+                    "__ulua_su",
+                    "__ulua_sw",
+                    "__ulua_st",
+                    "__ulua_str_trim_0",
+                ],
+            ),
+            (
+                "trimStart()",
+                vec![
+                    "__ulua_sn",
+                    "__ulua_su",
+                    "__ulua_sw",
+                    "__ulua_st",
+                    "__ulua_str_trimStart_0",
+                ],
+            ),
+            (
+                "trimEnd()",
+                vec![
+                    "__ulua_sn",
+                    "__ulua_su",
+                    "__ulua_sw",
+                    "__ulua_st",
+                    "__ulua_str_trimEnd_0",
+                ],
+            ),
         ] {
-            assert!(!luau.contains(unused), "{unused}");
+            let source = format!("export function main():void{{'x'.{call};}}");
+            let luau = compile(source.as_bytes(), Limits::default()).unwrap().luau;
+            let actual: Vec<_> = luau
+                .lines()
+                .filter_map(|line| {
+                    let name = line.strip_prefix("local function ")?.split('(').next()?;
+                    (name.starts_with("__ulua_s") && !name.starts_with("__ulua_set<"))
+                        .then_some(name)
+                })
+                .collect();
+            assert_eq!(actual, expected, "{call}");
         }
     }
 }

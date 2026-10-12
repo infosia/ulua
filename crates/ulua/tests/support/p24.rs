@@ -4,6 +4,7 @@ use std::{
     ffi::{c_char, c_void},
     path::PathBuf,
     process::Command,
+    time::Instant,
 };
 use ulua::*;
 
@@ -13,6 +14,7 @@ pub struct Suite {
     pub comparable: usize,
     pub traps: usize,
     pub rejects: usize,
+    start: Instant,
 }
 impl Suite {
     pub fn new() -> Self {
@@ -24,6 +26,7 @@ impl Suite {
             comparable: 0,
             traps: 0,
             rejects: 0,
+            start: Instant::now(),
         }
     }
     pub fn case(&mut self, body: &str) {
@@ -90,6 +93,7 @@ impl Suite {
         self.count += 1;
     }
     pub fn finish(&self) {
+        eprintln!("P2.4 fixtures: {:.3}s", self.start.elapsed().as_secs_f64());
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let ts: Vec<_> = (0..self.count)
             .map(|i| self.directory.join(format!("case-{i}.ts")))
@@ -110,10 +114,10 @@ impl Suite {
                 "prelude/ulua.d.ts",
             ])
             .args(&ts);
-        success(&mut tsc);
+        success("tsc", &mut tsc);
         let mut analyze = Command::new(root.join("target/luau-tools/luau-analyze"));
         analyze.args(&luau);
-        success(&mut analyze);
+        success("luau-analyze", &mut analyze);
         let runner = self.directory.join("witness.cjs");
         std::fs::write(&runner, r#"const fs=require('fs'),path=require('path');
 const ts=require(process.argv[2]);const dir=process.argv[3];let count=0;
@@ -129,7 +133,7 @@ for(const file of fs.readdirSync(dir).filter(f=>f.endsWith('.expected'))){
         node.arg(&runner)
             .arg(root.join("node_modules/typescript"))
             .arg(&self.directory);
-        success(&mut node);
+        success("node", &mut node);
         eprintln!(
             "P2.4 witnesses: accepted={} node={} traps={} rejected={}",
             self.count, self.comparable, self.traps, self.rejects
@@ -141,8 +145,10 @@ impl Drop for Suite {
         let _ = std::fs::remove_dir_all(&self.directory);
     }
 }
-fn success(command: &mut Command) {
+fn success(name: &str, command: &mut Command) {
+    let start = Instant::now();
     let out = command.output().unwrap();
+    eprintln!("P2.4 {name}: {:.3}s", start.elapsed().as_secs_f64());
     assert!(
         out.status.success(),
         "{command:?}\n{}{}",

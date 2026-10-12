@@ -5,6 +5,7 @@ mod functions;
 mod joins;
 pub(crate) mod methods;
 mod output;
+mod prelude;
 mod statements;
 mod storage;
 mod strings;
@@ -17,7 +18,7 @@ use std::{collections::HashMap, fmt::Write};
 
 const SPILL_FIELDS: usize = 128;
 
-pub(crate) const LIBRARIES: &str = "local __ulua_trap: (number) -> () = (...) :: (number) -> ()\nlocal __ulua_concat: typeof(table.concat) = (table.concat) :: typeof(table.concat)\nlocal __ulua_print: typeof(print) = (print) :: typeof(print)\nlocal __ulua_fmod: typeof(math.fmod) = (math.fmod) :: typeof(math.fmod)\nlocal __ulua_tostring: typeof(tostring) = (tostring) :: typeof(tostring)\nlocal __ulua_gsub: typeof(string.gsub) = (string.gsub) :: typeof(string.gsub)\nlocal __ulua_huge: typeof(math.huge) = (math.huge) :: typeof(math.huge)\nlocal function __ulua_format(__ulua_n: number): string\n    if __ulua_n ~= __ulua_n then return \"NaN\" end\n    if __ulua_n == __ulua_huge then return \"Infinity\" end\n    if __ulua_n == -__ulua_huge then return \"-Infinity\" end\n    if __ulua_n == 0 then return \"0\" end\n    local __ulua_s: string = (__ulua_gsub(__ulua_tostring(__ulua_n), \"e([+-])0*(%d)\", \"e%1%2\")) :: string\n    return __ulua_s\nend\nlocal function __ulua_get<T>(a: {T}, i: number): T\n    if not (i >= 0 and i < #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end\n    return a[i + 1]\nend\nlocal function __ulua_set<T>(a: {T}, i: number, v: T): ()\n    if not (i >= 0 and i <= #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end\n    a[i + 1] = v\nend\n";
+pub(crate) use prelude::LIBRARIES;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");

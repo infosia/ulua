@@ -1,4 +1,4 @@
-//! Byte helpers use plain searches and checked UTF-8 boundaries.
+//! Byte helpers use KMP searches and checked UTF-8 boundaries.
 use crate::{ir::Method, strings::StringMethod as M};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -25,7 +25,15 @@ pub(super) fn prelude(methods: &BTreeSet<(Method, usize)>) -> (String, usize) {
                 && selected
                     .values()
                     .chain(utilities.values())
-                    .any(|s: &String| s.contains(name))
+                    .any(|s: &String| {
+                        // Check name boundaries without repeated full token scans.
+                        s.match_indices(name).any(|(start, _)| {
+                            let identifier = |b: &u8| b.is_ascii_alphanumeric() || *b == b'_';
+                            let before = start.checked_sub(1).and_then(|i| s.as_bytes().get(i));
+                            let after = s.as_bytes().get(start + name.len());
+                            !before.is_some_and(identifier) && !after.is_some_and(identifier)
+                        })
+                    })
             {
                 utilities.insert(name, source.to_owned());
                 added = true;
@@ -58,10 +66,17 @@ end
 "#,
     ),
     (
+        "__ulua_sq",
+        r#"local function __ulua_sq(s: string, i: number): boolean
+    local b = string.byte(s, i + 1)
+    return b == nil or b < 128 or b > 191
+end
+"#,
+    ),
+    (
         "__ulua_sb",
         r#"local function __ulua_sb(s: string, i: number): ()
-    local b = string.byte(s, i + 1)
-    if b ~= nil and b >= 128 and b <= 191 then __ulua_trap(3) end
+    if not __ulua_sq(s, i) then __ulua_trap(3) end
 end
 "#,
     ),
@@ -93,23 +108,77 @@ end
 "#,
     ),
     (
+        "__ulua_su",
+        r#"local function __ulua_su(s: string, first: number, last: number?): string
+    local finish = if last == nil then #s else last
+    if first > finish then return "" end
+    if first == 1 and finish == #s then return s end
+    -- Fixed chunks bound work when Luau reuses an interned string.
+    if finish - first < 256 then return string.sub(s, first, finish) end
+    local pieces: {string} = {}
+    while first <= finish do
+        pieces[#pieces + 1] = string.sub(s, first, math.min(first + 255, finish))
+        first += 256
+    end
+    return __ulua_concat(pieces)
+end
+"#,
+    ),
+    (
+        "__ulua_se",
+        r#"local function __ulua_se(s: string, needle: string, a: number): boolean
+    for i = 1, #needle do
+        if string.byte(s, a + i) ~= string.byte(needle, i) then return false end
+    end
+    return true
+end
+"#,
+    ),
+    (
         "__ulua_ss",
         r#"local function __ulua_ss(s: string, a: number, b: number): string
     __ulua_sb(s, a)
     __ulua_sb(s, b)
-    return string.sub(s, a + 1, b)
+    return __ulua_su(s, a + 1, b)
 end
 "#,
     ),
     (
         "__ulua_sf",
-        r#"local function __ulua_sf(s: string, needle: string, p: number): number
+        r#"local function __ulua_sf(s: string, needle: string, p: number, backward: boolean): number
     __ulua_sb(s, p)
-    local a, b = string.find(s, needle, p + 1, true)
-    if a == nil then return -1 end
-    __ulua_sb(s, a - 1)
-    __ulua_sb(s, b :: number)
-    return a - 1
+    local m = #needle
+    if m == 0 then return p end
+    if m > #s or (not backward and m > #s - p) then return -1 end
+    local direction = if backward then -1 else 1
+    local origin = if backward then m else 1
+    -- KMP prefix lengths use the same byte order as the search.
+    local prefix: {number} = {0}
+    local matched = 0
+    for i = 2, m do
+        local b = string.byte(needle, origin + (i - 1) * direction)
+        while matched > 0 and b ~= string.byte(needle, origin + matched * direction) do
+            matched = prefix[matched]
+        end
+        if b == string.byte(needle, origin + matched * direction) then matched += 1 end
+        prefix[i] = matched
+    end
+    matched = 0
+    local i = if backward then math.min(p, #s - m) + m - 1 else p
+    while i >= 0 and i < #s do
+        local b = string.byte(s, i + 1)
+        while matched > 0 and b ~= string.byte(needle, origin + matched * direction) do
+            matched = prefix[matched]
+        end
+        if b == string.byte(needle, origin + matched * direction) then matched += 1 end
+        if matched == m then
+            local a = if backward then i else i - m + 1
+            if __ulua_sq(s, a) and __ulua_sq(s, a + m) then return a end
+            matched = prefix[matched]
+        end
+        i += direction
+    end
+    return -1
 end
 "#,
     ),
@@ -153,7 +222,7 @@ end
             b = i
         end
     end
-    return string.sub(s, a + 1, b)
+    return __ulua_su(s, a + 1, b)
 end
 "#,
     ),
@@ -168,7 +237,7 @@ end
     local full = math.floor(count / #p)
     local rest = __ulua_fmod(count, #p)
     __ulua_sb(p, rest)
-    local fill = __ulua_sr(p, full) .. string.sub(p, 1, rest)
+    local fill = __ulua_sr(p, full) .. __ulua_su(p, 1, rest)
     return if left then fill .. s else s .. fill
 end
 "#,
@@ -184,18 +253,18 @@ end
             local c = string.sub(replacement, i + 1, i + 1)
             local value: string? = nil
             if c == "$" then value = "$"
-            elseif c == "&" then value = string.sub(s, a + 1, b)
-            elseif c == "`" then value = string.sub(s, 1, a)
-            elseif c == "'" then value = string.sub(s, b + 1) end
+            elseif c == "&" then value = __ulua_su(s, a + 1, b)
+            elseif c == "`" then value = __ulua_su(s, 1, a)
+            elseif c == "'" then value = __ulua_su(s, b + 1) end
             if value ~= nil then
-                table.insert(pieces, string.sub(replacement, start, i - 1))
+                table.insert(pieces, __ulua_su(replacement, start, i - 1))
                 table.insert(pieces, value)
                 i += 2
                 start = i
             else i += 1 end
         else i += 1 end
     end
-    table.insert(pieces, string.sub(replacement, start))
+    table.insert(pieces, __ulua_su(replacement, start))
     return __ulua_concat(pieces)
 end
 "#,
@@ -207,10 +276,10 @@ end
     local cursor = 0
     local search = 0
     while search <= #s do
-        local a = __ulua_sf(s, pattern, search)
+        local a = __ulua_sf(s, pattern, search, false)
         if a < 0 then break end
         local b = a + #pattern
-        table.insert(pieces, string.sub(s, cursor + 1, a))
+        table.insert(pieces, __ulua_su(s, cursor + 1, a))
         table.insert(pieces, __ulua_sx(s, a, b, replacement))
         cursor = b
         if not all then break end
@@ -219,7 +288,7 @@ end
             search = __ulua_sn(s, a)
         else search = b end
     end
-    table.insert(pieces, string.sub(s, cursor + 1))
+    table.insert(pieces, __ulua_su(s, cursor + 1))
     return __ulua_concat(pieces)
 end
 "#,
@@ -255,29 +324,19 @@ fn member(m: M) -> (&'static str, &'static str, &'static str) {
         M::IndexOf => (
             "s: string, needle: string, from: number?",
             "number",
-            "    return __ulua_sf(s, needle, if from == nil then 0 else __ulua_sc(from, #s))\n",
+            "    return __ulua_sf(s, needle, if from == nil then 0 else __ulua_sc(from, #s), false)\n",
         ),
         M::LastIndexOf => (
             "s: string, needle: string, position: number?",
             "number",
             r#"    local p = if position == nil or position ~= position then #s else __ulua_sc(position, #s)
-    __ulua_sb(s, p)
-    if #needle == 0 then return p end
-    local found = -1
-    local search = 0
-    while search <= p do
-        local a = __ulua_sf(s, needle, search)
-        if a < 0 or a > p then break end
-        found = a
-        search = __ulua_sn(s, a)
-    end
-    return found
+    return __ulua_sf(s, needle, p, true)
 "#,
         ),
         M::Includes => (
             "s: string, needle: string, from: number?",
             "boolean",
-            "    return __ulua_sf(s, needle, if from == nil then 0 else __ulua_sc(from, #s)) >= 0\n",
+            "    return __ulua_sf(s, needle, if from == nil then 0 else __ulua_sc(from, #s), false) >= 0\n",
         ),
         M::StartsWith => (
             "s: string, needle: string, position: number?",
@@ -285,8 +344,8 @@ fn member(m: M) -> (&'static str, &'static str, &'static str) {
             r#"    local p = if position == nil then 0 else __ulua_sc(position, #s)
     __ulua_sb(s, p)
     local b = p + #needle
-    if b > #s then return false end
-    return __ulua_ss(s, p, b) == needle
+    if b > #s or not __ulua_sq(s, b) then return false end
+    return __ulua_se(s, needle, p)
 "#,
         ),
         M::EndsWith => (
@@ -295,8 +354,8 @@ fn member(m: M) -> (&'static str, &'static str, &'static str) {
             r#"    local p = if position == nil then #s else __ulua_sc(position, #s)
     __ulua_sb(s, p)
     local a = p - #needle
-    if a < 0 then return false end
-    return __ulua_ss(s, a, p) == needle
+    if a < 0 or not __ulua_sq(s, a) then return false end
+    return __ulua_se(s, needle, a)
 "#,
         ),
         M::CharAt | M::At => (
@@ -355,12 +414,12 @@ fn member(m: M) -> (&'static str, &'static str, &'static str) {
     end
     local i = 0
     while #pieces < n do
-        local a = __ulua_sf(s, separator, i)
+        local a = __ulua_sf(s, separator, i, false)
         if a < 0 then break end
-        table.insert(pieces, string.sub(s, i + 1, a))
+        table.insert(pieces, __ulua_su(s, i + 1, a))
         i = a + #separator
     end
-    if #pieces < n then table.insert(pieces, string.sub(s, i + 1)) end
+    if #pieces < n then table.insert(pieces, __ulua_su(s, i + 1)) end
     return pieces
 "#,
         ),

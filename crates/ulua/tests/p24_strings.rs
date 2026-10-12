@@ -1,4 +1,6 @@
 //! Direct string member witnesses: Node for ASCII, fixed byte values for UTF-8.
+//! Measured Debug cost: 6.76 seconds for all behaviour cases and their external witnesses.
+//! Large allocation and search limit tests require the measurements feature.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -10,10 +12,75 @@ use witness::Suite;
 fn string_members_match_node_and_byte_goldens() {
     let mut s = Suite::new();
     ascii(&mut s);
+    searches(&mut s);
     bytes(&mut s);
     traps(&mut s);
     random(&mut s);
     s.finish();
+}
+fn searches(s: &mut Suite) {
+    for text in [
+        "",
+        "a",
+        "aaaaaaa",
+        "abababa",
+        "abcababcabd",
+        "ababacababababac",
+    ] {
+        for needle in [
+            "", "a", "b", "aa", "aaaab", "aba", "abac", "abcabd", "missing",
+        ] {
+            for p in ["0", "1", "3", "99"] {
+                s.case(&format!(
+                    "const s='{text}';const t='{needle}';return `${{s.indexOf(t,{p})}}:${{s.lastIndexOf(t,{p})}}:${{s.includes(t,{p})}}`;"
+                ));
+            }
+            s.case(&format!(
+                "const s='{text}';const t='{needle}';return s.split(t).join('|')+':'+s.replace(t,'X')+':'+s.replaceAll(t,'X');"
+            ));
+        }
+    }
+    // These cases exercise failure links in both byte orders.
+    s.case("const s='a'.repeat(64);const t='a'.repeat(32)+'b';return `${s.indexOf(t)}:${s.lastIndexOf(t)}:${s.includes(t)}:${s.split(t).length}:${s.replace(t,'X')}:${s.replaceAll(t,'X')}`;");
+    s.case("const s='a'.repeat(64);const t='b'+'a'.repeat(32);return `${s.indexOf(t)}:${s.lastIndexOf(t)}:${s.includes(t)}`;");
+    s.case("return `${'a b '.repeat(60000).lastIndexOf(' ')}`;");
+    for n in [255, 256, 257, 511, 512, 513] {
+        s.case(&format!(
+            "const s='a'.repeat({n}+2);return s.slice(1,-1)+':'+s.substring(1,{n}+1)+':'+(' '+s+' ').trim()+':'+s.split('aa').join('');"
+        ));
+    }
+    s.bytes("return 'é😀'.repeat(100).slice(6,594);", &"é😀".repeat(98));
+    for body in [
+        "return `${'café'.endsWith('e')}`;",
+        "return `${'naïve'.startsWith('nai')}`;",
+        "return `${'é'.startsWith('x')}`;",
+        "return `${'日本語'.startsWith('ab')}`;",
+        "return `${'éa'.endsWith('xa')}`;",
+        "return `${'café'.includes('e')}`;",
+        "return ['', '', 'a', '', 'b', ''].join('');",
+        "return ['', '', 'a', '', 'b', ''].join('|');",
+        "return 'aaaa'.replaceAll('a','');",
+        "return `${''}${''}${''}`;",
+    ] {
+        s.case(body);
+    }
+    // Byte positions differ from Node positions after a non-ASCII character.
+    for (body, expected) in [
+        (
+            "return `${'éa'.startsWith('é',0)}:${'éa'.endsWith('é',2)}`;",
+            "true:true",
+        ),
+        (
+            "return `${'é日本é'.indexOf('日')}:${'é日本é'.lastIndexOf('é',5)}`;",
+            "2:0",
+        ),
+        (
+            "return `${'éa'.indexOf('x')}:${'éa'.lastIndexOf('x')}:${'éa'.includes('x')}`;",
+            "-1:-1:false",
+        ),
+    ] {
+        s.bytes(body, expected);
+    }
 }
 fn ascii(s: &mut Suite) {
     let positions = [
@@ -271,6 +338,7 @@ fn random(s: &mut Suite) {
     );
 }
 
+#[cfg(feature = "measurements")]
 #[test]
 fn huge_string_allocations_use_limits_and_recover() {
     use ulua::*;
@@ -301,6 +369,11 @@ fn huge_string_allocations_use_limits_and_recover() {
             }
         }
     }
+}
+
+#[test]
+fn string_traps_leave_the_instance_usable() {
+    use ulua::*;
     for (expression, kind) in [
         ("'é'.slice(1)", "trap:string-boundary"),
         ("''.at(0)", "trap:index-out-of-range"),
@@ -316,6 +389,73 @@ fn huge_string_allocations_use_limits_and_recover() {
             assert_eq!((status, code.as_str()), (ULUA_FAILED, kind));
             let (status, code, value) = script.call(script.index("good"), &[]);
             assert_eq!((status, code.as_str(), value.number), (ULUA_OK, "", 7.0));
+        }
+    }
+}
+
+#[cfg(feature = "measurements")]
+#[test]
+fn adversarial_searches_use_the_step_limit_and_recover() {
+    use std::time::Instant;
+    use ulua::*;
+    for (needle, expression) in [
+        ("'a'.repeat(2097152)+'b'", "s.includes(t)"),
+        ("'a'.repeat(2097152)+'b'", "s.indexOf(t)"),
+        ("'a'.repeat(2097152)+'b'", "s.lastIndexOf(t)"),
+        ("'a'.repeat(2097152)+'b'", "s.split(t).length"),
+        ("'a'.repeat(2097152)+'b'", "s.replace(t,'X')"),
+        ("'a'.repeat(2097152)+'b'", "s.replaceAll(t,'X')"),
+        // A short pattern completes prefix construction and reaches the scan.
+        ("'ab'", "s.includes(t)"),
+        ("'ba'", "s.lastIndexOf(t)"),
+        ("'a'.repeat(2097152)", "s.startsWith(t)"),
+        ("'a'.repeat(2097152)", "s.endsWith(t)"),
+    ] {
+        let source = format!(
+            "export function main():void{{const s='a'.repeat(4194304);const t={needle};print(`${{{expression}}}`);}}export function good():number{{return 7;}}"
+        );
+        let mut script = support::Script::new(&source);
+        assert_eq!(script.instance(RunLimits::default()).0, ULUA_OK);
+        let start = Instant::now();
+        let (status, code, _) = script.call(script.index("main"), &[]);
+        let elapsed = start.elapsed();
+        assert_eq!((status, code.as_str()), (ULUA_FAILED, "limit:steps"));
+        assert!(elapsed.as_secs_f64() < 10.0, "{expression}: {elapsed:?}");
+        eprintln!("P2.4 search limit: needle={needle} expression={expression} time={elapsed:?}");
+        let (status, code, value) = script.call(script.index("good"), &[]);
+        assert_eq!((status, code.as_str(), value.number), (ULUA_OK, "", 7.0));
+    }
+}
+
+#[test]
+fn search_loops_use_steps_and_leave_the_instance_usable() {
+    use ulua::*;
+    // A library search needs no output allocation for this literal input.
+    let text = "a".repeat(4096);
+    for expression in [
+        "s.includes('ab')",
+        "s.indexOf('ab') >= 0",
+        "s.lastIndexOf('ba') >= 0",
+        "s.split('ab').length == 0",
+        "s.replace('ab','x') == ''",
+        "s.replaceAll('ab','x') == ''",
+    ] {
+        let source = format!(
+            "const s='{text}';export function bad():boolean{{return {expression};}}export function good():boolean{{return s.includes('a');}}export function main():void{{}}"
+        );
+        let mut script = support::Script::new(&source);
+        let mut limits = RunLimits::default();
+        limits.max_steps = 4096;
+        assert_eq!(script.instance(limits), (ULUA_OK, String::new()));
+        for _ in 0..2 {
+            let (status, code, _) = script.call(script.index("bad"), &[]);
+            assert_eq!(
+                (status, code.as_str()),
+                (ULUA_FAILED, "limit:steps"),
+                "{expression}"
+            );
+            let (status, code, value) = script.call(script.index("good"), &[]);
+            assert_eq!((status, code.as_str(), value.boolean), (ULUA_OK, "", 1));
         }
     }
 }

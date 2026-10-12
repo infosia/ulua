@@ -164,6 +164,17 @@ Position arguments, search semantics, join, return values, traps, the
 | A prelude doc comment sits before the wrong declaration | MINOR | Fixed |
 | C6.9 does not give the comparator parameters | MINOR | Fixed |
 
+Fix record (P2.4 round 1): forward and backward KMP searches as Luau
+loops; the review input ends with `limit:steps` in 65 ms at the default
+limits. Library call audit: each call in the helpers does O(1) work
+(`string.byte`, `string.sub` of at most 256 bytes, `utf8.codepoint`,
+`math.*`, `typeof`, `tostring`, the fixed `gsub` of the format), or
+work in proportion to its allocation (`table.insert` at the end,
+`table.concat`). A window inside a code point is no match; helpers by
+exact name; 14 stress modules (19.97 s analyzer). `p24_strings.rs`
+6.76 s Debug; the large-input tests run under `measurements` (6.75 s).
+2,889 cases equal `node`.
+
 ### P2.4 Phase Review round 1
 
 Reviewer: fresh agent, diff `4ac7702..c83c521`. 1 CRITICAL, 1 MAJOR, 6

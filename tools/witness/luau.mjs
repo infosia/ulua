@@ -5,7 +5,7 @@
 // default is the binary that tools/luau-tools.sh builds.
 // It also analyzes the stress modules of pipeline.md section 5.11.
 // Cost: one cargo build, two ulua-corpus processes, one luau-analyze
-// process. The stress modules take about 18 s of the analyzer time.
+// process. The 14 stress modules take about 20 s of the analyzer time.
 
 import { readFileSync, readdirSync, existsSync, rmSync, mkdirSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";

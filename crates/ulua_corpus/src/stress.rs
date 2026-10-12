@@ -26,7 +26,7 @@ pub(crate) const FORMS: &[&str] = &[
 ];
 
 pub(crate) fn source(form: &str) -> Result<String, String> {
-    if p24::SHAPES.contains(&form) {
+    if form == "string-iteration" {
         return Ok(p24::source(form, SOURCE_CEILING as usize));
     }
     if p21::SHAPES.contains(&form) {
@@ -71,7 +71,10 @@ pub(crate) fn source(form: &str) -> Result<String, String> {
 
 pub(crate) fn emit(directory: &Path) -> Result<(), String> {
     std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
-    for form in FORMS.iter().chain(p24::SHAPES) {
+    let strings = p24::SHAPES
+        .iter()
+        .filter(|form| **form == "string-iteration");
+    for form in FORMS.iter().chain(strings) {
         let source = source(form)?;
         let compiled = ulua_compiler::compile(source.as_bytes(), Limits::default())
             .map_err(|d| format!("{form}: {} at {}: {}", d.code, d.offset, d.message))?;
