@@ -121,6 +121,7 @@ recorded defect of the golden, in the same commit.
 | `array-modified` | collisions.md C6.9 |
 | `string-boundary` | collisions.md C5 |
 | `invalid-argument` | collisions.md C5 |
+| `uncaught-exception` | collisions.md C17.8 |
 
 Resource limit traps (depth, time, memory; `CLAUDE.md` invariant 2) join
 this table at P1 with their own entries. The `node` comparison does not

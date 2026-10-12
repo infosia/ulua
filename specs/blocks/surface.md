@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 21, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 22, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -11,7 +11,7 @@ at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: infe
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
 reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
-optional calls as arrow bodies, P2.6 review).
+optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -52,11 +52,13 @@ C16 only, not the `tsc` type.
 | `ForStatement` | The init is a `let` `VariableDeclaration` or absent. The test is `boolean` or absent. The update is an `AssignmentExpression` or an `UpdateExpression`, or absent. No function or arrow node anywhere in the head (C9.3). |
 | `ForOfStatement` | The left side is a `const` declaration of one `BindingIdentifier`. The right side has an array type. Not `await`. |
 | `BreakStatement`, `ContinueStatement` | No label. |
+| `ThrowStatement` | The argument has the type of the Error family (C17.3). |
+| `TryStatement` | A `catch` clause, a `finally` block, or both (C17.4). The `CatchClause` parameter is absent or a `BindingIdentifier` with no annotation or with `unknown`; it is not assigned. |
 | `ReturnStatement` | With an expr, or empty in a function with a `void` result. |
 
 The body of a function with a result other than `void` cannot
 complete. A statement list cannot complete if one of its statements
-cannot complete. A statement cannot complete if it is a `return`; a
+cannot complete. A statement cannot complete if it is a `return` or a `throw`; a
 block whose list cannot complete; an `if` with an `else` whose two
 branches cannot complete; or a loop whose test is the literal `true`
 with no parentheses or is absent, and whose body holds no `break` of
@@ -76,7 +78,7 @@ rejected, also where `tsc` accepts it.
 | `ArrayExpression` | Each element is an expr. No hole, no `SpreadElement`. |
 | `ObjectExpression` | Each property is an `ObjectProperty` of kind `init` with an identifier key: not computed, not shorthand, not a method, not `get` or `set`, no `SpreadElement`. |
 | `ParenthesizedExpression` | Around an expr. |
-| `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `String` (only as the callee of `String(n)`). |
+| `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), a class of the Error family (C17.1; as the callee of `NewExpression` or the right operand of `instanceof`), a catch binding (C17.4), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `String` (only as the callee of `String(n)`). |
 | `ThisExpression` | In a method or a constructor, or in an arrow inside one at any depth (C13.5). Not in a field initializer (C13.2) and not in a nested function declaration (`tsc` TS2683). A value of the class type. |
 | `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, and the `string` members of C5.2 as callees. No other member. |
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
@@ -84,7 +86,7 @@ rejected, also where `tsc` accepts it.
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
 | `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type contains a function type at any depth (a function, or an array of functions) has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
-| `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). |
+| `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). `instanceof` with a class of the Error family on the right and a catch binding or a value of the family on the left (C17.2). |
 | `LogicalExpression` | `&&`, `\|\|` on two booleans. `a ?? b` with `a: T \| null` and `b` assignable to `T` or `T \| null`. |
 | `ConditionalExpression` | A `boolean` test. Both branches have one type `T`, or one branch is `null` and the result is `T \| null`. |
 | `AssignmentExpression` | Only as an `ExpressionStatement` or a `for` update; its value is never used. Operators `=`; `+=` on numbers or on two strings; `-=`, `*=`, `/=`, `%=` on numbers. The target is an `IdentifierReference` of a `let` binding or a parameter, a `StaticMemberExpression` of a field (not a method), or a `ComputedMemberExpression` of an array element. |

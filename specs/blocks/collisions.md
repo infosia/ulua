@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 38, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 39, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -664,7 +664,7 @@ says `T`. The checker narrows only where nothing else can run a write:
    exit, after a loop that never ends normally, and a `for` update that
    no edge reaches. `tsc` gives a read there the declared type
    (TS18047).
-9. Only these end an edge: `return`, `break`, `continue`, a loop
+9. Only these end an edge: `return`, `throw`, `break`, `continue`, a loop
    that never ends normally, and a literal leaf of a test. A test is
    *logical* when, without its parentheses and `!` operators, it is an
    `&&` or `||` expression. A logical test composes its edges from its
@@ -693,6 +693,94 @@ says `T`. The checker narrows only where nothing else can run a write:
    measured.
 
 Accept: `a14`, `a42`, `a43`, `a46`, `a47`, `a48`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`.
+
+## C17. Exceptions
+
+JavaScript throws any value and catches it with `try`. Luau raises an
+error with `error` and catches it with `pcall`, and `pcall` also
+catches the errors that stop a run: traps, `limit:memory`,
+`limit:steps`, `limit:stack`, and host errors. Measured: inside
+`pcall`, each of these returns `false` with a string, and the current
+shim then reports success if the generated code drops the error. A
+message comparison cannot separate them: `error("not enough memory",
+0)` gives the same string as an allocation failure. The measurements
+are in `tracking/p2-values.md` (P2.7 Step 0).
+
+1. **The Error family.** `Error`, `TypeError`, `RangeError`,
+   `SyntaxError`, `ReferenceError`, `EvalError`, and `URIError` are
+   classes of the prelude (`lib.es5.d.ts`). A value of the family has
+   two fields, `name: string` and `message: string`, and is a plain
+   table of them (C1, C14.1). `new C()` sets `message` to `""`;
+   `new C(m)` sets it to `m`; each sets `name` to the class name. A
+   second constructor argument, a call without `new`, and every other
+   member (`stack`, `cause`) are rejected (C11). The seven names denote
+   one static type: a value of one class flows to a binding of
+   another, as `tsc` relates them structurally.
+2. **Identity.** `x instanceof C`, with `C` a class of the family,
+   tests the class that constructed `x`, not its `name` field (a
+   program can assign `name`). Every family value is an instance of
+   `Error`. The lowering keeps the class in a private table with weak
+   keys that the prelude owns; it adds no field and no metatable to the
+   value (invariant 4). Every other `instanceof` is rejected (C11).
+3. **`throw e`.** `e` has the family type. `throw 42` and `throw "x"`
+   are `tsc`-clean and are rejected. `throw` ends its edge, as
+   `return` does (C16.9).
+4. **`try`.** `try { } catch (e) { }`, `catch { }`, and `finally { }`
+   are accepted in the three JavaScript combinations. `catch (e:
+   unknown)` is `catch (e)`. Every other annotation is rejected
+   (`tsc` gives TS1196 for `Error`; `any` is outside the subset). The
+   catch binding is a `const`: its two uses are `e instanceof C` and
+   `throw e`. In the true branch of `e instanceof C`, `e` has the
+   family type (C16 rules apply to the test). `e.message` without the
+   test is rejected (`tsc` TS18046).
+5. **Propagation.** An exception leaves the nearest enclosing `try`
+   block of the raise point through every call form: direct calls,
+   methods, arrows, function values, and the callbacks of array
+   methods and of `sort`. Measured: `node` delivers the same object
+   from each of these.
+6. **`finally`.** The finalizer runs once on each exit of the `try`
+   block and of the `catch` block: fall-through, `return`, `break`,
+   `continue`, and an exception. When the finalizer falls through, the
+   earlier completion continues: the return value evaluated before the
+   finalizer, the same exception object, or the same jump. A `return`,
+   `throw`, `break`, or `continue` in the finalizer, and an exception
+   that leaves it, replace the earlier completion. Measured in `node`:
+   4 pending completions by 5 final completions, 20 cases.
+7. **Stops are not exceptions.** A trap, `limit:memory`,
+   `limit:steps`, `limit:stack`, and a host error stop the run. No
+   `catch` receives them and no `finally` runs. A script raises only
+   family values (rule 3), and the prelude table of rule 2 holds each
+   of them. So a value that a protected block receives and that the
+   table does not hold is a stop: the generated code raises it again
+   with `error(v, 0)`, before any `catch` or `finally` code, without
+   a change and without an allocation (measured: zero allocator
+   requests), and the run reports the code that the stop has without a
+   `try` (`pipeline.md` §4). A message comparison does not decide it:
+   a script cannot raise a string. Divergence: `node` throws a
+   `RangeError` or a `TypeError` that a `catch` receives where this
+   run traps (`"x".repeat(-1)`, `invalid-argument`). An entry with
+   such a `try` is `js-comparable: no C17`.
+8. **An uncaught exception.** An exception that leaves an exported
+   function stops the run with `ULUA_FAILED` and the code
+   `trap:uncaught-exception`. The diagnostic message is the `name`,
+   `": "`, and the `message` of the value. `node` prints the same
+   value and exits with status 1.
+9. **Cost and limits.** Each entry into a `try` statement allocates
+   one closure: a cost that the source shows (principle 16). A `try`,
+   a `catch`, and a `finally` block each count as a nesting term of
+   `limit:nesting-depth` and add their generated closure to the Luau
+   nesting. Measured: `luau-analyze` reports "Code is too complex" for
+   75 nested protected closures in one function and passes at 70; Luau
+   gives "C stack overflow" at 198 nested protected calls
+   (`limit:stack`).
+10. **Narrowing.** At the entry of a `catch` block, a binding that the
+   `try` block assigns has no narrowing; the other narrowings are those
+   at the entry of the `try` statement. At the entry of a `finally`
+   block, the same holds for the bindings that the `try` block or the
+   `catch` block assigns.
+
+Accept: `a51`, `a52`, `a53`. Reject: `r119`, `r120`, `r121`, `r122`,
+`r123`. Trap: `t08`, `t09`.
 
 ## Open items
 

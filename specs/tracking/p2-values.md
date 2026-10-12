@@ -18,7 +18,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
 | P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r111`, `r115`, `a42`, `a43`, `a46`, `a47`, `a48`, `a49`, `a50`, `t07`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`, `a44`, `a45`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59`, `r112`, `r113`, `r114`, `r116`, `r117`, `r118` |
-| P2.7 | Exceptions | contract and entries to write |
+| P2.7 | Exceptions | `a51`, `a52`, `a53`; `r119` to `r123`; `t08`, `t09` |
 
 ## Carry-over into P2
 
@@ -32,6 +32,66 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   decides its own with the user.
 - A phase that exposes the `buffer` library classifies Luau errors by
   source location, not by text.
+
+## Exit checklist (P2.7)
+
+- [ ] collisions.md C17.1 to C17.10, C16.9 `throw`; surface.md Rev 22
+  (`ThrowStatement`, `TryStatement`, Error classes, `instanceof`);
+  pipeline.md §4.9; corpus.md §6 `uncaught-exception` implemented.
+- [ ] P2.7 entries pass in full; every earlier entry keeps passing.
+- [ ] Direct tests: each Error class and `instanceof` result; `throw`
+  through every call form (direct, method, arrow, function value, array
+  callbacks, `sort` comparator); nested `try`; the 20 `finally`
+  completion cases; each stop kind (each trap, `limit:memory`,
+  `limit:steps`, `limit:stack`, `host:output`) inside `try`, `catch`,
+  and `finally`, with the code the stop has without a `try`; an
+  uncaught exception at the ABI, and a later call on the same instance;
+  narrowing at `catch` and `finally` entry (C17.10); each against
+  `node` where comparable.
+- [ ] Limits: `try` nesting at the depth ceiling passes `luau-analyze
+  -j1` and Luau; growth shapes for `try` (sequential, nested, in loops)
+  at n and 4n.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source: the owner's prior project, §115 (Error family, `throw`,
+`catch` binding uses, `instanceof`) and §180 (`finally` on each exit,
+completion replacement). Changes: the Error value is a plain table and
+its class is in a private weak-keyed table (invariant 4); a stop is
+never caught; `catch (e: any)` is outside the subset.
+
+### P2.7 Step 0 measurement
+
+Codex measurement round, no repository change; Luau `c54f558`, node
+v24.18.0, `tsc` 5.9.2.
+
+- `pcall` returns `false` for every stop: a trap ("Script trap"), the
+  memory budget and allocation steps ("not enough memory"), the step
+  interrupt ("Step limit exceeded"), the Lua and C stack ("stack
+  overflow", "C stack overflow"), a host error. Dropping the error
+  makes the run report success; `error("not enough memory", 0)` from a
+  script gives the same string as an allocation failure.
+- `error(v, 0)` and `lua_error` keep the value and request no
+  allocation in each measured stop; default `error(v)` adds a position,
+  requests one 16,360-byte page, and changed `limit:stack` to
+  `internal`.
+- A `try` closure: 51.6 ns per entry with a capture, 62.2 ns with
+  three status branches (Release, 10^6 iterations); about 31 MB of
+  allocation requests per 10^6 entries.
+- Nested protected calls: 197 pass, 198 give "C stack overflow".
+  `luau-analyze` strict: 50 nested protected closures pass, 100 give
+  "Code is too complex"; the boundary of one shape is 70 to 75.
+- A weak-keyed class table passes `luau-analyze` strict and keeps
+  identity after `name` changes; a lookalike table has no identity;
+  dead keys go away after a collection; insertion costs 94 ns per new
+  value; the table keeps its hash capacity.
+- `node`: an uncaught throw exits 1; every family class is an instance
+  of `Error` and of itself; `new Error().message` is `""`; the 20
+  `finally` cases replace as JavaScript states; throws from `sort` and
+  13 array-method callbacks reach the outer `catch` with the same
+  object.
+- `tsc`: `catch (e)` is `unknown`; `catch (e: Error)` TS1196;
+  `e.message` without a test TS18046; `throw 42`, `Error("m")`,
+  `e.stack`, and `e.cause` are accepted.
 
 ## Exit checklist (P2.6)
 

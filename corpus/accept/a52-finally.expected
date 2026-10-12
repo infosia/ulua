@@ -1,0 +1,6 @@
+finally after return
+try
+finally
+second
+[fin0][body1][fin1][fin2]
+[catch][finally]b

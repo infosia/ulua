@@ -1,0 +1,9 @@
+Error:a true false false false false false false
+TypeError:b true true false false false false false
+RangeError:c true false true false false false false
+SyntaxError:d true false false true false false false
+ReferenceError:e true false false false true false false
+EvalError:f true false false false false true false
+URIError:g true false false false false false true
+[] 0
+custom true false

@@ -25,6 +25,7 @@ Rev 21: §6 `limit:type-depth` (P2.5 review 8).
 Rev 22: §6 recursive alias groups count their size (P2.5 review 9).
 Rev 23: §6 a group counts every type link inside it (P2.5 review 10).
 Rev 24: §6 `limit:fields` counts the methods of a class (P2.6).
+Rev 25: §4.9 exceptions (P2.7).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -170,6 +171,19 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    the code `trap:<kind>` (corpus.md §6). A script cannot call the
    function by name: every script name is generated (§5.2). The
    message holds no position of the generated Luau.
+9. **Exceptions.** A `try` statement lowers to one protected closure
+   per block (collisions.md C17). The closure captures the enclosing
+   locals by reference and returns its completion as multiple values:
+   a tag, a value, and a jump target where one is needed. Each
+   protected call that returns `false` with a value that the private
+   Error table does not hold raises that value again with
+   `error(v, 0)` before any other code (C17.7); default `error(v)`
+   adds a position and allocates. An Error value that leaves an
+   exported function gives `ULUA_FAILED` with
+   `trap:uncaught-exception` and the message `name: message`; it
+   does not poison the context. Measured: `error(v, 0)` and
+   `lua_error` request no allocation in the measured stops; nested
+   protected calls reach "C stack overflow" at 198.
 
 ## 5. Emission
 
