@@ -229,6 +229,15 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.5 Phase Review round 8
+
+Reviewer: fresh agent, diff `917e951..8db6110`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 7 resolution holds: `limit:fields` at 1,024 and 1,025 in every path; 40 C12.7 trap forms and 12 normal forms equal `node`; random campaign of about 1,650 programs, about 1,550 accepted, 0 differences outside the named C6 divergence.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A chain of 58 record aliases `type Ai = { a: A(i-1) }` with one local of type `A58` (1,072 B) fails `luau-analyze` (TypeSimplifier recursion limit); 57 passes; 61 nested `const` literals fail the same way; chains through `T \| null` fail at about 250 | MAJOR | `pipeline.md` §6 `limit:type-depth` = 48 |
+| Each C12.7 check `if t == nil then __ulua_trap(1) end` makes `luau-analyze` time grow with the square of their number in one function: 1.16 s to 41.3 s from 16 KB to 64 KB (ratio 36); the product compile stays linear | MINOR | the check is a helper call; the witness time is measured |
+
 ### P2.5 Phase Review round 7
 
 Reviewer: fresh agent, diff `917e951..5759969`. 0 CRITICAL, 1 MAJOR, 2 MINOR. The round 6 resolution holds. Records, emitter, D18, captures, and limits checked by hand probes and a 3,000-pair alias campaign; cost of 8 record shapes at most 45 ms, ratio about 3.0.
