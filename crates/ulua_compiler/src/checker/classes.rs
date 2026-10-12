@@ -206,7 +206,11 @@ impl Checker<'_> {
     pub(super) fn class_body(&mut self, class: &Class<'_>) -> Result<(), Diagnostic> {
         let ty = self.class_type(class)?;
         let previous_context = self.class_context.replace(ty);
-        let ctor = self.classes[&ty].constructor;
+        let ctor = self
+            .classes
+            .get(&ty)
+            .ok_or_else(|| self.error(class.span, "internal", "Missing class declaration"))?
+            .constructor;
         let state = self.enter_function(ctor, Type::Void, false);
         // Field initializers see module names, never constructor parameters or locals.
         self.field_initializer = true;
@@ -281,7 +285,12 @@ impl Checker<'_> {
                     continue;
                 }
                 let key = self.member_key(&m.key, m.span)?;
-                let id = self.classes[&ty].methods[&key];
+                let id = self
+                    .classes
+                    .get(&ty)
+                    .and_then(|info| info.methods.get(&key))
+                    .copied()
+                    .ok_or_else(|| self.error(m.span, "internal", "Missing class method target"))?;
                 let result = self
                     .types
                     .signature(

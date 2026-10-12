@@ -1,7 +1,17 @@
-//! D18 checks forms that preserve a narrowed boolean or nullable reference type.
+//! D18 checks boolean, nullable, and polymorphic receiver reference forms.
 use super::*;
 
 impl Checker<'_> {
+    pub(super) fn inferred_this(&self, e: &Expression<'_>) -> Result<(), Diagnostic> {
+        if this_reference(e) {
+            return Err(self.error(
+                e.span(),
+                "C11",
+                "An inferred type cannot come from this; add a type annotation",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn inferred_reference(
         &self,
         e: &Expression<'_>,
@@ -73,6 +83,9 @@ impl Checker<'_> {
 
 // The depth check bounds this walk before the checker starts.
 fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
+    if this_reference(e) {
+        return true;
+    }
     if ty != Type::Boolean {
         return false;
     }
@@ -96,6 +109,21 @@ fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
     }
 }
 
+// A member of this has its field type. These composites preserve polymorphic this.
+fn this_reference(e: &Expression<'_>) -> bool {
+    match e {
+        Expression::ThisExpression(_) => true,
+        Expression::ParenthesizedExpression(p) => this_reference(&p.expression),
+        Expression::UnaryExpression(u) if u.operator.as_str() == "!" => this_reference(&u.argument),
+        Expression::ConditionalExpression(c) => {
+            this_reference(&c.consequent) || this_reference(&c.alternate)
+        }
+        Expression::LogicalExpression(l) if matches!(l.operator.as_str(), "&&" | "||" | "??") => {
+            this_reference(&l.left) || this_reference(&l.right)
+        }
+        _ => false,
+    }
+}
 fn reference(e: &Expression<'_>) -> bool {
     match e {
         Expression::Identifier(_) | Expression::ThisExpression(_) => true,

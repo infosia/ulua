@@ -264,6 +264,15 @@ Reviewer: fresh agent, diff `4a8a817..a97e939`. 0 CRITICAL, 2 MAJOR, 2 MINOR. Ab
 | P2.6 test headers state no measured cost | MINOR | the headers state measured costs |
 | `self.classes[&ty]` and `.methods[&key]` index maps in library code | MINOR | an `internal` diagnostic instead of a panic path |
 
+Fix (Codex): `this` forms give C11 at the D18 positions and as a
+`const` initializer (asked during the task: `const u = this; let t =
+u; t = new A();` gives TS2322; surface.md Rev 21); an optional call is
+never an arrow body. 48 D18 rejects and 30 optional-call rejects
+checked against `tsc`; 9 accepted forms pass `node`, `tsc`, and
+`luau-analyze`. Test costs stated: p26_classes 0.424 s, p26_limits
+0.590 s, p26_growth 3.069 s, p26_random 1.169 s, p26_rejects 1.147 s,
+p26_tests 0.323 s. gate full: PASS, 153 entries.
+
 ### P2.6 implementation record
 
 - Codex task (fresh agent). Nominal class types, per-path constructor

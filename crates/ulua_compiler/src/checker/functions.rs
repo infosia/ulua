@@ -227,6 +227,21 @@ impl Checker<'_> {
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
+            let mut body_expression = e;
+            while let Expression::ParenthesizedExpression(p) = body_expression {
+                body_expression = &p.expression;
+            }
+            if matches!(body_expression, Expression::ChainExpression(c) if matches!(c.expression, ChainElement::CallExpression(_)))
+            {
+                return Err(self.error(
+                    e.span(),
+                    "C2",
+                    "An optional call is only an expression statement",
+                ));
+            }
+            if result.is_none() {
+                self.inferred_this(e)?;
+            }
             let value = self.expr_as(e, body_depth, true, result)?;
             if result.is_none() {
                 self.inferred_reference(e, value.ty)?;

@@ -1,4 +1,5 @@
 //! Fixed-seed class programs exercise the accepted surface against three external witnesses.
+//! Review round 1 Debug cost: 1.169 seconds; 160 accepted programs and three external witnesses.
 //! The test prints fixture and witness costs. No assertion reads elapsed time.
 #[allow(dead_code)]
 #[path = "support/script.rs"]

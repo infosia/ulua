@@ -1,4 +1,5 @@
 //! Class field and method bounds, nominal value-flow rejection, and class type-link limits.
+//! Review round 1 Debug cost: 0.590 seconds; four accepted boundaries and twelve rejects.
 //! One analyzer batch checks all accepted boundary modules. Costs are reports, never assertions.
 #[allow(dead_code)]
 #[path = "support/script.rs"]

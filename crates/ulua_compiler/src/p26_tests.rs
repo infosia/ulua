@@ -1,4 +1,5 @@
 //! P2.6 growth asserts compiler state and output ratios, never elapsed-time ratios.
+//! Review round 1 Debug cost: 0.323 seconds; three unit tests, including ten growth modules.
 //! Ten checked modules and ten emitted modules cost one measured test invocation.
 use crate::{checker, emitter, p26_shapes as shapes, *};
 use std::time::Instant;

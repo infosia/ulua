@@ -1,4 +1,5 @@
 //! Rejection witnesses pin C13 path shapes and the class surface boundaries.
+//! Review round 1 Debug cost: 1.147 seconds; 143 rejects in four parallel tests with tsc batches.
 //! One tsc batch checks each diagnostic set. The test prints its cost without a time assertion.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
@@ -25,7 +26,7 @@ fn constructor_paths_and_receiver_uses() {
         ),
         ("constructor(){print(`${this.v}`);this.v=1;}", &[2565]),
         ("constructor(){this.read();this.v=1;}", &[]),
-        ("constructor(){const self=this;this.v=1;}", &[]),
+        ("constructor(){const self:C=this;this.v=1;}", &[]),
         ("constructor(){const xs:C[]=[this];this.v=1;}", &[]),
         ("constructor(){this.v=this.read();}", &[]),
         ("constructor(){this.v+=1;}", &[2564, 2565]),
@@ -197,6 +198,113 @@ fn private_members_and_closed_class_surface() {
     eprintln!(
         "P2.6 surface rejects={} cost={:.3}s",
         cases.len() + type_names.len() + 11,
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn inferred_receivers_reject_polymorphic_this() {
+    let start = Instant::now();
+    let reviewer = [
+        ("const u=this;let t=u;t=new A();", &[2322][..]),
+        ("let t=this;t=new A();", &[2322][..]),
+        ("const xs=[this];xs.push(new A());", &[2345]),
+        ("const f=()=>this;let g=f;g=()=>new A();", &[2322]),
+        ("let t=this;if(o.n>0){t=o;}", &[2322]),
+        ("let xs=[this,this];xs=[new A()];", &[2322]),
+        ("[this].indexOf(new A());", &[2345]),
+        ("const g=()=>this;const xs=[g];", &[]),
+    ];
+    let mut programs: Vec<_> = reviewer
+        .iter()
+        .map(|(body, codes)| {
+            (
+                format!(
+                    "class A{{n:number=0;m(o:A):void{{{body}}}}}export function main():void{{}}"
+                ),
+                *codes,
+            )
+        })
+        .collect();
+    for form in [
+        "this",
+        "(this)",
+        "c?this:o",
+        "c?o:this",
+        "maybe??this",
+        "!this",
+        "this&&o",
+        "o||this",
+    ] {
+        for statement in [
+            format!("const u={form};"),
+            format!("let t={form};"),
+            format!("const xs=[{form}];"),
+            format!("const f=()=>{form};"),
+            format!("const r={{v:{form}}};"),
+        ] {
+            programs.push((format!("class A{{n:number=0;m(o:A,c:boolean,maybe:A|null):void{{{statement}}}}}export function main():void{{}}"),&[]));
+        }
+    }
+    let refs: Vec<_> = programs
+        .iter()
+        .map(|(source, codes)| (source.as_str(), *codes))
+        .collect();
+    witness::rejected_programs("P2.6-review-this", "C11", &refs);
+    eprintln!(
+        "P2.6 review this rejects={} cost={:.3}s",
+        programs.len(),
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn optional_calls_are_not_arrow_expression_bodies() {
+    let start = Instant::now();
+    let mut programs = vec![];
+    for setup in [
+        "class D{m():number{return 1;}}type R={d:D|null};const r:R={d:new D()};",
+        "type D={m:()=>number};type R={d:D|null};const r:R={d:{m:():number=>1}};",
+        "class D{m():void{}}type R={d:D|null};const r:R={d:new D()};",
+        "type D={m:()=>void};type R={d:D|null};const r:R={d:{m:():void=>{}}};",
+        "type O={f:(n:number)=>number};const o:O|null={f:(n:number):number=>n};",
+        "type O={f:(n:number)=>void};const o:O|null={f:(n:number):void=>{}};",
+    ] {
+        for body in [
+            "const f=():void=>r.d?.m();",
+            "run(():void=>r.d?.m());",
+            "let f=()=>r.d?.m();f=noop;",
+            "const f=()=>r.d?.m();const xs=[f];xs.push(():void=>{});",
+            "const f=():void=>((r.d?.m()));",
+        ] {
+            let codes: &[u32] = if setup.contains("m():number")
+                || setup.contains("m:()=>number")
+                || setup.contains("f:(n:number)=>number")
+            {
+                if body.contains("xs.push") {
+                    &[2345]
+                } else {
+                    &[2322]
+                }
+            } else {
+                &[]
+            };
+            let body = if setup.starts_with("type O=") {
+                body.replace("r.d?.m()", "o?.f(1)")
+            } else {
+                body.to_owned()
+            };
+            programs.push((format!("{setup}function run(f:()=>void):void{{f();}}function noop():void{{}}export function main():void{{{body}}}"),codes));
+        }
+    }
+    let refs: Vec<_> = programs
+        .iter()
+        .map(|(source, codes)| (source.as_str(), *codes))
+        .collect();
+    witness::rejected_programs("P2.6-review-optional", "C2", &refs);
+    eprintln!(
+        "P2.6 review optional rejects={} cost={:.3}s",
+        programs.len(),
         start.elapsed().as_secs_f64()
     );
 }

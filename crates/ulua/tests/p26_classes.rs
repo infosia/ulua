@@ -1,4 +1,5 @@
 //! P2.6 direct witnesses cover construction, receiver capture, nominal flow, and identity.
+//! Review round 1 Debug cost: 0.424 seconds; nine accepted programs and three external witnesses.
 //! The test prints its total cost. No assertion reads wall-clock time.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
@@ -122,6 +123,21 @@ export function main():void{print(`${new Paths(3).sum()} ${new Paths(0).sum()}`)
 "#,
         Some("4 2\n"),
     );
+    suite.source(r#"
+type Holder={value:A};
+class A{n:number=0;
+ check(o:A):void{const u:A=this;let t:A=this;t=o;
+  const xs:A[]=[this];xs.push(o);const f=():A=>this;
+  const contextual:()=>A=()=>this;const r:Holder={value:this};
+  print(`${u===this} ${t===o} ${xs[0]===this} ${f()===this} ${contextual()===this} ${r.value===this} ${this===o}`);
+ }
+ m():number{this.n++;return this.n;}}
+type Optional={f:()=>number};
+export function main():void{const a=new A();a.check(new A());
+ const d:A|null=a;const f=():void=>{d?.m();};f();
+ const o:Optional|null={f:():number=>2};const g=():void=>{o?.f();};g();
+ const h=():void=>a.check(a);h();print(`${a.n}`);}
+"#,Some("true true true true true true false\ntrue true true true true true true\n1\n"));
     suite.finish();
     eprintln!(
         "P2.6 direct accepted={} cost={:.3}s",

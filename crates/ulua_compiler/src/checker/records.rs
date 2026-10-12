@@ -138,7 +138,12 @@ impl Checker<'_> {
                     .id
                     .as_ref()
                     .ok_or_else(|| self.unsupported(class.span))?;
-                self.checked_type_depth(self.aliases[name.name.as_str()], class.span)?;
+                let ty = self
+                    .aliases
+                    .get(name.name.as_str())
+                    .copied()
+                    .ok_or_else(|| self.error(class.span, "internal", "Missing class identity"))?;
+                self.checked_type_depth(ty, class.span)?;
             }
         }
         for ty in self.aliases.values_mut() {
@@ -185,6 +190,9 @@ impl Checker<'_> {
                 return Err(self.error(p.span, "C11", "Duplicate object key"));
             }
             let contextual = expected.and_then(|ty| self.types.field(ty, key));
+            if contextual.is_none() {
+                self.inferred_this(&p.value)?;
+            }
             let value = self.expr_as(&p.value, depth, false, contextual)?;
             if let Some(ty) = contextual {
                 self.flow(&value.ty, Some(&ty), p.span)?;

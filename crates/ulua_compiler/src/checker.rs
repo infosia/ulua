@@ -369,13 +369,21 @@ pub(crate) fn check(
         );
     }
     for info in c.classes.values() {
+        let constructor = c
+            .bindings
+            .get(info.constructor)
+            .ok_or_else(|| c.error(program.span, "internal", "Missing constructor binding"))?;
         body.push(ir::Statement::Located(
-            c.bindings[info.constructor].start,
+            constructor.start,
             Box::new(ir::Statement::Function(info.constructor)),
         ));
         for id in info.methods.values() {
+            let method = c
+                .bindings
+                .get(*id)
+                .ok_or_else(|| c.error(program.span, "internal", "Missing method binding"))?;
             body.push(ir::Statement::Located(
-                c.bindings[*id].start,
+                method.start,
                 Box::new(ir::Statement::Function(*id)),
             ));
         }

@@ -289,6 +289,9 @@ impl Checker<'_> {
                     let e = entry.as_expression().ok_or_else(|| {
                         self.error(entry.span(), "C6", "Array holes and spreads are rejected")
                     })?;
+                    if contextual_element.is_none() {
+                        self.inferred_this(e)?;
+                    }
                     let value = self.expr_as(e, depth, false, contextual_element)?;
                     if self.types.contains_null(value.ty) {
                         return Err(self.error(e.span(), "C6", "Array elements must exclude null"));
