@@ -2,17 +2,6 @@
 use super::*;
 use crate::ir::{Expr, Statement};
 impl Emitter<'_> {
-    pub(super) fn index_check(&mut self, array: usize, index: usize, write: bool) {
-        self.capture("__ulua_fmod");
-        self.capture("__ulua_trap");
-        let i = self.temp(index);
-        // Test the original index. Adding one can round a fractional value to an integer.
-        self.line(format!(
-            "if not ({i} >= 0 and {i} {} #{} and __ulua_fmod({i}, 1) == 0) then __ulua_trap(1) end",
-            if write { "<=" } else { "<" },
-            self.temp(array)
-        ));
-    }
     pub(super) fn element(
         &mut self,
         a: &Expr,
@@ -23,11 +12,13 @@ impl Emitter<'_> {
     ) -> Result<(), Diagnostic> {
         let a = self.expression(a, depth)?;
         let i = self.expression(i, depth)?;
-        let target = format!("{}[{} + 1]", self.temp(a), self.temp(i));
         let old = if op.is_some() {
-            self.index_check(a, i, false);
+            self.capture("__ulua_get");
             let old = self.slot(&e.ty)?;
-            self.write_slot(old, &target);
+            self.write_slot(
+                old,
+                format!("__ulua_get({}, {})", self.temp(a), self.temp(i)),
+            );
             Some(old)
         } else {
             None
@@ -41,8 +32,12 @@ impl Emitter<'_> {
         } else {
             self.temp(value)
         };
-        self.index_check(a, i, true);
-        self.write(&target, result, &self.function_types.luau(&e.ty));
+        self.capture("__ulua_set");
+        self.line(format!(
+            "__ulua_set({}, {}, {result})",
+            self.temp(a),
+            self.temp(i)
+        ));
         for slot in [Some(a), Some(i), Some(value), old].into_iter().flatten() {
             self.release(slot);
         }

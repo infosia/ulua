@@ -203,6 +203,16 @@ traps, and budgets agree with `node` or trap as C6 states.
 | Note: the prelude calls `getfenv()`, which turns off the Luau safe-environment optimizations | note | §4.8: the trap function is a chunk argument |
 | Note: `for (const x of xs) if (x === 2)` gives C7 | note | C7 rule 3: a `for…of` binding is wide |
 
+Fix record (P2.2 round 1): the trap function is a chunk argument;
+element accesses call prelude helpers; `r89` gives C7; `a31` passes.
+The growth test measures the densest shape of 97 constructs at 65,536
+bytes: largest output ratio 63.14 (`%`), then `<` 59.9, `||` 61.3,
+spilled `%` 62.7; the review reproductions now give 37.5 to 40.4.
+Prelude 1,222 B. Heap over 121 shapes: 62.1 MB (templates), Rust
+allocations 33.5 MB. Growth test 8.56 s Debug. Random: 640 programs;
+512 accepted (448 equal to `node`, 64 trap per C6), 128 rejected with
+C7; each accepted passes `tsc` and `luau-analyze`.
+
 ## Failures before the fix
 
 ## Gaps

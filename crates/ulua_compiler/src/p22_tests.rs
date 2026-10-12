@@ -58,8 +58,15 @@ fn array_literals_obey_the_existing_temporary_budget() {
     let literal = |count| format!("const xs=[{}];", vec!["1"; count].join(","));
     check(&literal(135)).unwrap();
     assert_eq!(check(&literal(136)).unwrap_err().code, "limit:temporaries");
-    // The extra chunk trap local belongs to its own budget, independent of main's temporaries.
-    assert_eq!(check(&literal(136)).unwrap_err().code, "limit:temporaries");
+    // The chunk also reserves ten prelude locals and the literal result temporary.
+    let module = |count| format!("{}export function main():void{{}}", literal(count));
+    compile(module(125).as_bytes(), Limits::default()).unwrap();
+    assert_eq!(
+        compile(module(126).as_bytes(), Limits::default())
+            .unwrap_err()
+            .code,
+        "limit:temporaries"
+    );
 }
 #[test]
 fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
@@ -69,8 +76,33 @@ fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
     .unwrap()
     .luau;
     assert!(out.contains("= {__ulua_fn"));
-    let guard = out.find("__ulua_fmod(__ulua_t").unwrap();
+    let guard = out.find("__ulua_fmod(i, 1)").unwrap();
     let read = out[guard..].find(" + 1]").unwrap();
     assert!(read > 0);
-    assert_eq!(out.matches("getfenv().__ulua_trap").count(), 1);
+    assert!(out.contains("local __ulua_trap: (number) -> () = (...)"));
+    assert!(!out.contains("getfenv"));
+    assert!(out.contains("__ulua_get(__ulua_t"));
+    assert_eq!(out.matches("then __ulua_trap(1) end").count(), 2);
+}
+
+#[test]
+fn equality_rejects_literal_arrays_and_tracks_iteration_tests() {
+    for op in ["===", "!==", "==", "!="] {
+        for rhs in ["[]", "([])", "[1]", "([1])", "(([1]))"] {
+            assert_eq!(
+                check(&format!("const a=[1];if(a{op}{rhs}){{}}"))
+                    .unwrap_err()
+                    .code,
+                "C7"
+            );
+        }
+    }
+    assert_eq!(check("const a=[1];if(([])===a){}").unwrap_err().code, "C7");
+    check("const a=[1];for(const x of a){if(x===6){}} ").unwrap();
+    assert_eq!(
+        check("const a=[1];for(const x of a){if(x===6){if(x===7){}}}")
+            .unwrap_err()
+            .code,
+        "C7"
+    );
 }

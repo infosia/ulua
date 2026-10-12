@@ -346,12 +346,12 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 |---|---|---|
 | `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
-| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 61.6 MB over 42 growth shapes and the round 9 shape (180 `let` bindings and a 41-link `%` chain, Release, P2.1) |
+| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 62.1 MB over 121 shapes at the ceiling (densest templates, Release, P2.2); Rust allocations at most 33.5 MB |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
-| `OUTPUT_FACTOR` | 80, prelude 843 B | largest measured ratio 62.7 (`%` chain over a spilled binding, S7); margin 27% |
+| `OUTPUT_FACTOR` | 80, prelude 1,222 B | largest measured ratio 63.14 over the densest shape of each of 97 constructs at the ceiling (`%`, P2.2); margin 27% |
 | `ALLOCATION_STEP_BYTES` | 256 | 1,000,000 charged steps of the slowest measured input take about 2.0 s in Release |
 
 ## 8. Corpus runner

@@ -67,7 +67,7 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
         let (parameters, overhead) = if owner == 0 {
             probe.statements(&module.body, 0)?;
-            (vec![], 8)
+            (vec![], 10)
         } else {
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
@@ -101,6 +101,8 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         "__ulua_huge",
         "__ulua_format",
         "__ulua_trap",
+        "__ulua_get",
+        "__ulua_set",
     ] {
         context.locals[0].insert(name.into());
     }

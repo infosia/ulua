@@ -111,6 +111,9 @@ impl Checker<'_> {
                 if matches!(op, "**" | "|" | "&" | "^" | "<<" | ">>" | ">>>") {
                     return Err(self.error(b.span, "C4", "Numeric operator has no lowering"));
                 }
+                if matches!(op, "===" | "!==" | "==" | "!=") {
+                    self.equality_syntax(b.span, [&b.left, &b.right])?;
+                }
                 let a = self.expr(&b.left, depth, false)?;
                 let r = self.expr(&b.right, depth, false)?;
                 let (ty, op) = match op {

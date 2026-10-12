@@ -133,8 +133,11 @@ impl Emitter<'_> {
             E::Index(a, i) => {
                 let a = self.expression(a, depth)?;
                 let i = self.expression(i, depth)?;
-                self.index_check(a, i, false);
-                self.write_slot(dest, format!("{}[{} + 1]", self.temp(a), self.temp(i)));
+                self.capture("__ulua_get");
+                self.write_slot(
+                    dest,
+                    format!("__ulua_get({}, {})", self.temp(a), self.temp(i)),
+                );
                 self.release(a);
                 self.release(i);
             }

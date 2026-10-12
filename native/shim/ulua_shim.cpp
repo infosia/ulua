@@ -53,8 +53,6 @@ static int setup(lua_State* state) {
     luaL_openlibs(state);
     lua_pushcfunction(state, output, "print");
     lua_setglobal(state, "print");
-    lua_pushcfunction(state, trap, "__ulua_trap");
-    lua_setglobal(state, "__ulua_trap");
     luaL_sandbox(state);
     vm->thread = lua_newthread(state);
     lua_ref(state, -1);
@@ -98,7 +96,8 @@ struct Load {
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
-    lua_call(state, 0, 1);
+    lua_pushcfunction(state, trap, "__ulua_trap");
+    lua_call(state, 1, 1);
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
     return 0;

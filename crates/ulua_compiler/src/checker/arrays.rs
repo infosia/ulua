@@ -40,7 +40,7 @@ impl Checker<'_> {
             .element(receiver.ty)
             .ok_or_else(|| self.error(f.span, "C6", "For-of requires an array"))?;
         self.bindings[id].ty = Some(element);
-        self.equality.bindings[id] = self.types.element(element).is_some();
+        self.equality.bindings[id] = true;
         let mut exit = self.equality.join();
         exit.edge(&self.equality, self.reachable);
         let update = self.equality.join();

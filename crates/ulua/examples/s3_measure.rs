@@ -1,11 +1,16 @@
 //! Reproduce S3 measurements with the pinned native compiler. This is not a gate.
 //! Set LUAU_SOURCE_DIR and CARGO_NET_OFFLINE before each command.
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
-//! MODE is stack, heap, heap-products, native, run, or emit (with an output directory). Add --release before -p for Release.
+//! MODE is stack, heap, heap-products, heap-dense, native, run, or emit. Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
 //! Native template emission is incremental: its probe reports a lower bound,
 //! not an absolute maximum, when the next input still compiles.
 // Each mode uses a subset of the shared generators.
+#[allow(dead_code)]
+#[path = "../src/p22_inputs.rs"]
+mod arrays;
+#[path = "../src/dense_inputs.rs"]
+mod dense;
 #[allow(dead_code)]
 #[path = "../src/p21_inputs.rs"]
 mod functions;
@@ -276,6 +281,52 @@ fn main() {
                         stages(form, count);
                     }
                 }
+            }
+            "heap-dense" => {
+                println!("prelude_bytes={}", ulua_compiler::OUTPUT_PRELUDE_BYTES);
+                let mut worst = [("", 0); 3];
+                for label in dense::SHAPES
+                    .iter()
+                    .chain(inputs::SOURCE_SHAPES)
+                    .chain(review::SHAPES)
+                    .chain(joins::SHAPES)
+                    .chain(functions::SHAPES)
+                    .chain(arrays::SHAPES)
+                {
+                    if functions::diagnostic(label)
+                        .or_else(|| arrays::diagnostic(label))
+                        .is_some()
+                    {
+                        continue;
+                    }
+                    let bytes = SOURCE_CEILING as usize;
+                    let source = if dense::SHAPES.contains(label) {
+                        dense::source(label, bytes)
+                    } else if arrays::SHAPES.contains(label) {
+                        arrays::source(label, bytes)
+                    } else if functions::SHAPES.contains(label) {
+                        functions::source(label, bytes)
+                    } else if joins::SHAPES.contains(label) {
+                        joins::source(label, bytes)
+                    } else if review::SHAPES.contains(label) {
+                        review::source(label, bytes)
+                    } else if matches!(*label, "forward" | "backward" | "star") {
+                        inputs::call_graph(label, bytes)
+                    } else {
+                        inputs::source_ceiling(label, bytes)
+                    };
+                    let peak = heap(source, label);
+                    for (entry, bytes) in worst.iter_mut().zip([peak.total, peak.rust, peak.native])
+                    {
+                        if bytes > entry.1 {
+                            *entry = (label, bytes);
+                        }
+                    }
+                }
+                println!(
+                    "heap worst total={:?} rust={:?} native={:?}",
+                    worst[0], worst[1], worst[2]
+                );
             }
             "heap-products" => {
                 for shape in functions::SHAPES
