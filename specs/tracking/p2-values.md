@@ -238,6 +238,12 @@ Reviewer: fresh agent, diff `917e951..b7b9183`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Th
 | `tsc` composes `bn ?? (true \|\| c)` as `\|\|` and ends its false edge; Ulua keeps it (629 of 24,000 grid programs accepted, `tsc` TS18047) | MAJOR | C16.9: a boolean `??` whose right operand lacks an edge is rejected, `r115` |
 | `x != null \|\| x != null` loses the narrowing at the join; `tsc` accepts | MINOR | C16.9: a contradicted reference has no fact of its own at a join, `a46` |
 
+Fix (Codex): a boolean `??` checks the edges of its right operand; a
+contradicted reference takes the other edges' narrowing at a join. 52
+rejects checked against `tsc`; 147 accepted programs equal `node`, pass
+`luau-analyze`, and give only TS2339 that names `never` (3). Growth test
+8.860 s Debug, largest ratio 4.022. gate full: PASS, 131 entries.
+
 Measured: `tsc` keeps both edges of a literal operand of `??` (`if (bn ?? true) { return; } x.v` passes). `tsc` narrows on the `??` false edge through the right operand, which JavaScript also reaches when the left operand is `false`; Ulua narrows nothing through a `??` test.
 
 ### P2.5 Phase Review round 5

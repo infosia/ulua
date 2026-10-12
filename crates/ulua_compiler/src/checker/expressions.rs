@@ -215,6 +215,18 @@ impl Checker<'_> {
                     } else {
                         inner
                     };
+                    // Literal operands keep both edges. Logical operands use their cached test edges.
+                    if ty == Type::Boolean
+                        && b.flow.is_some_and(|flow| {
+                            flow.logical && (!flow.yes.reachable || !flow.no.reachable)
+                        })
+                    {
+                        return Err(self.error(
+                            l.span,
+                            "C16",
+                            "The right operand of boolean coalescing needs both test edges",
+                        ));
+                    }
                     return self.finish_expr(
                         e,
                         statement,

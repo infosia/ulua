@@ -1,5 +1,5 @@
 //! C16 joins cached condition edges and loop exits through persistent path heads.
-pub(super) use super::paths::{Facts, Join};
+pub(super) use super::paths::{Facts, Join, Narrowing};
 use super::*;
 use crate::ir::{Edge, Expr, ExprKind as E, Flow, Statement as S};
 pub(super) struct LoopFacts {
@@ -96,11 +96,11 @@ impl Checker<'_> {
                         let old = self.facts.get(id);
                         let mark = self.facts.mark();
                         let yes_value = *op == "~=";
-                        // A contradiction keeps the known type and the other facts on both edges.
-                        self.facts.set(id, old.or(Some(yes_value)));
+                        // A contradicted reference keeps its read type but contributes no fact at a join.
+                        self.facts.set(id, Some(Narrowing::test(old, yes_value)));
                         let yes = self.current_edge(true);
                         self.facts.restore(mark);
-                        self.facts.set(id, old.or(Some(!yes_value)));
+                        self.facts.set(id, Some(Narrowing::test(old, !yes_value)));
                         let no = self.current_edge(true);
                         self.facts.restore(mark);
                         return Flow {
@@ -241,7 +241,7 @@ impl Checker<'_> {
         if let Some(inner) = self.types.inner(ty)
             && let Some(nonnull) = self.facts.get(id)
         {
-            return if nonnull { inner } else { Type::Null };
+            return if nonnull.value() { inner } else { Type::Null };
         }
         ty
     }

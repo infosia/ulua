@@ -1,25 +1,55 @@
 //! Persistent path heads share undo prefixes. A move visits only divergent tails.
 use super::*;
-use std::collections::HashSet;
-type Fact = (bool, u64);
-// A join compares consecutive input paths. A lost fact never returns at that join.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Narrowing {
+    Known(bool),
+    // This reference cannot reach this edge. Reads retain its previous type.
+    Contradicted(bool),
+}
+impl Narrowing {
+    pub(super) fn value(self) -> bool {
+        match self {
+            Self::Known(value) | Self::Contradicted(value) => value,
+        }
+    }
+    pub(super) fn test(old: Option<Self>, value: bool) -> Self {
+        match old {
+            Some(Self::Known(previous)) if previous != value => Self::Contradicted(previous),
+            Some(value @ Self::Contradicted(_)) => value,
+            _ => Self::Known(value),
+        }
+    }
+    fn meet(a: Option<Self>, b: Option<Self>) -> Option<Self> {
+        match (a, b) {
+            (Some(Self::Contradicted(_)), _) => b,
+            (_, Some(Self::Contradicted(_))) => a,
+            _ if a == b => a,
+            _ => None,
+        }
+    }
+}
+type Fact = (Narrowing, u64);
+// A join compares consecutive input paths and merges only the changed references.
 #[derive(Default)]
 pub(super) struct Join {
     previous: Option<usize>,
-    lost: HashSet<usize>,
+    merged: HashMap<usize, Option<Narrowing>>,
 }
 impl Join {
     pub(super) fn include(&mut self, facts: &Facts, head: usize) {
         if let Some(previous) = self.previous {
-            self.lost.extend(facts.differences(previous, head));
+            for (id, a, b) in facts.differences(previous, head) {
+                let value = self.merged.entry(id).or_insert(a);
+                *value = Narrowing::meet(*value, b);
+            }
         }
         self.previous = Some(head);
     }
     pub(super) fn finish(&self, facts: &mut Facts) -> Option<usize> {
         let head = self.previous?;
         facts.travel(head);
-        for id in &self.lost {
-            facts.set(*id, None);
+        for (id, value) in &self.merged {
+            facts.set(*id, *value);
         }
         Some(facts.head())
     }
@@ -60,7 +90,7 @@ impl Facts {
     fn kills(&self, head: usize) -> usize {
         self.node(head).map_or(0, |n| n.kills)
     }
-    pub(super) fn get(&self, id: usize) -> Option<bool> {
+    pub(super) fn get(&self, id: usize) -> Option<Narrowing> {
         self.values
             .get(&id)
             .filter(|v| v.1 >= self.floor)
@@ -73,7 +103,7 @@ impl Facts {
             self.values.remove(&id);
         }
     }
-    pub(super) fn set(&mut self, id: usize, value: Option<bool>) {
+    pub(super) fn set(&mut self, id: usize, value: Option<Narrowing>) {
         let old = self.get(id);
         if old == value {
             return;
@@ -120,7 +150,11 @@ impl Facts {
         self.kills(ancestor) == self.kills(head)
     }
     // Each divergent tail supplies its final value and its value before that tail.
-    fn differences(&self, mut a: usize, mut b: usize) -> Vec<usize> {
+    fn differences(
+        &self,
+        mut a: usize,
+        mut b: usize,
+    ) -> Vec<(usize, Option<Narrowing>, Option<Narrowing>)> {
         type Tail = HashMap<usize, (Option<Fact>, Option<Fact>)>;
         let mut first: Tail = HashMap::new();
         let mut second: Tail = HashMap::new();
@@ -143,12 +177,12 @@ impl Facts {
         for (id, (value, old)) in &first {
             let other = second.get(id).map_or(*old, |v| v.0);
             if visible(*value) != visible(other) {
-                changed.push(*id);
+                changed.push((*id, visible(*value), visible(other)));
             }
         }
         for (id, (value, old)) in &second {
             if !first.contains_key(id) && visible(*old) != visible(*value) {
-                changed.push(*id);
+                changed.push((*id, visible(*old), visible(*value)));
             }
         }
         changed
@@ -174,7 +208,7 @@ impl Facts {
             }
         }
     }
-    pub(super) fn changes(&self, mark: usize) -> HashMap<usize, Option<bool>> {
+    pub(super) fn changes(&self, mark: usize) -> HashMap<usize, Option<Narrowing>> {
         self.log[mark..]
             .iter()
             .filter_map(|head| self.node(*head))
@@ -183,8 +217,8 @@ impl Facts {
     }
     pub(super) fn merge(
         &mut self,
-        a: HashMap<usize, Option<bool>>,
-        b: HashMap<usize, Option<bool>>,
+        a: HashMap<usize, Option<Narrowing>>,
+        b: HashMap<usize, Option<Narrowing>>,
     ) {
         let mut keys: std::collections::HashSet<_> = a.keys().copied().collect();
         keys.extend(b.keys().copied());
@@ -192,10 +226,10 @@ impl Facts {
             let old = self.get(id);
             let a = a.get(&id).copied().unwrap_or(old);
             let b = b.get(&id).copied().unwrap_or(old);
-            self.set(id, if a == b { a } else { None });
+            self.set(id, Narrowing::meet(a, b));
         }
     }
-    pub(super) fn apply(&mut self, changes: HashMap<usize, Option<bool>>) {
+    pub(super) fn apply(&mut self, changes: HashMap<usize, Option<Narrowing>>) {
         for (id, value) in changes {
             self.set(id, value);
         }
