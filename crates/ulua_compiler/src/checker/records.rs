@@ -121,8 +121,16 @@ impl Checker<'_> {
             }
         }
         self.types.seal_aliases();
+        for s in &program.body {
+            if let Statement::TSTypeAliasDeclaration(a) = s {
+                self.checked_type_depth(self.aliases[a.id.name.as_str()], a.span)?;
+            }
+        }
         for ty in self.aliases.values_mut() {
-            *ty = self.types.identity(*ty);
+            let identity = self.types.identity(*ty);
+            if self.types.depth(*ty) == self.types.depth(identity) {
+                *ty = identity;
+            }
         }
         Ok(())
     }
@@ -165,6 +173,7 @@ impl Checker<'_> {
             entries.push((key, value));
         }
         let ty = self.types.record(fields);
+        self.checked_type_depth(ty, object.span)?;
         if self.types.field_count(ty) > crate::FIELD_BOUND {
             return Err(self.error(
                 object.span,

@@ -61,9 +61,15 @@ impl Checker<'_> {
         }
         Ok(next)
     }
+    fn checked_type_depth(&self, ty: Type, span: Span) -> Result<Type, Diagnostic> {
+        if self.types.depth(ty) > crate::TYPE_DEPTH_BOUND {
+            return Err(self.error(span, "limit:type-depth", "Type-link depth limit exceeded"));
+        }
+        Ok(ty)
+    }
     fn ty(&mut self, t: &TSType<'_>, result: bool, depth: u32) -> Result<Type, Diagnostic> {
         let depth = self.descend(depth, t.span())?;
-        Ok(match t {
+        let ty = match t {
             TSType::TSNumberKeyword(_) => Type::Number,
             TSType::TSBooleanKeyword(_) => Type::Boolean,
             TSType::TSStringKeyword(_) => Type::String,
@@ -100,7 +106,8 @@ impl Checker<'_> {
                         return Err(self.error(t.span(), "C2", "Invalid nullable member"));
                     }
                     let inner = self.ty(inner, false, depth)?;
-                    return Ok(self.types.nullable(inner));
+                    let ty = self.types.nullable(inner);
+                    return self.checked_type_depth(ty, t.span());
                 }
                 return Err(self.error(t.span(), "C2", "Only T | null is a union"));
             }
@@ -143,7 +150,8 @@ impl Checker<'_> {
                 return Err(self.error(t.span(), "C11", "Object type needs a module alias"));
             }
             _ => return Err(self.error(t.span(), "C11", "Type is outside the closed surface")),
-        })
+        };
+        self.checked_type_depth(ty, t.span())
     }
     fn bind(&mut self, name: &str, binding: ir::Binding, span: Span) -> Result<usize, Diagnostic> {
         if strict::binding(name) {

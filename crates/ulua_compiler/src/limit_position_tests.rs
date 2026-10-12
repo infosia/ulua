@@ -52,7 +52,7 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .collect::<Vec<_>>()
         .join(",");
     let mut args = vec!["1"; 32];
-    args[25] = "987654321";
+    args[24] = "987654321";
     let mut value = format!("f({})", args.join(","));
     for _ in 0..3 {
         value = format!("f({},{value})", vec!["1"; 31].join(","));

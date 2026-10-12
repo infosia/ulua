@@ -1,4 +1,5 @@
 //! Interned type identities. Signatures store child identities, never child trees.
+mod depths;
 mod field_counts;
 mod partition;
 use std::{collections::HashMap, rc::Rc};
@@ -93,6 +94,8 @@ pub(crate) struct Types {
     anonymous_records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
     named_records: std::collections::HashSet<Type>,
     field_counts: Vec<usize>,
+    depths: Vec<usize>,
+    depths_ready: bool,
     function_content: std::cell::RefCell<HashMap<Type, bool>>,
 }
 
@@ -110,6 +113,8 @@ impl Types {
             anonymous_records: HashMap::new(),
             named_records: Default::default(),
             field_counts: vec![0; 6],
+            depths: vec![0; 6],
+            depths_ready: false,
             canonical: (0..6).map(Type).collect(),
             function_content: Default::default(),
         }
@@ -201,6 +206,7 @@ impl Types {
         self.canonical.push(ty);
         self.nodes.push(Node::Record(Rc::new(vec![])));
         self.field_counts.push(0);
+        self.depths.push(0);
         self.named_records.insert(ty);
         ty
     }

@@ -607,6 +607,7 @@ impl Checker<'_> {
         ty: Type,
         kind: ExprKind,
     ) -> Result<Expr, Diagnostic> {
+        self.checked_type_depth(ty, e.span())?;
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }

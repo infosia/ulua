@@ -77,6 +77,7 @@ impl Checker<'_> {
             depth,
         )?;
         let ty = self.types.intern(params, result, required);
+        self.checked_type_depth(ty, f.span)?;
         self.bind(
             name.name.as_str(),
             ir::Binding {
@@ -263,6 +264,7 @@ impl Checker<'_> {
         };
         self.leave_function(state);
         let ty = self.types.intern(params, result, required);
+        self.checked_type_depth(ty, a.span)?;
         self.bindings[id].ty = Some(ty);
         self.functions.push(ir::Function {
             binding: id,

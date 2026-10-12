@@ -32,6 +32,9 @@ local function __ulua_get<T>(a: {T}, i: number, deferred: boolean?): T
     end
     return a[i + 1]
 end
+local function __ulua_receiver(value: unknown): ()
+    if value == nil then __ulua_trap(1) end
+end
 local function __ulua_set<T>(a: {T}, i: number, v: T): ()
     if not (i >= 0 and i <= #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end
     a[i + 1] = v

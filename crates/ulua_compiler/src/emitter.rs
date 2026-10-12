@@ -19,6 +19,7 @@ use std::{collections::HashMap, fmt::Write};
 const SPILL_FIELDS: usize = 128;
 
 pub(crate) use prelude::LIBRARIES;
+const LIBRARY_LOCALS: usize = 11;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -113,7 +114,7 @@ impl<'a> Emitter<'a> {
             generated_count: 0,
             generated_live: 0,
             generated_peak: 0,
-            overhead: if owner == 0 { 10 } else { 0 },
+            overhead: if owner == 0 { LIBRARY_LOCALS } else { 0 },
             storage_offset: 0,
             loops: vec![],
             joins: joins::Joins::default(),
@@ -226,6 +227,7 @@ impl<'a> Emitter<'a> {
         self.upvalues.insert(name.to_owned());
     }
     fn slot(&mut self, ty: &Type) -> Result<usize, Diagnostic> {
+        let ty = &self.module.types.identity(*ty);
         if let Some(i) = self.slots.iter().position(|s| !s.busy && s.ty == *ty) {
             self.slots[i].busy = true;
             Ok(i)

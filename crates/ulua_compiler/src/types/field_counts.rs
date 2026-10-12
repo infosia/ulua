@@ -2,9 +2,9 @@
 use super::{Node, Type, Types};
 use crate::FIELD_BOUND;
 impl Types {
-    // Zero contributions can use their structural identity without a count-specific view.
+    // Use the identity only when both budgets retain the same contribution.
     pub(super) fn count_identity(&self, ty: Type) -> Type {
-        if self.nested_field_count(ty) == 0 {
+        if self.nested_field_count(ty) == 0 && self.depth(ty) == self.depth(self.identity(ty)) {
             self.identity(ty)
         } else {
             ty
@@ -46,6 +46,11 @@ impl Types {
         let count = self.count_node(&node);
         let ty = Type(self.nodes.len());
         self.field_counts.push(count);
+        self.depths.push(if self.depths_ready {
+            self.node_depth(&node)
+        } else {
+            0
+        });
         self.canonical.push(identity.unwrap_or(ty));
         self.nodes.push(node);
         ty

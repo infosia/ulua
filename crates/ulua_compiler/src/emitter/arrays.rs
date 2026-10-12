@@ -29,11 +29,8 @@ impl Emitter<'_> {
     }
     pub(super) fn access_receiver_check(&mut self, receiver: usize, deferred: bool) {
         if deferred {
-            self.capture("__ulua_trap");
-            self.line(format!(
-                "if {} == nil then __ulua_trap(1) end",
-                self.temp(receiver)
-            ));
+            self.capture("__ulua_receiver");
+            self.line(format!("__ulua_receiver({})", self.temp(receiver)));
         }
     }
     pub(super) fn array_literal(

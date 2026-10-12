@@ -66,10 +66,14 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     let empty = HashMap::new();
     for owner in std::iter::once(0).chain(module.functions.iter().map(|f| f.binding + 1)) {
         let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
-        probe.overhead = if owner == 0 { 10 + method_locals } else { 0 };
+        probe.overhead = if owner == 0 {
+            LIBRARY_LOCALS + method_locals
+        } else {
+            0
+        };
         let (parameters, overhead) = if owner == 0 {
             probe.statements(&module.body, 0)?;
-            (vec![], 10 + method_locals)
+            (vec![], LIBRARY_LOCALS + method_locals)
         } else {
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
@@ -106,6 +110,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         "__ulua_trap",
         "__ulua_get",
         "__ulua_set",
+        "__ulua_receiver",
     ] {
         context.locals[0].insert(name.into());
     }

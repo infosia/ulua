@@ -1,5 +1,5 @@
 //! Deterministic type graphs use partition refinement before value flow.
-use super::{FunctionType, Node, Type, Types};
+use super::{Node, Type, Types};
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -14,6 +14,7 @@ enum Shape {
 }
 impl Types {
     pub(crate) fn seal_aliases(&mut self) {
+        self.seal_depths();
         let mut shapes = HashMap::<Shape, usize>::new();
         let mut blocks: Vec<Vec<usize>> = vec![];
         let mut classes = vec![0; self.nodes.len()];
@@ -98,51 +99,17 @@ impl Types {
                 }
             }
         }
-        self.functions.clear();
-        self.arrays.clear();
-        self.nullable.clear();
+        // Keep source links for cached depth and field provenance. Only the identity keys use canonical children.
         self.records.clear();
-        for id in 0..self.nodes.len() {
-            let representative = self.canonical[id];
-            match &self.nodes[id] {
-                Node::Array(child) => {
-                    let child = self.canonical[child.0];
-                    self.nodes[id] = Node::Array(child);
-                    self.arrays.insert(child, representative);
-                }
-                Node::Nullable(child) => {
-                    let child = self.canonical[child.0];
-                    self.nodes[id] = Node::Nullable(child);
-                    self.nullable.insert(child, representative);
-                }
-                Node::Function(f) => {
-                    let f = FunctionType {
-                        params: f.params.iter().map(|t| self.canonical[t.0]).collect(),
-                        result: self.canonical[f.result.0],
-                        required: f.required,
-                    };
-                    let f = self
-                        .functions
-                        .get_key_value(&f)
-                        .map(|(shared, _)| Rc::clone(shared))
-                        .unwrap_or_else(|| Rc::new(f));
-                    self.nodes[id] = Node::Function(Rc::clone(&f));
-                    self.functions.insert(f, representative);
-                }
-                Node::Record(fields) => {
-                    let fields = fields
+        for (id, node) in self.nodes.iter().enumerate() {
+            if let Node::Record(fields) = node {
+                let fields = Rc::new(
+                    fields
                         .iter()
                         .map(|(key, t)| (*key, self.canonical[t.0]))
-                        .collect::<Vec<_>>();
-                    let fields = self
-                        .records
-                        .get_key_value(&fields)
-                        .map(|(shared, _)| Rc::clone(shared))
-                        .unwrap_or_else(|| Rc::new(fields));
-                    self.nodes[id] = Node::Record(Rc::clone(&fields));
-                    self.records.insert(fields, representative);
-                }
-                Node::Primitive(_) => {}
+                        .collect::<Vec<_>>(),
+                );
+                self.records.insert(fields, self.canonical[id]);
             }
         }
         // Function containment is reverse reachability, including recursive records.
