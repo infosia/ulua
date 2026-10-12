@@ -177,13 +177,18 @@ impl Checker<'_> {
                         {
                             // Check the literal's strict-module syntax before this special lowering.
                             self.expr(&a.right, depth, false)?;
-                            self.methods.insert(("clear", 0));
+                            self.methods.insert((ir::Method::Clear, 0));
                             return Ok(S::Eval(Expr {
                                 wide: false,
                                 bare_true: false,
                                 start: a.span.start,
                                 ty: Type::Void,
-                                kind: ExprKind::Method("clear", 0, Box::new(receiver), vec![]),
+                                kind: ExprKind::Method(
+                                    ir::Method::Clear,
+                                    0,
+                                    Box::new(receiver),
+                                    vec![],
+                                ),
                             }));
                         }
                         return Err(self.error(

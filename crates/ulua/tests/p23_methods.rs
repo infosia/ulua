@@ -1,4 +1,5 @@
 //! Direct Node, tsc, analyzer, and ABI witnesses for the array method contract.
+//! Measured Debug cost: 3.07 s in the P2.3 phase review.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -160,7 +161,7 @@ fn callbacks(s: &mut Suite) {
         }
         for method in ["reduce", "reduceRight"] {
             s.case(&format!(
-                "const xs:number[]={array};return `${{xs.{method}((a:number):number=>a+1,10)}}`;"
+                "const xs:number[]={array};return `${{xs.{method}((a:number,v:number,i:number):number=>a*2+v+i,10)}}`;"
             ));
             s.case(&format!("const xs:number[]={array};return xs.{method}((a:string,v:number):string=>`${{a}}${{v}}`,'x');"));
             s.case(&format!("const xs:number[]={array};let order=0;const value=xs.{method}((a:number,v:number):number=>{{order=order*10+v;return a-v;}},99);return `${{value}}:${{order}}`;"));
@@ -171,7 +172,7 @@ fn callbacks(s: &mut Suite) {
     }
     for comparator in ["0", "NaN", "-0"] {
         s.case(&format!(
-            "const xs=[3,1,2];xs.sort((a:number):number=>{comparator});return xs.join();"
+            "const xs=[3,1,2];xs.sort((a:number,b:number):number=>{comparator});return xs.join();"
         ));
     }
     s.case("const xs:number[]=[];xs.sort((a:number,b:number):number=>a-b);return xs.join();");

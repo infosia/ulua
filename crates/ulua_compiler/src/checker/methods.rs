@@ -39,6 +39,8 @@ impl Checker<'_> {
             "sort" => ("sort", 1, 1),
             _ => return Err(self.error(call.span, "C6", "Array method is rejected")),
         };
+        let method = ir::Method::parse(name)
+            .ok_or_else(|| self.error(call.span, "internal", "Missing array method kind"))?;
         if !(min..=max).contains(&call.arguments.len()) {
             return Err(self.error(call.span, "C6", "Array method argument count is rejected"));
         }
@@ -94,7 +96,7 @@ impl Checker<'_> {
                 })?;
                 arity = signature.params.len();
                 let reduce = matches!(name, "reduce" | "reduceRight");
-                if !(1..=2).contains(&arity) {
+                if !method.arities().contains(&arity) {
                     return Err(self.error(
                         arg.span(),
                         "C6",
@@ -103,13 +105,16 @@ impl Checker<'_> {
                 }
                 let expected = if reduce { signature.params[0] } else { element };
                 self.flow(&signature.params[0], Some(&expected), arg.span())?;
-                if arity == 2 {
+                if arity >= 2 {
                     let second = if reduce || name == "sort" {
                         element
                     } else {
                         Type::Number
                     };
                     self.flow(&signature.params[1], Some(&second), arg.span())?;
+                }
+                if reduce && arity == 3 {
+                    self.flow(&signature.params[2], Some(&Type::Number), arg.span())?;
                 }
                 if matches!(
                     name,
@@ -128,6 +133,22 @@ impl Checker<'_> {
                     ));
                 } else if name == "map" && signature.result == Type::Void {
                     return Err(self.error(arg.span(), "C2", "Map elements must exclude void"));
+                }
+                if matches!(name, "map" | "flatMap") {
+                    let element = if name == "map" {
+                        signature.result
+                    } else {
+                        self.types.element(signature.result).ok_or_else(|| {
+                            self.error(arg.span(), "C6", "FlatMap callback must return an array")
+                        })?
+                    };
+                    if self.types.contains_null(element) {
+                        return Err(self.error(
+                            arg.span(),
+                            "C6",
+                            "Array elements must exclude null",
+                        ));
+                    }
                 }
             }
             args.push(value);
@@ -154,13 +175,96 @@ impl Checker<'_> {
             }
             _ => receiver.ty,
         };
-        self.methods.insert((name, arity));
+        self.methods.insert((method, arity));
         Ok(Expr {
             wide: false,
             bare_true: false,
             start: call.span.start,
             ty,
-            kind: ExprKind::Method(name, arity, Box::new(receiver), args),
+            kind: ExprKind::Method(method, arity, Box::new(receiver), args),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn result_array_elements_reject_constructed_null_types() {
+        for method in ["map", "flatMap"] {
+            for shape in ["null", "nullable", "number"] {
+                let source = format!("xs.{method}(f);");
+                let allocator = oxc_allocator::Allocator::default();
+                let parsed =
+                    oxc_parser::Parser::new(&allocator, &source, oxc_span::SourceType::ts())
+                        .parse();
+                assert!(parsed.diagnostics.is_empty());
+                let Statement::ExpressionStatement(statement) = &parsed.program.body[0] else {
+                    panic!("expression statement");
+                };
+                let Expression::CallExpression(call) = &statement.expression else {
+                    panic!("method call");
+                };
+                let mut c = Checker {
+                    source: source.as_bytes(),
+                    methods: Default::default(),
+                    bindings: vec![],
+                    scopes: vec![HashMap::new()],
+                    owner: 0,
+                    result: Type::Void,
+                    types: ir::Types::new(),
+                    loops: vec![],
+                    reachable: true,
+                    limit: crate::DEPTH_CEILING,
+                    references: vec![],
+                    equality: Equality::new(),
+                    functions: vec![],
+                    default_scopes: vec![],
+                };
+                // Build the violating signature directly. The surface still rejects null.
+                let element = match shape {
+                    "null" => Type::Null,
+                    "nullable" => c.types.nullable(Type::Number),
+                    "number" => Type::Number,
+                    _ => panic!("type shape"),
+                };
+                let result = if method == "flatMap" {
+                    c.types.array(element)
+                } else {
+                    element
+                };
+                let callback = c.types.intern(vec![Type::Number], result, 1);
+                c.bind(
+                    "f",
+                    ir::Binding {
+                        ty: Some(callback),
+                        owner: 0,
+                        start: 0,
+                        end: 0,
+                        mutable: false,
+                        declaration: true,
+                    },
+                    call.span,
+                )
+                .unwrap();
+                let receiver = Expr {
+                    wide: false,
+                    bare_true: false,
+                    start: 0,
+                    ty: c.types.array(Type::Number),
+                    kind: ExprKind::Array(vec![]),
+                };
+                let checked = c.array_method(call, method, receiver, Type::Number, 0);
+                if shape == "number" {
+                    assert!(checked.is_ok(), "{method}");
+                } else {
+                    let error = checked.err().expect("nullable array result must fail");
+                    assert_eq!(error.code, "C6", "{method}: {shape}");
+                    assert_eq!(error.message, "Array elements must exclude null");
+                    assert!(c.methods.is_empty());
+                }
+            }
+        }
     }
 }

@@ -256,7 +256,7 @@ impl<'a> Emitter<'a> {
 
 pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
-        .saturating_add(methods::prelude(&module.methods).0.len())
+        .saturating_add(methods::prelude(&module.methods)?.0.len())
         .saturating_add(factor.saturating_mul(module.source.len()));
     functions::emit(module, bound)
 }

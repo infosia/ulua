@@ -1,8 +1,9 @@
 //! Selected, generic array helpers. Loops use the VM interrupt budget.
+use crate::{Diagnostic, ir::Method as M};
 use std::collections::BTreeSet;
 
-pub(super) fn name(method: &str, arity: usize) -> String {
-    format!("__ulua_{method}_{arity}")
+pub(super) fn name(method: M, arity: usize) -> String {
+    format!("__ulua_{}_{arity}", method.name())
 }
 
 const INTEGER: &str = r#"local function __ulua_integer(x: number): number
@@ -21,20 +22,20 @@ const POSITION: &str = r#"local function __ulua_position(x: number?, n: number, 
 end
 "#;
 
-fn positions(method: &str) -> bool {
+fn positions(method: M) -> bool {
     matches!(
         method,
-        "indexOf" | "includes" | "slice" | "fill" | "splice" | "copyWithin"
+        M::IndexOf | M::Includes | M::Slice | M::Fill | M::Splice | M::CopyWithin
     )
 }
 
-pub(crate) fn prelude(methods: &BTreeSet<(&str, usize)>) -> (String, usize) {
+pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize), Diagnostic> {
     let mut out = String::new();
-    let position = methods.iter().any(|(m, _)| positions(m));
+    let position = methods.iter().any(|(m, _)| positions(*m));
     let integer = position
         || methods
             .iter()
-            .any(|(m, _)| matches!(*m, "at" | "lastIndexOf"));
+            .any(|(m, _)| matches!(*m, M::At | M::LastIndexOf));
     if integer {
         out.push_str(INTEGER);
     }
@@ -43,17 +44,57 @@ pub(crate) fn prelude(methods: &BTreeSet<(&str, usize)>) -> (String, usize) {
     }
     let utilities = usize::from(integer) + usize::from(position);
     for &(method, arity) in methods {
-        let (generic, parameters, result, body) = if arity == 0 {
-            plain(method)
-        } else {
-            callback(method, arity)
+        if !method.arities().contains(&arity) {
+            return Err(invalid());
+        }
+        let (generic, parameters, result, body) = match method {
+            M::IndexOf
+            | M::LastIndexOf
+            | M::Includes
+            | M::Join
+            | M::Slice
+            | M::Concat
+            | M::Fill
+            | M::Reverse
+            | M::Splice
+            | M::Unshift
+            | M::CopyWithin
+            | M::At
+            | M::Pop
+            | M::Shift
+            | M::Clear => {
+                if arity != 0 {
+                    return Err(invalid());
+                }
+                plain(method)?
+            }
+            M::ForEach
+            | M::Map
+            | M::Filter
+            | M::Some
+            | M::Every
+            | M::FindIndex
+            | M::FindLastIndex
+            | M::FlatMap
+            | M::Reduce
+            | M::ReduceRight
+            | M::Sort => callback(method, arity)?,
         };
         out.push_str(&format!(
             "local function {}{generic}({parameters}): {result}\n{body}end\n",
             name(method, arity)
         ));
     }
-    (out, methods.len() + utilities)
+    Ok((out, methods.len() + utilities))
+}
+
+fn invalid() -> Diagnostic {
+    Diagnostic::at(
+        &[],
+        0,
+        "internal",
+        "Invalid array helper kind or callback arity",
+    )
 }
 
 type Helper = (String, String, String, String);
@@ -66,20 +107,20 @@ fn form(generic: &str, parameters: &str, result: &str, body: &str) -> Helper {
     )
 }
 
-fn plain(method: &str) -> Helper {
+fn plain(method: M) -> Result<Helper, Diagnostic> {
     let (parameters, result, body) = match method {
-        "indexOf" | "includes" => {
-            let equality = if method == "includes" {
+        M::IndexOf | M::Includes => {
+            let equality = if method == M::Includes {
                 "a[i + 1] == v or (a[i + 1] ~= a[i + 1] and v ~= v)"
             } else {
                 "a[i + 1] == v"
             };
-            let yes = if method == "includes" { "true" } else { "i" };
-            let no = if method == "includes" { "false" } else { "-1" };
-            return form(
+            let yes = if method == M::Includes { "true" } else { "i" };
+            let no = if method == M::Includes { "false" } else { "-1" };
+            return Ok(form(
                 "<T>",
                 "a: {T}, v: T, from: number?",
-                if method == "includes" {
+                if method == M::Includes {
                     "boolean"
                 } else {
                     "number"
@@ -94,9 +135,9 @@ fn plain(method: &str) -> Helper {
     return {no}
 "#
                 ),
-            );
+            ));
         }
-        "lastIndexOf" => (
+        M::LastIndexOf => (
             "a: {T}, v: T, from: number?",
             "number",
             r#"    local n = #a
@@ -110,7 +151,7 @@ fn plain(method: &str) -> Helper {
     return -1
 "#,
         ),
-        "join" => (
+        M::Join => (
             "a: {T}, separator: string?",
             "string",
             r#"    local parts: {string} = {}
@@ -127,7 +168,7 @@ fn plain(method: &str) -> Helper {
     return __ulua_concat(parts, if separator == nil then "," else separator)
 "#,
         ),
-        "slice" => (
+        M::Slice => (
             "a: {T}, first: number?, last: number?",
             "{T}",
             r#"    local n = #a
@@ -138,7 +179,7 @@ fn plain(method: &str) -> Helper {
     return out
 "#,
         ),
-        "concat" => (
+        M::Concat => (
             "a: {T}, b: {T}",
             "{T}",
             r#"    local out: {T} = {}
@@ -147,7 +188,7 @@ fn plain(method: &str) -> Helper {
     return out
 "#,
         ),
-        "fill" => (
+        M::Fill => (
             "a: {T}, v: T, first: number?, last: number?",
             "{T}",
             r#"    local n = #a
@@ -157,7 +198,7 @@ fn plain(method: &str) -> Helper {
     return a
 "#,
         ),
-        "reverse" => (
+        M::Reverse => (
             "a: {T}",
             "{T}",
             r#"    local n = #a
@@ -171,7 +212,7 @@ fn plain(method: &str) -> Helper {
     return a
 "#,
         ),
-        "splice" => (
+        M::Splice => (
             "a: {T}, first: number, count: number?",
             "{T}",
             r#"    local n = #a
@@ -186,7 +227,7 @@ fn plain(method: &str) -> Helper {
     return out
 "#,
         ),
-        "unshift" => (
+        M::Unshift => (
             "a: {T}, v: T",
             "number",
             r#"    local n = #a
@@ -195,7 +236,7 @@ fn plain(method: &str) -> Helper {
     return n + 1
 "#,
         ),
-        "copyWithin" => (
+        M::CopyWithin => (
             "a: {T}, target: number, first: number, last: number?",
             "{T}",
             r#"    local n = #a
@@ -212,7 +253,7 @@ fn plain(method: &str) -> Helper {
     return a
 "#,
         ),
-        "at" => (
+        M::At => (
             "a: {T}, position: number",
             "T",
             r#"    local i = __ulua_integer(position)
@@ -220,7 +261,7 @@ fn plain(method: &str) -> Helper {
     return __ulua_get(a, i)
 "#,
         ),
-        "pop" => (
+        M::Pop => (
             "a: {T}",
             "T",
             r#"    local n = #a
@@ -230,7 +271,7 @@ fn plain(method: &str) -> Helper {
     return v
 "#,
         ),
-        "shift" => (
+        M::Shift => (
             "a: {T}",
             "T",
             r#"    local n = #a
@@ -241,48 +282,51 @@ fn plain(method: &str) -> Helper {
     return v
 "#,
         ),
-        // The checker selects only this closed set.
-        _ => (
+        M::Clear => (
             "a: {T}",
             "()",
             r#"    for i = #a, 1, -1 do a[i] = nil end
 "#,
         ),
+        M::ForEach
+        | M::Map
+        | M::Filter
+        | M::Some
+        | M::Every
+        | M::FindIndex
+        | M::FindLastIndex
+        | M::FlatMap
+        | M::Reduce
+        | M::ReduceRight
+        | M::Sort => return Err(invalid()),
     };
-    form("<T>", parameters, result, body)
+    Ok(form("<T>", parameters, result, body))
 }
 
-fn callback(method: &str, arity: usize) -> Helper {
-    if method == "sort" {
-        let input = if arity == 1 { "T" } else { "T, T" };
-        let body = if arity == 1 {
-            SORT.replace(
-                "compare(source[left], source[right])",
-                "compare(source[left])",
-            )
-        } else {
-            SORT.into()
+fn callback(method: M, arity: usize) -> Result<Helper, Diagnostic> {
+    if method == M::Sort {
+        return match arity {
+            2 => Ok(form(
+                "<T>",
+                "a: {T}, compare: (T, T) -> number",
+                "{T}",
+                SORT,
+            )),
+            _ => Err(invalid()),
         };
-        return form(
-            "<T>",
-            &format!("a: {{T}}, compare: ({input}) -> number"),
-            "{T}",
-            &body,
-        );
     }
-    if matches!(method, "reduce" | "reduceRight") {
-        let range = if method == "reduce" {
+    if matches!(method, M::Reduce | M::ReduceRight) {
+        let range = if method == M::Reduce {
             "1, n"
         } else {
             "n, 1, -1"
         };
-        let input = if arity == 1 { "U" } else { "U, T" };
-        let arguments = if arity == 1 {
-            "accumulator"
-        } else {
-            "accumulator, a[i]"
+        let (input, arguments) = match arity {
+            2 => ("U, T", "accumulator, a[i]"),
+            3 => ("U, T, number", "accumulator, a[i], i - 1"),
+            _ => return Err(invalid()),
         };
-        return form(
+        return Ok(form(
             "<T, U>",
             &format!("a: {{T}}, f: ({input}) -> U, initial: U"),
             "U",
@@ -296,13 +340,16 @@ fn callback(method: &str, arity: usize) -> Helper {
     return accumulator
 "#
             ),
-        );
+        ));
     }
-    let input = if arity == 1 { "T" } else { "T, number" };
-    let arguments = if arity == 1 { "v" } else { "v, i - 1" };
+    let (input, arguments) = match arity {
+        1 => ("T", "v"),
+        2 => ("T, number", "v, i - 1"),
+        _ => return Err(invalid()),
+    };
     let (generic, callback_result, result, initial, step, finish) = match method {
-        "forEach" => ("<T, U...>", "U...", "()", "", "", ""),
-        "map" => (
+        M::ForEach => ("<T, U...>", "U...", "()", "", "", ""),
+        M::Map => (
             "<T, U>",
             "U",
             "{U}",
@@ -310,7 +357,7 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        out[i] = value\n",
             "    return out\n",
         ),
-        "flatMap" => (
+        M::FlatMap => (
             "<T, U>",
             "{U}",
             "{U}",
@@ -318,7 +365,7 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        for j = 1, #value do out[#out + 1] = value[j] end\n",
             "    return out\n",
         ),
-        "filter" => (
+        M::Filter => (
             "<T>",
             "boolean",
             "{T}",
@@ -326,7 +373,7 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        if value then out[#out + 1] = v end\n",
             "    return out\n",
         ),
-        "some" => (
+        M::Some => (
             "<T>",
             "boolean",
             "boolean",
@@ -334,7 +381,7 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        if value then return true end\n",
             "    return false\n",
         ),
-        "every" => (
+        M::Every => (
             "<T>",
             "boolean",
             "boolean",
@@ -342,7 +389,7 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        if not value then return false end\n",
             "    return true\n",
         ),
-        _ => (
+        M::FindIndex | M::FindLastIndex => (
             "<T>",
             "boolean",
             "number",
@@ -350,18 +397,36 @@ fn callback(method: &str, arity: usize) -> Helper {
             "        if value then return i - 1 end\n",
             "    return -1\n",
         ),
+        M::IndexOf
+        | M::LastIndexOf
+        | M::Includes
+        | M::Join
+        | M::Slice
+        | M::Concat
+        | M::Fill
+        | M::Reverse
+        | M::Splice
+        | M::Unshift
+        | M::CopyWithin
+        | M::At
+        | M::Pop
+        | M::Shift
+        | M::Clear
+        | M::Reduce
+        | M::ReduceRight
+        | M::Sort => return Err(invalid()),
     };
-    let range = if method == "findLastIndex" {
+    let range = if method == M::FindLastIndex {
         "n, 1, -1"
     } else {
         "1, n"
     };
-    let call = if method == "forEach" {
+    let call = if method == M::ForEach {
         format!("        f({arguments})\n")
     } else {
         format!("        local value = f({arguments})\n")
     };
-    form(
+    Ok(form(
         generic,
         &format!("a: {{T}}, f: ({input}) -> {callback_result}"),
         result,
@@ -373,7 +438,7 @@ fn callback(method: &str, arity: usize) -> Helper {
 {step}    end
 {finish}"#
         ),
-    )
+    ))
 }
 
 const SORT: &str = r#"    local n = #a

@@ -14,7 +14,7 @@ pub(super) struct Emission {
 }
 
 pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
-    let (method_prelude, method_locals) = methods::prelude(&module.methods);
+    let (method_prelude, method_locals) = methods::prelude(&module.methods)?;
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
     let mut groups = vec![0; size];

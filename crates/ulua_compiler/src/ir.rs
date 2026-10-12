@@ -1,4 +1,5 @@
 //! Checked P1 and P2.1 forms. Binding identities carry type, scope, and declaration order.
+pub(crate) use crate::methods::Method;
 pub(crate) use crate::types::{FunctionType, Type, Types};
 pub(crate) struct Binding {
     pub(crate) ty: Option<Type>,
@@ -9,7 +10,7 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
-    pub(crate) methods: std::collections::BTreeSet<(&'static str, usize)>,
+    pub(crate) methods: std::collections::BTreeSet<(Method, usize)>,
     pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,
     pub(crate) functions: Vec<Function>,
@@ -52,7 +53,7 @@ pub(crate) enum ExprKind {
     Index(Box<Expr>, Box<Expr>),
     Length(Box<Expr>),
     Push(Box<Expr>, Box<Expr>),
-    Method(&'static str, usize, Box<Expr>, Vec<Expr>),
+    Method(Method, usize, Box<Expr>, Vec<Expr>),
 }
 pub(crate) enum Statement {
     Located(u32, Box<Statement>),

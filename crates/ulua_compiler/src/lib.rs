@@ -7,6 +7,7 @@ mod checker;
 mod depth;
 mod emitter;
 mod ir;
+mod methods;
 #[cfg(test)]
 mod round6_tests;
 #[cfg(test)]

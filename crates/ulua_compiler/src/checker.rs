@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
-    methods: std::collections::BTreeSet<(&'static str, usize)>,
+    methods: std::collections::BTreeSet<(ir::Method, usize)>,
     pub(super) bindings: Vec<ir::Binding>,
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,

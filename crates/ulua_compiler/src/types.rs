@@ -12,6 +12,7 @@ impl Type {
     pub(crate) const String: Self = Self(2);
     pub(crate) const Void: Self = Self(3);
     pub(crate) const StringParts: Self = Self(4);
+    pub(crate) const Null: Self = Self(5);
 
     pub(crate) fn tag(&self) -> u32 {
         match *self {
@@ -39,7 +40,7 @@ mod tests {
                 outer
             );
         }
-        assert_eq!(types.nodes.len(), 7);
+        assert_eq!(types.nodes.len(), 8);
         assert_eq!(types.functions.len(), 2);
         assert_eq!(std::mem::size_of::<Type>(), std::mem::size_of::<usize>());
         let Node::Function(stored) = &types.nodes[outer.0] else {
@@ -75,6 +76,9 @@ enum Node {
     Primitive(&'static str),
     Function(Rc<FunctionType>),
     Array(Type),
+    // The surface rejects nullable types until the null slice opens.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Nullable(Type),
 }
 
 pub(crate) struct Types {
@@ -87,7 +91,7 @@ pub(crate) struct Types {
 impl Types {
     pub(crate) fn new() -> Self {
         Self {
-            nodes: ["number", "boolean", "string", "()", "{string}"]
+            nodes: ["number", "boolean", "string", "()", "{string}", "nil"]
                 .into_iter()
                 .map(Node::Primitive)
                 .collect(),
@@ -127,6 +131,21 @@ impl Types {
             Some(Node::Array(element)) => Some(*element),
             _ => None,
         }
+    }
+
+    pub(crate) fn contains_null(&self, ty: Type) -> bool {
+        match self.nodes.get(ty.0) {
+            Some(Node::Nullable(_)) => true,
+            Some(Node::Primitive(_)) => ty == Type::Null,
+            Some(Node::Array(_) | Node::Function(_)) | None => false,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn nullable(&mut self, inner: Type) -> Type {
+        let ty = Type(self.nodes.len());
+        self.nodes.push(Node::Nullable(inner));
+        ty
     }
 
     // The checker bounds the depth of every array chain.
@@ -176,6 +195,9 @@ impl Types {
                         pending.push(Part::Text("}"));
                         pending.push(Part::Ty(element));
                         pending.push(Part::Text("{"));
+                    } else if let Some(Node::Nullable(inner)) = self.nodes.get(ty.0) {
+                        pending.push(Part::Text("?"));
+                        pending.push(Part::Ty(*inner));
                     } else if let Some(f) = self.function(ty) {
                         pending.push(Part::Ty(f.result));
                         pending.push(Part::Text(") -> "));

@@ -116,7 +116,7 @@ impl Emitter<'_> {
                 for arg in arguments {
                     slots.push(self.expression(arg, depth)?);
                 }
-                let helper = methods::name(name, *arity);
+                let helper = methods::name(*name, *arity);
                 self.capture(&helper);
                 let call = format!(
                     "{helper}({})",

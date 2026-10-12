@@ -9,6 +9,12 @@ fn methods_keep_exact_argument_and_callback_types() {
     for body in [
         "const xs=[1];xs.sort();",
         "const xs=[1];xs.reduce((a:number,v:number):number=>a+v);",
+        "const xs=[1];xs.reduce((a:number):number=>a+1,0);",
+        "const xs=[1];xs.reduceRight((a:number):number=>a+1,0);",
+        "const xs=[1];xs.reduce((a:number,v:number,i:number,xs:number[]):number=>a+v,0);",
+        "const xs=[1];xs.reduceRight((a:number,v:number,i:number,xs:number[]):number=>a+v,0);",
+        "const xs=[1];xs.sort((a:number):number=>a);",
+        "const xs=[1];xs.sort((a:number,b:number,i:number):number=>a-b);",
         "const xs=[1];xs.map((v:number,i:number,a:number[]):number=>v);",
         "const xs=[1];xs.map(():number=>1);",
         "const xs=[1];xs.flat();",
@@ -84,6 +90,8 @@ fn methods_keep_exact_argument_and_callback_types() {
         "const xs=[1];xs.sort((a:number,b:string):number=>a);",
         "const xs=[1];xs.reduce((a:string,v:number):string=>a,0);",
         "const xs=[1];xs.reduce((a:string,v:number):number=>v,'');",
+        "const xs=[1];xs.reduce((a:number,v:string,i:number):number=>a,0);",
+        "const xs=[1];xs.reduceRight((a:number,v:number,i:string):number=>a+v,0);",
     ] {
         assert_eq!(
             compile(module(body).as_bytes(), Limits::default())
@@ -106,7 +114,7 @@ fn helpers_appear_once_only_when_used_and_the_output_budget_includes_them() {
     let parsed = oxc_parser::Parser::new(&allocator, &source, oxc_span::SourceType::ts()).parse();
     let checked =
         crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING).unwrap();
-    let (prelude, _) = crate::emitter::methods::prelude(&checked.methods);
+    let (prelude, _) = crate::emitter::methods::prelude(&checked.methods).unwrap();
     let output = crate::emitter::emit(&checked, crate::OUTPUT_FACTOR).unwrap();
     for helper in ["slice_0<T>", "map_1<T, U>", "filter_1<T>"] {
         assert_eq!(
@@ -138,6 +146,26 @@ fn helpers_appear_once_only_when_used_and_the_output_budget_includes_them() {
         .luau;
         assert!(output.contains("local function __ulua_integer"));
         assert!(!output.contains("local function __ulua_position"));
+    }
+}
+
+#[test]
+fn helpers_reject_constructed_invalid_arities() {
+    use crate::ir::Method;
+    for (method, arity) in [
+        (Method::Reduce, 1),
+        (Method::Reduce, 4),
+        (Method::ReduceRight, 1),
+        (Method::ReduceRight, 4),
+        (Method::Sort, 1),
+        (Method::Sort, 3),
+        (Method::Map, 0),
+        (Method::Map, 3),
+        (Method::Slice, 1),
+    ] {
+        let methods = [(method, arity)].into_iter().collect();
+        let error = crate::emitter::methods::prelude(&methods).unwrap_err();
+        assert_eq!(error.code, "internal", "{method:?}: {arity}");
     }
 }
 
