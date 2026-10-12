@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 29, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 30, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -14,7 +14,7 @@ C6.3 divergence text, C7 array literal operands and `for…of` bindings,
 P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4; Rev 27: C1.5 structural object
 types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
 function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
-P2.5 review).
+P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -470,7 +470,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order
@@ -617,9 +617,13 @@ says `T`. The checker narrows only where nothing else can run a write:
 6. A point that two or more edges reach has the narrowings that every
    edge carries. The update of a `for` is such a point: its edges are
    the end of the body and each `continue` of the loop.
-7. A null test that is the test of a `?:`, `&&`, or `||` operand, at
-   any depth, costs O(1) per syntax node: the compiler computes the
-   narrowings of each node once (`pipeline.md` §3.10).
+7. The narrowing costs O(1) amortized per syntax node and per edge
+   (`pipeline.md` §3.10). The compiler computes the narrowings of each
+   condition node once, at any depth of `?:`, `&&`, and `||`. An edge
+   into a join (a `break`, a `continue`, the end of a branch or a body)
+   costs O(1) amortized per narrowing change since the previous edge
+   into that join. It does not walk the path from the loop entry or
+   the branch start again.
 
 Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`.
 

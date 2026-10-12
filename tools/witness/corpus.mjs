@@ -111,7 +111,7 @@ function tscCodes(files) {
 // `never`, the narrowing that a contradictory accepted equality or an
 // assignment of `null` leaves.
 function isAcceptedEquality(d, checker) {
-  if (d.code === 2322 || d.code === 2345 || d.code === 2339) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+  if (d.code === 2322 || d.code === 2345 || d.code === 2339) return /\b[Tt]ype 'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
   const kinds = new Set([
     ts.SyntaxKind.EqualsEqualsEqualsToken,

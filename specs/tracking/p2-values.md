@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r105`, `a42`, `a43`; retired `r05` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r107`, `a42`, `a43`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -228,6 +228,16 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.5 Phase Review round 2
+
+Reviewer: fresh agent, diff `917e951..b8cbf72`. 0 CRITICAL, 2 MAJOR, 1 MINOR. Each round 1 resolution holds.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A loop `break` or `continue` edge walks the path from the loop entry when a write precedes it: unit `if(y==null)break;y=g();` repeated, 16 KB to 64 KB, ratio 16.0 Debug and 14.8 Release (949 ms); the growth shapes put every fact before identical edges | MAJOR | C16.7 covers join edges; growth shape with a write between edges |
+| D18 misses `o?.s ?? null` and `(o).s`, `(bs[0]).flag`: accepted, `tsc` gives TS2322 or TS2345 | MAJOR | surface.md Rev 18 reference definition, `r106`, `r107` |
+| The witness `never` test matches a property named `never` | MINOR | the test matches `type 'never'` |
 
 ### P2.5 Phase Review round 1
 

@@ -71,7 +71,7 @@ Each entry starts with `//` header lines, in this order:
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
   `number`, `string`, or `boolean` type (literal types widened; an
   operand narrowed to `never` counts as either) for TS2367 and TS2845;
-  each TS2322, TS2345, or TS2339 names the type `never` in its message; and the codes equal the codes of the header. One
+  each TS2322, TS2345, or TS2339 names the type `never` in its message (`type 'never'`); and the codes equal the codes of the header. One
   program over the prelude and every reject entry reports, per file,
   the codes that its header states.
 - `node`: the gate runs each entry with `js-comparable: yes`. Each such
