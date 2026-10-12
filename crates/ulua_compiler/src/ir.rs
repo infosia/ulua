@@ -1,65 +1,5 @@
 //! Checked P1 and P2.1 forms. Binding identities carry type, scope, and declaration order.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum Type {
-    Number,
-    Boolean,
-    String,
-    Void,
-    StringParts,
-    Function(Vec<Type>, Box<Type>, usize),
-}
-impl Type {
-    pub(crate) fn luau(&self) -> String {
-        enum Part<'a> {
-            Ty(&'a Type),
-            Text(String),
-        }
-        let mut pending = vec![Part::Ty(self)];
-        let mut out = String::new();
-        while let Some(part) = pending.pop() {
-            match part {
-                Part::Text(text) => out.push_str(&text),
-                Part::Ty(ty) => match ty {
-                    Self::Number => out.push_str("number"),
-                    Self::Boolean => out.push_str("boolean"),
-                    Self::String => out.push_str("string"),
-                    Self::Void => out.push_str("()"),
-                    Self::StringParts => out.push_str("{string}"),
-                    Self::Function(params, result, required) => {
-                        pending.push(Part::Ty(result));
-                        pending.push(Part::Text(") -> ".into()));
-                        for (i, t) in params.iter().enumerate().rev() {
-                            if i >= *required {
-                                pending.push(Part::Text("?".into()));
-                            }
-                            let grouped = i >= *required && matches!(t, Self::Function(..));
-                            if grouped {
-                                pending.push(Part::Text(")".into()));
-                            }
-                            pending.push(Part::Ty(t));
-                            if grouped {
-                                pending.push(Part::Text("(".into()));
-                            }
-                            if i > 0 {
-                                pending.push(Part::Text(", ".into()));
-                            }
-                        }
-                        pending.push(Part::Text("(".into()));
-                    }
-                },
-            }
-        }
-        out
-    }
-    pub(crate) fn tag(&self) -> u32 {
-        match self {
-            Self::Number => 1,
-            Self::Boolean => 2,
-            Self::String => 3,
-            _ => 0,
-        }
-    }
-}
+pub(crate) use crate::types::{FunctionType, Type, Types};
 pub(crate) struct Binding {
     pub(crate) ty: Option<Type>,
     pub(crate) owner: usize,
@@ -69,6 +9,7 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
+    pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,
     pub(crate) functions: Vec<Function>,
     pub(crate) body: Vec<Statement>,

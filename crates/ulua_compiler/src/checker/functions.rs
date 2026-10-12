@@ -4,7 +4,7 @@ use crate::ir::{Expr, ExprKind, Statement as S};
 
 impl Checker<'_> {
     pub(super) fn signature(
-        &self,
+        &mut self,
         params: &FormalParameters<'_>,
         defaults: bool,
         depth: u32,
@@ -76,10 +76,11 @@ impl Checker<'_> {
             true,
             depth,
         )?;
+        let ty = self.types.intern(params, result, required);
         self.bind(
             name.name.as_str(),
             ir::Binding {
-                ty: Some(Type::Function(params, Box::new(result), required)),
+                ty: Some(ty),
                 owner: self.owner,
                 start: f.span.start,
                 end: 0,
@@ -157,21 +158,19 @@ impl Checker<'_> {
         exported: bool,
         depth: u32,
     ) -> Result<(), Diagnostic> {
-        let Type::Function(_, result, _) = self.bindings[id]
+        let result = self.bindings[id]
             .ty
-            .clone()
-            .ok_or_else(|| self.unsupported(f.span))?
-        else {
-            return Err(self.unsupported(f.span));
-        };
-        let state = self.enter_function(id, *result.clone());
+            .and_then(|ty| self.types.function(ty))
+            .map(|f| f.result)
+            .ok_or_else(|| self.unsupported(f.span))?;
+        let state = self.enter_function(id, result);
         let b = f.body.as_ref().ok_or_else(|| self.unsupported(f.span))?;
         let parameters = self.parameters(&f.params, &b.statements, depth)?;
         if !b.directives.is_empty() {
             return Err(self.error(b.span, "C11", "Function directives are rejected"));
         }
         let body = self.block_contents(&b.statements, self.descend(depth, b.span)?)?;
-        if *result != Type::Void && !statements::returns(&body) {
+        if result != Type::Void && !statements::returns(&body) {
             return Err(self.error(f.span, "C11", "Function can finish without its result"));
         }
         self.leave_function(state);
@@ -180,7 +179,7 @@ impl Checker<'_> {
             name: f.id.as_ref().map_or(String::new(), |n| n.name.to_string()),
             exported,
             parameters,
-            result: *result,
+            result,
             body,
         });
         Ok(())
@@ -218,7 +217,7 @@ impl Checker<'_> {
             a.span,
         )?;
         self.scopes.pop();
-        let state = self.enter_function(id, result.clone().unwrap_or(Type::Void));
+        let state = self.enter_function(id, result.unwrap_or(Type::Void));
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
@@ -229,10 +228,10 @@ impl Checker<'_> {
             if let Some(result) = &result {
                 self.flow(&value.ty, Some(result), a.span)?;
             }
-            if result.is_none() && matches!(value.ty, Type::Function(..)) {
+            if result.is_none() && self.types.function(value.ty).is_some() {
                 return Err(self.error(a.span, "C11", "Function result needs an annotation"));
             }
-            let result = result.unwrap_or_else(|| value.ty.clone());
+            let result = result.unwrap_or(value.ty);
             let body = if result == Type::Void {
                 vec![S::Eval(value)]
             } else {
@@ -254,8 +253,8 @@ impl Checker<'_> {
             (body, result)
         };
         self.leave_function(state);
-        let ty = Type::Function(params, Box::new(result.clone()), required);
-        self.bindings[id].ty = Some(ty.clone());
+        let ty = self.types.intern(params, result, required);
+        self.bindings[id].ty = Some(ty);
         self.functions.push(ir::Function {
             binding: id,
             name: String::new(),

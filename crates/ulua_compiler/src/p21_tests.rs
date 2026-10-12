@@ -141,31 +141,31 @@ fn function_type_equality_is_recursive_at_each_value_flow() {
 
 #[test]
 fn luau_function_types_keep_composite_boundaries() {
-    use crate::ir::Type::{Boolean, Function, Number};
-    let callback = Function(vec![Number], Box::new(Boolean), 1);
+    use crate::ir::{Type, Types};
+    let mut types = Types::new();
+    let number = Type::Number;
+    let boolean = Type::Boolean;
+    let callback = types.intern(vec![number], boolean, 1);
+    let nested = types.intern(vec![callback], number, 0);
     for (ty, expected) in [
         (
-            Function(vec![callback.clone(), Number], Box::new(Boolean), 2),
+            types.intern(vec![callback, number], boolean, 2),
             "((number) -> boolean, number) -> boolean",
         ),
         (
-            Function(vec![], Box::new(callback.clone()), 0),
+            types.intern(vec![], callback, 0),
             "() -> (number) -> boolean",
         ),
         (
-            Function(vec![Number, callback.clone()], Box::new(Boolean), 1),
+            types.intern(vec![number, callback], boolean, 1),
             "(number, ((number) -> boolean)?) -> boolean",
         ),
         (
-            Function(
-                vec![Function(vec![callback], Box::new(Number), 0)],
-                Box::new(Boolean),
-                0,
-            ),
+            types.intern(vec![nested], boolean, 0),
             "(((((number) -> boolean)?) -> number)?) -> boolean",
         ),
     ] {
-        assert_eq!(ty.luau(), expected);
+        assert_eq!(types.luau(ty), expected);
     }
 }
 

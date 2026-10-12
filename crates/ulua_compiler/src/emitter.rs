@@ -28,7 +28,7 @@ pub(crate) fn quote(value: &str) -> String {
     out
 }
 fn initial(ty: &Type) -> &'static str {
-    match ty {
+    match *ty {
         Type::Number => "0",
         Type::Boolean => "false",
         Type::String => "\"\"",
@@ -182,7 +182,7 @@ impl<'a> Emitter<'a> {
             self.reserve_temporary()?;
             let i = self.slots.len();
             self.slots.push(Slot {
-                ty: ty.clone(),
+                ty: *ty,
                 busy: true,
             });
             Ok(i)

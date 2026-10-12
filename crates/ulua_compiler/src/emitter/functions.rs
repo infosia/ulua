@@ -60,7 +60,7 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
             _ => {}
         }
     }
-    let types = types::FunctionTypes::new(module);
+    let types = types::FunctionTypes::new(module)?;
     let mut locations = HashMap::new();
     let empty = HashMap::new();
     for owner in std::iter::once(0).chain(module.functions.iter().map(|f| f.binding + 1)) {

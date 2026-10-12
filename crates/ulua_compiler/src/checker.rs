@@ -20,6 +20,7 @@ pub(crate) struct Checker<'s> {
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,
     result: Type,
+    types: ir::Types,
     loops: Vec<equality::LoopFlow>,
     reachable: bool,
     limit: u32,
@@ -46,7 +47,7 @@ impl Checker<'_> {
         }
         Ok(next)
     }
-    fn ty(&self, t: &TSType<'_>, result: bool, depth: u32) -> Result<Type, Diagnostic> {
+    fn ty(&mut self, t: &TSType<'_>, result: bool, depth: u32) -> Result<Type, Diagnostic> {
         let depth = self.descend(depth, t.span())?;
         Ok(match t {
             TSType::TSNumberKeyword(_) => Type::Number,
@@ -80,11 +81,8 @@ impl Checker<'_> {
                     return Err(self.error(f.span, "C11", "Invalid function type"));
                 }
                 let (params, required) = self.signature(&f.params, false, depth)?;
-                Type::Function(
-                    params,
-                    Box::new(self.ty(&f.return_type.type_annotation, true, depth)?),
-                    required,
-                )
+                let result = self.ty(&f.return_type.type_annotation, true, depth)?;
+                self.types.intern(params, result, required)
             }
             TSType::TSParenthesizedType(p) => return self.ty(&p.type_annotation, result, depth),
             TSType::TSNullKeyword(_)
@@ -210,6 +208,7 @@ pub(crate) fn check(
         scopes: vec![HashMap::new()],
         owner: 0,
         result: Type::Void,
+        types: ir::Types::new(),
         loops: vec![],
         reachable: true,
         limit,
@@ -247,8 +246,12 @@ pub(crate) fn check(
         }
     }
     if !declarations.iter().any(|(id, f, exported)| {
-        *exported && f.id.as_ref().is_some_and(|n| n.name == "main")
-            && matches!(&c.bindings[*id].ty, Some(Type::Function(p, r, _)) if p.is_empty() && **r == Type::Void)
+        *exported
+            && f.id.as_ref().is_some_and(|n| n.name == "main")
+            && c.bindings[*id]
+                .ty
+                .and_then(|ty| c.types.function(ty))
+                .is_some_and(|f| f.params.is_empty() && f.result == Type::Void)
     }) {
         return Err(c.unsupported(program.span));
     }
@@ -278,6 +281,7 @@ pub(crate) fn check(
         captured[id] |= owner != c.bindings[id].owner;
     }
     Ok(ir::Module {
+        types: c.types,
         captured,
         bindings: c.bindings,
         functions: c.functions,

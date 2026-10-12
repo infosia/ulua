@@ -1,8 +1,9 @@
 //! Growth gate: source ceiling shapes, 8 KiB and 32 KiB, through the full ABI.
 //! Ratios above 6.5 use the minimum of two runs per size. Lower ratios retain ample margin.
-//! Measured Debug cost: 8.20 seconds. Largest time ratio: 6.494 (spilled-mod-37).
-//! Alias-chain ratios: Debug 3.913 / 3.898; Release 3.777 / 3.785 (one / eight references).
-//! Measured Release cost: 2.32 seconds. Largest time ratio: 6.433 (spilled-mod-37).
+//! Measured Debug cost: 8.18 seconds with all four type products (16/64 KiB, widths 15/31).
+//! Product time ratios: 3.882 / 3.768 / 3.857 / 3.768 (assign / declare / call / self).
+//! Measured Release cost: 2.41 seconds. Product time ratios: 3.702 / 3.672 / 3.656 / 3.734.
+//! Product output ratios: 10.141 / 10.381 / 11.935 / 10.141 at 65,536 bytes.
 //! The largest output ratio is 62.671; 1.25 times this ratio stays below 80.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
@@ -47,6 +48,12 @@ fn full_pipeline_growth_stays_below_eight() {
             } else {
                 inputs::source_ceiling(shape, bytes)
             }
+        };
+        // The review type occupies about 12.7 KiB. Product shapes use 16/64 KiB.
+        let n = if shape.starts_with("type-product-") {
+            16 * 1024
+        } else {
+            n
         };
         let small = make(n);
         let large = make(4 * n);

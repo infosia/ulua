@@ -123,6 +123,21 @@ programs: 990 accepted, each passes `tsc`, `node`, `luau-analyze`; no
 | `FunctionTypes::add` recurses without a depth counter (§3.4); the parser bounds type nesting today | MINOR | Fix with the interned types |
 | The function-result annotation rule tests a bare function type only; a later slice that adds arrays, nullable values, or records reopens the size class (`() => [() => 1]`) | MINOR | Gap below |
 
+Fix record (round 3): a type table stores each type once; the IR
+carries ids; `FunctionTypes::add` takes the depth counter. Product
+shapes, 16 / 64 KiB, Debug / Release time ratio, output ratio, heap at
+65,536 B: `k = g;` 3.88 / 3.70, 10.1, 9.8 MB; `const xi = g;` 3.77 /
+3.67, 10.4, 12.0 MB; `q(g);` 3.86 / 3.66, 11.9, 11.8 MB; `k = k;` 3.77 /
+3.73, 10.1, 9.6 MB (before: 343 to 426 MB). Worst heap: 180 bindings
+and a 41-link `%` chain, 61.6 MB; `spilled-mod-39` 61.4 MB. Growth gate:
+42 shapes, largest time ratio 6.36 Debug / 6.54 Release, output 62.7,
+cost 8.18 s Debug. Random: 640 programs, 425 accepted, each passes
+`tsc`, `node`, `luau-analyze`; no `internal`.
+Codex reported that `luau-analyze` failed in its own shell with the
+default stack and passed with `ulimit -s 65520`. The primary gate run
+with `ulimit -s` 8,176 KB passes. Gap: the stack need of `luau-analyze`
+on the stress set is not measured.
+
 ## Failures before the fix
 
 ## Gaps

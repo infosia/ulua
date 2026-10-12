@@ -38,7 +38,7 @@ impl Checker<'_> {
             if self.bindings[id].ty.is_some() {
                 self.flow(&value.ty, self.bindings[id].ty.as_ref(), v.span)?;
             } else {
-                self.bindings[id].ty = Some(value.ty.clone());
+                self.bindings[id].ty = Some(value.ty);
             }
             if value.ty == Type::Boolean {
                 let facts = self.equality.condition_facts(&value);

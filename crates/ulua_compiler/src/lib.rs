@@ -11,6 +11,7 @@ mod ir;
 mod round6_tests;
 #[cfg(test)]
 mod round7_tests;
+mod types;
 
 use oxc_allocator::Allocator;
 use oxc_parser::{ParseOptions, Parser};
@@ -180,11 +181,14 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         }
     }
     source.push_str("`;}");
+    let mut types = ir::Types::new();
+    let main_type = types.intern(vec![], Type::Void, 0);
     emitter::emit(&Module {
+        types,
         captured: vec![true, false],
         bindings: vec![
             Binding {
-                ty: Some(Type::Function(vec![], Box::new(Type::Void), 0)),
+                ty: Some(main_type),
                 owner: 0,
                 start: 0,
                 end: 0,

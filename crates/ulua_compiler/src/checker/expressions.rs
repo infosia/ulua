@@ -54,7 +54,6 @@ impl Checker<'_> {
                     let id = self.lookup(n.name.as_str(), n.span)?;
                     let ty = self.bindings[id]
                         .ty
-                        .clone()
                         .ok_or_else(|| self.error(n.span, "C10", "Binding is not initialized"))?;
                     (ty, ExprKind::Read(id))
                 } else {
@@ -185,7 +184,7 @@ impl Checker<'_> {
                 self.reachable = self.equality.finish(join);
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
-                    a.ty.clone(),
+                    a.ty,
                     ExprKind::Conditional(Box::new(test), Box::new(a), Box::new(b)),
                 )
             }
@@ -214,7 +213,7 @@ impl Checker<'_> {
                             wide: false,
                             bare_true: false,
                             start: call.callee.span().start,
-                            ty: Type::Function(vec![p], Box::new(r), 1),
+                            ty: self.types.intern(vec![p], r, 1),
                             kind: ExprKind::Builtin(name),
                         }
                     } else {
@@ -253,13 +252,18 @@ impl Checker<'_> {
                         }
                     }
                 };
-                let Type::Function(params, result, required) = &callee.ty else {
+                let Some(signature) = self.types.signature(callee.ty) else {
                     return Err(self.error(
                         call.span,
                         "C11",
                         "Callee must be a function declaration",
                     ));
                 };
+                let ir::FunctionType {
+                    params,
+                    result,
+                    required,
+                } = signature.as_ref();
                 if call.arguments.len() < *required || call.arguments.len() > params.len() {
                     return Err(self.error(call.span, "C1", "Argument count does not agree"));
                 }
@@ -272,7 +276,7 @@ impl Checker<'_> {
                     self.flow(&value.ty, Some(ty), arg.span())?;
                     args.push(value);
                 }
-                (*result.clone(), ExprKind::Call(Box::new(callee), args))
+                (*result, ExprKind::Call(Box::new(callee), args))
             }
             Expression::TemplateLiteral(t) => {
                 if t.quasis.len() + t.expressions.len() > crate::TEMPLATE_PART_BOUND {

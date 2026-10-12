@@ -1,11 +1,14 @@
 //! Reproduce S3 measurements with the pinned native compiler. This is not a gate.
 //! Set LUAU_SOURCE_DIR and CARGO_NET_OFFLINE before each command.
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
-//! MODE is stack, heap, native, run, or emit (with an output directory). Add --release before -p for Release.
+//! MODE is stack, heap, heap-products, native, run, or emit (with an output directory). Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
 //! Native template emission is incremental: its probe reports a lower bound,
 //! not an absolute maximum, when the next input still compiles.
 // Each mode uses a subset of the shared generators.
+#[allow(dead_code)]
+#[path = "../src/p21_inputs.rs"]
+mod functions;
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
@@ -272,6 +275,33 @@ fn main() {
                     for count in [8, 16, n, n + 1] {
                         stages(form, count);
                     }
+                }
+            }
+            "heap-products" => {
+                for shape in functions::SHAPES
+                    .iter()
+                    .filter(|s| s.starts_with("type-product-"))
+                {
+                    heap(functions::source(shape, SOURCE_CEILING as usize), shape);
+                }
+                heap(
+                    review::source("spilled-mod-39", SOURCE_CEILING as usize),
+                    "spilled-mod-39",
+                );
+                for links in [40, 41] {
+                    let mut source = "export function main():void{".to_owned();
+                    for i in 0..180 {
+                        source.push_str(&format!("let v{i}=0;"));
+                    }
+                    source.push_str("let y=1;");
+                    let unit = format!("y={};", vec!["y"; links + 1].join("%"));
+                    // The review source ends near 65,518 bytes. Spaces fill the source ceiling.
+                    while source.len() + unit.len() < 65_518 {
+                        source.push_str(&unit);
+                    }
+                    source.push('}');
+                    source.push_str(&" ".repeat(SOURCE_CEILING as usize - source.len()));
+                    heap(source, &format!("spilled-mod-180-{links}-links"));
                 }
             }
             "heap" => {

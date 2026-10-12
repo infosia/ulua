@@ -7,6 +7,10 @@ pub const SHAPES: &[&str] = &[
     "inferred-type-chain",
     "deep-result-types",
     "deep-parameter-types",
+    "type-product-assign",
+    "type-product-declare",
+    "type-product-call",
+    "type-product-self",
 ];
 
 /// The inferred function result violates the arrow annotation rule.
@@ -16,6 +20,9 @@ pub fn diagnostic(shape: &str) -> Option<&'static str> {
 
 /// Fill a source size with declarations, arrows, or nested function annotations.
 pub fn source(shape: &str, bytes: usize) -> String {
+    if shape.starts_with("type-product-") {
+        return type_product(shape, bytes);
+    }
     let mut out = String::from("export function main():void{");
     match shape {
         "arrows" => out.push_str("let f=()=>0;"),
@@ -42,6 +49,53 @@ pub fn source(shape: &str, bytes: usize) -> String {
                 format!("function f{count}(g:{ty}):{ty}{{return g;}}")
             }
             _ => return String::new(),
+        };
+        if out.len() + unit.len() + 1 > bytes {
+            break;
+        }
+        out.push_str(&unit);
+        count += 1;
+    }
+    out.push('}');
+    out.push_str(&" ".repeat(bytes - out.len()));
+    out
+}
+
+// Both sizes grow: width 15 at 16 KiB and width 31 at 64 KiB.
+// The type occupies about one fifth of each source. The remainder holds repeated references.
+fn type_product(shape: &str, bytes: usize) -> String {
+    let width = ((bytes as f64 / 65536.0).sqrt() * 31.0) as usize;
+    let width = width.clamp(1, 31);
+    let inner = format!(
+        "({}) => number",
+        (0..width)
+            .map(|i| format!("a{i}: number"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let ty = format!(
+        "({}) => number",
+        (0..width)
+            .map(|i| format!("a{i}: {inner}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let mut out = String::from("export function main():void{}");
+    if shape == "type-product-call" {
+        out.push_str(&format!("function q(x:{ty}):void{{}}"));
+    }
+    out.push_str(&format!("function f(g:{ty}):void{{"));
+    if matches!(shape, "type-product-assign" | "type-product-self") {
+        out.push_str("let k=g;");
+    }
+    let mut count = 0;
+    loop {
+        let unit = match shape {
+            "type-product-assign" => "k = g;\n".to_owned(),
+            "type-product-declare" => format!("const x{count} = g;\n"),
+            "type-product-call" => "q(g);\n".to_owned(),
+            "type-product-self" => "k = k;\n".to_owned(),
+            _ => unreachable!("known product shape"),
         };
         if out.len() + unit.len() + 1 > bytes {
             break;

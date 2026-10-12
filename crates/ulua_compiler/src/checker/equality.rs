@@ -233,7 +233,7 @@ impl Checker<'_> {
         a: &Expr,
         b: &Expr,
     ) -> Result<(), Diagnostic> {
-        if a.ty != b.ty || matches!(a.ty, Type::Function(..)) {
+        if a.ty != b.ty || self.types.function(a.ty).is_some() {
             return Err(self.error(span, "C7", "Equality requires identical value types"));
         }
         if a.ty == Type::Boolean {
