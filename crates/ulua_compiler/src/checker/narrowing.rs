@@ -1,135 +1,220 @@
-//! C16 edge facts use one undo log. Joins inspect only changed bindings.
+//! C16 joins cached condition edges and loop exits through persistent path heads.
+pub(super) use super::paths::Facts;
 use super::*;
-use crate::ir::{Expr, ExprKind as E, Statement as S};
-type Fact = (bool, u64);
-type Undo = (usize, Option<Fact>, u64);
-#[derive(Default)]
-pub(super) struct Facts {
-    values: HashMap<usize, Fact>,
-    log: Vec<Undo>,
-    pub(super) floor: u64,
-    pub(super) serial: u64,
-}
-impl Facts {
-    pub(super) fn mark(&self) -> usize {
-        self.log.len()
-    }
-    pub(super) fn get(&self, id: usize) -> Option<bool> {
-        self.values
-            .get(&id)
-            .filter(|value| value.1 >= self.floor)
-            .map(|value| value.0)
-    }
-    pub(super) fn set(&mut self, id: usize, value: Option<bool>) {
-        let old = self.get(id);
-        if old == value {
-            return;
-        }
-        self.serial += 1;
-        self.log
-            .push((id, self.values.get(&id).copied(), self.serial));
-        if let Some(value) = value {
-            self.values.insert(id, (value, self.serial));
-        } else {
-            self.values.remove(&id);
-        }
-    }
-    pub(super) fn changes(&self, mark: usize) -> HashMap<usize, Option<bool>> {
-        self.log[mark..]
-            .iter()
-            .map(|(id, _, _)| (*id, self.get(*id)))
-            .collect()
-    }
-    pub(super) fn restore(&mut self, mark: usize) {
-        while self.log.len() > mark {
-            if let Some((id, old, _)) = self.log.pop() {
-                if let Some(old) = old {
-                    self.values.insert(id, old);
-                } else {
-                    self.values.remove(&id);
-                }
-            }
-        }
-    }
-    pub(super) fn merge(
-        &mut self,
-        a: HashMap<usize, Option<bool>>,
-        b: HashMap<usize, Option<bool>>,
-    ) {
-        let mut keys: std::collections::HashSet<_> = a.keys().copied().collect();
-        keys.extend(b.keys().copied());
-        for id in keys {
-            let old = self.get(id);
-            let a = a.get(&id).copied().unwrap_or(old);
-            let b = b.get(&id).copied().unwrap_or(old);
-            self.set(id, if a == b { a } else { None });
-        }
-    }
-    pub(super) fn apply(&mut self, changes: HashMap<usize, Option<bool>>) {
-        for (id, value) in changes {
-            self.set(id, value);
-        }
-    }
-}
+use crate::ir::{Edge, Expr, ExprKind as E, Flow, Statement as S};
 pub(super) struct LoopFacts {
     mark: usize,
-    exit: Option<HashMap<usize, Option<bool>>>,
-    saved: Vec<Undo>,
-    baseline: HashMap<usize, Option<bool>>,
+    exit: Option<Edge>,
+    next: Option<Edge>,
     reachable: bool,
 }
 impl Checker<'_> {
+    fn current_edge(&self, reachable: bool) -> Edge {
+        Edge {
+            head: self.facts.head(),
+            reachable,
+        }
+    }
+    // A meet preserves the caller's path and visits only divergent fact tails.
+    fn meet(&mut self, a: Edge, b: Edge) -> Edge {
+        if !a.reachable {
+            return b;
+        }
+        if !b.reachable || a.head == b.head {
+            return a;
+        }
+        let common = self.facts.common(a.head, b.head);
+        if (common == a.head && self.facts.extends(common, b.head))
+            || (common == b.head && self.facts.extends(common, a.head))
+        {
+            return Edge {
+                head: common,
+                reachable: true,
+            };
+        }
+        let saved = self.facts.head();
+        self.facts.travel(common);
+        let mark = self.facts.mark();
+        self.facts.travel(a.head);
+        let first = self.facts.changes(mark);
+        self.facts.travel(b.head);
+        let second = self.facts.changes(mark);
+        self.facts.travel(common);
+        self.facts.merge(first, second);
+        let result = self.current_edge(true);
+        self.facts.travel(saved);
+        result
+    }
+    pub(super) fn condition(&mut self, kind: &E) -> Flow {
+        let base = self.current_edge(true);
+        let unknown = Flow {
+            yes: base,
+            no: base,
+        };
+        match kind {
+            E::Boolean(value) => Flow {
+                yes: Edge {
+                    reachable: *value,
+                    ..base
+                },
+                no: Edge {
+                    reachable: !*value,
+                    ..base
+                },
+            },
+            E::Unary("not", a) => {
+                let a = a.flow.unwrap_or(unknown);
+                Flow {
+                    yes: a.no,
+                    no: a.yes,
+                }
+            }
+            E::Binary(op, a, b) if matches!(*op, "==" | "~=") => {
+                let reference = if matches!(b.kind, E::Null) {
+                    a
+                } else if matches!(a.kind, E::Null) {
+                    b
+                } else {
+                    return unknown;
+                };
+                if let E::Read(id) = reference.kind {
+                    let binding = &self.bindings[id];
+                    if !binding.mutable
+                        || (binding.owner != 0
+                            && binding.owner == self.owner
+                            && !self.captured_writes.contains(&binding.start))
+                    {
+                        let old = self.facts.get(id);
+                        let mark = self.facts.mark();
+                        let yes_value = *op == "~=";
+                        self.facts.set(id, Some(yes_value));
+                        let yes = self.current_edge(old.is_none_or(|v| v == yes_value));
+                        self.facts.restore(mark);
+                        self.facts.set(id, Some(!yes_value));
+                        let no = self.current_edge(old.is_none_or(|v| v != yes_value));
+                        self.facts.restore(mark);
+                        return Flow { yes, no };
+                    }
+                }
+                unknown
+            }
+            E::Logical(and, a, b) => {
+                let a = a.flow.unwrap_or(unknown);
+                let b = b.flow.unwrap_or(unknown);
+                if *and {
+                    Flow {
+                        yes: Edge {
+                            reachable: a.yes.reachable && b.yes.reachable,
+                            ..b.yes
+                        },
+                        no: self.meet(
+                            a.no,
+                            Edge {
+                                reachable: a.yes.reachable && b.no.reachable,
+                                ..b.no
+                            },
+                        ),
+                    }
+                } else {
+                    Flow {
+                        yes: self.meet(
+                            a.yes,
+                            Edge {
+                                reachable: a.no.reachable && b.yes.reachable,
+                                ..b.yes
+                            },
+                        ),
+                        no: Edge {
+                            reachable: a.no.reachable && b.no.reachable,
+                            ..b.no
+                        },
+                    }
+                }
+            }
+            E::Conditional(t, a, b) => {
+                let t = t.flow.unwrap_or(unknown);
+                let a = a.flow.unwrap_or(unknown);
+                let b = b.flow.unwrap_or(unknown);
+                Flow {
+                    yes: self.meet(
+                        Edge {
+                            reachable: t.yes.reachable && a.yes.reachable,
+                            ..a.yes
+                        },
+                        Edge {
+                            reachable: t.no.reachable && b.yes.reachable,
+                            ..b.yes
+                        },
+                    ),
+                    no: self.meet(
+                        Edge {
+                            reachable: t.yes.reachable && a.no.reachable,
+                            ..a.no
+                        },
+                        Edge {
+                            reachable: t.no.reachable && b.no.reachable,
+                            ..b.no
+                        },
+                    ),
+                }
+            }
+            _ => unknown,
+        }
+    }
+    pub(super) fn edge(&mut self, e: &Expr, truth: bool) -> bool {
+        if let Some(flow) = e.flow {
+            let path = if truth { flow.yes } else { flow.no };
+            self.facts.travel(path.head);
+            path.reachable
+        } else {
+            !matches!(e.kind,E::Boolean(value) if value!=truth)
+        }
+    }
     pub(super) fn enter_loop(&mut self) {
         self.loop_facts.push(LoopFacts {
             mark: self.facts.mark(),
             exit: None,
-            saved: vec![],
-            baseline: HashMap::new(),
+            next: None,
             reachable: self.reachable,
         });
     }
-    pub(super) fn break_edge(&mut self) {
+    fn loop_edge(&mut self, continuing: bool) {
         if !self.reachable {
             return;
         }
-        let Some(context) = self.loop_facts.last_mut() else {
+        let Some(context) = self.loop_facts.last() else {
             return;
         };
-        let path = &self.facts.log[context.mark..];
-        // Active log prefixes share unique revision tags. Inspect only divergent tails.
-        let mut low = 0;
-        let mut high = path.len().min(context.saved.len());
-        while low < high {
-            let mid = low + (high - low).div_ceil(2);
-            if path[mid - 1].2 == context.saved[mid - 1].2 {
-                low = mid;
-            } else {
-                high = mid - 1;
-            }
-        }
-        let common = low;
-        let mut changed: std::collections::HashSet<_> =
-            context.saved[common..].iter().map(|e| e.0).collect();
-        for (id, old, _) in &path[common..] {
-            changed.insert(*id);
-            context
-                .baseline
-                .entry(*id)
-                .or_insert(old.filter(|v| v.1 >= self.facts.floor).map(|v| v.0));
-        }
-        if let Some(exit) = context.exit.as_mut() {
-            for id in changed {
-                let before = context.baseline.get(&id).copied().unwrap_or(None);
-                let value = exit.entry(id).or_insert(before);
-                if *value != self.facts.get(id) {
-                    *value = None;
-                }
-            }
+        let previous = if continuing {
+            context.next
         } else {
-            context.exit = Some(self.facts.changes(context.mark));
+            context.exit
+        };
+        let current = self.current_edge(true);
+        let joined = previous.map_or(current, |previous| self.meet(previous, current));
+        if let Some(context) = self.loop_facts.last_mut() {
+            if continuing {
+                context.next = Some(joined);
+            } else {
+                context.exit = Some(joined);
+            }
         }
-        context.saved.truncate(common);
-        context.saved.extend_from_slice(&path[common..]);
+    }
+    pub(super) fn break_edge(&mut self) {
+        self.loop_edge(false);
+    }
+    pub(super) fn continue_edge(&mut self) {
+        self.loop_edge(true);
+    }
+    pub(super) fn loop_update(&mut self) {
+        self.continue_edge();
+        let next = self.loop_facts.last().and_then(|c| c.next);
+        if let Some(next) = next {
+            self.facts.travel(next.head);
+            self.reachable = next.reachable;
+        } else {
+            self.reachable = false;
+        }
     }
     pub(super) fn leave_loop(&mut self, test: Option<&Expr>) {
         let Some(context) = self.loop_facts.pop() else {
@@ -140,25 +225,19 @@ impl Checker<'_> {
         if let Some(test) = test
             && !test.bare_true
         {
-            if context.reachable && self.edge(test, false) {
-                let path = self.facts.changes(context.mark);
-                self.facts.restore(context.mark);
-                if let Some(previous) = exit.take() {
-                    self.facts.merge(previous, path);
-                    exit = Some(self.facts.changes(context.mark));
-                    self.facts.restore(context.mark);
-                } else {
-                    exit = Some(path);
-                }
-            } else {
-                self.facts.restore(context.mark);
+            let possible = self.edge(test, false);
+            let path = self.current_edge(context.reachable && possible);
+            if path.reachable {
+                exit = Some(exit.map_or(path, |previous| self.meet(previous, path)));
             }
+            self.facts.restore(context.mark);
         }
         self.reachable = context.reachable && exit.is_some();
         if let Some(exit) = exit {
-            self.facts.apply(exit);
+            self.facts.travel(exit.head);
         }
     }
+    // Initial entry joins every back edge. Any loop writer removes its entry fact.
     pub(super) fn loop_writes(&mut self, span: Span) {
         let begin = self.assignments.partition_point(|a| a.1 < span.start);
         let end = self.assignments.partition_point(|a| a.1 < span.end);
@@ -193,82 +272,6 @@ impl Checker<'_> {
             e.ty
         }
     }
-    pub(super) fn edge(&mut self, e: &Expr, truth: bool) -> bool {
-        match &e.kind {
-            E::Boolean(value) => *value == truth,
-            E::Unary("not", a) => self.edge(a, !truth),
-            E::Binary(op, a, b) if matches!(*op, "==" | "~=") => {
-                let reference = if matches!(b.kind, E::Null) {
-                    a
-                } else if matches!(a.kind, E::Null) {
-                    b
-                } else {
-                    return true;
-                };
-                if let E::Read(id) = reference.kind {
-                    let binding = &self.bindings[id];
-                    if !binding.mutable
-                        || (binding.owner != 0
-                            && binding.owner == self.owner
-                            && !self.captured_writes.contains(&binding.start))
-                    {
-                        let nonnull = truth == (*op == "~=");
-                        let reachable = self.facts.get(id).is_none_or(|old| old == nonnull);
-                        self.facts.set(id, Some(nonnull));
-                        return reachable;
-                    }
-                }
-                true
-            }
-            E::Logical(and, a, b) => {
-                if truth == *and {
-                    let first = self.edge(a, truth);
-                    let second = self.edge(b, truth);
-                    first && second
-                } else {
-                    let mark = self.facts.mark();
-                    let reachable_first = self.edge(a, truth);
-                    let first = self.facts.changes(mark);
-                    self.facts.restore(mark);
-                    let left = self.edge(a, !truth);
-                    let right = self.edge(b, truth);
-                    let reachable_second = left && right;
-                    let second = self.facts.changes(mark);
-                    self.facts.restore(mark);
-                    if !reachable_first {
-                        self.facts.apply(second);
-                    } else if !reachable_second {
-                        self.facts.apply(first);
-                    } else {
-                        self.facts.merge(first, second);
-                    }
-                    reachable_first || reachable_second
-                }
-            }
-            E::Conditional(t, a, b) => {
-                let mark = self.facts.mark();
-                let test_first = self.edge(t, true);
-                let arm_first = self.edge(a, truth);
-                let reachable_first = test_first && arm_first;
-                let first = self.facts.changes(mark);
-                self.facts.restore(mark);
-                let test_second = self.edge(t, false);
-                let arm_second = self.edge(b, truth);
-                let reachable_second = test_second && arm_second;
-                let second = self.facts.changes(mark);
-                self.facts.restore(mark);
-                if !reachable_first {
-                    self.facts.apply(second);
-                } else if !reachable_second {
-                    self.facts.apply(first);
-                } else {
-                    self.facts.merge(first, second);
-                }
-                reachable_first || reachable_second
-            }
-            _ => true,
-        }
-    }
     pub(super) fn nullable_use(&self, span: Span, types: &[Type]) -> Result<(), Diagnostic> {
         if types.iter().any(|ty| self.types.contains_null(*ty)) {
             return Err(self.error(
@@ -280,7 +283,6 @@ impl Checker<'_> {
         Ok(())
     }
 }
-// An exit removes that branch from the continuation join.
 pub(super) fn exits(s: &S) -> bool {
     match s.form() {
         S::Return(_) | S::Break | S::Continue => true,

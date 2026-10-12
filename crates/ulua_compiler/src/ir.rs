@@ -27,7 +27,19 @@ pub(crate) struct Function {
     pub(crate) result: Type,
     pub(crate) body: Vec<Statement>,
 }
+#[derive(Clone, Copy)]
+pub(crate) struct Edge {
+    pub(crate) head: usize,
+    pub(crate) reachable: bool,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct Flow {
+    pub(crate) yes: Edge,
+    pub(crate) no: Edge,
+}
 pub(crate) struct Expr {
+    // The checker caches both condition edges before a parent consumes them.
+    pub(crate) flow: Option<Flow>,
     // Return coverage needs the original test syntax after parentheses disappear.
     pub(crate) bare_true: bool,
     pub(crate) start: u32,

@@ -152,6 +152,8 @@ impl Checker<'_> {
             let value = self.expr_as(&p.value, depth, false, contextual)?;
             if let Some(ty) = contextual {
                 self.flow(&value.ty, Some(&ty), p.span)?;
+            } else {
+                self.inferred_reference(&p.value, value.ty)?;
             }
             fields.push((key, contextual.unwrap_or(value.ty)));
             entries.push((key, value));
@@ -184,6 +186,7 @@ impl Checker<'_> {
         {
             let ty = self.types.nullable(Type::Number);
             return Ok(Expr {
+                flow: None,
                 bare_true: false,
                 start: chain.span.start,
                 ty,
@@ -197,6 +200,7 @@ impl Checker<'_> {
             .ok_or_else(|| self.error(m.span, "C1", "Unknown optional field"))?;
         let ty = self.types.nullable(field);
         Ok(Expr {
+            flow: None,
             bare_true: false,
             start: chain.span.start,
             ty,
@@ -239,6 +243,7 @@ impl Checker<'_> {
                 let value = self.expr_as(arg, depth, false, Some(element))?;
                 self.flow(&value.ty, Some(&element), arg.span())?;
                 return Ok(Expr {
+                    flow: None,
                     bare_true: false,
                     start: chain.span.start,
                     ty: Type::Void,
@@ -264,6 +269,7 @@ impl Checker<'_> {
             };
             receiver.ty = nullable;
             return Ok(Expr {
+                flow: None,
                 bare_true: false,
                 start: chain.span.start,
                 ty: Type::Void,
@@ -292,6 +298,7 @@ impl Checker<'_> {
             args.push(value);
         }
         Ok(Expr {
+            flow: None,
             bare_true: false,
             start: chain.span.start,
             ty: Type::Void,

@@ -367,6 +367,7 @@ impl Checker<'_> {
                             let value = self.expr_as(arg, depth, false, Some(element))?;
                             self.flow(&value.ty, Some(&element), arg.span())?;
                             return Ok(Expr {
+                                flow: None,
                                 bare_true: false,
                                 start: call.span.start,
                                 ty: Type::Void,
@@ -380,6 +381,7 @@ impl Checker<'_> {
                             .field(receiver.ty, key)
                             .ok_or_else(|| self.error(m.span, "C1", "Unknown object field"))?;
                         field_callee = Some(Expr {
+                            flow: None,
                             bare_true: false,
                             start: m.span.start,
                             ty,
@@ -428,6 +430,7 @@ impl Checker<'_> {
                             ("__ulua_format", Type::Number, Type::String)
                         };
                         Expr {
+                            flow: None,
                             bare_true: false,
                             start: call.callee.span().start,
                             ty: self.types.intern(vec![p], r, 1),
@@ -519,6 +522,7 @@ impl Checker<'_> {
                             self.error(q.span, "syntax", "Invalid template escape")
                         })?;
                     parts.push(Expr {
+                        flow: None,
                         bare_true: false,
                         start: q.span.start,
                         ty: Type::String,
@@ -572,7 +576,7 @@ impl Checker<'_> {
         self.finish_expr(e, statement, ty, kind)
     }
     fn finish_expr(
-        &self,
+        &mut self,
         e: &Expression<'_>,
         statement: bool,
         ty: Type,
@@ -581,7 +585,13 @@ impl Checker<'_> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }
+        let flow = if ty == Type::Boolean {
+            Some(self.condition(&kind))
+        } else {
+            None
+        };
         let value = Expr {
+            flow,
             bare_true: matches!(e, Expression::BooleanLiteral(b) if b.value),
             start: e.span().start,
             ty,

@@ -53,6 +53,7 @@ impl Checker<'_> {
         let body = self.statement(&f.body, depth)?;
         self.loops -= 1;
         let zero_or_exhausted = Expr {
+            flow: None,
             bare_true: false,
             start: f.span.start,
             ty: Type::Boolean,

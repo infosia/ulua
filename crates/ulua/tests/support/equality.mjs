@@ -22,9 +22,10 @@ const isAcceptedEquality = new Function("ts", `return (${predicate.getText(witne
 const diagnostics = ts.getPreEmitDiagnostics(program);
 const codes = new Map();
 const affected = new Set();
+const templates = label === "P2.5 templates";
 const randomFiles = new Set(files.filter(f => {
   const source = fs.readFileSync(f, "utf8");
-  return source.startsWith("function identity(") || source.startsWith("// D18 random\n") || source.startsWith("// P2.5 random\n");
+  return source.startsWith("function identity(") || source.startsWith("// D18 random\n") || source.startsWith("// P2.5 template\n");
 }));
 const randomCodes = new Map();
 const randomAffected = new Set();
@@ -62,5 +63,5 @@ for (const file of files) {
   node++;
 }
 console.log(`${label} witnesses: node=${node} tsc=${files.length} diagnostic_programs=${affected.size} codes=${JSON.stringify([...codes].sort())} other_codes=[]`);
-console.log(`${label} random tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
+if (randomFiles.size) console.log(`${label} ${templates ? "template" : "random"} tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
 console.log(`${label} exception control: ordinary TS2322/TS2345 and mixed TS2367 denied; never TS2322/TS2345 allowed`);

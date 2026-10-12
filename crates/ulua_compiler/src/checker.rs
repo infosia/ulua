@@ -8,6 +8,7 @@ mod inference;
 mod methods;
 mod narrowing;
 mod order;
+mod paths;
 mod records;
 mod statements;
 mod strict;

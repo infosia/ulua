@@ -176,6 +176,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     for i in 0..=substitutions {
         source.push_str(&format!("x{i}"));
         parts.push(Expr {
+            flow: None,
             bare_true: false,
             start: 0,
             ty: Type::String,
@@ -184,6 +185,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         if i < substitutions {
             source.push_str(&format!("${{{i}}}"));
             parts.push(Expr {
+                flow: None,
                 bare_true: false,
                 start: 0,
                 ty: Type::Number,
@@ -226,6 +228,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 body: vec![Statement::Block(vec![Statement::Declare(
                     1,
                     Expr {
+                        flow: None,
                         bare_true: false,
                         start: 0,
                         ty: Type::String,

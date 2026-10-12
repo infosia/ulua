@@ -1,4 +1,4 @@
-//! C7 compares one primitive type or arrays with identical element types.
+//! C7 compares one primitive type, identical arrays, or identical object types.
 use super::*;
 use crate::ir::Expr;
 
@@ -16,7 +16,11 @@ impl Checker<'_> {
                 operand,
                 Expression::ArrayExpression(_) | Expression::ObjectExpression(_)
             ) {
-                return Err(self.error(span, "C7", "Array literal equality operands are rejected"));
+                return Err(self.error(
+                    span,
+                    "C7",
+                    "Array and object literal equality operands are rejected",
+                ));
             }
         }
         Ok(())
@@ -48,7 +52,7 @@ impl Checker<'_> {
         Err(self.error(
             span,
             "C7",
-            "Equality requires one primitive type or identical array types",
+            "Equality requires one primitive type, identical array types, or identical object types",
         ))
     }
 }

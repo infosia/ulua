@@ -62,6 +62,7 @@ impl Checker<'_> {
         let method = Method::String(method);
         self.methods.insert((method, 0));
         Ok(Expr {
+            flow: None,
             bare_true: false,
             start: call.span.start,
             ty,

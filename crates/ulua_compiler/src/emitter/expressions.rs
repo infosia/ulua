@@ -181,6 +181,11 @@ impl Emitter<'_> {
                 self.release(b);
             }
             E::Logical(and, a, b) => {
+                // Pure boolean operands use Luau's short-circuit expression without temporary joins.
+                if let Some(value) = self.pure(expr, depth)? {
+                    self.write_slot(dest, value);
+                    return Ok(dest);
+                }
                 let a = self.expression(a, depth)?;
                 self.write_slot(dest, self.temp(a));
                 self.release(a);
@@ -372,6 +377,12 @@ impl Emitter<'_> {
             E::String(s) => Some(quote(s)),
             E::Read(id) => Some(self.read_binding(*id)?),
             E::Unary(op, a) => self.pure(a, depth)?.map(|a| format!("({op} ({a}))")),
+            E::Logical(and, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
+                (Some(a), Some(b)) => {
+                    Some(format!("({a} {} {b})", if *and { "and" } else { "or" }))
+                }
+                _ => None,
+            },
             E::Binary(op, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
                 (Some(a), Some(b)) => {
                     if *op == "%" {

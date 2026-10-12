@@ -177,6 +177,7 @@ impl Checker<'_> {
         };
         self.methods.insert((method, arity));
         Ok(Expr {
+            flow: None,
             bare_true: false,
             start: call.span.start,
             ty,
@@ -254,6 +255,7 @@ mod tests {
                 )
                 .unwrap();
                 let receiver = Expr {
+                    flow: None,
                     bare_true: false,
                     start: 0,
                     ty: c.types.array(Type::Number),

@@ -1,5 +1,8 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
+//! Measured Debug cost: 7.234 seconds. The largest ratio is 4.101.
+//! New shape ratios: conditional 3.570, alternating logical 3.864, conditional with wrappers 3.656.
+//! Logical with wrappers: 3.727. Nullable conditional: 3.708. Continue product: 3.751.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -18,13 +21,106 @@ const SHAPES: &[&str] = &[
     "record-functions",
     "break-product",
     "recursive-product",
+    "conditional-tests",
+    "alternating-logical-tests",
+    "conditional-wrapped-tests",
+    "logical-wrapped-tests",
+    "nullable-conditional-tests",
+    "continue-product",
 ];
+fn condition_depth(shape: &str) -> usize {
+    match shape {
+        "conditional-wrapped-tests" | "logical-wrapped-tests" => 8,
+        "nullable-conditional-tests" => 20,
+        _ => 21,
+    }
+}
+fn condition(shape: &str, depth: usize) -> String {
+    let mut test = if shape == "nullable-conditional-tests" {
+        "x!=null".to_owned()
+    } else {
+        "b".to_owned()
+    };
+    for level in 0..depth {
+        test = match shape {
+            "alternating-logical-tests" => {
+                format!("({test}{}b)", if level % 2 == 0 { "&&" } else { "||" })
+            }
+            "conditional-wrapped-tests" => format!("(!(({test}?true:false)))"),
+            "logical-wrapped-tests" => {
+                format!("(!(({test}{}b)))", if level % 2 == 0 { "&&" } else { "||" })
+            }
+            _ => format!("({test}?true:false)"),
+        };
+    }
+    test
+}
+fn condition_source(shape: &str, depth: usize) -> String {
+    let test = condition(shape, depth);
+    let body = if shape == "nullable-conditional-tests" {
+        "x.v+=1;"
+    } else {
+        ""
+    };
+    format!(
+        "type B={{v:number}};export function main():void{{const b:boolean=true;const x:B|null={{v:0}};if({test}){{{body}}}}}"
+    )
+}
+#[test]
+fn condition_wrappers_reach_the_nesting_bound() {
+    for shape in [
+        "conditional-tests",
+        "alternating-logical-tests",
+        "conditional-wrapped-tests",
+        "logical-wrapped-tests",
+        "nullable-conditional-tests",
+    ] {
+        let depth = condition_depth(shape);
+        compile(condition_source(shape, depth).as_bytes(), Limits::default()).unwrap();
+        assert_eq!(
+            compile(
+                condition_source(shape, depth + 1).as_bytes(),
+                Limits::default()
+            )
+            .unwrap_err()
+            .code,
+            "limit:nesting-depth",
+            "{shape}"
+        );
+    }
+}
 fn make(shape: &str, bytes: usize) -> String {
     let mut declarations = "type B={v:number};".to_owned();
     let mut prefix = String::new();
     let unit: String;
     let mut tail = "}";
     match shape {
+        "conditional-tests"
+        | "alternating-logical-tests"
+        | "conditional-wrapped-tests"
+        | "logical-wrapped-tests"
+        | "nullable-conditional-tests" => {
+            prefix = "const b:boolean=true;const x:B|null={v:0};".into();
+            let test = condition(shape, condition_depth(shape));
+            let body = if shape == "nullable-conditional-tests" {
+                "x.v+=1;"
+            } else {
+                ""
+            };
+            unit = format!("if({test}){{{body}}}");
+        }
+        "continue-product" => {
+            let count = bytes / 190;
+            for i in 0..count {
+                prefix.push_str(&format!("const x{i}:B|null={{v:0}};"));
+            }
+            prefix.push_str("for(let i=0;i<2;i+=x0.v){");
+            for i in 0..count {
+                prefix.push_str(&format!("if(x{i}==null){{return;}}"));
+            }
+            unit = "if(x0.v==1){continue;}".into();
+            tail = "i+=1;}}";
+        }
         "fields" | "field-product" => {
             let fields = if shape == "fields" {
                 bytes / 48
@@ -131,7 +227,10 @@ fn p25_full_pipeline_growth_and_output() {
     let mut largest_ratio = 0.0f64;
     let mut largest_output = 0.0f64;
     for shape in SHAPES {
-        let n = if matches!(*shape, "field-product" | "fact-product" | "break-product") {
+        let n = if matches!(
+            *shape,
+            "field-product" | "fact-product" | "break-product" | "continue-product"
+        ) {
             16384
         } else {
             4096

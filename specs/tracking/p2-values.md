@@ -245,6 +245,14 @@ Reviewer: fresh agent, diff `917e951..362fa4c`. 2 CRITICAL, 2 MAJOR, 5 MINOR.
 | `p25_values.rs` states no cost (1.07 s test, 2.3 s wall) | MINOR | the test states its cost |
 | The C7 diagnostic text omits object types | MINOR | diagnostic text |
 
+Fix (Codex): the `for` update joins the body end and each `continue`;
+each condition node is computed once. The reviewer's 21-level `?:`
+shape: 1,637.6 ms to 2.2 ms Debug (396 B); 31,037.8 ms to 8.0 ms
+Release (58,356 B). Six new growth shapes, ratios 3.570 to 3.864;
+growth test 7.234 s Debug, largest ratio 4.101. 13 D18 field forms
+give C11 (`tsc`: TS2322 for 12, no error for 1). Template reject codes
+counted: C1 40, C11 40, C16 120, C6 40. gate full: PASS, 123 entries.
+
 ### P2.5 implementation record
 
 - Codex task, commit `e506cce`. Structural records with generated field

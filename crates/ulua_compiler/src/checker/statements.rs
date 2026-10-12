@@ -175,6 +175,7 @@ impl Checker<'_> {
                             self.expr(&a.right, depth, false)?;
                             self.methods.insert((ir::Method::Clear, 0));
                             return Ok(S::Eval(Expr {
+                                flow: None,
                                 bare_true: false,
                                 start: a.span.start,
                                 ty: Type::Void,
@@ -309,6 +310,7 @@ impl Checker<'_> {
                         "-"
                     }),
                     Expr {
+                        flow: None,
                         bare_true: false,
                         start: u.span.start,
                         ty: Type::Number,
@@ -336,12 +338,14 @@ impl Checker<'_> {
                 let test = self.test(&i.test, depth)?;
                 let mark = self.facts.mark();
                 let incoming = self.reachable;
-                self.reachable = incoming && self.edge(&test, true);
+                let true_edge = self.edge(&test, true);
+                self.reachable = incoming && true_edge;
                 let a = self.statement(&i.consequent, depth)?;
                 let first_reachable = self.reachable && !narrowing::exits(&a);
                 let first = self.facts.changes(mark);
                 self.facts.restore(mark);
-                self.reachable = incoming && self.edge(&test, false);
+                let false_edge = self.edge(&test, false);
+                self.reachable = incoming && false_edge;
                 let b = i
                     .alternate
                     .as_ref()
@@ -403,6 +407,7 @@ impl Checker<'_> {
                 self.loops += 1;
                 let body = self.statement(&f.body, depth)?;
                 self.loops -= 1;
+                self.loop_update();
                 let update = f
                     .update
                     .as_ref()
@@ -418,6 +423,7 @@ impl Checker<'_> {
                 S::Break
             }
             Statement::ContinueStatement(c) if c.label.is_none() && self.loops != 0 => {
+                self.continue_edge();
                 self.reachable = false;
                 S::Continue
             }
@@ -501,6 +507,7 @@ fn boolean_initializer(mut e: &Expression<'_>) -> bool {
 
 fn string_value(value: Expr) -> Expr {
     Expr {
+        flow: None,
         start: value.start,
         bare_true: false,
         ty: Type::String,
