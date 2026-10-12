@@ -238,6 +238,12 @@ Reviewer: fresh agent, diff `917e951..4a1201f`. 0 CRITICAL, 2 MAJOR, 0 MINOR. Th
 | A loop test `true \|\| c`, `(true \|\| c)`, `!(false && c)`, `c \|\| true` keeps the loop exit; `tsc` ends it (TS18047 after the loop); the `if` already agrees | MAJOR | C16.9 logical tests, `r110` |
 | Ulua narrows through a `?:` test (`if (c ? x != null : false) { x.v }`); `tsc` gives TS18047 | MAJOR | C16.1: a `?:` test is a leaf, `r111` |
 
+Fix (Codex): one edge computation for every test position, loop exits
+included; a `?:` test narrows nothing, a `?:` value narrows its
+branches. 44 rejected forms give C16 (`tsc` TS18047); 33 controls pass
+`tsc`, `node`, and `luau-analyze`. Growth test 8.942 s Debug, largest
+ratio 4.105. gate full: PASS, 129 entries.
+
 Measured `tsc` loop exits (TS18047 after `while (t) {...}` means no exit): no exit for `true`, `true \|\| c`, `(true \|\| c)`, `!(false && c)`; an exit for `(true)`, `!(false)`, `!!true`, `(true) \|\| c`, `c ? true : true`.
 
 ### P2.5 Phase Review round 4

@@ -147,38 +147,7 @@ impl Checker<'_> {
                     }
                 }
             }
-            E::Conditional(t, a, b) => {
-                let t = t.flow.unwrap_or(unknown);
-                let a = a.flow.unwrap_or(unknown);
-                let b = b.flow.unwrap_or(unknown);
-                let mut result = Flow {
-                    logical: false,
-                    yes: self.meet(
-                        Edge {
-                            reachable: t.yes.reachable && a.yes.reachable,
-                            ..a.yes
-                        },
-                        Edge {
-                            reachable: t.no.reachable && b.yes.reachable,
-                            ..b.yes
-                        },
-                    ),
-                    no: self.meet(
-                        Edge {
-                            reachable: t.yes.reachable && a.no.reachable,
-                            ..a.no
-                        },
-                        Edge {
-                            reachable: t.no.reachable && b.no.reachable,
-                            ..b.no
-                        },
-                    ),
-                };
-                // Boolean values of the arms are not literal tests of this expression.
-                result.yes.reachable = true;
-                result.no.reachable = true;
-                result
-            }
+            // A conditional expression is a leaf test; its value branches keep their own facts.
             _ => unknown,
         }
     }
@@ -232,12 +201,9 @@ impl Checker<'_> {
             return;
         };
         self.facts.restore(context.mark);
-        if let Some(test) = test
-            && !test.bare_true
-        {
-            self.edge(test, false);
-            // Only an absent test or bare true removes the normal loop exit.
-            if context.reachable {
+        if let Some(test) = test {
+            let possible = self.edge(test, false);
+            if context.reachable && possible {
                 context.exit.include(&self.facts, self.facts.head());
             }
         }

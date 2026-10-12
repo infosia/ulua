@@ -1,8 +1,9 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
-//! Round 4 measured Debug cost: 8.847 seconds. The largest ratio is 3.981.
-//! Condition ratios: conditional 3.676, alternating logical 3.875, conditional with wrappers 3.625.
-//! Logical with wrappers: 3.707. Nullable conditional: 3.602. Continue product: 3.909.
+//! Round 5 measured Debug cost: 8.942 seconds. The largest ratio is 4.105.
+//! Condition ratios: conditional 3.472, alternating logical 3.896, conditional with wrappers 3.712.
+//! Logical with wrappers: 3.798. Nullable conditional: 3.718. Continue product: 4.045.
+//! A conditional test gives no facts. The nullable shape uses a separate null guard in its body.
 //! Round 2 ABI times compare 16 KiB and 64 KiB. Before uses the handoff HEAD.
 //! Debug ybreak: 888.475/13581.536 ms -> 28.809/112.749 ms; ratios 15.286 -> 3.914.
 //! Debug ycont: 678.899/10635.650 ms -> 27.229/106.332 ms; ratios 15.666 -> 3.905.
@@ -104,7 +105,7 @@ fn condition(shape: &str, depth: usize) -> String {
 fn condition_source(shape: &str, depth: usize) -> String {
     let test = condition(shape, depth);
     let body = if shape == "nullable-conditional-tests" {
-        "x.v+=1;"
+        "if(x!=null){x.v+=1;}"
     } else {
         ""
     };
@@ -155,7 +156,7 @@ fn make(shape: &str, bytes: usize) -> String {
             prefix = "const b:boolean=true;const x:B|null={v:0};".into();
             let test = condition(shape, condition_depth(shape));
             let body = if shape == "nullable-conditional-tests" {
-                "x.v+=1;"
+                "if(x!=null){x.v+=1;}"
             } else {
                 ""
             };

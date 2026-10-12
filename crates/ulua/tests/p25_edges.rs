@@ -27,6 +27,7 @@ fn contradictory_tests_keep_all_join_edges() {
         "if(k!=null){if(a!=null){if(k!=null){out+=0;}else{a=null;}out+=a.v;}}",
         "if(k!=null){if(a!=null){if(k==null&&out>0){a=null;}out+=a.v;}}",
         "if(k!=null){if((k==null&&c2==null)||c2!=null){out+=c2.v;}}",
+        // This conditional is a value; its logical test still joins both c2 edges.
         "if(k!=null){out+=((k==null&&c2==null)||c2!=null)?c2.v:0;}",
         "if(k!==null){if(a!==null){if(null===k){a=null;}out+=a.v;}}",
         "if(k!==null){if(a!==null){if(k!==null){}else{a=null;}out+=a.v;}}",
