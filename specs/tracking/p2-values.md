@@ -109,6 +109,26 @@ pass `luau-analyze` without the aliases, so they stay out of the
 stress set (§5.11). Random: 640 programs, 425 accepted (each passes
 `tsc`, `node`, `luau-analyze`), 215 rejected.
 
+### P2.1 Phase Review round 3
+
+Reviewer: fresh agent, diff `b4e42f3..c9b7d0f`. 1 MAJOR, 3 MINOR.
+C10.3 holds through each closure creation position; fuzz of 3,000
+programs: 990 accepted, each passes `tsc`, `node`, `luau-analyze`; no
+`internal`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Each identifier read clones the whole type; each typed write hashes it. A wide nested function type read by many `k = g;`: Release 0.02 s at 16 KiB, 0.40 s at 64 KiB (ratio 20); peak RSS 23.8 MB and 425.9 MB | MAJOR | pipeline.md §3.10 Rev 10: interned types; product growth shapes |
+| surface.md says `tsc` gives TS2373 for any body name; it does so only for a function declaration | MINOR | surface.md text |
+| `FunctionTypes::add` recurses without a depth counter (§3.4); the parser bounds type nesting today | MINOR | Fix with the interned types |
+| The function-result annotation rule tests a bare function type only; a later slice that adds arrays, nullable values, or records reopens the size class (`() => [() => 1]`) | MINOR | Gap below |
+
 ## Failures before the fix
 
 ## Gaps
+
+- P2.2 and P2.4: an arrow whose inferred result contains a function
+  type at any depth (array element, nullable member, record field)
+  needs a result annotation, as a bare function result does now.
+- P2.2 and P2.4: the parentheses rule for function types applies to
+  every composite type they add (unions, arrays).

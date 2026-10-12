@@ -96,7 +96,7 @@ its target.
 
 | Node kind | Accepted form |
 |---|---|
-| `FormalParameter` | A `BindingIdentifier` with a type annotation. No binding pattern, no rest element, no `?`, no modifiers. A default is allowed in a `FunctionDeclaration` or a `MethodDefinition` if the type excludes `null` (C2) and each later parameter also has a default. `tsc` types a parameter with a default before a parameter without one as `T | undefined` (D16). A default does not refer to a name that the function body declares at its top level: `tsc` gives TS2373. |
+| `FormalParameter` | A `BindingIdentifier` with a type annotation. No binding pattern, no rest element, no `?`, no modifiers. A default is allowed in a `FunctionDeclaration` or a `MethodDefinition` if the type excludes `null` (C2) and each later parameter also has a default. `tsc` types a parameter with a default before a parameter without one as `T | undefined` (D16). A default does not refer to a name that the function body declares at its top level. `tsc` gives TS2373 when the body name is a function declaration; for a `let` or `const` body name the rule is a restrictive reading. |
 
 ## 5. Types
 

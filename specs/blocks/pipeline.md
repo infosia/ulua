@@ -10,6 +10,7 @@ Rev 6: §4.6a, §7 values (round 8).
 Rev 7: §5.14 functions as values, `limit:upvalues` (P2.1).
 Rev 8: §5.14.3 parentheses for an optional function type (P2.1 review).
 Rev 9: §5.14.3 nested aliases (P2.1 review 2).
+Rev 10: §3.10 interned types and product shapes (P2.1 review 3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -96,6 +97,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     is at most O(n log n) in the source size n. A gate test compiles
     one input of each shape at n and at 4n bytes. The time at 4n is at
     most 8 times the time at n.
+    The compiler stores each distinct type once and refers to it by an
+    id. A type read, a type copy, a type equality test, and a type hash
+    cost O(1). The growth shapes include the product of two sizes: a
+    deep type read by many references, and every later pair that a
+    slice adds.
     The generated Luau has at most `OUTPUT_FACTOR` bytes per source
     byte, plus a fixed prelude. The emitter checks the bound on each
     module. A module over the bound gives `internal`. §7 records the
