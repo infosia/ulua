@@ -17,6 +17,15 @@ interface Array<T> {
   findLastIndex(predicate: (value: T, index: number) => boolean): number;
 }
 
+/**
+ * Ulua traps where JavaScript gives `undefined` for these members
+ * (collisions.md C5), so their result types exclude `undefined`.
+ */
+interface String {
+  at(index: number): string;
+  codePointAt(pos: number): number;
+}
+
 /** Byte operations on UTF-8 strings. JavaScript has no such names. */
 declare namespace Utf8 {
   /** Returns the number of UTF-8 bytes in `text`. */

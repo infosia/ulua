@@ -15,7 +15,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
-| P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
+| P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
 | P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
@@ -32,6 +32,22 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   decides its own with the user.
 - A phase that exposes the `buffer` library classifies Luau errors by
   source location, not by text.
+
+## Exit checklist (P2.4)
+
+- [ ] collisions.md C4.6 and C5 (byte semantics, the member list, the
+  traps) and pipeline.md §5.17 implemented; the prelude declares `at`
+  and `codePointAt` on `String`.
+- [ ] P2.4 entries pass in full; later slices stay `unsupported`.
+- [ ] Each member has a direct test: ASCII against `node`; non-ASCII
+  against the byte rule; each trap.
+- [ ] Growth shapes for string members and concatenation;
+  `luau-analyze` passes.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source of the member set: the owner's prior project (byte measures).
+Changes: case mapping and normalization stay rejected (no Unicode data
+in Luau); no regular expressions; string ordering stays rejected.
 
 ## Exit checklist (P2.3)
 

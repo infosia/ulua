@@ -17,6 +17,7 @@ Rev 13: §3.10 `limit:output` (P2.2 review 2).
 Rev 14: §5.16 array methods (P2.3).
 Rev 15: §5.15.2 literal blocks, §6.0 limit positions, §3.10 final check (P2.2 review 3).
 Rev 16: §5.7 loop locals end with their loop (P2.3).
+Rev 17: §5.17 strings (P2.4).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -327,6 +328,22 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     6. Each helper is generic in the element type, so `luau-analyze`
        checks each call. A helper loop counts toward `max_steps` as any
        loop does.
+17. **Strings (P2.4).**
+    1. Each string member of collisions.md C5 lowers to one call of a
+       generated prelude helper, as array methods do (§5.16.1 and
+       §5.16.2): only used helpers, C12 order, ToIntegerOrInfinity
+       for number arguments.
+    2. A helper works on byte offsets with `string.sub` and with
+       `string.find` in plain mode; it never uses a Luau pattern built
+       from script text. A boundary check tests that the byte at an
+       offset is not a continuation byte (`0x80` to `0xBF`).
+    3. `s.length` lowers to `#s`. `+` with a `number` operand calls the
+       C4.5 format function; with a `boolean` operand it writes `true`
+       or `false`.
+    4. `for (const c of s)` steps by code point over the valid UTF-8 of
+       `s`; a captured binding is a new local per step (§5.14.1).
+    5. The traps `string-boundary`, `index-out-of-range`, and
+       `invalid-argument` go through §4.8.
 
 ## 6. Limits
 

@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 25, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 26, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -11,7 +11,7 @@ literal conditions, strict-mode early errors, round 6; Rev 19:
 set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
 closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
-P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17).
+P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -145,53 +145,102 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    with the leading zeros of the exponent removed. It agrees with node
    on 800,019 of 800,019 sampled values (M4). The golden is the
    JavaScript format.
-6. `+` and `+=` with one `string` operand and one non-`string` operand
-   are rejected. A template literal states the conversion.
+6. `+` and `+=` with one `string` operand and one `number` or `boolean`
+   operand convert the other operand as a template substitution does
+   (rule 5 for a number; `true` or `false`) and concatenate. The
+   operands are evaluated in order (C12). An operand of any other type
+   is rejected (rule 8). (P2.4; the owner's prior project accepts the
+   same form.)
 7. The bitwise operators are rejected. No lowering is decided.
 8. A template substitution has type `number`, `string`, or `boolean`.
    `String(x)` takes a `number`. JavaScript formats `null` as `null`,
    an object as `[object Object]`, and an array by its elements. Luau
    `tostring` gives `nil` and a table address.
 
-Accept: `a02`, `a03`, `a04`, `a10`. Reject: `r15`, `r21`, `r22`,
-`r38`, `r44`, `r57`, `r58`.
+Accept: `a02`, `a03`, `a04`, `a10`, `a37`. Reject: `r15`, `r22`, `r44`, `r57`,
+`r58`. Retired by P2.4: `retired:r21-string-plus-number`,
+`retired:r38-string-plus-assign-number`.
 
 ## C5. Strings
 
-Strings are the native UTF-8 Luau strings.
+Strings are the native UTF-8 Luau strings. P2.4 follows the owner's
+prior project: **every length, index, and position of an accepted
+string member is a byte measure.** On ASCII text the result equals the
+JavaScript result. On non-ASCII text a byte measure differs from the
+UTF-16 unit that JavaScript counts. This is a divergence: measured,
+`"héllo".length` is 6 here and 5 in `node`; `"日本".indexOf("本")` is 3
+here and 1 in `node`. An entry whose positions cross a non-ASCII
+character is `js-comparable: no C5`.
 
 1. Each string literal and each template literal part decodes to a
    sequence of Unicode scalar values. An unpaired surrogate is
    rejected in every escape form: `\uD83D`, `\u{D83D}`, in a string
-   literal and in a template. UTF-8 has no form for a lone surrogate. The host boundary (P3)
-   validates the UTF-8 of each string that it passes in.
-2. Accepted string operations, and no others:
-   - `+` between two strings, and template concatenation;
-   - `===` and `!==` between two strings;
-   - `includes`, `startsWith`, and `endsWith` with exactly one argument;
-   - `split` with exactly one argument, a non-empty string literal.
-
-   Each lowering agrees with JavaScript for an empty needle:
-   `includes("")`, `startsWith("")`, and `endsWith("")` are `true`.
-3. Every other `String` member and every other string operator is
-   rejected. These are rejected because the result depends on the
-   encoding:
-   - `length`, an index `s[i]`, `at`, `charAt`, `charCodeAt`,
-     `codePointAt`, `slice`, `substring`, `indexOf`, `lastIndexOf`;
-   - the position argument of `includes`, `startsWith`, and `endsWith`;
-   - `split` with a separator that is not a literal: an empty
-     separator splits by UTF-16 unit in JavaScript and by byte in Luau;
+   literal and in a template. UTF-8 has no form for a lone surrogate.
+   The host boundary (P3) validates the UTF-8 of each string that it
+   passes in.
+2. Accepted operations:
+   - `+` and `+=` (C4.6), template concatenation, `===` and `!==`
+     (C7);
+   - `s.length`: the byte length;
+   - `slice(start?, end?)`, `substring(start, end?)`, `substr(start,
+     length?)`, with the ECMAScript negative, clamp, and swap rules of
+     each method over byte offsets;
+   - `indexOf(needle, from?)`, `lastIndexOf(needle, position?)`,
+     `includes(needle, from?)`, `startsWith(needle, position?)`,
+     `endsWith(needle, endPosition?)`, with byte offsets and the
+     ECMAScript clamps; an empty needle matches as ECMAScript says;
+   - `charAt(i)`: the code point that starts at byte `i`, or `""` out
+     of range; `charCodeAt(i)`: the byte value 0 to 255; `codePointAt(i)`
+     and `at(i)` (a negative `i` counts from the end): the code point
+     that starts at byte `i`;
+   - `split(sep, limit?)` with a string separator: no match gives the
+     whole string, adjacent separators give empty strings, `limit`
+     follows ECMAScript ToUint32; an empty separator gives one piece
+     per code point, and `"".split("")` is `[]`;
+   - `trim()`, `trimStart()`, `trimEnd()`, `trimLeft()`, `trimRight()`:
+     the ECMAScript WhiteSpace and LineTerminator set (U+0009 to
+     U+000D, U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029,
+     U+202F, U+205F, U+3000, U+FEFF); U+0085 is not in the set;
+   - `repeat(n)`; `padStart(len, pad?)`, `padEnd(len, pad?)` with byte
+     lengths and `pad` `" "` by default; an empty `pad` returns the
+     receiver;
+   - `replace(pattern, replacement)` (the first occurrence) and
+     `replaceAll(pattern, replacement)` with a string pattern: `$$`,
+     `$&`, `` $` ``, and `$'` in the replacement are substituted; `$1`
+     to `$9` stay literal; an empty pattern matches at the start
+     (`replace`) or at every code-point boundary (`replaceAll`);
+   - `concat(other)` with one string;
+   - `for (const c of s)`: one code point per step, as in JavaScript.
+   A number argument converts as ECMAScript ToIntegerOrInfinity
+   converts it (C6.9).
+3. Traps (divergences; JavaScript gives a value):
+   - a position or a result boundary that is not on a UTF-8 code-point
+     boundary traps `string-boundary` (for example `"é".slice(1)`);
+   - `charCodeAt`, `codePointAt`, and `at` outside the string trap
+     `index-out-of-range` (JavaScript gives NaN or `undefined`);
+   - `repeat` with a negative or infinite count traps
+     `invalid-argument` (JavaScript throws RangeError).
+   The prelude declares `at` and `codePointAt` with a `string` and a
+   `number` result (D16).
+4. Rejected:
+   - an index `s[i]`: the element of a string is a UTF-16 unit in
+     JavaScript and has no byte form;
    - `<`, `>`, `<=`, `>=` between strings;
-   - `for…of` over a string: JavaScript steps by code point.
-4. Byte operations use prelude names that JavaScript does not define:
-   `Utf8.byteLength`. Further names are decided in the P2 string slice.
-5. `toUpperCase`, `toLowerCase`, `trim`, `trimStart`, and `trimEnd` are
-   rejected until a lowering agrees with JavaScript on non-ASCII input,
-   or a revision names the divergence.
-   Luau `string.upper`, `string.lower`, and `%s` act on ASCII only.
+   - `toUpperCase`, `toLowerCase`, `toLocaleUpperCase`,
+     `toLocaleLowerCase`, `localeCompare`, `normalize`: Luau has no
+     Unicode case or normalization data (`string.upper` and
+     `string.lower` act on ASCII only); a later revision can add a
+     native helper;
+   - `match`, `matchAll`, `search`, a `RegExp` argument, and
+     `String.fromCharCode`, `String.raw`, `String` as a value.
+5. Byte operations keep the prelude name `Utf8.byteLength`, equal to
+   `length`.
 
-Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
-`r30`, `r31`, `r32`, `r33`, `r34`, `r37`, `r39`.
+Accept: `a11`, `a12`, `a19`, `a37`, `a38`. Reject: `r09`, `r10`, `r18`, `r34`, `r37`.
+Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
+`retired:r29-string-slice`, `retired:r30-string-index-of`,
+`retired:r31-string-trim`, `retired:r32-string-position-argument`,
+`retired:r33-split-non-literal`, `retired:r39-string-for-of`.
 
 ## C6. Arrays
 
