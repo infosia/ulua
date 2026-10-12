@@ -195,6 +195,7 @@ impl Checker<'_> {
                     }
                     self.nullable_use(m.span, &[receiver.ty])?;
                     let key = self.field_key(m.property.name.as_str());
+                    self.reject_method_value(receiver.ty, key, m.span)?;
                     let field_ty = self
                         .types
                         .field(receiver.ty, key)
@@ -295,6 +296,7 @@ impl Checker<'_> {
                     }
                     self.nullable_use(m.span, &[receiver.ty])?;
                     let key = self.field_key(m.property.name.as_str());
+                    self.reject_method_value(receiver.ty, key, m.span)?;
                     let field_ty = self
                         .types
                         .field(receiver.ty, key)
@@ -323,13 +325,16 @@ impl Checker<'_> {
                 }
                 Ok(S::Assign(id, op, value))
             }
-            Expression::CallExpression(_) | Expression::ChainExpression(_) if !update => {
+            Expression::CallExpression(_)
+            | Expression::ChainExpression(_)
+            | Expression::NewExpression(_)
+                if !update =>
+            {
                 Ok(S::Eval(self.expr(e, depth, true)?))
             }
             Expression::TaggedTemplateExpression(_) | Expression::SequenceExpression(_) => {
                 Err(self.error(e.span(), "C8", "Expression has no lowering"))
             }
-            Expression::NewExpression(_) => Err(self.unsupported(e.span())),
             _ => Err(self.error(e.span(), "C11", "Invalid statement expression")),
         }
     }
@@ -433,6 +438,9 @@ impl Checker<'_> {
                 S::Continue
             }
             Statement::ReturnStatement(r) => {
+                if self.in_constructor && r.argument.is_some() {
+                    return Err(self.error(r.span, "C11", "A constructor return has no argument"));
+                }
                 let value = r
                     .argument
                     .as_ref()

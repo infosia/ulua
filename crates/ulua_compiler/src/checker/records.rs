@@ -28,6 +28,9 @@ impl Checker<'_> {
     }
     pub(super) fn aliases(&mut self, program: &Program<'_>) -> Result<(), Diagnostic> {
         for s in &program.body {
+            if let Statement::ClassDeclaration(class) = s {
+                self.reserve_class(class)?;
+            }
             if let Statement::TSTypeAliasDeclaration(a) = s {
                 if strict::binding(a.id.name.as_str())
                     && !matches!(a.id.name.as_str(), "eval" | "arguments")
@@ -120,10 +123,22 @@ impl Checker<'_> {
                 self.types.define_record(ty, fields);
             }
         }
+        for s in &program.body {
+            if let Statement::ClassDeclaration(class) = s {
+                self.class_signature(class)?;
+            }
+        }
         self.types.seal_aliases();
         for s in &program.body {
             if let Statement::TSTypeAliasDeclaration(a) = s {
                 self.checked_type_depth(self.aliases[a.id.name.as_str()], a.span)?;
+            }
+            if let Statement::ClassDeclaration(class) = s {
+                let name = class
+                    .id
+                    .as_ref()
+                    .ok_or_else(|| self.unsupported(class.span))?;
+                self.checked_type_depth(self.aliases[name.name.as_str()], class.span)?;
             }
         }
         for ty in self.aliases.values_mut() {
@@ -144,6 +159,13 @@ impl Checker<'_> {
             return Err(self.error(entry.span(), "limit:fields", "Field limit exceeded"));
         }
         let expected = expected.map(|ty| self.types.inner(ty).unwrap_or(ty));
+        if expected.is_some_and(|ty| self.types.is_class(ty)) {
+            return Err(self.error(
+                object.span,
+                "C1",
+                "An object literal cannot have a class type",
+            ));
+        }
         let mut entries = vec![];
         let mut fields = vec![];
         let mut seen = std::collections::HashSet::new();
@@ -227,6 +249,7 @@ impl Checker<'_> {
             });
         }
         let key = self.field_key(m.property.name.as_str());
+        self.reject_method_value(inner, key, m.span)?;
         let field = self
             .types
             .field(inner, key)
@@ -310,6 +333,11 @@ impl Checker<'_> {
             });
         }
         let key = self.field_key(m.property.name.as_str());
+        self.member_access(inner, key, m.span)?;
+        if let Some(id) = self.method_target(inner, key) {
+            let (ty, kind) = self.class_call(id, receiver, &c.arguments, true, depth, c.span)?;
+            return Ok(super::classes::value(ty, kind, chain.span.start));
+        }
         let field = self
             .types
             .field(inner, key)

@@ -37,6 +37,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     }
     let mut work: Vec<_> = module.body.iter().collect();
     for f in &module.functions {
+        work.extend(&f.initializers);
         work.extend(&f.body);
     }
     while let Some(s) = work.pop() {
@@ -79,6 +80,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
             let f = &module.functions[i];
             probe.overhead = f.parameters.iter().filter(|(_, d)| d.is_some()).count();
+            probe.statements(&f.initializers, 0)?;
             probe.defaults(f)?;
             probe.statements(&f.body, 0)?;
             (
@@ -235,6 +237,7 @@ impl Emitter<'_> {
             output.charge(prefix.len(), self.statement_offset);
             output.check(self.module)?;
         }
+        child.statements(&f.initializers, depth)?;
         child.defaults(f)?;
         child.statements(&f.body, depth)?;
         if child.upvalues.len() > crate::UPVALUE_BUDGET {

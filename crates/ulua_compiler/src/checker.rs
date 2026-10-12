@@ -1,6 +1,8 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod arrays;
 mod captures;
+mod classes;
+mod construction;
 mod equality;
 mod expressions;
 mod functions;
@@ -24,6 +26,12 @@ use std::collections::HashMap;
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
     aliases: HashMap<String, Type>,
+    classes: HashMap<Type, classes::ClassInfo>,
+    class_bindings: std::collections::HashSet<usize>,
+    this_binding: Option<usize>,
+    field_initializer: bool,
+    class_context: Option<Type>,
+    in_constructor: bool,
     fields: HashMap<String, usize>,
     facts: narrowing::Facts,
     assignments: Vec<(u32, u32)>,
@@ -188,7 +196,10 @@ impl Checker<'_> {
                 )
             })?;
         let binding = &self.bindings[id];
-        if !binding.declaration && span.start < binding.end {
+        let inside_class = self.class_bindings.contains(&id)
+            && span.start >= binding.start
+            && span.start < binding.end;
+        if !binding.declaration && span.start < binding.end && !inside_class {
             return Err(self.error(span, "C10", "Reference precedes the end of its declaration"));
         }
         self.references.push((self.owner, id, span.start));
@@ -266,6 +277,12 @@ pub(crate) fn check(
     let mut c = Checker {
         source,
         aliases: HashMap::new(),
+        classes: HashMap::new(),
+        class_bindings: Default::default(),
+        this_binding: None,
+        field_initializer: false,
+        class_context: None,
+        in_constructor: false,
         fields: HashMap::new(),
         facts: Default::default(),
         assignments: writes.assignments,
@@ -309,9 +326,7 @@ pub(crate) fn check(
                 return Err(c.error(s.span(), "C8", "Interface declarations have no lowering"));
             }
             Statement::TSTypeAliasDeclaration(_) => {}
-            Statement::ClassDeclaration(_) => {
-                return Err(c.unsupported(s.span()));
-            }
+            Statement::ClassDeclaration(_) => {}
             _ => return Err(c.error(s.span(), "C11", "Module statements must be declarations")),
         }
     }
@@ -329,12 +344,21 @@ pub(crate) fn check(
     let mut body = vec![ir::Statement::Located(
         first_offset,
         Box::new(ir::Statement::Entry(
-            c.scopes[0].values().copied().collect(),
+            c.bindings
+                .iter()
+                .enumerate()
+                .filter_map(|(id, b)| (b.owner == 0).then_some(id))
+                .collect(),
         )),
     )];
     for s in &program.body {
         if let Statement::VariableDeclaration(d) = s {
             body.extend(c.variables(d, 0)?);
+        }
+    }
+    for s in &program.body {
+        if let Statement::ClassDeclaration(class) = s {
+            c.class_body(class)?;
         }
     }
     for (id, f, exported, offset) in declarations {
@@ -343,6 +367,18 @@ pub(crate) fn check(
             1,
             ir::Statement::Located(offset, Box::new(ir::Statement::Function(id))),
         );
+    }
+    for info in c.classes.values() {
+        body.push(ir::Statement::Located(
+            c.bindings[info.constructor].start,
+            Box::new(ir::Statement::Function(info.constructor)),
+        ));
+        for id in info.methods.values() {
+            body.push(ir::Statement::Located(
+                c.bindings[*id].start,
+                Box::new(ir::Statement::Function(*id)),
+            ));
+        }
     }
     // Restore source order after function bodies add their nested declarations.
     body[1..].sort_by_key(|s| match s.form() {

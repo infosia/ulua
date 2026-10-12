@@ -66,6 +66,13 @@ impl Checker<'_> {
                 self.default_reference(n.name.as_str(), n.span)?;
                 if self.scopes.iter().any(|s| s.contains_key(n.name.as_str())) {
                     let id = self.lookup(n.name.as_str(), n.span)?;
+                    if self.class_bindings.contains(&id) {
+                        return Err(self.error(
+                            n.span,
+                            "C11",
+                            "A class identifier only precedes new arguments",
+                        ));
+                    }
                     let ty = self.bindings[id]
                         .ty
                         .ok_or_else(|| self.error(n.span, "C10", "Binding is not initialized"))?;
@@ -330,6 +337,7 @@ impl Checker<'_> {
                         ));
                     }
                     let key = self.field_key(m.property.name.as_str());
+                    self.reject_method_value(a.ty, key, m.span)?;
                     let ty = self
                         .types
                         .field(a.ty, key)
@@ -401,6 +409,18 @@ impl Checker<'_> {
                         }
                         self.nullable_use(m.span, &[receiver.ty])?;
                         let key = self.field_key(m.property.name.as_str());
+                        self.member_access(receiver.ty, key, m.span)?;
+                        if let Some(id) = self.method_target(receiver.ty, key) {
+                            let (ty, kind) = self.class_call(
+                                id,
+                                receiver,
+                                &call.arguments,
+                                false,
+                                depth,
+                                call.span,
+                            )?;
+                            return self.finish_expr(e, statement, ty, kind);
+                        }
                         let ty = self
                             .types
                             .field(receiver.ty, key)
@@ -587,9 +607,8 @@ impl Checker<'_> {
             Expression::ChainExpression(_) => {
                 return Err(self.error(e.span(), "C2", "Optional field only precedes coalescing"));
             }
-            Expression::NewExpression(_) | Expression::ThisExpression(_) => {
-                return Err(self.unsupported(e.span()));
-            }
+            Expression::NewExpression(new) => self.new_instance(new, depth)?,
+            Expression::ThisExpression(this) => self.this(this.span)?,
             _ => {
                 return Err(self.error(
                     e.span(),

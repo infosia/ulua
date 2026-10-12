@@ -209,6 +209,12 @@ mod tests {
                 let mut c = Checker {
                     source: source.as_bytes(),
                     aliases: Default::default(),
+                    classes: Default::default(),
+                    class_bindings: Default::default(),
+                    this_binding: None,
+                    field_initializer: false,
+                    class_context: None,
+                    in_constructor: false,
                     fields: Default::default(),
                     facts: Default::default(),
                     assignments: vec![],

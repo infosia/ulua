@@ -176,11 +176,8 @@ fn c11_closed_surface_positions_and_targets() {
 }
 #[test]
 fn later_phase_forms_stay_unsupported() {
-    reject(
-        "class Box { value:number=1; } export function main():void{}",
-        "unsupported",
-    );
-    reject(&body("const x = new Box();"), "unsupported");
+    accept("class Box { value:number=1; } export function main():void{}");
+    reject(&body("const x = new Box();"), "C11");
     for s in [
         "const x = null;",
         "const x = {};",

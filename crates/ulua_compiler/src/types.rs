@@ -82,6 +82,12 @@ enum Node {
     Array(Type),
     Nullable(Type),
     Record(Rc<Vec<(usize, Type)>>),
+    Class(Rc<ClassType>),
+}
+
+struct ClassType {
+    fields: Vec<(usize, Type)>,
+    methods: Vec<(usize, Type)>,
 }
 
 pub(crate) struct Types {
@@ -193,8 +199,34 @@ impl Types {
     pub(crate) fn fields(&self, ty: Type) -> Option<&[(usize, Type)]> {
         match self.nodes.get(ty.0) {
             Some(Node::Record(fields)) => Some(fields),
+            Some(Node::Class(class)) => Some(&class.fields),
             _ => None,
         }
+    }
+    pub(crate) fn reserve_class(&mut self) -> Type {
+        let ty = self.add_counted(
+            Node::Class(Rc::new(ClassType {
+                fields: vec![],
+                methods: vec![],
+            })),
+            None,
+        );
+        self.named_records.insert(ty);
+        ty
+    }
+    pub(crate) fn define_class(
+        &mut self,
+        ty: Type,
+        mut fields: Vec<(usize, Type)>,
+        methods: Vec<(usize, Type)>,
+    ) {
+        fields.sort_unstable_by_key(|f| f.0);
+        let node = Node::Class(Rc::new(ClassType { fields, methods }));
+        self.field_counts[ty.0] = self.count_node(&node);
+        self.nodes[ty.0] = node;
+    }
+    pub(crate) fn is_class(&self, ty: Type) -> bool {
+        matches!(self.nodes.get(ty.0), Some(Node::Class(_)))
     }
     pub(crate) fn field(&self, ty: Type, key: usize) -> Option<Type> {
         let fields = self.fields(ty)?;

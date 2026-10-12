@@ -9,6 +9,10 @@ mod emitter;
 mod ir;
 mod methods;
 #[cfg(test)]
+mod p26_shapes;
+#[cfg(test)]
+mod p26_tests;
+#[cfg(test)]
 mod round6_tests;
 #[cfg(test)]
 mod round7_tests;
@@ -220,6 +224,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 },
             ],
             functions: vec![Function {
+                initializers: vec![],
                 binding: 0,
                 name: "main".into(),
                 exported: true,

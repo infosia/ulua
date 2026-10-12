@@ -251,6 +251,52 @@ impl Emitter<'_> {
                     self.release(arg);
                 }
             }
+            E::ClassCall(callee, receiver, arguments, optional) => {
+                let c = self.expression(callee, depth)?;
+                let receiver_slot = self.expression(receiver, depth)?;
+                if *optional {
+                    self.line(format!("if {} ~= nil then", self.temp(receiver_slot)));
+                    self.indent += 1;
+                }
+                let receiver_slot = if *optional {
+                    let inner = self
+                        .module
+                        .types
+                        .inner(receiver.ty)
+                        .ok_or_else(|| self.limit("internal", "Missing optional class type"))?;
+                    let narrowed = self.slot(&inner)?;
+                    self.write_slot(narrowed, self.temp(receiver_slot));
+                    self.release(receiver_slot);
+                    narrowed
+                } else {
+                    receiver_slot
+                };
+                let mut args = vec![receiver_slot];
+                for arg in arguments {
+                    args.push(self.expression(arg, depth)?);
+                }
+                let call = format!(
+                    "{}({})",
+                    self.temp(c),
+                    args.iter()
+                        .map(|slot| self.temp(*slot))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                if expr.ty == Type::Void {
+                    self.line(call);
+                } else {
+                    self.write_slot(dest, call);
+                }
+                for slot in args {
+                    self.release(slot);
+                }
+                self.release(c);
+                if *optional {
+                    self.indent -= 1;
+                    self.line("end");
+                }
+            }
             E::Method(name, arity, receiver, arguments) => {
                 let a = self.expression(receiver, depth)?;
                 let mut slots = vec![a];

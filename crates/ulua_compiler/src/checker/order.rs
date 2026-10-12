@@ -13,14 +13,17 @@ impl Checker<'_> {
                 callers[function.binding + 1].push(parent);
             }
         }
-        for &(owner, id, _) in &self.references {
+        for &(owner, id, offset) in &self.references {
             if owner == 0 {
                 continue;
             }
             let b = &self.bindings[id];
-            if b.declaration {
+            if b.declaration || self.class_bindings.contains(&id) {
                 callers[id + 1].push(owner);
-            } else if b.owner != owner {
+            }
+            let inside_class =
+                self.class_bindings.contains(&id) && offset >= b.start && offset < b.end;
+            if !b.declaration && b.owner != owner && !inside_class {
                 let end = latest[owner].entry(b.owner).or_default();
                 *end = (*end).max(b.end);
             }
@@ -48,7 +51,9 @@ impl Checker<'_> {
             }
         }
         for &(_, id, offset) in &self.references {
-            if self.bindings[id].declaration && latest[id + 1].values().any(|end| offset < *end) {
+            if (self.bindings[id].declaration || self.class_bindings.contains(&id))
+                && latest[id + 1].values().any(|end| offset < *end)
+            {
                 return Err(Diagnostic::at(
                     self.source,
                     offset as usize,

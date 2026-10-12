@@ -11,6 +11,7 @@ enum Shape {
     Nullable,
     Function(usize, usize),
     Record(Vec<usize>),
+    Class(usize),
 }
 impl Types {
     pub(crate) fn seal_aliases(&mut self) {
@@ -33,6 +34,15 @@ impl Types {
                 Node::Record(fields) => (
                     Shape::Record(fields.iter().map(|f| f.0).collect()),
                     fields.iter().map(|f| f.1).collect(),
+                ),
+                Node::Class(class) => (
+                    Shape::Class(id),
+                    class
+                        .fields
+                        .iter()
+                        .chain(&class.methods)
+                        .map(|f| f.1)
+                        .collect(),
                 ),
             };
             let next = blocks.len();
@@ -130,7 +140,7 @@ impl Types {
                     );
                     self.records.insert(fields, identity);
                 }
-                Node::Primitive(_) => {}
+                Node::Primitive(_) | Node::Class(_) => {}
             }
         }
         // Function containment is reverse reachability, including recursive records.
@@ -143,7 +153,11 @@ impl Types {
             }
         }
         while let Some(id) = pending.pop_front() {
-            for (source, _) in &incoming[id] {
+            for (source, label) in &incoming[id] {
+                if matches!(&self.nodes[*source], Node::Class(class) if *label >= class.fields.len())
+                {
+                    continue;
+                }
                 if !contains[*source] {
                     contains[*source] = true;
                     pending.push_back(*source);

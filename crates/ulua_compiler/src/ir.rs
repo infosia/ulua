@@ -1,6 +1,10 @@
 //! Checked P1 and P2.1 forms. Binding identities carry type, scope, and declaration order.
+#[cfg(test)]
+mod count;
 pub(crate) use crate::methods::Method;
 pub(crate) use crate::types::{FunctionType, Type, Types};
+#[cfg(test)]
+pub(crate) use count::nodes;
 pub(crate) struct Binding {
     pub(crate) ty: Option<Type>,
     pub(crate) owner: usize,
@@ -25,6 +29,7 @@ pub(crate) struct Function {
     pub(crate) exported: bool,
     pub(crate) parameters: Vec<(usize, Option<Expr>)>,
     pub(crate) result: Type,
+    pub(crate) initializers: Vec<Statement>,
     pub(crate) body: Vec<Statement>,
 }
 #[derive(Clone, Copy)]
@@ -69,6 +74,7 @@ pub(crate) enum ExprKind {
     Logical(bool, Box<Expr>, Box<Expr>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
+    ClassCall(Box<Expr>, Box<Expr>, Vec<Expr>, bool),
     Template(Vec<Expr>),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
@@ -201,6 +207,10 @@ pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
             }
             ExprKind::Call(c, args) => {
                 expressions.push(c);
+                expressions.extend(args);
+            }
+            ExprKind::ClassCall(c, receiver, args, _) => {
+                expressions.extend([c.as_ref(), receiver.as_ref()]);
                 expressions.extend(args);
             }
             ExprKind::Object(fields) => expressions.extend(fields.iter().map(|f| &f.1)),

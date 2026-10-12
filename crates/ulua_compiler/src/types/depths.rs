@@ -14,6 +14,12 @@ impl Node {
                 .map(|t| t.0)
                 .collect(),
             Self::Record(fields) => fields.iter().map(|(_, t)| t.0).collect(),
+            Self::Class(class) => class
+                .fields
+                .iter()
+                .chain(&class.methods)
+                .map(|(_, t)| t.0)
+                .collect(),
         }
     }
 }

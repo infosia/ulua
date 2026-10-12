@@ -7,6 +7,7 @@ enum Node<'a> {
     Statement(&'a Statement<'a>),
     Declaration(&'a Declaration<'a>),
     Function(&'a Function<'a>),
+    Class(&'a Class<'a>),
     Expression(&'a Expression<'a>),
 }
 impl Node<'_> {
@@ -15,6 +16,7 @@ impl Node<'_> {
             Self::Statement(n) => n.span().start,
             Self::Declaration(n) => n.span().start,
             Self::Function(n) => n.span.start,
+            Self::Class(n) => n.span.start,
             Self::Expression(n) => n.span().start,
         }
     }
@@ -57,6 +59,7 @@ pub(crate) fn check<'a>(
                     pending.push((Node::Declaration(&n.declaration), next))
                 }
                 Statement::FunctionDeclaration(n) => pending.push((Node::Function(n), next)),
+                Statement::ClassDeclaration(n) => pending.push((Node::Class(n), next)),
                 Statement::ExpressionStatement(n) => {
                     pending.push((Node::Expression(&n.expression), next))
                 }
@@ -134,6 +137,21 @@ pub(crate) fn check<'a>(
                 }
                 _ => {}
             },
+            Node::Class(class) => {
+                for member in &class.body.body {
+                    match member {
+                        ClassElement::MethodDefinition(m) => {
+                            pending.push((Node::Function(&m.value), next))
+                        }
+                        ClassElement::PropertyDefinition(p) => {
+                            if let Some(e) = &p.value {
+                                pending.push((Node::Expression(e), next));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
             Node::Function(f) => {
                 for p in &f.params.items {
                     if let Some(e) = &p.initializer {
@@ -145,6 +163,14 @@ pub(crate) fn check<'a>(
                 }
             }
             Node::Expression(e) => match e {
+                Expression::NewExpression(n) => {
+                    pending.push((Node::Expression(&n.callee), next));
+                    for arg in &n.arguments {
+                        if let Some(e) = arg.as_expression() {
+                            pending.push((Node::Expression(e), next));
+                        }
+                    }
+                }
                 Expression::ArrowFunctionExpression(a) => {
                     for p in &a.params.items {
                         if let Some(e) = &p.initializer {

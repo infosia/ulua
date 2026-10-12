@@ -37,6 +37,7 @@ impl FunctionTypes {
         let mut statements: Vec<_> = module.body.iter().collect();
         let mut expressions = vec![];
         for function in &module.functions {
+            statements.extend(&function.initializers);
             statements.extend(&function.body);
             expressions.extend(
                 function
@@ -104,6 +105,10 @@ impl FunctionTypes {
                     expressions.extend(args);
                 }
                 E::Object(fields) => expressions.extend(fields.iter().map(|f| &f.1)),
+                E::ClassCall(c, receiver, args, _) => {
+                    expressions.extend([c.as_ref(), receiver.as_ref()]);
+                    expressions.extend(args);
+                }
                 E::Template(parts) | E::Array(parts) => expressions.extend(parts),
                 _ => {}
             }

@@ -253,6 +253,30 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.6 implementation record
+
+- Codex task (fresh agent). Nominal class types, per-path constructor
+  assignment (C13), receiver capture in arrows, method, `new`, and
+  optional method calls, identity equality, class links in
+  `limit:fields` and `limit:type-depth`. Plain tables; receiver-first
+  generated method functions.
+- Contract questions answered during the task: `private` access
+  outside the class gives C11 (`tsc` TS2341, `r116`); a constructor has
+  no modifier and no `return e` (surface.md Rev 20).
+- At the contract pin `8af6a48`: `a16`, `a18`, `a21`, `a44`, `a45`
+  gave `unsupported`; `r40` gave C11, the other rejects `unsupported`.
+- Direct tests: 8 accepted and 4 boundary programs pass `node`, `tsc`,
+  and `luau-analyze`; 22 C13 rejects and 43 other rejects checked
+  against `tsc`.
+- Growth at 8,192 and 32,768 bytes, asserted on state and output
+  ratios (principle 15): many classes 3.906, many methods 4.232, wide
+  classes 4.665, deep method chains 3.918, many constructions 4.015;
+  output factor at 64 KiB at most 25.197; ABI compile time observed
+  (largest ratio 4.4).
+- Random: 160 programs, 160 accepted, each equal to `node` and passing
+  `tsc` (TS2339 that names `never` in 20) and `luau-analyze`.
+- gate full: PASS, 151 entries in P2.6 or earlier.
+
 ### P2.5 Phase Review round 14
 
 Reviewer: fresh agent, diff `917e951..c161907`. 0 CRITICAL, 0 MAJOR, 0 MINOR. The round 13 resolution holds. Type relation campaign: 24,000 alias pairs, 12,668 accepted, 0 accepted that `tsc` rejects, 0 pairs that `tsc` accepts both ways and Ulua rejects. Field update campaign: about 5,500 programs, 0 differences from `node`. Observation: `p25_alias_links.rs` has no reject control for unequal composites built after the seal; the campaign covers that direction.

@@ -92,7 +92,7 @@ impl Checker<'_> {
         )
     }
 
-    fn parameters(
+    pub(super) fn parameters(
         &mut self,
         params: &FormalParameters<'_>,
         body: &[Statement<'_>],
@@ -176,6 +176,7 @@ impl Checker<'_> {
         }
         self.leave_function(state);
         self.functions.push(ir::Function {
+            initializers: vec![],
             binding: id,
             name: f.id.as_ref().map_or(String::new(), |n| n.name.to_string()),
             exported,
@@ -231,7 +232,10 @@ impl Checker<'_> {
                 self.inferred_reference(e, value.ty)?;
             }
             if value.ty == Type::Void
-                && !matches!(value.kind, ExprKind::Call(..) | ExprKind::Method(..))
+                && !matches!(
+                    value.kind,
+                    ExprKind::Call(..) | ExprKind::Method(..) | ExprKind::ClassCall(..)
+                )
             {
                 return Err(self.error(e.span(), "C11", "Void arrow body must be a call"));
             }
@@ -267,6 +271,7 @@ impl Checker<'_> {
         self.checked_type_depth(ty, a.span)?;
         self.bindings[id].ty = Some(ty);
         self.functions.push(ir::Function {
+            initializers: vec![],
             binding: id,
             name: String::new(),
             exported: false,
@@ -277,7 +282,12 @@ impl Checker<'_> {
         Ok((ty, ExprKind::Closure(id)))
     }
 
-    fn enter_function(&mut self, id: usize, result: Type, inherit: bool) -> FunctionState {
+    pub(super) fn enter_function(
+        &mut self,
+        id: usize,
+        result: Type,
+        inherit: bool,
+    ) -> FunctionState {
         let state = FunctionState {
             reachable: std::mem::replace(&mut self.reachable, true),
             fact_mark: self.facts.mark(),
@@ -287,7 +297,12 @@ impl Checker<'_> {
             owner: self.owner,
             result: std::mem::replace(&mut self.result, result),
             loops: std::mem::replace(&mut self.loops, 0),
+            this_binding: self.this_binding,
+            in_constructor: std::mem::replace(&mut self.in_constructor, false),
         };
+        if !inherit {
+            self.this_binding = None;
+        }
         // Named declarations and arrows at unreachable points have no outer const facts (TS18047).
         if !inherit || !state.reachable {
             self.facts.floor = self.facts.serial + 1;
@@ -297,7 +312,7 @@ impl Checker<'_> {
         self.scopes.push(HashMap::new());
         state
     }
-    fn leave_function(&mut self, state: FunctionState) {
+    pub(super) fn leave_function(&mut self, state: FunctionState) {
         self.reachable = state.reachable;
         self.facts.restore(state.fact_mark);
         self.facts.floor = state.fact_floor;
@@ -307,9 +322,11 @@ impl Checker<'_> {
         self.owner = state.owner;
         self.result = state.result;
         self.loops = state.loops;
+        self.this_binding = state.this_binding;
+        self.in_constructor = state.in_constructor;
     }
 }
-struct FunctionState {
+pub(super) struct FunctionState {
     reachable: bool,
     fact_mark: usize,
     fact_floor: u64,
@@ -318,4 +335,6 @@ struct FunctionState {
     owner: usize,
     result: Type,
     loops: usize,
+    this_binding: Option<usize>,
+    in_constructor: bool,
 }

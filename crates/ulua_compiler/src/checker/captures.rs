@@ -46,6 +46,21 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                     }
                 }
                 Statement::FunctionDeclaration(f) => pending.push(Work::Function(f, scope)),
+                Statement::ClassDeclaration(class) => {
+                    for member in &class.body.body {
+                        match member {
+                            ClassElement::MethodDefinition(m) => {
+                                pending.push(Work::Function(&m.value, scope))
+                            }
+                            ClassElement::PropertyDefinition(p) => {
+                                if let Some(e) = &p.value {
+                                    pending.push(Work::Expr(e, scope));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 Statement::BlockStatement(b) => {
                     let scope = Scope {
                         span: b.span,
@@ -120,6 +135,15 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                 }
             }
             Work::Expr(e, scope) => match e {
+                Expression::NewExpression(n) => {
+                    pending.push(Work::Expr(&n.callee, scope));
+                    pending.extend(
+                        n.arguments
+                            .iter()
+                            .filter_map(|a| a.as_expression())
+                            .map(|e| Work::Expr(e, scope)),
+                    );
+                }
                 Expression::ArrowFunctionExpression(a) => {
                     let scope = Scope {
                         span: a.span,

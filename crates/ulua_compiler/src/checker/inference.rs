@@ -54,6 +54,7 @@ impl Checker<'_> {
                 .rev()
                 .find_map(|s| s.get(n.name.as_str()))
                 .and_then(|id| self.bindings[*id].ty),
+            Expression::ThisExpression(_) => self.this_binding.and_then(|id| self.bindings[id].ty),
             Expression::ParenthesizedExpression(p) => self.reference_type(&p.expression),
             Expression::ComputedMemberExpression(m) => {
                 let ty = self.reference_type(&m.object)?;
@@ -77,7 +78,7 @@ fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
     }
     // Checked logical operands and conditional arms have the result's boolean type.
     match e {
-        Expression::Identifier(_) => true,
+        Expression::Identifier(_) | Expression::ThisExpression(_) => true,
         Expression::ComputedMemberExpression(m) => reference(&m.object),
         Expression::StaticMemberExpression(m) => reference(&m.object),
         Expression::ChainExpression(c) => chain_reference(&c.expression),
@@ -97,7 +98,7 @@ fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
 
 fn reference(e: &Expression<'_>) -> bool {
     match e {
-        Expression::Identifier(_) => true,
+        Expression::Identifier(_) | Expression::ThisExpression(_) => true,
         Expression::ComputedMemberExpression(m) => reference(&m.object),
         Expression::StaticMemberExpression(m) => reference(&m.object),
         Expression::ParenthesizedExpression(p) => reference(&p.expression),

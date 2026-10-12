@@ -40,6 +40,10 @@ impl Types {
                 .fold(fields.len().min(FIELD_BOUND + 1), |count, (_, ty)| {
                     add(count, *ty)
                 }),
+            Node::Class(class) => class.fields.iter().chain(&class.methods).fold(
+                (class.fields.len() + class.methods.len()).min(FIELD_BOUND + 1),
+                |count, (_, ty)| add(count, *ty),
+            ),
         }
     }
     pub(super) fn add_counted(&mut self, node: Node, identity: Option<Type>) -> Type {
