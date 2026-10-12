@@ -1,8 +1,8 @@
 # P2 value representations
 
-Status: open; P2.1 to P2.4 COMPLETE 2026-10-12; P2.5 COMPLETE 2026-10-13. Contracts:
-`pipeline.md` Rev 23, `abi.md` Rev 4, `corpus.md` Rev 7, `surface.md` Rev 18,
-`collisions.md` Rev 36. Decisions: D15 to D19 (`plan.md` §8).
+Status: open; P2.1 to P2.4 COMPLETE 2026-10-12; P2.5 and P2.6 COMPLETE 2026-10-13.
+Contracts: `pipeline.md` Rev 24, `abi.md` Rev 4, `corpus.md` Rev 8, `surface.md`
+Rev 21, `collisions.md` Rev 38. Decisions: D15 to D19 (`plan.md` §8).
 
 ## Slices
 
@@ -35,17 +35,18 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.6)
 
-- [ ] surface.md §1 class rows, Rev 19 `ThisExpression`; collisions.md
+- [x] surface.md §1 class rows, Rev 19 `ThisExpression`; collisions.md
   C1.5 (classes nominal, D19), C1.6 (class members), C7 (identity
   within a class), C13.1 to C13.5, C14.1 and C14.2 implemented.
-- [ ] P2.6 entries pass in full; P2.7 entries stay `unsupported`.
-- [ ] Direct tests: construction order, field initializers, `this` in
+- [x] P2.6 entries pass in full; P2.7 entries stay `unsupported`.
+- [x] Direct tests: construction order, field initializers, `this` in
   arrows, `this` as a value, methods calling methods, recursion,
   classes in arrays, records, and `T | null`, `?.` method calls,
   identity, `private`; each against `node`.
-- [ ] `limit:fields` (fields and methods) and `limit:type-depth` with
+- [x] `limit:fields` (fields and methods) and `limit:type-depth` with
   class links; growth shapes for classes; `luau-analyze` passes.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 4: 0 findings).
 
 Source: the owner's prior project for `this` in a lambda (captured as a
 `const`) and field initializers on every construction. Changes: no
@@ -252,6 +253,17 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.6 Phase Review round 4
+
+Reviewer: fresh agent, diff `4a8a817..9ec2739`. 0 CRITICAL, 0 MAJOR, 0 MINOR. The round 3 resolution holds: the forwarding alias line is load-bearing; every analyzer call passes `-j1`. Random class graphs: 4,500 programs, 4,342 accepted (158 `limit:type-depth`), 0 `tsc` errors, 0 `luau-analyze` failures, 0 `node` differences; 66 of 400 emit a forwarding alias.
+
+### P2.6 close
+
+`sh tools/gate.sh full` passes: `cargo-test` 200 s, `luau-witnesses`
+57 s (153 entries in P2.6 or earlier, 57 generated modules, 14 stress
+modules); hygiene passes. Review rounds: 4. Running tasks at the
+close: none.
 
 ### P2.6 Phase Review round 3
 
