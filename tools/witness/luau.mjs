@@ -109,8 +109,8 @@ const analyze = process.env.LUAU_ANALYZE || path.join(root, "target/luau-tools/l
 const files = readdirSync(luauDir).map((f) => path.join(luauDir, f));
 if (!existsSync(analyze)) fail("luau-analyze", `not found at ${path.relative(root, analyze)}; run sh tools/luau-tools.sh`);
 else if (files.length > 0) {
-  const a = spawnSync(analyze, [...files, ...stressFiles], { encoding: "utf8", maxBuffer: 1 << 28 });
-  if (a.status !== 0) fail("luau-analyze", `exit ${a.status}\n${a.stdout}${a.stderr}`);
+  const a = spawnSync(analyze, ["-j1", ...files, ...stressFiles], { encoding: "utf8", maxBuffer: 1 << 28 });
+  if (a.status !== 0) fail("luau-analyze", `exit ${a.status} signal ${a.signal}\n${a.stdout}${a.stderr}`);
 }
 
 const checked = entries.filter((e) => order(e.header.phase) <= order(PHASE)).length;

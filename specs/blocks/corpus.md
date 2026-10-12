@@ -1,11 +1,11 @@
 # Corpus contract
 
-Status: Rev 7, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 8, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
 `phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
 codes to it; Rev 6 renames it to `exception`, P2.5 review; Rev 7: any code that names `never`,
-P2.5 review 11).
+P2.5 review 11; Rev 8: `luau-analyze -j1`, P2.6 review 3).
 
 ## 1. Layout
 
@@ -100,7 +100,12 @@ Each entry starts with `//` header lines, in this order:
   - reject: status `rejected`, with any code.
 - No entry gives status `internal`.
 - `luau-analyze` exits with status 0 over the generated Luau of every
-  compiled entry (D10).
+  compiled entry (D10). Every call of `luau-analyze`, in the witness
+  and in a test, passes `-j1`. The pinned Luau writes the shared
+  `Frontend::iceHandler.moduleName` from each worker thread
+  (`Analysis/src/Frontend.cpp`), and a parallel run can die by a
+  signal with no output: 96 of 12,000 parallel runs, 0 of 12,000 with
+  `-j1`. A failure reports the exit status and the signal.
 
 ## 5. Golden changes
 

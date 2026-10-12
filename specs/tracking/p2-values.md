@@ -253,6 +253,15 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.6 Phase Review round 3
+
+Reviewer: fresh agent, diff `4a8a817..0b95ecf`. 0 CRITICAL, 1 MAJOR, 1 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Shared type aliases leave an undeclared name in a class cycle: `class X { d: D; f: F \| null }`, `class D` and `class F` with equal shapes that point back to `X`; the cycle root is renamed to an equal alias after a descendant alias used its first name; `luau-analyze` gives "Unknown type '__ulua_fn1'"; the parent commit passes | MAJOR | implementation; a test runs `luau-analyze` on the cycle shapes |
+| `luau-analyze` of the pinned Luau has a data race: each worker thread writes the shared `Frontend::iceHandler.moduleName`; a parallel run dies by SIGTRAP, SIGABRT, or SIGSEGV with no output (crash reports in `basic_string::__grow_by_and_replace` from `Luau::check`). 96 of 12,000 parallel runs crash, 0 of 12,000 with `-j1`. This is the cause of the open `p26_limits.rs:122` and P2.5 `p25_growth.rs:356` failures | MINOR | corpus.md Rev 8: every call passes `-j1` and reports status and signal; the witness changed |
+
 ### P2.6 Phase Review round 2
 
 Reviewer: fresh agent, diff `4a8a817..29a8f0f`. 0 CRITICAL, 0 MAJOR, 3 MINOR. The round 1 resolution holds (every `this` form at the D18 positions; contextual forms accepted and `tsc`-clean). C13 paths, construction order, C10 with classes, private access, nominal relation, and limits checked.
@@ -277,8 +286,8 @@ runs outside the sandbox (0.13 s against 0.57 s for a pass); the same
 files analyze with status 0 by hand; 5 later runs and 2 `gate.sh full`
 runs with a status-logging wrapper (80 analyzer calls, all status 0)
 did not reproduce it. The P2.5 round 11 and round 12 `:356` failures
-are the same shape. An analyzer failure must report its exit status
-and signal.
+are the same shape. Cause found in round 3: a data race in
+`luau-analyze` (see round 3).
 
 Observation (over-rejection, consistent with C10.3): a method that calls a function declaration that reaches its own class gives C10; `tsc` and `node` accept it.
 
