@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 30, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 31, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -14,7 +14,8 @@ C6.3 divergence text, C7 array literal operands and `for…of` bindings,
 P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4; Rev 27: C1.5 structural object
 types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
 function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
-P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2).
+P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
+unreachable points, P2.5 review 3).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -624,8 +625,14 @@ says `T`. The checker narrows only where nothing else can run a write:
    costs O(1) amortized per narrowing change since the previous edge
    into that join. It does not walk the path from the loop entry or
    the branch start again.
+8. At a point that no edge reaches, no reference is narrowed: a read
+   there has the declared type. Such points are the statements after
+   a `return`, `break`, or `continue`, after an `if` whose branches all
+   exit, after a loop that never ends normally, and a `for` update that
+   no edge reaches. `tsc` gives a read there the declared type
+   (TS18047).
 
-Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`.
+Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`.
 
 ## Open items
 
