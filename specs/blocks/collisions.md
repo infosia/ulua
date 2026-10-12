@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 32, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 33, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -15,7 +15,8 @@ P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D
 types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
 function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
 P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
-unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4).
+unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
+C16.9 logical tests, P2.5 review 5).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -601,10 +602,14 @@ type across calls and for fields. A call can assign `null` to the
 location in between, and JavaScript then reads `null` where the type
 says `T`. The checker narrows only where nothing else can run a write:
 
-1. A null test (`x != null`, `x == null`, `x !== null`, `x === null`,
-   with `!`, `&&`, `||`, `?:`,
-   `if`, `while`, and an early `return`, `break`, or `continue`) narrows
-   a reference `x` on the paths where the test holds.
+1. A null test (`x != null`, `x == null`, `x !== null`, `x === null`)
+   narrows a reference `x` on the edges where the test holds. The edges
+   compose through `!`, `&&`, `||`, and parentheses (rule 9), and reach
+   the branches of `if`, `?:`, `&&`, and `||`, the body and the exit of
+   a loop, and the statements after an early `return`, `break`, or
+   `continue`. A `?:` used as a test is a leaf of rule 9: it narrows
+   nothing on its edges (`if (c ? x != null : false)` gives TS18047 in
+   `tsc`).
 2. `x` is a `const` binding, or a `let` binding or a parameter that no
    function or arrow assigns. A module-level `let` is never narrowed.
 3. The narrowing ends at the next assignment to `x` on that path.
@@ -632,15 +637,24 @@ says `T`. The checker narrows only where nothing else can run a write:
    no edge reaches. `tsc` gives a read there the declared type
    (TS18047).
 9. Only these end an edge: `return`, `break`, `continue`, a loop
-   that never ends normally, and a test that is the literal `true` or
-   `false` with no parentheses and no `!` (the false edge of `true`,
-   the true edge of `false`). A null test never ends an edge, also
-   when it contradicts a narrowing: `tsc` keeps that edge and narrows
-   the reference to `never` there. On that edge the other narrowings
-   stay. A loop never ends normally when its test is absent or the
-   literal `true`, and no `break` of the loop is reachable.
+   that never ends normally, and a literal leaf of a test. A test is
+   *logical* when, without its parentheses and `!` operators, it is an
+   `&&` or `||` expression. A logical test composes its edges from its
+   operands: `!` swaps the true and false edges, parentheses keep them,
+   `a && b` and `a || b` join the edges of `a` and `b` as their
+   evaluation order gives. Every other test is a leaf. A leaf `true`,
+   with no parentheses and no `!`, has no false edge; a leaf `false`
+   has no true edge; every other leaf has both edges. So `true || c`,
+   `(true || c)`, and `!(false && c)` have no false edge; `(true)`,
+   `!false`, `!!true`, `(true) || c`, and `c ? true : true` have both.
+   A null test never ends an edge, also when it contradicts a
+   narrowing: `tsc` keeps that edge and narrows the reference to
+   `never` there. On that edge the other narrowings stay. A loop never
+   ends normally when its test is absent or has no false edge, and no
+   `break` of the loop is reachable. These are the `tsc` edges,
+   measured.
 
-Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`.
+Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`.
 
 ## Open items
 
