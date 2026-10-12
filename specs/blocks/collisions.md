@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 36, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 37, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -83,13 +83,13 @@ results, and object fields.
    its first argument (C14). A class instance seen through an object
    type, or an object literal seen through a class type, selects the
    wrong call form.
-6. A field named `__proto__` is rejected, in an object type and in an
-   object literal. `node` reads `{ __proto__: 1 }.__proto__` as the
+6. A field named `__proto__` is rejected, in an object type, in an
+   object literal, and as a class field or method. `node` reads `{ __proto__: 1 }.__proto__` as the
    prototype object and prints `[object Object]`. The Luau table field
    holds `1`.
 
 Accept: `a01`, `a05`, `a09`, `a15`, `a16`, `a49`. Reject: `r19`, `r43`, `r53`, `r84`,
-`r54`, `r102`.
+`r54`, `r102`, `r113`.
 
 ## C2. Absence — `T | null` only
 
@@ -474,7 +474,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order
@@ -526,9 +526,19 @@ Accept: `a18`, `a31`, `a50`. Trap: `t07`.
 3. In a constructor, until every field without an initializer has an
    assignment on every path, `this` appears only as the target
    `this.f = e`, and `e` does not use `this`. JavaScript reads
-   `undefined` from an unassigned field, outside its type.
+   `undefined` from an unassigned field, outside its type. An arrow
+   that reads `this` is a use of `this` where the arrow is written.
+4. `new C(a, b)` evaluates the arguments from left to right, then the
+   field initializers in declaration order, then the constructor body,
+   as JavaScript does.
+5. `this` in a method or a constructor is the receiver. An arrow at
+   any depth inside a method or a constructor reads the receiver of
+   that call; the arrow captures it as it captures a `const` binding.
+   A nested function declaration does not see `this` (`tsc` gives
+   TS2683). `this` is a value of the class type: a method can return
+   it, store it, and pass it.
 
-Accept: `a16`. Reject: `r52`.
+Accept: `a16`, `a44`, `a45`. Reject: `r52`, `r114`.
 
 ## C14. No metatables; literal values
 

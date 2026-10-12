@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 18, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 19, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -10,7 +10,7 @@ for function results, default scope, P2.1 review 2; Rev 11: function types
 at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
-reference, P2.5 review 2).
+reference, P2.5 review 2; Rev 19: `this`, P2.6).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -76,7 +76,7 @@ rejected, also where `tsc` accepts it.
 | `ObjectExpression` | Each property is an `ObjectProperty` of kind `init` with an identifier key: not computed, not shorthand, not a method, not `get` or `set`, no `SpreadElement`. |
 | `ParenthesizedExpression` | Around an expr. |
 | `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `String` (only as the callee of `String(n)`). |
-| `ThisExpression` | In a method or constructor, only as the object of a `StaticMemberExpression` (C13). |
+| `ThisExpression` | In a method or a constructor, or in an arrow inside one at any depth (C13.5). Not in a field initializer (C13.2) and not in a nested function declaration (`tsc` TS2683). A value of the class type. |
 | `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, and the `string` members of C5.2 as callees. No other member. |
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
 | `CallExpression` | The callee is an `IdentifierReference` of a function declaration, or of a binding or a parameter of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
@@ -132,7 +132,7 @@ C11; a type annotation, or a contextual type, accepts it. A `T | null`
 reference narrows to `T` after a null test in the same way, and a later
 write of `null` gives TS2322.
 
-A reference is an `IdentifierReference`, an element read `e[k]` or
+A reference is an `IdentifierReference`, `this`, an element read `e[k]` or
 `e?.[k]`, or a member read `e.f` or `e?.f` (`length` included), where
 `e` is a reference or a reference in parentheses. `tsc` ignores the
 parentheses and narrows `o?.f` as it narrows `o.f`. A
