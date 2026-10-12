@@ -1,10 +1,10 @@
 # Corpus contract
 
-Status: Rev 5, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 6, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
 `phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
-codes to it).
+codes to it; Rev 6 renames it to `exception`, P2.5 review).
 
 ## 1. Layout
 
@@ -41,9 +41,9 @@ Each entry starts with `//` header lines, in this order:
 ```
 
 - `tsc` is measured, never assumed. An accept or trap entry states
-  `tsc: accepts`, or `tsc: equality <codes>` with codes from TS2367,
+  `tsc: accepts`, or `tsc: exception <codes>` with codes from TS2367,
   TS2845, TS2322, TS2345, and TS2339 when `tsc` gives them only where CLAUDE.md
-  invariant 3 allows (collisions.md C7). A reject entry states the result of `tsc` on
+  invariant 3 allows (collisions.md C7, C16). A reject entry states the result of `tsc` on
   that file alone with the project options.
 - `rule` names collision ids (`C1`, `C2`, ...) of `collisions.md`.
 - `phase` names the phase from which the Luau witnesses check the entry
@@ -67,7 +67,7 @@ Each entry starts with `//` header lines, in this order:
   `collisions.md`. Each rule names exactly the entries that cite it.
 - `tsc`: `tsconfig.json` has no option errors. One program over the
   prelude and every accept and trap entry reports zero errors, except
-  the codes of an `equality` header: each such diagnostic lies on a
+  the codes of an `exception` header: each such diagnostic lies on a
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
   `number`, `string`, or `boolean` type (literal types widened; an
   operand narrowed to `never` counts as either) for TS2367 and TS2845;

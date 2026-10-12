@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 28, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 29, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -13,7 +13,8 @@ closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
 P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4; Rev 27: C1.5 structural object
 types (D19), C2 strict null tests, C7 object identity, P2.5; Rev 28: C1.6 `__proto__`, C16.4
-function declarations, P2.5 implementation).
+function declarations, P2.5 implementation; Rev 29: C16.1, C16.6, C16.7,
+P2.5 review).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -469,7 +470,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order
@@ -599,7 +600,8 @@ type across calls and for fields. A call can assign `null` to the
 location in between, and JavaScript then reads `null` where the type
 says `T`. The checker narrows only where nothing else can run a write:
 
-1. A null test (`x != null`, `x == null`, with `!`, `&&`, `||`, `?:`,
+1. A null test (`x != null`, `x == null`, `x !== null`, `x === null`,
+   with `!`, `&&`, `||`, `?:`,
    `if`, `while`, and an early `return`, `break`, or `continue`) narrows
    a reference `x` on the paths where the test holds.
 2. `x` is a `const` binding, or a `let` binding or a parameter that no
@@ -612,8 +614,14 @@ says `T`. The checker narrows only where nothing else can run a write:
    the declaration is hoisted, and `tsc` gives TS18047 there.
 5. A field, an element, and every other reference are never narrowed.
    Copy the value into a `const` to narrow it.
+6. A point that two or more edges reach has the narrowings that every
+   edge carries. The update of a `for` is such a point: its edges are
+   the end of the body and each `continue` of the loop.
+7. A null test that is the test of a `?:`, `&&`, or `||` operand, at
+   any depth, costs O(1) per syntax node: the compiler computes the
+   narrowings of each node once (`pipeline.md` §3.10).
 
-Accept: `a14`. Reject: `r67`, `r68`, `r69`, `r101`.
+Accept: `a14`, `a42`, `a43`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`.
 
 ## Open items
 

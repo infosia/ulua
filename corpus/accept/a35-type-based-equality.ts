@@ -2,7 +2,7 @@
 // purpose: Compares operands of one primitive type, including constants, narrowed references, aliases, and NaN.
 // rule: C7
 // phase: P2.3
-// tsc: equality TS2367, TS2845
+// tsc: exception TS2367, TS2845
 // js-comparable: yes
 let calls = 0;
 

@@ -56,8 +56,8 @@ function parseHeader(entry) {
   const m = NAME.exec(entry.file);
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
-  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845|2322|2345|2339)(, TS(2367|2845|2322|2345|2339))*$/.test(header.tsc || ""))
-    fail(entry.id, "accept and trap entries state tsc: accepts or tsc: equality <codes of invariant 3>");
+  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^exception TS(2367|2845|2322|2345|2339)(, TS(2367|2845|2322|2345|2339))*$/.test(header.tsc || ""))
+    fail(entry.id, "accept and trap entries state tsc: accepts or tsc: exception <codes of invariant 3>");
   if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
@@ -75,7 +75,7 @@ function parseHeader(entry) {
 
 function expectedCodes(tscHeader) {
   if (tscHeader === "accepts") return [];
-  const eq = /^equality (TS\d+(?:, TS\d+)*)$/.exec(tscHeader || "");
+  const eq = /^exception (TS\d+(?:, TS\d+)*)$/.exec(tscHeader || "");
   if (eq) return eq[1].split(", ").map((c) => Number(c.slice(2)));
   const m = /^errors (TS\d+(?:, TS\d+)*)$/.exec(tscHeader || "");
   return m ? m[1].split(", ").map((c) => Number(c.slice(2))) : null;
@@ -107,8 +107,9 @@ function tscCodes(files) {
 
 // CLAUDE.md invariant 3, collisions.md C7: TS2367 or TS2845 on an
 // equality expression whose operands have one primitive type, with
-// literal types widened; or TS2322 or TS2345 that names `never`, the
-// narrowing that a contradictory accepted equality leaves.
+// literal types widened; or TS2322, TS2345, or TS2339 that names
+// `never`, the narrowing that a contradictory accepted equality or an
+// assignment of `null` leaves.
 function isAcceptedEquality(d, checker) {
   if (d.code === 2322 || d.code === 2345 || d.code === 2339) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
@@ -223,11 +224,11 @@ for (const group of [[...accept, ...trap], reject]) {
     const want = expectedCodes(headers.get(e.id).tsc);
     const got = [...byFile.get(path.resolve(e.path))].sort((a, b) => a - b);
     if (want === null) {
-      fail(e.id, `tsc header is not 'accepts', 'equality TSnnnn, ...', or 'errors TSnnnn, ...'; measured [${got.map((c) => `TS${c}`).join(", ")}]`);
+      fail(e.id, `tsc header is not 'accepts', 'exception TSnnnn, ...', or 'errors TSnnnn, ...'; measured [${got.map((c) => `TS${c}`).join(", ")}]`);
       continue;
     }
-    if (/^equality /.test(headers.get(e.id).tsc) && !atEquality.get(path.resolve(e.path)))
-      fail(e.id, "a tsc diagnostic is outside invariant 3: not TS2367 or TS2845 on an accepted equality, nor TS2322 or TS2345 that names never");
+    if (/^exception /.test(headers.get(e.id).tsc) && !atEquality.get(path.resolve(e.path)))
+      fail(e.id, "a tsc diagnostic is outside invariant 3: not TS2367 or TS2845 on an accepted equality, nor TS2322, TS2345, or TS2339 that names never");
     if (got.join(",") !== [...want].sort((a, b) => a - b).join(",")) {
       fail(e.id, `tsc codes [${got.map((c) => `TS${c}`).join(", ")}], header states ${headers.get(e.id).tsc}`);
     }

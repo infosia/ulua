@@ -2,7 +2,7 @@
 // purpose: Copies and writes number and string references, including after a contradictory comparison.
 // rule: C7
 // phase: P2.3
-// tsc: equality TS2367, TS2322
+// tsc: exception TS2367, TS2322
 // js-comparable: yes
 function compound(k: number): number {
   if (k === 1) {

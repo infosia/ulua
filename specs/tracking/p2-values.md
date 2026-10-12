@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100`, `r101`, `r102`; retired `r05` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100` to `r105`, `a42`, `a43`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -229,6 +229,22 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.5 Phase Review round 1
+
+Reviewer: fresh agent, diff `917e951..362fa4c`. 2 CRITICAL, 2 MAJOR, 5 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C16 at the `for` update ignores `continue` edges: `for (...; ...; s += x.value) { if (x == null) { continue; } }` is accepted, Luau indexes `nil` (`internal`), `tsc` gives TS18047 | CRITICAL | C16.6, `r103` |
+| `edge()` evaluates a `?:` test twice per level: 21 nested tests in 396 bytes take 3.46 s Debug; 58,356 bytes take 38.05 s Release | CRITICAL | C16.7; growth shape for nested tests |
+| An object literal field without a contextual type is an inference position: `const o = { b: y }; o.b = null;` with `y` narrowed is accepted, `tsc` gives TS2322 | MAJOR | surface.md Rev 17 (D18 fourth position), `r104`, `r105` |
+| TS2339 that names `never` after an assignment of `null`, no equality (`s = null; s?.length`); the witness accepts it | MAJOR | invariant 3 covers the `null` assignment; header `tsc: exception` (corpus.md Rev 6); `a42` |
+| C16.1 omits `===` and `!==` | MINOR | C16.1 |
+| `r68` executes C16.2, not C16.4; C16.4 for a `const` in an arrow has no entry | MINOR | `a43` |
+| The "random" programs are fixed templates; the reject-code line is a constant | MINOR | wording here; the test counts the codes |
+| `p25_values.rs` states no cost (1.07 s test, 2.3 s wall) | MINOR | the test states its cost |
+| The C7 diagnostic text omits object types | MINOR | diagnostic text |
+
 ### P2.5 implementation record
 
 - Codex task, commit `e506cce`. Structural records with generated field
@@ -238,9 +254,10 @@ byte rule; no Luau pattern from script text; no `internal`.
   `unsupported`.
 - Direct tests: 81 accepted programs equal to `node`; 48 rejects. `tsc`
   gives TS2339 that names `never` in 2 programs, and no other code.
-- Random: 480 programs; 240 accepted, each equal to `node` and passing
-  `tsc` and `luau-analyze`; 40 programs give TS2339 that names `never`;
-  240 rejected (C16 120, C11 40, C1 40, C6 40).
+- Templates: 6 fixed program templates with a varied number, 480
+  programs; 240 accepted, each equal to `node` and passing `tsc` and
+  `luau-analyze`; 40 give TS2339 that names `never` after an assignment
+  of `null` (no equality); 240 rejects from 6 fixed strings.
 - Growth: 11 shapes; largest time ratio 3.936, largest output factor
   26.972 (record functions); Debug cost 5.978 s. Recursive types: ratio
   13.158 before canonical identities, 2.843 after.

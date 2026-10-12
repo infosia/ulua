@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 16, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 17, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -8,7 +8,8 @@ C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
 for function results, default scope, P2.1 review 2; Rev 11: function types
 at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
-references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5).
+references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
+fields, P2.5 review).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -116,10 +117,12 @@ its target.
 
 ### Inferred types from references (D18)
 
-`tsc` infers a type at three positions: the initializer of a `let`
+`tsc` infers a type at four positions: the initializer of a `let`
 without a type annotation, an element of an array literal without a
-contextual type, and the expression body of an arrow without a result
-type annotation. At these positions `tsc` takes the narrowed type of a
+contextual type, the expression body of an arrow without a result
+type annotation, and the value of a field of an object literal without
+a contextual type. The positions nest: a field of an object literal at
+one of these positions is again such a position. At these positions `tsc` takes the narrowed type of a
 reference. A `boolean` reference narrows to `true` or `false` after a
 truth test or a comparison, and a later write of the other value gives
 TS2322 or TS2345. The compiler does not track narrowing (D17). So a
