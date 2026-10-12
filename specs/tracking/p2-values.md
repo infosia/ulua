@@ -1,8 +1,8 @@
 # P2 value representations
 
-Status: open; P2.1 to P2.4 COMPLETE 2026-10-12. Contracts: `pipeline.md` Rev 10, `abi.md` Rev 4,
-`corpus.md` Rev 3, `surface.md` Rev 10, `collisions.md` Rev 22.
-Decisions: D15, D16 (`plan.md` §8).
+Status: open; P2.1 to P2.4 COMPLETE 2026-10-12; P2.5 COMPLETE 2026-10-13. Contracts:
+`pipeline.md` Rev 23, `abi.md` Rev 4, `corpus.md` Rev 7, `surface.md` Rev 18,
+`collisions.md` Rev 36. Decisions: D15 to D19 (`plan.md` §8).
 
 ## Slices
 
@@ -35,16 +35,21 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.5)
 
-- [ ] D19 and collisions.md C1.5, C2 (strict null tests), C7 (object
+- [x] D19 and collisions.md C1.5, C2 (strict null tests), C7 (object
   identity), C16, surface.md Rev 16 (D18 for nullable references), and
-  pipeline.md §5.18 implemented.
-- [ ] P2.5 entries pass in full, the C16.4 carry-over included (`r68`,
-  `r69` execute it); P2.6 entries stay `unsupported`.
-- [ ] Direct tests: field reads and writes, nested records, records in
+  pipeline.md §5.18 implemented; review rounds 1 to 13 extended them
+  (C1.6, C12.7, C16.1 to C16.9, D18 Rev 17 and 18, `limit:fields`,
+  `limit:type-depth`).
+- [x] P2.5 entries pass in full. C16.4 carry-over: `r69` executes it
+  for a `let` (rejected), `a43` and `a47` for a `const` and a nested
+  test (accepted); `r68` executes C16.2. P2.6 entries stay
+  `unsupported`.
+- [x] Direct tests: field reads and writes, nested records, records in
   arrays, null tests in every form, `??`, `?.`, narrowing at each join
   and its limits; each against `node`.
-- [ ] Growth shapes for records and narrowing; `luau-analyze` passes.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Growth shapes for records and narrowing; `luau-analyze` passes.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding
+  (round 14: 0 findings).
 
 Source: the owner's prior project for null tests and narrowing (C17
 shared locations, C24 indexed reads). Changes: records are structural
@@ -228,6 +233,17 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.5 Phase Review round 14
+
+Reviewer: fresh agent, diff `917e951..c161907`. 0 CRITICAL, 0 MAJOR, 0 MINOR. The round 13 resolution holds. Type relation campaign: 24,000 alias pairs, 12,668 accepted, 0 accepted that `tsc` rejects, 0 pairs that `tsc` accepts both ways and Ulua rejects. Field update campaign: about 5,500 programs, 0 differences from `node`. Observation: `p25_alias_links.rs` has no reject control for unequal composites built after the seal; the campaign covers that direction.
+
+### P2.5 close
+
+`sh tools/gate.sh full` passes: `cargo-test` 120 s, `luau-witnesses`
+20 s (136 entries in P2.5 or earlier, 52 generated modules, 14 stress
+modules); hygiene passes. Review rounds: 14. Running tasks at the
+close: none.
 
 ### P2.5 Phase Review round 13
 
