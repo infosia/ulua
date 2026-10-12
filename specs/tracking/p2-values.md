@@ -86,6 +86,13 @@ Information from the review: D18 as first written rejected `let best =
 Infinity;`, `let acc = n;`, and array or function references; the
 revision accepts number, string, array, and function references.
 
+D18 revision record: only boolean reference forms (access paths
+included) give C11. Random: 576 programs; 480 accepted, each equal to
+`node` and `luau-analyze` clean; 96 rejected with C11. `tsc` codes on
+accepted programs: TS2322 naming `never` 9, TS2345 naming `never` 2,
+TS2367 10, TS2845 10, other 0. A member read `e.f` is checked by a unit
+test; records arrive in P2.5.
+
 ### P2.3 Phase Review round 2 (with D17)
 
 Reviewer: fresh agent, diff `9a74af7..963fea7`. 1 MAJOR, 2 MINOR. The

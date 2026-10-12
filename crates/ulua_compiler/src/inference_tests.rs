@@ -1,8 +1,9 @@
 //! Direct D18 forms, source offsets, and contextual types.
 use crate::{Limits, compile};
 
-const PREFIX: &str = "function take(xs:boolean[][]):void{}function truth():boolean{return true;}function number():number{return 1;}export function main():void{const b=true;const c=false;const n=1;const s='a';";
-const MESSAGE: &str = "An inferred type cannot come from a reference; add a type annotation";
+const PREFIX: &str = "function take(xs:boolean[][]):void{}function truth():boolean{return true;}function number():number{return 1;}export function main():void{const b=true;const c=false;const n=1;const s='a';const bs:boolean[]=[true];const bss:boolean[][]=[[true]];const ns:number[]=[1];const ss:string[]=['a'];const fs:(()=>number)[]=[number];";
+const MESSAGE: &str =
+    "An inferred type cannot come from a boolean reference; add a type annotation";
 
 fn accept(body: &str) {
     let source = format!("{PREFIX}{body}}}");
@@ -25,7 +26,7 @@ fn reject(before: &str, form: &str, after: &str) {
 }
 
 #[test]
-fn each_reference_form_needs_a_type_at_each_inference_position() {
+fn each_boolean_reference_form_needs_a_type_at_each_inference_position() {
     for form in [
         "b",
         "(b)",
@@ -39,6 +40,17 @@ fn each_reference_form_needs_a_type_at_each_inference_position() {
         "b||false",
         "false||b",
         "c?(!b&&true):(false||b)",
+        "bs[0]",
+        "bss[0][0]",
+        "(bs[0])",
+        "!bs[0]",
+        "c?bs[0]:false",
+        "c?false:bss[0][0]",
+        "bs[0]&&true",
+        "true&&bss[0][0]",
+        "bs[0]||false",
+        "false||bss[0][0]",
+        "c?(!bs[0]&&true):(false||bss[0][0])",
     ] {
         reject("let copy=", form, ";");
         reject("const xs=[", form, "];");
@@ -63,10 +75,44 @@ fn each_reference_form_needs_a_type_at_each_inference_position() {
             accept(&body);
         }
     }
-    for form in ["n", "s", "NaN", "Infinity"] {
-        reject("let copy=", form, ";");
-        reject("const xs=[", form, "];");
-        reject("const f=()=>", form, ";");
+}
+
+#[test]
+fn nonboolean_references_keep_inference_at_each_position() {
+    for form in [
+        "n",
+        "s",
+        "NaN",
+        "Infinity",
+        "ns",
+        "ss",
+        "bs",
+        "bss[0]",
+        "ns[0]",
+        "ss[0]",
+        "ns.length",
+        "bss[0].length",
+        "(n)",
+        "c?n:2",
+        "c?s:'b'",
+    ] {
+        accept(&format!(
+            "let copy={form};const xs=[{form}];const f=()=>{form};"
+        ));
+    }
+    for form in ["number", "fs[0]", "fs"] {
+        accept(&format!("let copy={form};const xs=[{form}];"));
+    }
+    // The separate function-result rule still requires an arrow result annotation.
+    accept("const f=():()=>number=>number;const g=():(()=>number)[]=>fs;");
+    for form in ["number", "fs[0]", "fs"] {
+        let source = format!("{PREFIX}const f=()=>{form};}}");
+        let error = compile(source.as_bytes(), Limits::default()).unwrap_err();
+        assert_eq!(error.code, "C11", "{source}");
+        assert_eq!(
+            error.message, "Function result needs an annotation",
+            "{source}"
+        );
     }
 }
 
@@ -116,16 +162,22 @@ fn nonreference_forms_keep_inference() {
 }
 
 #[test]
-fn narrowed_references_need_annotations_after_equalities_and_truth_tests() {
+fn only_boolean_references_need_annotations_after_equalities_and_truth_tests() {
     for condition in ["b", "!b", "b===true", "b!==false", "s==='b'", "n===2"] {
         for (name, ty, wider) in [
             ("b", "boolean", "false"),
             ("s", "string", "'c'"),
             ("n", "number", "3"),
         ] {
-            reject(&format!("if({condition}){{let copy="), name, ";}");
-            reject(&format!("if({condition}){{const xs=["), name, "];}");
-            reject(&format!("if({condition}){{const f=()=>"), name, ";}");
+            if ty == "boolean" {
+                reject(&format!("if({condition}){{let copy="), name, ";}");
+                reject(&format!("if({condition}){{const xs=["), name, "];}");
+                reject(&format!("if({condition}){{const f=()=>"), name, ";}");
+            } else {
+                accept(&format!(
+                    "if({condition}){{let copy={name};copy={wider};const xs=[{name}];xs.push({wider});const f=()=>{name};}}"
+                ));
+            }
             accept(&format!(
                 "if({condition}){{let copy:{ty}={name};copy={wider};const xs:{ty}[]=[{name}];xs.push({wider});const f=():{ty}=>{name};}}"
             ));

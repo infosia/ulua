@@ -23,10 +23,10 @@ impl Checker<'_> {
                 .init
                 .as_ref()
                 .ok_or_else(|| self.error(v.span, "C8", "Missing initializer"))?;
-            if d.kind == VariableDeclarationKind::Let && v.type_annotation.is_none() {
-                self.inferred_reference(initializer)?;
-            }
             let value = self.expr_as(initializer, depth, false, self.bindings[id].ty)?;
+            if d.kind == VariableDeclarationKind::Let && v.type_annotation.is_none() {
+                self.inferred_reference(initializer, value.ty)?;
+            }
             if d.kind == VariableDeclarationKind::Let
                 && v.type_annotation.is_none()
                 && value.ty == Type::Boolean

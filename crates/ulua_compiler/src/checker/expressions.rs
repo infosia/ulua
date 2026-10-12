@@ -199,10 +199,10 @@ impl Checker<'_> {
                     let e = entry.as_expression().ok_or_else(|| {
                         self.error(entry.span(), "C6", "Array holes and spreads are rejected")
                     })?;
-                    if contextual_element.is_none() {
-                        self.inferred_reference(e)?;
-                    }
                     let value = self.expr_as(e, depth, false, contextual_element)?;
+                    if contextual_element.is_none() {
+                        self.inferred_reference(e, value.ty)?;
+                    }
                     if let Some(element) = element {
                         self.flow(&value.ty, Some(&element), e.span())?;
                     } else {

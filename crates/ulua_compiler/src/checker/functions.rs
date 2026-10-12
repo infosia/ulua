@@ -225,10 +225,10 @@ impl Checker<'_> {
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
-            if result.is_none() {
-                self.inferred_reference(e)?;
-            }
             let value = self.expr_as(e, body_depth, true, result)?;
+            if result.is_none() {
+                self.inferred_reference(e, value.ty)?;
+            }
             if value.ty == Type::Void
                 && !matches!(value.kind, ExprKind::Call(..) | ExprKind::Method(..))
             {
