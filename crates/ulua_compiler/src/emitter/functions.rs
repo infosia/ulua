@@ -72,6 +72,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
             let i = context.functions[owner - 1]
                 .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
             let f = &module.functions[i];
+            probe.overhead = f.parameters.iter().filter(|(_, d)| d.is_some()).count();
             probe.defaults(f)?;
             probe.statements(&f.body, 0)?;
             (
@@ -157,7 +158,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         })
         .unwrap_or(first_offset);
     output.charge(out.len() - trailer_start, last_offset);
-    output.check(module)?;
+    output.finish(module, out.len())?;
     Ok(out)
 }
 
@@ -180,6 +181,7 @@ impl Emitter<'_> {
             self.function_types,
         );
         child.context = Some(context);
+        child.overhead = f.parameters.iter().filter(|(_, d)| d.is_some()).count();
         child.copies = self.copies.clone();
         child.slots = layout.slots.clone();
         for s in &mut child.slots {

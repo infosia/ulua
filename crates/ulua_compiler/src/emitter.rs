@@ -71,6 +71,8 @@ struct Emitter<'a> {
     credited: usize,
     copies: HashMap<usize, String>,
     generated: Vec<(String, String, String, bool)>,
+    overhead: usize,
+    storage_offset: usize,
     loops: Vec<Loop>,
     joins: joins::Joins,
     context: Option<&'a functions::Emission>,
@@ -104,6 +106,8 @@ impl<'a> Emitter<'a> {
             credited: 0,
             copies: HashMap::new(),
             generated: vec![],
+            overhead: if owner == 0 { 10 } else { 0 },
+            storage_offset: 0,
             loops: vec![],
             joins: joins::Joins::default(),
             context: None,
@@ -205,6 +209,7 @@ impl<'a> Emitter<'a> {
             Ok(i)
         } else {
             self.reserve_temporary()?;
+            self.storage_offset = self.offset;
             let i = self.slots.len();
             self.slots.push(Slot {
                 ty: *ty,
@@ -214,7 +219,7 @@ impl<'a> Emitter<'a> {
         }
     }
     fn reserve_temporary(&self) -> Result<(), Diagnostic> {
-        if self.slots.len() + self.generated.len() >= TEMPORARY_BOUND {
+        if self.slots.len() + self.generated.len() + self.overhead >= TEMPORARY_BOUND {
             return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
         }
         Ok(())
@@ -229,6 +234,7 @@ impl<'a> Emitter<'a> {
     }
     fn generated(&mut self, ty: &str, value: &str) -> Result<String, Diagnostic> {
         self.reserve_temporary()?;
+        self.storage_offset = self.offset;
         let name = format!("__ulua_g{}_{}", self.owner, self.generated.len());
         self.generated
             .push((name.clone(), ty.into(), value.into(), true));
@@ -324,5 +330,25 @@ mod output_tests {
         assert_eq!(error.offset, source.find("print").unwrap() as u64);
         assert_eq!((error.line, error.column), (1, 29));
         assert_eq!(error.message, "Generated source exceeds the output bound");
+    }
+
+    #[test]
+    fn final_output_check_rejects_an_independent_counter_mismatch() {
+        let source = "export function main():void{}";
+        let allocator = oxc_allocator::Allocator::default();
+        let parsed =
+            oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::ts()).parse();
+        let module =
+            crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                .unwrap();
+        let output = output::Output::new(100);
+        output.charge(10, 0);
+        output.finish(&module, 10).unwrap();
+        for written in [9, 11] {
+            assert_eq!(
+                output.finish(&module, written).unwrap_err().code,
+                "internal"
+            );
+        }
     }
 }

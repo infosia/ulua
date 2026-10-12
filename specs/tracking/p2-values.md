@@ -263,6 +263,15 @@ C6 traps; the heap matches §7.
 | An array literal of 129 elements (a 400-byte lookup table) gives `limit:temporaries`; the diagnostic points at the later `print` statement | MAJOR | pipeline.md Rev 15: constant elements in place, blocks of at most 32 temporaries (§5.15.2); limit diagnostics at the causing form (§6.0) |
 | The final output check compares only the counter with the bound | MINOR | §3.10: the final check compares the counter with the text length |
 
+Fix record (P2.2 round 3): constant elements in place; computed
+elements appended one per block (within the bound of 32); a 129-element
+and wider literal compiles. One position test per limit code (7 codes)
+checks offset, line, and column. A counter and text-length mismatch is
+`internal` (tested). Growth 16 to 64 KiB: constant literal 3.99 (output
+20.3), computed literal 4.00 (44.3), nested 3.99 (43.6), module
+computed 3.96 (40.3). Array method calls of C6.9 give `unsupported`
+until P2.3. `gate.sh full`: 76 entries in P2.2 or earlier.
+
 ## Failures before the fix
 
 ## Gaps

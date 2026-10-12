@@ -12,6 +12,7 @@ impl Emitter<'_> {
         overhead: usize,
         groups: &[usize],
     ) -> Result<Layout, Diagnostic> {
+        self.offset = self.storage_offset;
         let fixed = parameters.len() + self.slots.len() + self.generated.len() + overhead;
         if self.slots.len() + self.generated.len() + overhead > TEMPORARY_BOUND {
             return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
@@ -46,6 +47,14 @@ impl Emitter<'_> {
                 *counts.entry(group(id)).or_default() += 1;
             }
             if counts.len() > capacity {
+                let mut seen = std::collections::HashSet::new();
+                if let Some(id) = ids
+                    .iter()
+                    .skip(available)
+                    .find(|id| seen.insert(group(**id)) && seen.len() > capacity)
+                {
+                    self.offset = self.module.bindings[*id].start as usize;
+                }
                 return Err(self.limit(
                     "limit:temporaries",
                     "Block spill locals exceed the local budget",

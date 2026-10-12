@@ -148,6 +148,7 @@ impl Emitter<'_> {
             S::For(init, test, update, body, ids) => {
                 self.joins.enter();
                 self.statements(init, depth)?;
+                self.offset = self.statement_offset;
                 let tail = self.generated("boolean", "true")?;
                 let mut copies = vec![];
                 let mut previous = vec![];

@@ -111,24 +111,7 @@ impl Emitter<'_> {
                 }
             }
             E::Array(entries) => {
-                let mut values = vec![];
-                for entry in entries {
-                    values.push(self.expression(entry, depth)?);
-                }
-                self.write_slot(
-                    dest,
-                    format!(
-                        "{{{}}}",
-                        values
-                            .iter()
-                            .map(|v| self.temp(*v))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                );
-                for v in values {
-                    self.release(v);
-                }
+                self.array_literal(dest, entries, depth)?;
             }
             E::Index(a, i) => {
                 let a = self.expression(a, depth)?;
@@ -215,6 +198,7 @@ impl Emitter<'_> {
                 }
             }
         }
+        self.offset = expr.start as usize;
         Ok(dest)
     }
     fn pure(&mut self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {

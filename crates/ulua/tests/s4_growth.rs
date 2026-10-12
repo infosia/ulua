@@ -57,7 +57,15 @@ fn full_pipeline_growth_stays_below_eight() {
             }
         };
         // The review type occupies about 12.7 KiB. Product shapes use 16/64 KiB.
-        let n = if shape.starts_with("type-product-") || *shape == "array-wide-function-product" {
+        let n = if shape.starts_with("type-product-")
+            || matches!(
+                *shape,
+                "array-wide-function-product"
+                    | "array-large-literal"
+                    | "array-wide-computed"
+                    | "array-wide-nested"
+                    | "array-wide-computed-module"
+            ) {
             16 * 1024
         } else if shape.starts_with("spilled-mod-") {
             8 * 1024
@@ -84,6 +92,10 @@ fn full_pipeline_growth_stays_below_eight() {
                     | "nested-writes"
                     | "array-wide-function-product"
                     | "array-function-product"
+                    | "array-large-literal"
+                    | "array-wide-computed"
+                    | "array-wide-nested"
+                    | "array-wide-computed-module"
             )
         {
             outputs.push((*shape, make(65536)));

@@ -6,6 +6,15 @@ fn check(body: &str) -> Result<crate::Compiled, crate::Diagnostic> {
         Limits::default(),
     )
 }
+fn temporary_count(out: &str) -> usize {
+    out.lines()
+        .filter(|line| {
+            line.trim()
+                .strip_prefix("local __ulua_t")
+                .is_some_and(|tail| tail.as_bytes().first().is_some_and(u8::is_ascii_digit))
+        })
+        .count()
+}
 #[test]
 fn array_flows_are_invariant_at_every_depth() {
     for body in [
@@ -54,19 +63,86 @@ fn array_flows_are_invariant_at_every_depth() {
     }
 }
 #[test]
-fn array_literals_obey_the_existing_temporary_budget() {
-    let literal = |count| format!("const xs=[{}];", vec!["1"; count].join(","));
-    check(&literal(135)).unwrap();
-    assert_eq!(check(&literal(136)).unwrap_err().code, "limit:temporaries");
-    // The chunk also reserves ten prelude locals and the literal result temporary.
-    let module = |count| format!("{}export function main():void{{}}", literal(count));
-    compile(module(125).as_bytes(), Limits::default()).unwrap();
-    assert_eq!(
-        compile(module(126).as_bytes(), Limits::default())
-            .unwrap_err()
-            .code,
-        "limit:temporaries"
-    );
+fn array_literal_width_does_not_consume_the_temporary_budget() {
+    for entry in ["1", "-1", "1+1", "x", "[x]", "f()"] {
+        let body = format!(
+            "const x=1;function f():number{{return x;}}const xs=[{}];",
+            vec![entry; 1000].join(",")
+        );
+        for source in [
+            format!("export function main():void{{{body}}}"),
+            format!("{body}export function main():void{{}}"),
+            format!("export function main():void{{const f=():void=>{{{body}}};f();}}"),
+        ] {
+            let out = compile(source.as_bytes(), Limits::default()).unwrap().luau;
+            let temporaries = temporary_count(&out);
+            assert!(temporaries <= 33, "{entry}: {temporaries}");
+        }
+    }
+    for entry in ["1", "-1", "true", "'text'"] {
+        let out = check(&format!("const xs=[{}];", vec![entry; 200].join(",")))
+            .unwrap()
+            .luau;
+        assert_eq!(temporary_count(&out), 1, "{entry}");
+    }
+}
+
+#[test]
+fn array_methods_wait_for_p23_and_other_members_keep_c6() {
+    for method in [
+        "indexOf",
+        "lastIndexOf",
+        "includes",
+        "join",
+        "slice",
+        "concat",
+        "fill",
+        "reverse",
+        "splice",
+        "unshift",
+        "copyWithin",
+        "at",
+        "pop",
+        "shift",
+        "forEach",
+        "map",
+        "filter",
+        "some",
+        "every",
+        "findIndex",
+        "findLastIndex",
+        "flatMap",
+        "reduce",
+        "reduceRight",
+        "sort",
+        "flat",
+    ] {
+        assert_eq!(
+            check(&format!("const xs=[1];xs.{method}();"))
+                .unwrap_err()
+                .code,
+            "unsupported",
+            "{method}"
+        );
+        assert_eq!(
+            check(&format!("const xs=[1];const m=xs.{method};"))
+                .unwrap_err()
+                .code,
+            "C6",
+            "{method}"
+        );
+    }
+    for method in [
+        "find", "findLast", "unknown", "entries", "keys", "values", "toString",
+    ] {
+        assert_eq!(
+            check(&format!("const xs=[1];xs.{method}();"))
+                .unwrap_err()
+                .code,
+            "C6",
+            "{method}"
+        );
+    }
 }
 #[test]
 fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {

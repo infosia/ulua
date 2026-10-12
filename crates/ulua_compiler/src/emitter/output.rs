@@ -36,4 +36,16 @@ impl Output {
         }
         Ok(())
     }
+    pub(super) fn finish(&self, module: &ir::Module, written: usize) -> Result<(), Diagnostic> {
+        self.check(module)?;
+        if self.bytes.get() != written {
+            return Err(Diagnostic::at(
+                &module.source,
+                0,
+                "internal",
+                "Output byte counter differs from written text length",
+            ));
+        }
+        Ok(())
+    }
 }

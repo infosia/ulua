@@ -10,11 +10,14 @@ pub const SHAPES: &[&str] = &[
     "array-function-product",
     "array-wide-function-product",
     "array-large-literal",
+    "array-wide-computed",
+    "array-wide-nested",
+    "array-wide-computed-module",
 ];
 
-/// A single large constructor crosses the existing non-spill temporary limit.
-pub fn diagnostic(shape: &str) -> Option<&'static str> {
-    (shape == "array-large-literal").then_some("limit:temporaries")
+/// Every array growth shape compiles without a limit diagnostic.
+pub fn diagnostic(_shape: &str) -> Option<&'static str> {
+    None
 }
 
 /// Fill a size with the specified shape. Products grow both the type and reference count.
@@ -85,6 +88,21 @@ pub fn source(shape: &str, bytes: usize) -> String {
             "export function main():void{const xs=[".into(),
             "1,".into(),
             "];}",
+        ),
+        "array-wide-computed" => (
+            "export function main():void{let n=1;const xs=[".into(),
+            "n,".into(),
+            "];}",
+        ),
+        "array-wide-nested" => (
+            "export function main():void{let n=1;const xs=[".into(),
+            "[n],".into(),
+            "];}",
+        ),
+        "array-wide-computed-module" => (
+            "let n=1;const xs=[".into(),
+            "n,".into(),
+            "];export function main():void{}",
         ),
         _ => return String::new(),
     };

@@ -252,6 +252,37 @@ impl Checker<'_> {
                         let receiver = self.expr(&m.object, depth, false)?;
                         if let Some(element) = self.types.element(receiver.ty) {
                             if m.property.name != "push" {
+                                if matches!(
+                                    m.property.name.as_str(),
+                                    "indexOf"
+                                        | "lastIndexOf"
+                                        | "includes"
+                                        | "join"
+                                        | "slice"
+                                        | "concat"
+                                        | "fill"
+                                        | "reverse"
+                                        | "splice"
+                                        | "unshift"
+                                        | "copyWithin"
+                                        | "at"
+                                        | "pop"
+                                        | "shift"
+                                        | "forEach"
+                                        | "map"
+                                        | "filter"
+                                        | "some"
+                                        | "every"
+                                        | "findIndex"
+                                        | "findLastIndex"
+                                        | "flatMap"
+                                        | "reduce"
+                                        | "reduceRight"
+                                        | "sort"
+                                        | "flat"
+                                ) {
+                                    return Err(self.unsupported(call.span));
+                                }
                                 return Err(self.error(m.span, "C6", "Array method is rejected"));
                             }
                             if !statement {

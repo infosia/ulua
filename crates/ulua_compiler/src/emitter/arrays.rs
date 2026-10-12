@@ -1,7 +1,56 @@
 //! Checked element operations and live-length iteration preserve C12 order.
 use super::*;
-use crate::ir::{Expr, Statement};
+use crate::ir::{Expr, ExprKind as E, Statement};
 impl Emitter<'_> {
+    pub(super) fn array_literal(
+        &mut self,
+        dest: usize,
+        entries: &[Expr],
+        depth: u32,
+    ) -> Result<(), Diagnostic> {
+        self.write_slot(dest, "{}");
+        for (index, entry) in entries.iter().enumerate() {
+            self.offset = entry.start as usize;
+            let constant = match &entry.kind {
+                E::Number(n) => {
+                    if n.is_infinite() {
+                        self.capture("__ulua_huge");
+                    }
+                    Some(number(*n))
+                }
+                E::Boolean(b) => Some(b.to_string()),
+                E::String(s) => Some(quote(s)),
+                E::Unary("-", a) => {
+                    if let E::Number(n) = a.kind {
+                        if n.is_infinite() {
+                            self.capture("__ulua_huge");
+                        }
+                        Some(number(-n))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            // A one-element block avoids retained values across nested literals.
+            // Append each block before the next source element can change a binding.
+            let (value, slot) = if let Some(value) = constant {
+                (value, None)
+            } else {
+                let slot = self.expression(entry, depth)?;
+                (self.temp(slot), Some(slot))
+            };
+            self.write(
+                &format!("{}[{}]", self.temp(dest), index + 1),
+                value,
+                &self.function_types.luau(&entry.ty),
+            );
+            if let Some(slot) = slot {
+                self.release(slot);
+            }
+        }
+        Ok(())
+    }
     pub(super) fn element(
         &mut self,
         a: &Expr,

@@ -11,7 +11,11 @@ use ulua::*;
 
 fn result(body: &str, expected: f64) {
     let source = format!("export function score():number{{{body}}}export function main():void{{}}");
-    let mut script = Script::new(&source);
+    source_result(&source, expected);
+}
+
+fn source_result(source: &str, expected: f64) {
+    let mut script = Script::new(source);
     assert_eq!(script.instance(RunLimits::default()).0, ULUA_OK);
     let (status, code, value) = script.call(script.index("score"), &[]);
     assert_eq!((status, code), (ULUA_OK, String::new()));
@@ -33,6 +37,30 @@ fn result(body: &str, expected: f64) {
         std::fs::write(path.join(format!("{name}.luau")), compiled.luau).unwrap();
         std::fs::write(path.join(format!("{name}.golden")), format!("{expected}\n")).unwrap();
     }
+}
+
+#[test]
+fn wide_literals_keep_constants_reads_and_side_effects_in_source_order() {
+    let entries = vec!["7,n,next()"; 150].join(",");
+    result(
+        &format!(
+            "let n=0;function next():number{{n++;return n;}}const xs=[{entries}];let total=0;for(const x of xs){{total+=x;}}return total;"
+        ),
+        23550.0,
+    );
+    result(
+        &format!(
+            "let n=0;function next():number{{n++;return n;}}const make=():number[]=>[{entries}];let total=0;for(let i=0;i<3;i++){{n=0;const xs=[make(),make()];for(const row of xs){{for(const x of row){{total+=x;}}}}}}return total;"
+        ),
+        276300.0,
+    );
+    source_result(
+        &format!(
+            "let n=0;function next():number{{n++;return n;}}const xs=[{entries}];export function score():number{{let total=0;for(const x of xs){{total+=x;}}return total;}}export function main():void{{}}"
+        ),
+        23550.0,
+    );
+    result("const xs=[-0,-1,true?2:3];return 1/xs[0]<0?1:0;", 1.0);
 }
 
 #[test]

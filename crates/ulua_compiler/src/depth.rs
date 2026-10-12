@@ -9,6 +9,16 @@ enum Node<'a> {
     Function(&'a Function<'a>),
     Expression(&'a Expression<'a>),
 }
+impl Node<'_> {
+    fn offset(&self) -> u32 {
+        match self {
+            Self::Statement(n) => n.span().start,
+            Self::Declaration(n) => n.span().start,
+            Self::Function(n) => n.span.start,
+            Self::Expression(n) => n.span().start,
+        }
+    }
+}
 
 pub(crate) fn check<'a>(
     program: &'a Program<'a>,
@@ -26,15 +36,11 @@ pub(crate) fn check<'a>(
     let mut pending: Vec<_> = program
         .body
         .iter()
+        .rev()
         .map(|s| (Node::Statement(s), 1))
         .collect();
     while let Some((node, depth)) = pending.pop() {
-        let offset = match &node {
-            Node::Statement(n) => n.span().start,
-            Node::Declaration(n) => n.span().start,
-            Node::Function(n) => n.span.start,
-            Node::Expression(n) => n.span().start,
-        };
+        let offset = node.offset();
         if depth >= limit {
             return Err(Diagnostic::at(
                 source,
@@ -44,6 +50,7 @@ pub(crate) fn check<'a>(
             ));
         }
         let next = depth + 1;
+        let children = pending.len();
         match node {
             Node::Statement(s) => match s {
                 Statement::ExportDeclaration(n) => {
@@ -213,6 +220,8 @@ pub(crate) fn check<'a>(
                 _ => {}
             },
         }
+        // A later sibling cannot hide the first form that reaches the depth bound.
+        pending[children..].sort_by_key(|(node, _)| std::cmp::Reverse(node.offset()));
     }
     Ok(())
 }
