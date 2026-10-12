@@ -1,6 +1,6 @@
 //! Record updates share the compound-store order and the C12.7 receiver check.
 //! Each accepted source passes tsc, Node, the ABI, and luau-analyze. The test prints its Debug cost.
-//! Measured Debug cost: 0.490 seconds for 41 accepted sources; restrictions cost 0.008 seconds for nine rejects.
+//! Single-worker Debug cost: 0.53 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

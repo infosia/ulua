@@ -1,7 +1,9 @@
 //! C15 type-link depth: 48 passes the analyzer; 49 gives limit:type-depth.
 //! Recursive alias components include every internal type node. Shared branches use cached depths.
-//! Measured Debug cost: 2.172 seconds, including ABI execution, tsc, and thirty-nine analyzer witnesses.
+//! Single-worker Debug cost: 2.99 seconds for this test target.
 //! Ceiling groups: direct 26, branching 20, nullable 48, array 48, function 41, anonymous 58, array values 63.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -336,15 +338,14 @@ fn type_depth_bound_and_ceiling_combinations() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let output = Command::new(root.join("target/luau-tools/luau-analyze"))
+    let output = analyzer::command(root.join("target/luau-tools/luau-analyze"))
         .args(paths.iter().map(|p| p.with_extension("luau")))
         .output()
         .unwrap();
     assert!(
         output.status.success(),
-        "Bound shape exceeds the analyzer budget:\n{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        "Bound shape exceeds the analyzer budget:\n{}",
+        analyzer::failure(&output)
     );
     eprintln!(
         "P2.5 type depth analyzer: programs={} cost={:.3}s",

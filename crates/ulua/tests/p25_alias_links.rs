@@ -1,6 +1,6 @@
 //! Equal aliases retain one structural identity through every composite link.
 //! Each source passes stock tsc, Node, the ABI, and luau-analyze. The test prints its Debug cost.
-//! Measured Debug cost: 0.543 seconds for 56 accepted sources and their witnesses.
+//! Single-worker Debug cost: 0.60 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

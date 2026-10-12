@@ -1,5 +1,5 @@
 //! C16.4 tests in nested bodies establish local facts for stable enclosing bindings.
-//! Measured Debug cost: 0.49 seconds for 29 accepted and 17 rejected programs.
+//! Single-worker Debug cost: 0.51 seconds for this test target.
 //! Accepted programs pass node, stock tsc, and luau-analyze; rejection witnesses give TS18047 or no diagnostic.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]

@@ -1,5 +1,5 @@
 //! C16 uses the same cached test edges in statements, expressions, and loop exits.
-//! Measured Debug cost: 0.51 seconds, including tsc, Node, the ABI, and luau-analyze.
+//! Single-worker Debug cost: 0.57 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod oracle;

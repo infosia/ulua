@@ -2,10 +2,12 @@
 //! The witness ratio bound is twelve; the quadratic checks measured ratios from 29 to 36.
 //! Five-level compound: 0.108/0.629 seconds; ratio 5.798.
 //! Thirty-level store: 0.162/0.984 seconds; ratio 6.087.
-//! Measured Debug cost: 8.809 seconds, including compilation, eight analyzer runs, and stock tsc.
+//! Single-worker Debug cost: 8.84 seconds for this test target.
 //! All four inputs pass stock tsc without diagnostics.
 //! Each access keeps its original trap point.
 //! The helper isolates the nil branch from the caller's flow graph.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 use std::{path::PathBuf, process::Command, time::Instant};
 use ulua_compiler::{Limits, compile};
 
@@ -47,16 +49,15 @@ fn missing_element_checks_have_linear_analyzer_time() {
             let mut seconds = f64::INFINITY;
             for _ in 0..2 {
                 let now = Instant::now();
-                let output = Command::new(root.join("target/luau-tools/luau-analyze"))
+                let output = analyzer::command(root.join("target/luau-tools/luau-analyze"))
                     .arg(path.with_extension("luau"))
                     .output()
                     .unwrap();
                 seconds = seconds.min(now.elapsed().as_secs_f64());
                 assert!(
                     output.status.success(),
-                    "{}{}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
+                    "luau-analyze {}",
+                    analyzer::failure(&output)
                 );
             }
             eprintln!("P2.5 analyzer {name}: bytes={bytes} seconds={seconds:.3}");

@@ -1,7 +1,9 @@
 //! Class field and method bounds, nominal value-flow rejection, and class type-link limits.
-//! Measured Debug cost: 0.601 seconds; six accepted boundaries and twelve rejects.
+//! Single-worker Debug cost: 0.64 seconds for this test target.
 //! Four boundaries use external witnesses. Two initializer boundaries use the native compiler and VM.
 //! Costs are reports, never assertions.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -115,15 +117,14 @@ fn class_boundaries_and_nominal_flows() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let out = Command::new(root.join("target/luau-tools/luau-analyze"))
+    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
         .args(&paths)
         .output()
         .unwrap();
     assert!(
         out.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        "luau-analyze {}",
+        analyzer::failure(&out)
     );
     let analyze = now.elapsed().as_secs_f64();
     let out = Command::new("node")

@@ -1,5 +1,5 @@
 //! P2.5 direct and parameterized template programs use Node, tsc, Luau, and the ABI.
-//! Measured Debug cost: 1.52 seconds, including the external witnesses.
+//! Single-worker Debug cost: 1.80 seconds for this test target.
 #[path = "support/p25.rs"]
 mod field_witness;
 #[allow(dead_code)]

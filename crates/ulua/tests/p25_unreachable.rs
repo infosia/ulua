@@ -1,5 +1,5 @@
 //! C16.8 checks declared types at unreachable points against stock tsc.
-//! Measured Debug cost: 1.30 seconds, including tsc, Node, and Luau analysis.
+//! Single-worker Debug cost: 1.31 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod oracle;

@@ -1,5 +1,5 @@
 //! C16.9 checks coalescing operands and preserves facts from the other edges at contradictions.
-//! Measured Debug cost: 0.75 seconds, including tsc, Node, the ABI, and luau-analyze.
+//! Single-worker Debug cost: 0.87 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod oracle;

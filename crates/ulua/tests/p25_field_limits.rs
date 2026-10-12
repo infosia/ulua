@@ -1,5 +1,7 @@
 //! C15 counts nested anonymous types at each position. Alias names end the count.
-//! Measured Debug cost: 1.579 seconds, including ABI execution, tsc, and luau-analyze.
+//! Single-worker Debug cost: 2.26 seconds for this test target.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -272,15 +274,14 @@ fn field_bound_and_combined_ceiling_shapes_pass_the_analyzer() {
         );
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let result = Command::new(root.join("target/luau-tools/luau-analyze"))
+    let result = analyzer::command(root.join("target/luau-tools/luau-analyze"))
         .args(paths.iter().map(|p| p.with_extension("luau")))
         .output()
         .unwrap();
     assert!(
         result.status.success(),
-        "Combined field count exceeds the analyzer budget:\n{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
+        "Combined field count exceeds the analyzer budget:\n{}",
+        analyzer::failure(&result)
     );
     let result = Command::new("node")
         .current_dir(&root)

@@ -1,4 +1,5 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
+//! Single-worker Debug cost: 22.10 seconds for this test target.
 //! Debug cost is measured and printed, including one batch analyzer run; it is not a gate bound.
 //! Ratios above 6.5 use the minimum of two runs per size.
 //! Round 12 isolated Debug cost: 9.164 seconds; largest ratio: 3.960.
@@ -22,10 +23,12 @@
 //! Release continue/update: 51.067/792.868 ms -> 6.518/24.327 ms; ratios 15.526 -> 3.732.
 //! Release if/else ends: 9.481/36.893 ms -> 9.500/35.942 ms; ratios 3.891 -> 3.783.
 //! Stock tsc gives TS2563 for ceiling ybreak and if-end-writes; the other new shapes pass.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
-use std::{path::PathBuf, process::Command, time::Instant};
+use std::{path::PathBuf, time::Instant};
 use support::Script;
 use ulua_compiler::{FIELD_BOUND, Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_BYTES, compile};
 const SHAPES: &[&str] = &[
@@ -374,17 +377,15 @@ fn p25_full_pipeline_growth_and_output() {
         }
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let result = Command::new(root.join("target/luau-tools/luau-analyze"))
+    let result = analyzer::command(root.join("target/luau-tools/luau-analyze"))
         .args(&paths)
         .output()
         .unwrap();
     assert!(
         result.status.success(),
-        "luau-analyze status={} outputs={}\nstdout:\n{}\nstderr:\n{}",
-        result.status,
+        "luau-analyze outputs={}\n{}",
         directory.display(),
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
+        analyzer::failure(&result)
     );
     std::fs::remove_dir_all(directory).unwrap();
     let cost = start.elapsed().as_secs_f64();

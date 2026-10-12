@@ -1,5 +1,5 @@
 //! P2.6 direct witnesses cover construction, receiver capture, nominal flow, and identity.
-//! Review round 1 Debug cost: 0.424 seconds; nine accepted programs and three external witnesses.
+//! Single-worker Debug cost: 0.46 seconds for this test target.
 //! The test prints its total cost. No assertion reads wall-clock time.
 #[allow(dead_code)]
 #[path = "support/script.rs"]

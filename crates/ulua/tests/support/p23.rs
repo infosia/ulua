@@ -1,4 +1,7 @@
 //! Batch external witnesses keep the direct method test cost bounded.
+//! Measured single-worker Debug cost: 5.04 seconds for p23_methods.
+#[path = "analyzer.rs"]
+mod analyzer;
 use super::support::Script;
 use std::{
     ffi::{c_char, c_void},
@@ -100,7 +103,7 @@ impl Suite {
             ])
             .args(&ts);
         success(&mut tsc);
-        let mut analyze = Command::new(root.join("target/luau-tools/luau-analyze"));
+        let mut analyze = analyzer::command(root.join("target/luau-tools/luau-analyze"));
         analyze.args(&luau);
         success(&mut analyze);
         let runner = self.directory.join("witness.cjs");
@@ -134,9 +137,8 @@ fn success(command: &mut Command) {
     let out = command.output().unwrap();
     assert!(
         out.status.success(),
-        "{command:?}\n{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        "{command:?}\n{}",
+        analyzer::failure(&out)
     );
     eprint!("{}", String::from_utf8_lossy(&out.stdout));
 }

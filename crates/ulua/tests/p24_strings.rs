@@ -1,5 +1,5 @@
 //! Direct string member witnesses: Node for ASCII, fixed byte values for UTF-8.
-//! Measured Debug cost: 6.76 seconds for all behaviour cases and their external witnesses.
+//! Single-worker Debug cost: 11.27 seconds for this test target.
 //! Large allocation and search limit tests require the measurements feature.
 //! Adversarial search cost is measured and printed, not bounded by wall-clock assertions.
 //! Round 12 adversarial Debug cost: 0.449 seconds; individual searches: 22.442 to 70.921 ms.

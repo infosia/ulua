@@ -1,5 +1,5 @@
 //! C12.7 checks element receivers at the next access, after its key, or at its store.
-//! Measured Debug cost: 0.55 seconds, including tsc, Node, the ABI, and luau-analyze.
+//! Single-worker Debug cost: 0.57 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

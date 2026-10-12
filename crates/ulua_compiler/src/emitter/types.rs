@@ -3,7 +3,10 @@ use crate::{
     Diagnostic,
     ir::{self, ExprKind as E, Statement as S, Type},
 };
-use std::{collections::HashMap, fmt::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Write,
+};
 
 pub(super) struct FunctionTypes {
     names: HashMap<Type, String>,
@@ -125,16 +128,22 @@ impl FunctionTypes {
         _offset: u32,
     ) -> Result<(), Diagnostic> {
         let mut pending = vec![(ty, false)];
+        let mut active = HashSet::new();
+        let mut back_edges = HashSet::new();
         while let Some((ty, emit)) = pending.pop() {
             // Count-specific views keep the same emitted identity as their structural type.
             let ty = module.types.identity(ty);
             if !emit {
                 if self.names.contains_key(&ty) {
+                    if active.contains(&ty) {
+                        back_edges.insert(ty);
+                    }
                     continue;
                 }
                 let name = format!("__ulua_fn{}", self.next_name);
                 self.next_name += 1;
                 self.names.insert(ty, name);
+                active.insert(ty);
                 pending.push((ty, true));
                 if let Some(inner) = module.types.inner(ty).or_else(|| module.types.element(ty)) {
                     pending.push((inner, false));
@@ -191,11 +200,16 @@ impl FunctionTypes {
             // Luau classes have structural field types. The checker retains their nominal identities.
             // Share identical class shapes and signatures instead of separate aliases for each declaration.
             if let Some(existing) = self.definitions.get(&definition) {
+                // A descendant can already name this pending ancestor. Preserve that name when it merges.
+                if back_edges.contains(&ty) {
+                    let _ = writeln!(self.declarations, "type {name} = {existing}");
+                }
                 self.names.insert(ty, existing.clone());
             } else {
                 self.definitions.insert(definition.clone(), name.clone());
                 let _ = writeln!(self.declarations, "type {name} = {definition}");
             }
+            active.remove(&ty);
         }
         Ok(())
     }

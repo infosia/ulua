@@ -1,5 +1,5 @@
 //! Direct Node, tsc, analyzer, and ABI witnesses for the array method contract.
-//! Measured Debug cost: 3.07 s in the P2.3 phase review.
+//! Single-worker Debug cost: 5.04 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

@@ -1,5 +1,5 @@
 //! Direct results, operand effects, and seeded random programs for D17.
-//! Measured Debug cost: 1.23 s (P2.3 phase review).
+//! Single-worker Debug cost: 1.65 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

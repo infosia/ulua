@@ -1,5 +1,5 @@
 //! Rejection witnesses pin C13 path shapes and the class surface boundaries.
-//! Measured Debug cost: 1.169 seconds; 143 rejects and one accept control in four parallel tests.
+//! Single-worker Debug cost: 1.18 seconds for this test target.
 //! One tsc batch checks each diagnostic set. The test prints its cost without a time assertion.
 #[allow(dead_code)]
 #[path = "support/script.rs"]

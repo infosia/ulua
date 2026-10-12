@@ -1,5 +1,5 @@
 //! Direct contextual copies and seeded random copies after equality and truth tests.
-//! Measured Debug cost: 2.03 s for 712 accepted sources and three batch witnesses.
+//! Single-worker Debug cost: 2.88 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;

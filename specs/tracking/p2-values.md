@@ -262,6 +262,13 @@ Reviewer: fresh agent, diff `4a8a817..0b95ecf`. 0 CRITICAL, 1 MAJOR, 1 MINOR.
 | Shared type aliases leave an undeclared name in a class cycle: `class X { d: D; f: F \| null }`, `class D` and `class F` with equal shapes that point back to `X`; the cycle root is renamed to an equal alias after a descendant alias used its first name; `luau-analyze` gives "Unknown type '__ulua_fn1'"; the parent commit passes | MAJOR | implementation; a test runs `luau-analyze` on the cycle shapes |
 | `luau-analyze` of the pinned Luau has a data race: each worker thread writes the shared `Frontend::iceHandler.moduleName`; a parallel run dies by SIGTRAP, SIGABRT, or SIGSEGV with no output (crash reports in `basic_string::__grow_by_and_replace` from `Luau::check`). 96 of 12,000 parallel runs crash, 0 of 12,000 with `-j1`. This is the cause of the open `p26_limits.rs:122` and P2.5 `p25_growth.rs:356` failures | MINOR | corpus.md Rev 8: every call passes `-j1` and reports status and signal; the witness changed |
 
+Fix (Codex): every handed-out alias name is declared; cycle tests run
+`luau-analyze` (0.38 s); all test calls go through one helper that
+passes `-j1` and reports status and signal (0.24 s test). Cost of
+`-j1`: 20 comparable test targets 46.93 s to 69.61 s (p25_growth 9.45
+to 22.10 s); `cargo-test` 155 s to 200 s; the Luau witness 20 s to
+57 s. gate full: PASS, 153 entries.
+
 ### P2.6 Phase Review round 2
 
 Reviewer: fresh agent, diff `4a8a817..29a8f0f`. 0 CRITICAL, 0 MAJOR, 3 MINOR. The round 1 resolution holds (every `this` form at the D18 positions; contextual forms accepted and `tsc`-clean). C13 paths, construction order, C10 with classes, private access, nominal relation, and limits checked.

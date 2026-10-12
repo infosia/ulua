@@ -1,12 +1,14 @@
 //! Class growth runs the full ABI compiler at n and 4n bytes and analyzes ceiling outputs.
-//! Review round 1 Debug cost: 3.069 seconds; the analyzer batch costs 1.835 seconds for fifteen modules.
+//! Single-worker Debug cost: 3.58 seconds for this test target.
 //! Compiler unit tests assert deterministic state ratios. This test only reports elapsed cost.
+#[path = "support/analyzer.rs"]
+mod analyzer;
 #[path = "../../ulua_compiler/src/p26_shapes.rs"]
 mod shapes;
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
-use std::{path::PathBuf, process::Command, time::Instant};
+use std::{path::PathBuf, time::Instant};
 use ulua_compiler::{Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_BYTES, compile};
 
 #[test]
@@ -46,15 +48,14 @@ fn class_full_pipeline_growth() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let out = Command::new(root.join("target/luau-tools/luau-analyze"))
+    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
         .args(&files)
         .output()
         .unwrap();
     assert!(
         out.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        "luau-analyze {}",
+        analyzer::failure(&out)
     );
     eprintln!(
         "P2.6 growth analyzer={} cost={:.3}s total_cost={:.3}s",

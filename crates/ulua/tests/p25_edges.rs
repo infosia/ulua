@@ -1,5 +1,5 @@
 //! C16.9 keeps contradictory null-test edges and checks the original literal syntax.
-//! Measured Debug cost: 0.48 seconds, including tsc, Node, and Luau analysis.
+//! Single-worker Debug cost: 0.50 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod oracle;
