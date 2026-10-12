@@ -236,8 +236,12 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
      array), `reduce(f, init)` and `reduceRight(f, init)` with `init`
      required, and `sort(cmp)` with the comparator required.
    - A callback takes `(v)` or `(v, i)`; the callback of `reduce` and
-     `reduceRight` takes `(acc, v)` or `(acc, v, i)`. The parameter
-     after the index, the array, is rejected.
+     `reduceRight` takes `(acc, v)` or `(acc, v, i)`; the comparator of
+     `sort` takes exactly `(a, b)`. The parameter after the index, the
+     array, is rejected. A one-parameter comparator is rejected: it is
+     not consistent unless it is constant.
+   - The element type of a result array (`map`, `flatMap`) follows
+     C6.5: a callback result type that includes `null` is rejected.
    - A number argument (`from`, `start`, `end`, `count`, `target`,
      `i`) is converted as ECMAScript ToIntegerOrInfinity converts it:
      NaN is 0, a fraction truncates toward 0. A negative position is
@@ -248,10 +252,16 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
    - `join` formats a number element as `String(n)` (C4.5), a boolean
      as `true` or `false`, and a string as itself. An element type of
      array or function type is rejected for `join`.
-   - `sort` is stable. A comparator result that is NaN counts as 0.
-     Divergence: the number and the order of comparator calls are not
-     those of `node`; an entry whose comparator has a visible effect is
-     `js-comparable: no C6`.
+   - `sort` is a stable merge sort that calls `compare(earlier, later)`.
+     A comparator result that is NaN counts as 0. Divergences: the
+     number and the order of comparator calls are not those of `node`;
+     and for a comparator that is not consistent (ECMAScript: the sort
+     order is then implementation-defined), the result order is not
+     that of `node`. Measured: `[3, NaN, 1, 2].sort((a, b) => a - b)`
+     gives `1,2,3,NaN` here and `3,NaN,1,2` in `node`; `(x, y) => x > y ?
+     1 : 0` over `[3,1,2,5,4]` gives `1,2,3,4,5` here and `3,1,2,5,4` in
+     `node`. An entry with such a comparator, or with a comparator that
+     has a visible effect, is `js-comparable: no C6`.
    - `pop()`, `shift()` on an empty array and `at(i)` outside the array
      trap `index-out-of-range`. Divergence: `node` gives `undefined`.
      The prelude declares their result as `T` (D16: no `undefined`).

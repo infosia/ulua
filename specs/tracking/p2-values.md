@@ -72,6 +72,23 @@ Source of the method set: the owner's prior project, with one change:
 
 ## Measurements
 
+### P2.3 Phase Review round 1
+
+Reviewer: fresh agent, diff `ebd372c..9a74af7`. 2 MAJOR, 5 MINOR.
+Position arguments, search semantics, join, return values, traps, the
+11 x 11 array-modified matrix, step and memory limits, `luau-analyze`,
+§5.7 (400 sequential loops), and `tsc` hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C6.9 states the `reduce` callback `(acc, v, i)`; the code rejects it and accepts `(acc)` | MAJOR | Code follows C6.9; `(acc)` rejected |
+| An inconsistent comparator orders differently from `node` (`[3, NaN, 1, 2].sort((a, b) => a - b)`); no divergence names it | MAJOR | C6.9 names the divergence with the measured cases; a one-parameter comparator is rejected |
+| `map` and `flatMap` result element types have no C6.5 check (latent until null opens) | MINOR | C6.9 rule; code check |
+| `p23_methods.rs` states no cost (3.07 s Debug) | MINOR | Cost statement |
+| The helper selection falls back to a default body (`_ =>`) | MINOR | A total match |
+| A prelude doc comment sits before the wrong declaration | MINOR | Fixed |
+| C6.9 does not give the comparator parameters | MINOR | Fixed |
+
 ### P2.3 implementation record
 
 - Codex task. Array methods of C6.9 as prelude helpers; `pop`,

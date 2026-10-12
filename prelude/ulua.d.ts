@@ -5,7 +5,6 @@
 /** Writes `text` and one line feed to the host output capability. */
 declare function print(text: string): void;
 
-/** Byte operations on UTF-8 strings. JavaScript has no such names. */
 /**
  * Ulua traps where JavaScript gives `undefined` for these members
  * (collisions.md C6.9), so their result type is the element type.
@@ -18,6 +17,7 @@ interface Array<T> {
   findLastIndex(predicate: (value: T, index: number) => boolean): number;
 }
 
+/** Byte operations on UTF-8 strings. JavaScript has no such names. */
 declare namespace Utf8 {
   /** Returns the number of UTF-8 bytes in `text`. */
   function byteLength(text: string): number;
