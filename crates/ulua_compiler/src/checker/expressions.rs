@@ -88,6 +88,12 @@ impl Checker<'_> {
             Expression::ParenthesizedExpression(p) => {
                 let mut value = self.expr_as(&p.expression, depth, statement, expected)?;
                 value.bare_true = false;
+                if let Some(flow) = &mut value.flow
+                    && !flow.logical
+                {
+                    flow.yes.reachable = true;
+                    flow.no.reachable = true;
+                }
                 return Ok(value);
             }
             Expression::UnaryExpression(u) => {

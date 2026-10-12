@@ -1,8 +1,8 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
-//! Measured Debug cost: 8.835 seconds. The largest ratio is 3.993.
-//! Condition ratios: conditional 3.580, alternating logical 3.790, conditional with wrappers 3.639.
-//! Logical with wrappers: 3.698. Nullable conditional: 3.641. Continue product: 3.993.
+//! Round 4 measured Debug cost: 8.847 seconds. The largest ratio is 3.981.
+//! Condition ratios: conditional 3.676, alternating logical 3.875, conditional with wrappers 3.625.
+//! Logical with wrappers: 3.707. Nullable conditional: 3.602. Continue product: 3.909.
 //! Round 2 ABI times compare 16 KiB and 64 KiB. Before uses the handoff HEAD.
 //! Debug ybreak: 888.475/13581.536 ms -> 28.809/112.749 ms; ratios 15.286 -> 3.914.
 //! Debug ycont: 678.899/10635.650 ms -> 27.229/106.332 ms; ratios 15.666 -> 3.905.

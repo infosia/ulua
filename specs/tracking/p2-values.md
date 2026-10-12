@@ -238,6 +238,12 @@ Reviewer: fresh agent, diff `917e951..b19cb60`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Th
 | A null test that contradicts a narrowing ends its edge; `tsc` keeps the edge: `if (c2 != null) {} else if (k != null) { return; } out += c2.v;` with `k` narrowed is accepted, `tsc` gives TS18047 | MAJOR | C16.9, `r109` |
 | `(false)`, `!true`, `while ((true))` end an edge in Ulua but not in `tsc`; Ulua rejects with C16 where `tsc` accepts | MINOR | C16.9: only a literal with no parentheses and no `!` |
 
+Fix (Codex): a contradicting null test keeps both edges and the other
+narrowings; parenthesized and negated literals keep their edges. 15
+rejected forms give C16 (`tsc` TS18047); 25 accepted forms pass `node`,
+`tsc` (one TS2339 that names `never`), and `luau-analyze`. Growth test
+8.847 s Debug, largest ratio 3.981. gate full: PASS, 127 entries.
+
 Invariant 3 names the null test (C2) beside the equality: `if (k == null) { out += k?.v ?? 0; }` gives TS2339 that names `never` after a null test.
 
 ### P2.5 Phase Review round 3

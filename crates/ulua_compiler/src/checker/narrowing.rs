@@ -48,11 +48,13 @@ impl Checker<'_> {
     pub(super) fn condition(&mut self, kind: &E) -> Flow {
         let base = self.current_edge(true);
         let unknown = Flow {
+            logical: false,
             yes: base,
             no: base,
         };
         match kind {
             E::Boolean(value) => Flow {
+                logical: false,
                 yes: Edge {
                     reachable: *value,
                     ..base
@@ -65,8 +67,15 @@ impl Checker<'_> {
             E::Unary("not", a) => {
                 let a = a.flow.unwrap_or(unknown);
                 Flow {
-                    yes: a.no,
-                    no: a.yes,
+                    logical: a.logical,
+                    yes: Edge {
+                        reachable: !a.logical || a.no.reachable,
+                        ..a.no
+                    },
+                    no: Edge {
+                        reachable: !a.logical || a.yes.reachable,
+                        ..a.yes
+                    },
                 }
             }
             E::Binary(op, a, b) if matches!(*op, "==" | "~=") => {
@@ -87,13 +96,18 @@ impl Checker<'_> {
                         let old = self.facts.get(id);
                         let mark = self.facts.mark();
                         let yes_value = *op == "~=";
-                        self.facts.set(id, Some(yes_value));
-                        let yes = self.current_edge(old.is_none_or(|v| v == yes_value));
+                        // A contradiction keeps the known type and the other facts on both edges.
+                        self.facts.set(id, old.or(Some(yes_value)));
+                        let yes = self.current_edge(true);
                         self.facts.restore(mark);
-                        self.facts.set(id, Some(!yes_value));
-                        let no = self.current_edge(old.is_none_or(|v| v != yes_value));
+                        self.facts.set(id, old.or(Some(!yes_value)));
+                        let no = self.current_edge(true);
                         self.facts.restore(mark);
-                        return Flow { yes, no };
+                        return Flow {
+                            logical: false,
+                            yes,
+                            no,
+                        };
                     }
                 }
                 unknown
@@ -103,6 +117,7 @@ impl Checker<'_> {
                 let b = b.flow.unwrap_or(unknown);
                 if *and {
                     Flow {
+                        logical: true,
                         yes: Edge {
                             reachable: a.yes.reachable && b.yes.reachable,
                             ..b.yes
@@ -117,6 +132,7 @@ impl Checker<'_> {
                     }
                 } else {
                     Flow {
+                        logical: true,
                         yes: self.meet(
                             a.yes,
                             Edge {
@@ -135,7 +151,8 @@ impl Checker<'_> {
                 let t = t.flow.unwrap_or(unknown);
                 let a = a.flow.unwrap_or(unknown);
                 let b = b.flow.unwrap_or(unknown);
-                Flow {
+                let mut result = Flow {
+                    logical: false,
                     yes: self.meet(
                         Edge {
                             reachable: t.yes.reachable && a.yes.reachable,
@@ -156,7 +173,11 @@ impl Checker<'_> {
                             ..b.no
                         },
                     ),
-                }
+                };
+                // Boolean values of the arms are not literal tests of this expression.
+                result.yes.reachable = true;
+                result.no.reachable = true;
+                result
             }
             _ => unknown,
         }
@@ -214,8 +235,9 @@ impl Checker<'_> {
         if let Some(test) = test
             && !test.bare_true
         {
-            let possible = self.edge(test, false);
-            if context.reachable && possible {
+            self.edge(test, false);
+            // Only an absent test or bare true removes the normal loop exit.
+            if context.reachable {
                 context.exit.include(&self.facts, self.facts.head());
             }
         }

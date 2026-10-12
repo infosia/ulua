@@ -34,6 +34,8 @@ pub(crate) struct Edge {
 }
 #[derive(Clone, Copy)]
 pub(crate) struct Flow {
+    // Logical tests retain child edge endings through parentheses and negation.
+    pub(crate) logical: bool,
     pub(crate) yes: Edge,
     pub(crate) no: Edge,
 }
