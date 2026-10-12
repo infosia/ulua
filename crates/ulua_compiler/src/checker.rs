@@ -237,11 +237,11 @@ pub(crate) fn check(
     for s in &program.body {
         match s {
             Statement::FunctionDeclaration(f) => {
-                declarations.push((c.function_name(f, 0)?, f.as_ref(), false));
+                declarations.push((c.function_name(f, 0)?, f.as_ref(), false, s.span().start));
             }
             Statement::ExportDeclaration(e) => match &e.declaration {
                 Declaration::FunctionDeclaration(f) => {
-                    declarations.push((c.function_name(f, 0)?, f.as_ref(), true));
+                    declarations.push((c.function_name(f, 0)?, f.as_ref(), true, s.span().start));
                 }
                 _ => return Err(c.unsupported(e.span)),
             },
@@ -255,7 +255,7 @@ pub(crate) fn check(
             _ => return Err(c.error(s.span(), "C11", "Module statements must be declarations")),
         }
     }
-    if !declarations.iter().any(|(id, f, exported)| {
+    if !declarations.iter().any(|(id, f, exported, _)| {
         *exported
             && f.id.as_ref().is_some_and(|n| n.name == "main")
             && c.bindings[*id]
@@ -265,8 +265,12 @@ pub(crate) fn check(
     }) {
         return Err(c.unsupported(program.span));
     }
-    let mut body = vec![ir::Statement::Entry(
-        c.scopes[0].values().copied().collect(),
+    let first_offset = program.body.first().map_or(0, |s| s.span().start);
+    let mut body = vec![ir::Statement::Located(
+        first_offset,
+        Box::new(ir::Statement::Entry(
+            c.scopes[0].values().copied().collect(),
+        )),
     )];
     for s in &program.body {
         if let Statement::VariableDeclaration(d) = s {
@@ -275,9 +279,12 @@ pub(crate) fn check(
     }
     c.equality.restore(0);
     c.reachable = true;
-    for (id, f, exported) in declarations {
+    for (id, f, exported, offset) in declarations {
         c.function_body(id, f, exported, 0)?;
-        body.insert(1, ir::Statement::Function(id));
+        body.insert(
+            1,
+            ir::Statement::Located(offset, Box::new(ir::Statement::Function(id))),
+        );
     }
     // Restore source order after function bodies add their nested declarations.
     body[1..].sort_by_key(|s| match s.form() {

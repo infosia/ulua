@@ -13,7 +13,7 @@ pub(super) struct Emission {
     pub(super) locals: Vec<std::collections::HashSet<String>>,
 }
 
-pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
+pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
     let mut groups = vec![0; size];
@@ -116,14 +116,27 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
     for s in &mut chunk.slots {
         s.busy = false;
     }
-    chunk.statements(&module.body, 0)?;
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
     out.push_str(&types.declarations);
     if let Some(layout) = &context.layouts[0] {
         out.push_str(&layout.headers);
     }
+    let output = output::Output::new(bound);
+    let first_offset = module
+        .body
+        .iter()
+        .find_map(|s| match s {
+            S::Located(offset, _) => Some(*offset as usize),
+            _ => None,
+        })
+        .unwrap_or(0);
+    output.charge(out.len(), first_offset);
+    output.check(module)?;
+    chunk.output = Some(&output);
+    chunk.statements(&module.body, 0)?;
     out.push_str(&chunk.out);
+    let trailer_start = out.len();
     out.push_str("return {\n");
     for f in module.functions.iter().filter(|f| f.exported) {
         let _ = writeln!(
@@ -134,7 +147,17 @@ pub(super) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
         );
     }
     out.push_str("}\n");
-    check_output(module, out.len())?;
+    let last_offset = module
+        .body
+        .iter()
+        .rev()
+        .find_map(|s| match s {
+            S::Located(offset, _) => Some(*offset as usize),
+            _ => None,
+        })
+        .unwrap_or(first_offset);
+    output.charge(out.len() - trailer_start, last_offset);
+    output.check(module)?;
     Ok(out)
 }
 
@@ -162,19 +185,6 @@ impl Emitter<'_> {
         for s in &mut child.slots {
             s.busy = false;
         }
-        child.defaults(f)?;
-        child.statements(&f.body, depth)?;
-        if child.upvalues.len() > crate::UPVALUE_BUDGET {
-            return Err(Diagnostic::at(
-                &self.module.source,
-                self.module.bindings[id].start as usize,
-                "limit:upvalues",
-                "Closure upvalue limit exceeded",
-            ));
-        }
-        for name in &child.upvalues {
-            self.capture(name);
-        }
         let mut parameters = vec![];
         let mut parameter_locals = String::new();
         for (id, default) in &f.parameters {
@@ -199,13 +209,39 @@ impl Emitter<'_> {
                 parameters.push(format!("__ulua_b{id}: {ty}"));
             }
         }
-        Ok(format!(
-            "function({}): {}\n{}{}{}end",
+        let prefix = format!(
+            "function({}): {}\n{}{}",
             parameters.join(", "),
             self.function_types.luau(&f.result),
             parameter_locals,
-            child.headers(&layout.headers),
-            child.out
-        ))
+            child.headers(&layout.headers)
+        );
+        child.output = self.output;
+        child.statement_offset = self.statement_offset;
+        if let Some(output) = self.output {
+            output.charge(prefix.len(), self.statement_offset);
+            output.check(self.module)?;
+        }
+        child.defaults(f)?;
+        child.statements(&f.body, depth)?;
+        if child.upvalues.len() > crate::UPVALUE_BUDGET {
+            return Err(Diagnostic::at(
+                &self.module.source,
+                self.module.bindings[id].start as usize,
+                "limit:upvalues",
+                "Closure upvalue limit exceeded",
+            ));
+        }
+        for name in &child.upvalues {
+            self.capture(name);
+        }
+        if let Some(output) = self.output {
+            output.charge(3, self.statement_offset);
+            output.check(self.module)?;
+        }
+        let value = format!("{prefix}{}end", child.out);
+        // Child writes already use the module budget. The enclosing line counts only its own bytes.
+        self.credited += value.len();
+        Ok(value)
     }
 }

@@ -24,3 +24,6 @@ ulua_compiler = { path = "../ulua_compiler" }
 
 [build-dependencies]
 cc.workspace = true
+
+[dev-dependencies]
+ulua_compiler = { path = "../ulua_compiler", features = ["test-output-limit"] }

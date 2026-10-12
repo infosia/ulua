@@ -3,6 +3,7 @@ mod arrays;
 mod expressions;
 mod functions;
 mod joins;
+mod output;
 mod statements;
 mod storage;
 mod types;
@@ -65,6 +66,9 @@ struct Emitter<'a> {
     module_locations: &'a HashMap<usize, String>,
     binding_ids: &'a [usize],
     offset: usize,
+    statement_offset: usize,
+    output: Option<&'a output::Output>,
+    credited: usize,
     copies: HashMap<usize, String>,
     generated: Vec<(String, String, String, bool)>,
     loops: Vec<Loop>,
@@ -95,6 +99,9 @@ impl<'a> Emitter<'a> {
             module_locations,
             binding_ids,
             offset: 0,
+            statement_offset: 0,
+            output: None,
+            credited: 0,
             copies: HashMap::new(),
             generated: vec![],
             loops: vec![],
@@ -121,12 +128,25 @@ impl<'a> Emitter<'a> {
         if self.context.is_none() {
             return;
         }
+        let text = text.as_ref();
+        let bytes = text.len() + if self.indent == 0 { 1 } else { 5 };
+        let credited = std::mem::take(&mut self.credited);
+        if let Some(output) = self.output {
+            output.charge(bytes.saturating_sub(credited), self.statement_offset);
+            if output.exceeded() {
+                return;
+            }
+        }
         let _ = writeln!(
             self.out,
             "{}{}",
             if self.indent == 0 { "" } else { "    " },
-            text.as_ref()
+            text
         );
+    }
+    fn output_check(&self) -> Result<(), Diagnostic> {
+        self.output
+            .map_or(Ok(()), |output| output.check(self.module))
     }
     fn location(&self, id: usize) -> Result<String, Diagnostic> {
         self.copies
@@ -222,27 +242,41 @@ impl<'a> Emitter<'a> {
     }
 }
 
-pub(crate) fn emit(module: &ir::Module) -> Result<String, Diagnostic> {
-    functions::emit(module)
-}
-
-fn check_output(module: &ir::Module, generated: usize) -> Result<(), Diagnostic> {
-    let bound = crate::OUTPUT_PRELUDE_BYTES
-        .saturating_add(crate::OUTPUT_FACTOR.saturating_mul(module.source.len()));
-    if generated > bound {
-        return Err(Diagnostic::at(
-            &module.source,
-            0,
-            "internal",
-            "Generated source exceeds the output bound",
-        ));
-    }
-    Ok(())
+pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
+    let bound =
+        crate::OUTPUT_PRELUDE_BYTES.saturating_add(factor.saturating_mul(module.source.len()));
+    functions::emit(module, bound)
 }
 
 #[cfg(test)]
 mod output_tests {
     use super::*;
+
+    #[test]
+    fn the_budget_counts_nested_output_exactly_once() {
+        for source in [
+            "\nexport function main():void{print('a');}",
+            "\nexport function main():void{function f(x:number=1):number{return x;}let g=():number=>f();print(`${g()}`);}",
+            "\nexport function main():void{for(let i=0;i<2;i++){let g=()=>i;print(`${g()}`);}}",
+        ] {
+            let allocator = oxc_allocator::Allocator::default();
+            let parsed =
+                oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::ts()).parse();
+            let module =
+                crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                    .unwrap();
+            let generated = emit(&module, crate::OUTPUT_FACTOR).unwrap();
+            assert_eq!(
+                functions::emit(&module, generated.len()).unwrap(),
+                generated
+            );
+            let error = functions::emit(&module, generated.len() - 1).unwrap_err();
+            assert_eq!(
+                (error.code, error.offset, error.line, error.column),
+                ("limit:output", 1, 2, 1)
+            );
+        }
+    }
 
     #[test]
     fn independently_oversized_ir_reaches_the_output_check() {
@@ -254,10 +288,20 @@ mod output_tests {
             crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
                 .unwrap();
         let bound = crate::OUTPUT_PRELUDE_BYTES + crate::OUTPUT_FACTOR * source.len();
-        assert!(check_output(&module, bound).is_ok());
+        let output = output::Output::new(bound);
+        output.charge(bound, 0);
+        assert!(output.check(&module).is_ok());
+        output.charge(1, source.find("print").unwrap());
+        output.charge(1, 0);
+        let crossing = output.check(&module).unwrap_err();
         assert_eq!(
-            check_output(&module, bound + 1).unwrap_err().code,
-            "internal"
+            (
+                crossing.code,
+                crossing.offset,
+                crossing.line,
+                crossing.column
+            ),
+            ("limit:output", 28, 1, 29)
         );
         let statement = module.functions[0]
             .body
@@ -275,8 +319,10 @@ mod output_tests {
         };
         arguments[0].kind = ir::ExprKind::String("x".repeat(bound + 1));
         // The original source size remains intact. The generated text independently exceeds its bound.
-        let error = emit(&module).unwrap_err();
-        assert_eq!(error.code, "internal");
+        let error = emit(&module, crate::OUTPUT_FACTOR).unwrap_err();
+        assert_eq!(error.code, "limit:output");
+        assert_eq!(error.offset, source.find("print").unwrap() as u64);
+        assert_eq!((error.line, error.column), (1, 29));
         assert_eq!(error.message, "Generated source exceeds the output bound");
     }
 }

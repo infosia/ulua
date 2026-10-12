@@ -351,7 +351,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 |---|---|---|
 | `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
-| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 62.1 MB over 121 shapes at the ceiling (densest templates, Release, P2.2); Rust allocations at most 33.5 MB |
+| Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 93.1 MB at the ceiling (`spillD`, a fresh arrow per array literal over spilled bindings, Release, P2.2 review 2); Rust allocations 39.1 MB |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |

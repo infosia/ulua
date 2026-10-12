@@ -52,7 +52,7 @@ impl Checker<'_> {
                 self.equality.aliases[id] = facts;
             }
             self.equality.bindings[id] = self.bindings[id].mutable || value.wide;
-            out.push(S::Located(v.span.start, Box::new(S::Declare(id, value))));
+            out.push(S::Located(d.span.start, Box::new(S::Declare(id, value))));
         }
         Ok(out)
     }
@@ -89,7 +89,11 @@ impl Checker<'_> {
             .map(|s| s.values().copied().collect())
             .unwrap_or_default();
         let mut out = vec![S::Entry(ids)];
-        out.extend(declarations.iter().map(|(id, _)| S::Function(*id)));
+        out.extend(
+            declarations
+                .iter()
+                .map(|(id, f)| S::Located(f.span.start, Box::new(S::Function(*id)))),
+        );
         for s in statements {
             if !matches!(s, Statement::FunctionDeclaration(_)) {
                 out.push(self.statement(s, depth)?);

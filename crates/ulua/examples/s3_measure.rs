@@ -1,7 +1,7 @@
 //! Reproduce S3 measurements with the pinned native compiler. This is not a gate.
 //! Set LUAU_SOURCE_DIR and CARGO_NET_OFFLINE before each command.
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
-//! MODE is stack, heap, heap-products, heap-dense, native, run, or emit. Add --release before -p for Release.
+//! MODE is stack, heap, heap-products, heap-dense, heap-spill, native, run, or emit. Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
 //! Native template emission is incremental: its probe reports a lower bound,
 //! not an absolute maximum, when the next input still compiles.
@@ -281,6 +281,12 @@ fn main() {
                         stages(form, count);
                     }
                 }
+            }
+            "heap-spill" => {
+                heap(
+                    arrays::spill_source("spillD", SOURCE_CEILING as usize),
+                    "spillD",
+                );
             }
             "heap-dense" => {
                 println!("prelude_bytes={}", ulua_compiler::OUTPUT_PRELUDE_BYTES);

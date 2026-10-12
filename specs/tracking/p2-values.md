@@ -229,6 +229,12 @@ case; each review found a denser shape (56.7, 62.7, 63.1, 71.7). The
 bound becomes a limit diagnostic, so no accepted program reaches
 `internal` through it.
 
+Fix record (P2.2 round 2): `limit:output` at the crossing statement,
+with offset, line, and column; `OUTPUT_FACTOR` stays 80. Largest
+measured ratio 71.69 (`spillD`); `spillA` 69.15. Heap at 65,536 B for
+`spillD`: 93.1 MB (sampled), Rust allocations 39.1 MB; this replaces
+the 62.1 MB value of §7. Growth test 8.87 s Debug.
+
 ## Failures before the fix
 
 ## Gaps

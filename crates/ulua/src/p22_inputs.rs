@@ -93,3 +93,43 @@ pub fn source(shape: &str, bytes: usize) -> String {
     out.push_str(&" ".repeat(bytes.saturating_sub(out.len())));
     out
 }
+
+/// Review shapes combine fresh arrows, array products, and spilled bindings.
+pub const SPILL_SHAPES: &[&str] = &["spillA", "spillD"];
+
+/// Build one review shape at the source ceiling.
+pub fn spill_source(shape: &str, bytes: usize) -> String {
+    let mut source = (0..100)
+        .map(|n| format!("function f{n}():void{{}}"))
+        .collect::<String>();
+    source.push_str("export function main():void{");
+    let deep = shape == "spillD";
+    if deep {
+        for (n, base) in [
+            "number",
+            "boolean",
+            "string",
+            "(()=>number)",
+            "(()=>boolean)",
+            "(()=>string)",
+        ]
+        .iter()
+        .enumerate()
+        {
+            source.push_str(&format!("let w{n}:{base}{}=[];", "[]".repeat(20)));
+        }
+    }
+    for n in 0..200 {
+        source.push_str(&format!("let v{n}=0;"));
+    }
+    let ty = format!("number{}", "[]".repeat(if deep { 21 } else { 1 }));
+    let value = if deep { "[]" } else { "[1]" };
+    source.push_str(&format!("const a:{ty}={value};let g=():{ty}[]=>[];"));
+    let unit = format!("g=()=>[{}];", vec!["a"; 130].join(","));
+    while source.len() + unit.len() < bytes {
+        source.push_str(&unit);
+    }
+    source.push('}');
+    source.push_str(&" ".repeat(bytes.saturating_sub(source.len())));
+    source
+}

@@ -738,3 +738,68 @@ fn templates_freeze_each_read_and_conversion_in_order() {
         assert_eq!(p1_output(&source), [expected]);
     }
 }
+
+#[test]
+fn output_limit_reports_the_crossing_statement_through_the_abi() {
+    let fixture = Fixture::new();
+    // Factor 1 admits the headers. Decimal byte escapes expand the UTF-8 string.
+    for (prefix, suffix) in [
+        ("\nconst x='", "';\nexport function main():void{}"),
+        (
+            "export function main():void{\n print('first');\n  print('",
+            "');print('later');\n}",
+        ),
+        (
+            "export function main():void{\n function f():void{\n  print('",
+            "');\n}\n}",
+        ),
+    ] {
+        let source = format!("{prefix}{}{suffix}", "é".repeat(512));
+        let offset = if prefix.contains("print") {
+            source.find("print('é").unwrap()
+        } else {
+            source.find("const").unwrap()
+        };
+        let line = source[..offset].bytes().filter(|b| *b == b'\n').count() as u32 + 1;
+        let column = (offset - source[..offset].rfind('\n').map_or(0, |n| n + 1)) as u32 + 1;
+        let mut module = ptr::null_mut();
+        let mut diagnostic = Diagnostic::default();
+        abi::TEST_OUTPUT_FACTOR.with(|factor| factor.set(Some(1)));
+        // SAFETY: The fixture owns the context. Source and output storage cover their lengths.
+        unsafe {
+            assert_eq!(
+                ulua_compile(
+                    fixture.context,
+                    source.as_ptr().cast(),
+                    source.len(),
+                    ptr::null(),
+                    &mut module,
+                    &mut diagnostic
+                ),
+                ULUA_REJECTED
+            );
+        }
+        assert!(module.is_null());
+        assert_eq!(code(&diagnostic), "limit:output");
+        assert_eq!(
+            (diagnostic.offset, diagnostic.line, diagnostic.column),
+            (offset as u64, line, column)
+        );
+        // A rejected compile leaves the context usable, with the default factor restored.
+        // SAFETY: The same live source and output storage satisfy the ABI preconditions.
+        unsafe {
+            assert_eq!(
+                ulua_compile(
+                    fixture.context,
+                    source.as_ptr().cast(),
+                    source.len(),
+                    ptr::null(),
+                    &mut module,
+                    &mut diagnostic
+                ),
+                ULUA_OK
+            );
+            assert_eq!(ulua_module_free(module), ULUA_OK);
+        }
+    }
+}

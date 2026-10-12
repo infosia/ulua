@@ -7,6 +7,7 @@ use std::{
 
 #[cfg(test)]
 thread_local! {
+    pub(crate) static TEST_OUTPUT_FACTOR: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     pub(crate) static REFUSE_COMPILER_THREAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -142,6 +143,8 @@ pub unsafe extern "C" fn ulua_compile(
         };
         guard(context, diagnostic, || {
             out.write(ptr::null_mut());
+            #[cfg(test)]
+            let output_factor = TEST_OUTPUT_FACTOR.with(|factor| factor.take());
             let joined = std::thread::scope(|scope| {
                 #[cfg(test)]
                 if REFUSE_COMPILER_THREAD.with(|flag| flag.replace(false)) {
@@ -151,6 +154,16 @@ pub unsafe extern "C" fn ulua_compile(
                     .name("ulua-compiler".into())
                     .stack_size(ulua_compiler::COMPILER_STACK_BYTES)
                     .spawn_scoped(scope, move || -> Result<_, ulua_compiler::Diagnostic> {
+                        #[cfg(test)]
+                        let compiled = match output_factor {
+                            Some(factor) => ulua_compiler::test_compile_with_output_factor(
+                                source,
+                                compiler_limits(limits),
+                                factor,
+                            ),
+                            None => ulua_compiler::compile(source, compiler_limits(limits)),
+                        }?;
+                        #[cfg(not(test))]
                         let compiled = ulua_compiler::compile(source, compiler_limits(limits))?;
                         let mut bytecode = ptr::null_mut();
                         let mut size = 0;

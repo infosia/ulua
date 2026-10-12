@@ -27,7 +27,10 @@ impl Emitter<'_> {
         Ok(())
     }
     pub(super) fn statement(&mut self, s: &S, depth: u32) -> Result<(), Diagnostic> {
+        self.output_check()?;
+        let parent_offset = self.statement_offset;
         if let S::Located(offset, _) = s {
+            self.statement_offset = *offset as usize;
             self.offset = *offset as usize;
         }
         if !self.joins.is_empty() {
@@ -46,7 +49,12 @@ impl Emitter<'_> {
                         .as_ref()
                         .and_then(|l| l.entries.get(&key))
                     {
-                        self.out.push_str(&self.headers(headers));
+                        let headers = self.headers(headers);
+                        if let Some(output) = self.output {
+                            output.charge(headers.len(), self.statement_offset);
+                            output.check(self.module)?;
+                        }
+                        self.out.push_str(&headers);
                     }
                 }
             }
@@ -249,6 +257,7 @@ impl Emitter<'_> {
                 }
             }
         }
-        Ok(())
+        self.statement_offset = parent_offset;
+        self.output_check()
     }
 }
