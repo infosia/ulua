@@ -342,7 +342,10 @@ impl Checker<'_> {
                 self.reachable = incoming && true_edge;
                 let a = self.statement(&i.consequent, depth)?;
                 let first_reachable = self.reachable && !narrowing::exits(&a);
-                let first = self.facts.changes(mark);
+                let mut join = narrowing::Join::default();
+                if first_reachable {
+                    join.include(&self.facts, self.facts.head());
+                }
                 self.facts.restore(mark);
                 let false_edge = self.edge(&test, false);
                 self.reachable = incoming && false_edge;
@@ -352,14 +355,11 @@ impl Checker<'_> {
                     .map(|s| self.statement(s, depth))
                     .transpose()?;
                 let second_reachable = self.reachable && !b.as_ref().is_some_and(narrowing::exits);
-                let second = self.facts.changes(mark);
-                self.facts.restore(mark);
-                if !first_reachable {
-                    self.facts.apply(second);
-                } else if !second_reachable {
-                    self.facts.apply(first);
-                } else {
-                    self.facts.merge(first, second);
+                if second_reachable {
+                    join.include(&self.facts, self.facts.head());
+                }
+                if join.finish(&mut self.facts).is_none() {
+                    self.facts.restore(mark);
                 }
                 self.reachable = first_reachable || second_reachable;
                 S::If(test, Box::new(a), b.map(Box::new))

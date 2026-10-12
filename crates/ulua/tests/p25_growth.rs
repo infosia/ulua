@@ -1,8 +1,20 @@
 //! P2.5 growth compares full ABI compilation at n and 4n, and checks ceiling output.
 //! The Debug budget is twelve seconds, including one batch analyzer run.
-//! Measured Debug cost: 7.234 seconds. The largest ratio is 4.101.
-//! New shape ratios: conditional 3.570, alternating logical 3.864, conditional with wrappers 3.656.
-//! Logical with wrappers: 3.727. Nullable conditional: 3.708. Continue product: 3.751.
+//! Measured Debug cost: 8.835 seconds. The largest ratio is 3.993.
+//! Condition ratios: conditional 3.580, alternating logical 3.790, conditional with wrappers 3.639.
+//! Logical with wrappers: 3.698. Nullable conditional: 3.641. Continue product: 3.993.
+//! Round 2 ABI times compare 16 KiB and 64 KiB. Before uses the handoff HEAD.
+//! Debug ybreak: 888.475/13581.536 ms -> 28.809/112.749 ms; ratios 15.286 -> 3.914.
+//! Debug ycont: 678.899/10635.650 ms -> 27.229/106.332 ms; ratios 15.666 -> 3.905.
+//! Debug distinct consts: 163.846/2246.953 ms -> 25.709/100.300 ms; ratios 13.714 -> 3.901.
+//! Debug continue/update: 675.917/10637.277 ms -> 27.174/105.922 ms; ratios 15.738 -> 3.898.
+//! Debug if/else ends: 39.578/158.546 ms -> 39.702/157.984 ms; ratios 4.006 -> 3.979.
+//! Release ybreak: 94.294/991.532 ms -> 21.752/42.102 ms; ratios 10.515 -> 1.936.
+//! Release ycont: 50.623/781.942 ms -> 7.733/25.709 ms; ratios 15.446 -> 3.324.
+//! Release distinct consts: 15.706/189.527 ms -> 6.058/21.778 ms; ratios 12.067 -> 3.595.
+//! Release continue/update: 51.067/792.868 ms -> 6.518/24.327 ms; ratios 15.526 -> 3.732.
+//! Release if/else ends: 9.481/36.893 ms -> 9.500/35.942 ms; ratios 3.891 -> 3.783.
+//! Stock tsc gives TS2563 for ceiling ybreak and if-end-writes; the other new shapes pass.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -27,7 +39,41 @@ const SHAPES: &[&str] = &[
     "logical-wrapped-tests",
     "nullable-conditional-tests",
     "continue-product",
+    "ybreak",
+    "ycont",
+    "distinct-const-break",
+    "continue-update-writes",
+    "if-end-writes",
 ];
+fn join_source(shape: &str, bytes: usize) -> String {
+    let mut out = "function g():string|null{return null;}export function main():void{const c:boolean=false;let y:string|null=g();".to_owned();
+    let tail = "}}";
+    out.push_str(match shape {
+        "ycont" => "for(let i=0;i<1;i++){",
+        "continue-update-writes" => "for(let i=0;i<1;y=g()){i+=1;",
+        "distinct-const-break" => "while(c){if(y==null){return;}",
+        _ => "while(c){",
+    });
+    let mut i = 0;
+    loop {
+        let unit = match shape {
+            "ybreak" => "if(y==null)break;y=g();".to_owned(),
+            "ycont" | "continue-update-writes" => "if(y==null)continue;y=g();".to_owned(),
+            "distinct-const-break" => {
+                format!("const x{i}:string|null=g();if(x{i}==null){{y=g();break;}}")
+            }
+            _ => "if(y==null){y=g();}else{y=g();}y=g();".to_owned(),
+        };
+        if out.len() + unit.len() + tail.len() > bytes {
+            break;
+        }
+        out.push_str(&unit);
+        i += 1;
+    }
+    out.push_str(tail);
+    out.push_str(&" ".repeat(bytes - out.len()));
+    out
+}
 fn condition_depth(shape: &str) -> usize {
     match shape {
         "conditional-wrapped-tests" | "logical-wrapped-tests" => 8,
@@ -90,6 +136,12 @@ fn condition_wrappers_reach_the_nesting_bound() {
     }
 }
 fn make(shape: &str, bytes: usize) -> String {
+    if matches!(
+        shape,
+        "ybreak" | "ycont" | "distinct-const-break" | "continue-update-writes" | "if-end-writes"
+    ) {
+        return join_source(shape, bytes);
+    }
     let mut declarations = "type B={v:number};".to_owned();
     let mut prefix = String::new();
     let unit: String;
@@ -229,7 +281,15 @@ fn p25_full_pipeline_growth_and_output() {
     for shape in SHAPES {
         let n = if matches!(
             *shape,
-            "field-product" | "fact-product" | "break-product" | "continue-product"
+            "field-product"
+                | "fact-product"
+                | "break-product"
+                | "continue-product"
+                | "ybreak"
+                | "ycont"
+                | "distinct-const-break"
+                | "continue-update-writes"
+                | "if-end-writes"
         ) {
             16384
         } else {

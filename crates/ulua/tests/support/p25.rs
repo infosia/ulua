@@ -2,8 +2,11 @@
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 use ulua_compiler::{Limits, compile};
 pub fn rejected_fields(cases: &[(&str, &[u32])]) {
+    rejected_references("fields", cases);
+}
+pub fn rejected_references(label: &str, cases: &[(&str, &[u32])]) {
     let directory =
-        std::env::temp_dir().join(format!("ulua-p25-d18-fields-{}", std::process::id()));
+        std::env::temp_dir().join(format!("ulua-p25-d18-{label}-{}", std::process::id()));
     std::fs::create_dir_all(&directory).unwrap();
     let paths: Vec<_> = cases
         .iter()
@@ -68,7 +71,7 @@ pub fn rejected_fields(cases: &[(&str, &[u32])]) {
         "{text}"
     );
     eprintln!(
-        "P2.5 D18 field tsc: {} fixtures; codes={codes:?}",
+        "P2.5 D18 {label} tsc: {} fixtures; codes={codes:?}",
         cases.len()
     );
     std::fs::remove_dir_all(directory).unwrap();

@@ -1,5 +1,5 @@
 //! P2.5 direct and parameterized template programs use Node, tsc, Luau, and the ABI.
-//! Measured Debug cost: 1.38 seconds, including the external witnesses.
+//! Measured Debug cost: 1.52 seconds, including the external witnesses.
 #[path = "support/p25.rs"]
 mod field_witness;
 #[allow(dead_code)]
@@ -391,6 +391,8 @@ fn nullable_flow_joins_every_loop_edge() {
         "const x:Box|null=null;let s=0;for(let i=0;i<1;s+=x.value){i+=1;for(let j=0;j<1;j+=1){if(x==null){break;}}}",
         "const x:Box|null=null;const y:Box|null={value:1};if((x!=null?true:y!=null)){print(`${x.value}`);}",
         "const x:Box|null=null;const y:Box|null={value:1};if((x!=null&&true)||(y!=null&&true)){print(`${x.value}`);}",
+        "let x:Box|null={value:1};let i=0;while(true){if(i==0){if(x==null){return;}break;}if(i==1){x=null;break;}if(x==null){return;}break;}print(`${x.value}`);",
+        "let x:Box|null={value:1};let s=0;for(let i=0;i<3;s+=x.value){i+=1;if(i==1){if(x==null){return;}continue;}if(i==2){x=null;continue;}if(x==null){return;}}",
     ] {
         let program = source(body);
         assert_eq!(
@@ -479,6 +481,96 @@ fn object_field_inference_requires_context_at_every_depth() {
             "type Hold={{b:Box|null}};type Nested={{b:Hold}};type Flag={{v:boolean}};type MaybeNumber={{v:number|null}};{TYPES}function take(o:Hold):void{{o.b=null;print(`${{o.b?.value??0}}`);}}export function main():void{{{body}}}"
         );
         suite.source(&program, None);
+    }
+    suite.finish();
+}
+
+#[test]
+fn optional_and_parenthesized_references_require_context() {
+    const SETUP: &str =
+        "type B={s:string|null;flag:boolean};function get():B|null{return {s:'a',flag:true};}";
+    let fixtures = [
+        (
+            "const o=get();if(o!=null&&o.s!=null){let y=o?.s??null;y=null;}",
+            &[2322u32][..],
+        ),
+        (
+            "const o=get();if(o!=null&&o.flag){const xs=[o?.flag??true];xs.push(false);}",
+            &[2345][..],
+        ),
+        (
+            "const o=get();if(o!=null&&o.s!=null){const f=()=>o?.s??null;}",
+            &[][..],
+        ),
+        (
+            "const o=get();if(o!=null&&o.s!=null){const out={a:o?.s??null};out.a=null;}",
+            &[2322][..],
+        ),
+        (
+            "const o:B={s:'a',flag:true};if(o.s!=null){let y=(o).s;y=null;}",
+            &[2322][..],
+        ),
+        (
+            "const o:B={s:'a',flag:true};if(o.flag){const xs=[(o).flag];xs.push(false);}",
+            &[2345][..],
+        ),
+        (
+            "const bs:B[]=[{s:'a',flag:true}];if(bs[0].flag){const xs=[(bs[0]).flag,(bs)[0].flag];xs.push(false);}",
+            &[2345][..],
+        ),
+        (
+            "const bs:B[]=[{s:'a',flag:true}];if(bs[0].flag){const xs=[(bs)[0].flag];xs.push(false);}",
+            &[2345][..],
+        ),
+        (
+            "const o=get();if(o!=null&&o.flag){const xs=[(o)?.flag??true];xs.push(false);}",
+            &[2345][..],
+        ),
+        (
+            "const o=get();if(o!=null&&o.flag){const out={a:(o)?.flag??true};out.a=false;}",
+            &[2322][..],
+        ),
+        ("const o:B={s:'a',flag:true};const f=()=>(o).s;", &[][..]),
+        (
+            "const xs:boolean[]=[true];if(xs[0]){const ys=[(xs)[0]];ys.push(false);}",
+            &[2345][..],
+        ),
+    ];
+    let programs: Vec<_> = fixtures
+        .iter()
+        .map(|(body, _)| format!("{SETUP}export function main():void{{{body}}}"))
+        .collect();
+    let cases: Vec<_> = programs
+        .iter()
+        .zip(&fixtures)
+        .map(|(source, (_, codes))| (source.as_str(), *codes))
+        .chain([
+            (
+                include_str!("../../../corpus/reject/r106-optional-chain-reference.ts"),
+                &[2322][..],
+            ),
+            (
+                include_str!("../../../corpus/reject/r107-parenthesized-reference.ts"),
+                &[2345][..],
+            ),
+        ])
+        .collect();
+    field_witness::rejected_references("optional-parenthesized", &cases);
+    let mut suite = Suite::named("P2.5 reference contexts");
+    for body in [
+        "const o=get();if(o!=null){let y:string|null=o?.s??null;y=null;print(`${y==null}`);}",
+        "const o=get();if(o!=null){const xs:boolean[]=[o?.flag??true];xs.push(false);print(`${xs.length}`);}",
+        "const o=get();if(o!=null){const f=():string|null=>o?.s??null;print(f()??'none');}",
+        "const o=get();if(o!=null){const out:Text={a:o?.s??null};out.a=null;print(`${out.a==null}`);}",
+        "const o:B={s:'a',flag:true};let y:string|null=(o).s;y=null;print(`${y==null}`);",
+        "const bs:B[]=[{s:'a',flag:true}];const xs:boolean[]=[(bs[0]).flag,(bs)[0].flag];xs.push(false);print(`${xs.length}`);",
+        "const o=get();if(o!=null){take({a:o?.s??null});}",
+        "const y:string|null=(get())?.s??null;print(y??'none');",
+        "const bs:B[]=[{s:'a',flag:true}];const f=():string|null=>(bs[0]).s;print(f()??'none');",
+        "let y=(get())?.s??null;y=null;print(`${y==null}`);",
+        "const xs=[(get())?.flag??true];xs.push(false);print(`${xs.length}`);",
+    ] {
+        suite.source(&format!("{SETUP}type Text={{a:string|null}};function take(x:Text):void{{print(x.a??'none');}}export function main():void{{{body}}}"), None);
     }
     suite.finish();
 }

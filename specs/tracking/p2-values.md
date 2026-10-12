@@ -239,6 +239,13 @@ Reviewer: fresh agent, diff `917e951..b8cbf72`. 0 CRITICAL, 2 MAJOR, 1 MINOR. Ea
 | D18 misses `o?.s ?? null` and `(o).s`, `(bs[0]).flag`: accepted, `tsc` gives TS2322 or TS2345 | MAJOR | surface.md Rev 18 reference definition, `r106`, `r107` |
 | The witness `never` test matches a property named `never` | MINOR | the test matches `type 'never'` |
 
+Fix (Codex): a join compares each edge with the previous edge into it.
+64 KiB Release, before and after: ybreak 991.5 to 42.1 ms (ratio
+10.5 to 1.9), ycont 781.9 to 25.7 ms (15.4 to 3.3), distinct consts
+189.5 to 21.8 ms, continue to update 792.9 to 24.3 ms. Growth test
+8.835 s Debug, largest ratio 3.993. 14 D18 reference forms give C11
+(`tsc`: TS2322 5, TS2345 7, no error 2). gate full: PASS, 125 entries.
+
 ### P2.5 Phase Review round 1
 
 Reviewer: fresh agent, diff `917e951..362fa4c`. 2 CRITICAL, 2 MAJOR, 5 MINOR.

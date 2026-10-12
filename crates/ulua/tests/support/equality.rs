@@ -62,7 +62,8 @@ impl Suite {
             .unwrap();
         assert!(
             out.status.success(),
-            "{}{}",
+            "{:?}\n{}{}",
+            out.status,
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
@@ -76,7 +77,8 @@ impl Suite {
         let out = Command::new(analyze).args(files).output().unwrap();
         assert!(
             out.status.success(),
-            "{}{}",
+            "{:?}\n{}{}",
+            out.status,
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );

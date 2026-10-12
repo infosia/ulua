@@ -28,6 +28,8 @@ impl Checker<'_> {
                         .is_some_and(|ty| self.types.inner(ty).is_some())
             }
             Expression::ParenthesizedExpression(p) => self.nullable_reference(&p.expression),
+            // Every accepted optional field read includes null in its result type.
+            Expression::ChainExpression(c) => chain_reference(&c.expression),
             Expression::UnaryExpression(u) if u.operator.as_str() == "!" => {
                 self.nullable_reference(&u.argument)
             }
@@ -54,7 +56,8 @@ impl Checker<'_> {
                 .and_then(|id| self.bindings[*id].ty),
             Expression::ParenthesizedExpression(p) => self.reference_type(&p.expression),
             Expression::ComputedMemberExpression(m) => {
-                self.types.element(self.reference_type(&m.object)?)
+                let ty = self.reference_type(&m.object)?;
+                self.types.element(self.types.inner(ty).unwrap_or(ty))
             }
             Expression::StaticMemberExpression(m) => {
                 let ty = self.reference_type(&m.object)?;
@@ -77,6 +80,7 @@ fn reference_form(e: &Expression<'_>, ty: Type) -> bool {
         Expression::Identifier(_) => true,
         Expression::ComputedMemberExpression(m) => reference(&m.object),
         Expression::StaticMemberExpression(m) => reference(&m.object),
+        Expression::ChainExpression(c) => chain_reference(&c.expression),
         Expression::ParenthesizedExpression(p) => reference_form(&p.expression, ty),
         Expression::UnaryExpression(u) if u.operator.as_str() == "!" => {
             reference_form(&u.argument, ty)
@@ -96,6 +100,15 @@ fn reference(e: &Expression<'_>) -> bool {
         Expression::Identifier(_) => true,
         Expression::ComputedMemberExpression(m) => reference(&m.object),
         Expression::StaticMemberExpression(m) => reference(&m.object),
+        Expression::ParenthesizedExpression(p) => reference(&p.expression),
+        Expression::ChainExpression(c) => chain_reference(&c.expression),
+        _ => false,
+    }
+}
+fn chain_reference(c: &ChainElement<'_>) -> bool {
+    match c {
+        ChainElement::ComputedMemberExpression(m) => reference(&m.object),
+        ChainElement::StaticMemberExpression(m) => reference(&m.object),
         _ => false,
     }
 }
@@ -118,6 +131,14 @@ mod tests {
             "o.f",
             "o.fields[k].flag",
             "os[k].child.flags[j]",
+            "(o).f",
+            "(o.fields)[k].flag",
+            "(os[k]).child.flags[j]",
+            "o?.f",
+            "o?.[k]",
+            "(o)?.f",
+            "(os[k])?.flag",
+            "(o?.child).flag",
         ] {
             for form in [
                 reference.to_string(),
@@ -144,6 +165,9 @@ mod tests {
             "truth()",
             "make()[0]",
             "make().flag",
+            "make()?.flag",
+            "(make()).flag",
+            "o?.f()",
             "c?true:false",
             "b===true",
             "true&&false",

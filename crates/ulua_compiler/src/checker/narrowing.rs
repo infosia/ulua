@@ -1,11 +1,11 @@
 //! C16 joins cached condition edges and loop exits through persistent path heads.
-pub(super) use super::paths::Facts;
+pub(super) use super::paths::{Facts, Join};
 use super::*;
 use crate::ir::{Edge, Expr, ExprKind as E, Flow, Statement as S};
 pub(super) struct LoopFacts {
     mark: usize,
-    exit: Option<Edge>,
-    next: Option<Edge>,
+    exit: Join,
+    next: Join,
     reachable: bool,
 }
 impl Checker<'_> {
@@ -173,8 +173,8 @@ impl Checker<'_> {
     pub(super) fn enter_loop(&mut self) {
         self.loop_facts.push(LoopFacts {
             mark: self.facts.mark(),
-            exit: None,
-            next: None,
+            exit: Join::default(),
+            next: Join::default(),
             reachable: self.reachable,
         });
     }
@@ -182,23 +182,15 @@ impl Checker<'_> {
         if !self.reachable {
             return;
         }
-        let Some(context) = self.loop_facts.last() else {
+        let Some(context) = self.loop_facts.last_mut() else {
             return;
         };
-        let previous = if continuing {
-            context.next
+        let join = if continuing {
+            &mut context.next
         } else {
-            context.exit
+            &mut context.exit
         };
-        let current = self.current_edge(true);
-        let joined = previous.map_or(current, |previous| self.meet(previous, current));
-        if let Some(context) = self.loop_facts.last_mut() {
-            if continuing {
-                context.next = Some(joined);
-            } else {
-                context.exit = Some(joined);
-            }
-        }
+        join.include(&self.facts, self.facts.head());
     }
     pub(super) fn break_edge(&mut self) {
         self.loop_edge(false);
@@ -208,33 +200,29 @@ impl Checker<'_> {
     }
     pub(super) fn loop_update(&mut self) {
         self.continue_edge();
-        let next = self.loop_facts.last().and_then(|c| c.next);
-        if let Some(next) = next {
-            self.facts.travel(next.head);
-            self.reachable = next.reachable;
-        } else {
-            self.reachable = false;
-        }
+        self.reachable = self
+            .loop_facts
+            .last()
+            .and_then(|c| c.next.finish(&mut self.facts))
+            .is_some();
     }
     pub(super) fn leave_loop(&mut self, test: Option<&Expr>) {
-        let Some(context) = self.loop_facts.pop() else {
+        let Some(mut context) = self.loop_facts.pop() else {
             return;
         };
         self.facts.restore(context.mark);
-        let mut exit = context.exit;
         if let Some(test) = test
             && !test.bare_true
         {
             let possible = self.edge(test, false);
-            let path = self.current_edge(context.reachable && possible);
-            if path.reachable {
-                exit = Some(exit.map_or(path, |previous| self.meet(previous, path)));
+            if context.reachable && possible {
+                context.exit.include(&self.facts, self.facts.head());
             }
-            self.facts.restore(context.mark);
         }
+        let exit = context.exit.finish(&mut self.facts);
         self.reachable = context.reachable && exit.is_some();
-        if let Some(exit) = exit {
-            self.facts.travel(exit.head);
+        if exit.is_none() {
+            self.facts.restore(context.mark);
         }
     }
     // Initial entry joins every back edge. Any loop writer removes its entry fact.

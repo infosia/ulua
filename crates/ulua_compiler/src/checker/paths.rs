@@ -1,6 +1,29 @@
 //! Persistent path heads share undo prefixes. A move visits only divergent tails.
 use super::*;
+use std::collections::HashSet;
 type Fact = (bool, u64);
+// A join compares consecutive input paths. A lost fact never returns at that join.
+#[derive(Default)]
+pub(super) struct Join {
+    previous: Option<usize>,
+    lost: HashSet<usize>,
+}
+impl Join {
+    pub(super) fn include(&mut self, facts: &Facts, head: usize) {
+        if let Some(previous) = self.previous {
+            self.lost.extend(facts.differences(previous, head));
+        }
+        self.previous = Some(head);
+    }
+    pub(super) fn finish(&self, facts: &mut Facts) -> Option<usize> {
+        let head = self.previous?;
+        facts.travel(head);
+        for id in &self.lost {
+            facts.set(*id, None);
+        }
+        Some(facts.head())
+    }
+}
 #[derive(Clone, Copy)]
 struct Change {
     id: usize,
@@ -95,6 +118,40 @@ impl Facts {
     }
     pub(super) fn extends(&self, ancestor: usize, head: usize) -> bool {
         self.kills(ancestor) == self.kills(head)
+    }
+    // Each divergent tail supplies its final value and its value before that tail.
+    fn differences(&self, mut a: usize, mut b: usize) -> Vec<usize> {
+        type Tail = HashMap<usize, (Option<Fact>, Option<Fact>)>;
+        let mut first: Tail = HashMap::new();
+        let mut second: Tail = HashMap::new();
+        while a != b {
+            let (head, tail) = if self.depth(a) >= self.depth(b) {
+                (&mut a, &mut first)
+            } else {
+                (&mut b, &mut second)
+            };
+            let Some(node) = self.node(*head) else {
+                break;
+            };
+            tail.entry(node.id)
+                .and_modify(|value| value.1 = node.old)
+                .or_insert((node.value, node.old));
+            *head = node.parent;
+        }
+        let visible = |value: Option<Fact>| value.filter(|v| v.1 >= self.floor).map(|v| v.0);
+        let mut changed = vec![];
+        for (id, (value, old)) in &first {
+            let other = second.get(id).map_or(*old, |v| v.0);
+            if visible(*value) != visible(other) {
+                changed.push(*id);
+            }
+        }
+        for (id, (value, old)) in &second {
+            if !first.contains_key(id) && visible(*old) != visible(*value) {
+                changed.push(*id);
+            }
+        }
+        changed
     }
     pub(super) fn travel(&mut self, mut target: usize) {
         let mut pending = vec![];

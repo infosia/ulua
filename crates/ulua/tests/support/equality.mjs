@@ -42,12 +42,12 @@ for (const d of diagnostics) {
 }
 // Unrelated type errors and mixed comparisons cannot use the exception.
 const invalid = path.join(directory, "invalid.ts");
-fs.writeFileSync(invalid, "function take(n:number):void{}export function main():void{const wrong:number='x';take('x');const mixed=1==='1';const allowed=1===2;const s='a';if(s==='b'){let copy=s;copy='c';const xs=[s];xs.push('c');}}");
+fs.writeFileSync(invalid, "function take(n:number):void{}export function main():void{const wrong:number='x';take('x');const mixed=1==='1';const allowed=1===2;const o={v:1};o.never;const s='a';if(s==='b'){let copy=s;copy='c';const xs=[s];xs.push('c');}}");
 const invalidProgram = ts.createProgram([...prelude, invalid], config.options);
 const invalidChecker = invalidProgram.getTypeChecker();
 const invalidDiagnostics = ts.getPreEmitDiagnostics(invalidProgram);
 const denied = invalidDiagnostics.filter(d => !isAcceptedEquality(d, invalidChecker)).map(d => d.code).sort();
-if (denied.join(',') !== '2322,2345,2367' || invalidDiagnostics.filter(d => isAcceptedEquality(d, invalidChecker)).length !== 4)
+if (denied.join(',') !== '2322,2339,2345,2367' || invalidDiagnostics.filter(d => isAcceptedEquality(d, invalidChecker)).length !== 4)
   throw Error('Equality exception concealed another error');
 let node = 0;
 for (const file of files) {
@@ -64,4 +64,4 @@ for (const file of files) {
 }
 console.log(`${label} witnesses: node=${node} tsc=${files.length} diagnostic_programs=${affected.size} codes=${JSON.stringify([...codes].sort())} other_codes=[]`);
 if (randomFiles.size) console.log(`${label} ${templates ? "template" : "random"} tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
-console.log(`${label} exception control: ordinary TS2322/TS2345 and mixed TS2367 denied; never TS2322/TS2345 allowed`);
+console.log(`${label} exception control: ordinary TS2322/TS2345, property 'never' TS2339, and mixed TS2367 denied; never TS2322/TS2345 allowed`);
