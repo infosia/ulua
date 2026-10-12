@@ -273,11 +273,36 @@ impl Checker<'_> {
                 Ok(S::Assign(id, op, value))
             }
             Expression::UpdateExpression(u) => {
+                let op = Some(if u.operator.as_str() == "++" {
+                    "+"
+                } else {
+                    "-"
+                });
+                let value = Expr {
+                    flow: None,
+                    bare_true: false,
+                    start: u.span.start,
+                    ty: Type::Number,
+                    kind: ExprKind::Number(1.0),
+                };
                 if let SimpleAssignmentTarget::StaticMemberExpression(m) = &u.argument {
+                    if m.optional {
+                        return Err(self.error(m.span, "C2", "Optional write is rejected"));
+                    }
                     let receiver = self.expr(&m.object, depth, false)?;
                     if self.types.element(receiver.ty).is_some() {
                         return Err(self.error(m.span, "C6", "Array properties are read-only"));
                     }
+                    self.nullable_use(m.span, &[receiver.ty])?;
+                    let key = self.field_key(m.property.name.as_str());
+                    let field_ty = self
+                        .types
+                        .field(receiver.ty, key)
+                        .ok_or_else(|| self.error(m.span, "C1", "Unknown object field"))?;
+                    if field_ty != Type::Number {
+                        return Err(self.error(u.span, "C4", "Update requires number"));
+                    }
+                    return Ok(S::Field(receiver, key, op, value));
                 }
                 if matches!(
                     u.argument,
@@ -290,33 +315,13 @@ impl Checker<'_> {
                     ));
                 }
                 let SimpleAssignmentTarget::AssignmentTargetIdentifier(n) = &u.argument else {
-                    return Err(match &u.argument {
-                        SimpleAssignmentTarget::StaticMemberExpression(_)
-                        | SimpleAssignmentTarget::ComputedMemberExpression(_) => {
-                            self.unsupported(u.argument.span())
-                        }
-                        _ => self.error(u.argument.span(), "C11", "Invalid update target"),
-                    });
+                    return Err(self.error(u.argument.span(), "C11", "Invalid update target"));
                 };
                 let id = self.target(n)?;
                 if self.bindings[id].ty != Some(Type::Number) {
                     return Err(self.error(u.span, "C4", "Update requires number"));
                 }
-                Ok(S::Assign(
-                    id,
-                    Some(if u.operator.as_str() == "++" {
-                        "+"
-                    } else {
-                        "-"
-                    }),
-                    Expr {
-                        flow: None,
-                        bare_true: false,
-                        start: u.span.start,
-                        ty: Type::Number,
-                        kind: ExprKind::Number(1.0),
-                    },
-                ))
+                Ok(S::Assign(id, op, value))
             }
             Expression::CallExpression(_) | Expression::ChainExpression(_) if !update => {
                 Ok(S::Eval(self.expr(e, depth, true)?))

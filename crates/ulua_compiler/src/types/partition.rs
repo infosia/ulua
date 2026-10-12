@@ -1,5 +1,5 @@
 //! Deterministic type graphs use partition refinement before value flow.
-use super::{Node, Type, Types};
+use super::{FunctionType, Node, Type, Types};
 use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
@@ -99,17 +99,38 @@ impl Types {
                 }
             }
         }
-        // Keep source links for cached depth and field provenance. Only the identity keys use canonical children.
+        // Keep source links for cached budgets. Rebuild every identity index with canonical child keys.
         self.records.clear();
+        self.arrays.clear();
+        self.nullable.clear();
+        self.functions.clear();
         for (id, node) in self.nodes.iter().enumerate() {
-            if let Node::Record(fields) = node {
-                let fields = Rc::new(
-                    fields
-                        .iter()
-                        .map(|(key, t)| (*key, self.canonical[t.0]))
-                        .collect::<Vec<_>>(),
-                );
-                self.records.insert(fields, self.canonical[id]);
+            let identity = self.canonical[id];
+            match node {
+                Node::Array(t) => {
+                    self.arrays.insert(self.canonical[t.0], identity);
+                }
+                Node::Nullable(t) => {
+                    self.nullable.insert(self.canonical[t.0], identity);
+                }
+                Node::Function(f) => {
+                    let signature = Rc::new(FunctionType {
+                        params: f.params.iter().map(|t| self.canonical[t.0]).collect(),
+                        result: self.canonical[f.result.0],
+                        required: f.required,
+                    });
+                    self.functions.insert(signature, identity);
+                }
+                Node::Record(fields) => {
+                    let fields = Rc::new(
+                        fields
+                            .iter()
+                            .map(|(key, t)| (*key, self.canonical[t.0]))
+                            .collect::<Vec<_>>(),
+                    );
+                    self.records.insert(fields, identity);
+                }
+                Node::Primitive(_) => {}
             }
         }
         // Function containment is reverse reachability, including recursive records.

@@ -238,6 +238,12 @@ Reviewer: fresh agent, diff `917e951..2d8ce0a`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Th
 | Two equal aliases do not relate through an array, `T \| null`, or a function type: with `type P = { v: number }`, `type Q = { v: number }`, `type R = { xs: Q[] }`, `const ys: P[] = r.xs` gives C1; `tsc` accepts; adding an unrelated field `ys: P[]` to `R` makes it pass. `seal_aliases` rebuilds only the record map | MAJOR | implementation (C1.5 already requires it), `a49` |
 | `o.v++` on a record field gives `unsupported`; surface.md §3 accepts a field target | MINOR | implementation, `a50` |
 
+Fix (Codex): after the seal every interned composite is keyed by
+canonical child ids. 56 alias and link tests (0.543 s), 41 field
+update tests with 16 traps (0.490 s), 9 update rejects; accepted forms
+pass `tsc`, `node`, and `luau-analyze`. Growth test 9.263 s Debug,
+largest ratio 4.044. gate full: PASS, 136 entries.
+
 ### P2.5 Phase Review round 12
 
 Reviewer: fresh agent, diff `917e951..f4d934c`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 11 resolution holds: the predicate matches only the type `never`; 37 wrong programs in regions that `tsc` narrows to `never` are rejected by the checker; 14 C16 attacks found no unsound program.

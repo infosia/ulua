@@ -4,6 +4,8 @@
 //! Round 12 isolated Debug cost: 9.164 seconds; largest ratio: 3.960.
 //! Four concurrent copies, ten batches: 40/40 pass, with no analyzer failure.
 //! Per-run Debug cost: 24.374 to 25.082 seconds; largest ratios: 4.010 to 4.510.
+//! Round 13 Debug cost: 9.263 seconds; largest ratio: 4.044.
+//! Equal alias links: 5.441/20.631 ms at 4/16 KiB, ratio 3.792; ceiling output factor: 12.095.
 //! Round 10 measured Debug cost: 9.058 seconds. The largest ratio is 3.958.
 //! Condition ratios: conditional 3.619, alternating logical 3.915, conditional with wrappers 3.660.
 //! Logical with wrappers: 3.740. Nullable conditional: 3.684. Continue product: 3.863.
@@ -36,6 +38,7 @@ const SHAPES: &[&str] = &[
     "field-product",
     "fact-product",
     "record-functions",
+    "equal-alias-links",
     "break-product",
     "recursive-product",
     "conditional-tests",
@@ -141,6 +144,24 @@ fn condition_wrappers_reach_the_nesting_bound() {
     }
 }
 fn make(shape: &str, bytes: usize) -> String {
+    if shape == "equal-alias-links" {
+        let mut out = String::new();
+        let tail = "export function main():void{}";
+        let mut i = 0;
+        loop {
+            let unit = format!(
+                "type P{i}={{v:number}};type Q{i}={{v:number}};type R{i}={{xs:Q{i}[];n:Q{i}|null;f:(p:P{i})=>Q{i}}};function f{i}(r:R{i}):number{{const xs:P{i}[]=r.xs;const n:P{i}|null=r.n;const f:(p:Q{i})=>P{i}=r.f;return xs[0].v+(n!=null?n.v:0)+f({{v:1}}).v;}}"
+            );
+            if out.len() + unit.len() + tail.len() > bytes {
+                break;
+            }
+            out.push_str(&unit);
+            i += 1;
+        }
+        out.push_str(tail);
+        out.extend(std::iter::repeat_n(' ', bytes - out.len()));
+        return out;
+    }
     if matches!(
         shape,
         "ybreak" | "ycont" | "distinct-const-break" | "continue-update-writes" | "if-end-writes"

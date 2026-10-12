@@ -1,6 +1,7 @@
 //! Interned type identities. Signatures store child identities, never child trees.
 mod depths;
 mod field_counts;
+mod links;
 mod partition;
 use std::{collections::HashMap, rc::Rc};
 
@@ -86,8 +87,12 @@ enum Node {
 pub(crate) struct Types {
     nodes: Vec<Node>,
     canonical: Vec<Type>,
-    // The index and table share one stored signature allocation.
+    // Identity indexes use canonical child ids after the alias seal.
     functions: HashMap<Rc<FunctionType>, Type>,
+    // Source views retain the depth and field-count contributions of their children.
+    function_views: HashMap<Rc<FunctionType>, Type>,
+    array_views: HashMap<Type, Type>,
+    nullable_views: HashMap<Type, Type>,
     arrays: HashMap<Type, Type>,
     nullable: HashMap<Type, Type>,
     records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
@@ -107,6 +112,9 @@ impl Types {
                 .map(Node::Primitive)
                 .collect(),
             functions: HashMap::new(),
+            function_views: HashMap::new(),
+            array_views: HashMap::new(),
+            nullable_views: HashMap::new(),
             arrays: HashMap::new(),
             nullable: HashMap::new(),
             records: HashMap::new(),
@@ -118,53 +126,6 @@ impl Types {
             canonical: (0..6).map(Type).collect(),
             function_content: Default::default(),
         }
-    }
-
-    pub(crate) fn intern(&mut self, params: Vec<Type>, result: Type, required: usize) -> Type {
-        let params = params
-            .into_iter()
-            .map(|ty| self.count_identity(ty))
-            .collect();
-        let result = self.count_identity(result);
-        let signature = FunctionType {
-            params,
-            result,
-            required,
-        };
-        if let Some(ty) = self.functions.get(&signature) {
-            return *ty;
-        }
-        let canonical_params: Vec<_> = signature
-            .params
-            .iter()
-            .map(|ty| self.identity(*ty))
-            .collect();
-        let canonical_result = self.identity(result);
-        let identity = if canonical_params != signature.params || canonical_result != result {
-            Some(self.intern(canonical_params, canonical_result, required))
-        } else {
-            None
-        };
-        let signature = Rc::new(signature);
-        let ty = self.add_counted(Node::Function(Rc::clone(&signature)), identity);
-        self.functions.insert(signature, ty);
-        ty
-    }
-
-    pub(crate) fn array(&mut self, element: Type) -> Type {
-        let element = self.count_identity(element);
-        if let Some(ty) = self.arrays.get(&element) {
-            return *ty;
-        }
-        let canonical = self.identity(element);
-        let identity = if canonical != element {
-            Some(self.array(canonical))
-        } else {
-            None
-        };
-        let ty = self.add_counted(Node::Array(element), identity);
-        self.arrays.insert(element, ty);
-        ty
     }
 
     pub(crate) fn element(&self, ty: Type) -> Option<Type> {
@@ -182,24 +143,6 @@ impl Types {
             Some(Node::Nullable(inner)) => Some(*inner),
             _ => None,
         }
-    }
-    pub(crate) fn nullable(&mut self, inner: Type) -> Type {
-        let inner = self.count_identity(inner);
-        if inner == Type::Null || self.inner(inner).is_some() {
-            return inner;
-        }
-        if let Some(ty) = self.nullable.get(&inner) {
-            return *ty;
-        }
-        let canonical = self.identity(inner);
-        let identity = if canonical != inner {
-            Some(self.nullable(canonical))
-        } else {
-            None
-        };
-        let ty = self.add_counted(Node::Nullable(inner), identity);
-        self.nullable.insert(inner, ty);
-        ty
     }
     pub(crate) fn reserve_record(&mut self) -> Type {
         let ty = Type(self.nodes.len());
