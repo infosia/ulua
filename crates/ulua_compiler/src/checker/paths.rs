@@ -6,6 +6,28 @@ pub(super) enum Narrowing {
     // This reference cannot reach this edge. Reads retain its previous type.
     Contradicted(bool),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn body_floor_hides_mutable_prefixes_but_keeps_fresh_tests_and_const_facts() {
+        let mut facts = Facts::default();
+        facts.mutable.extend([true, false]);
+        facts.set(0, Some(Narrowing::Known(true)));
+        facts.set(1, Some(Narrowing::Known(true)));
+        let mark = facts.mark();
+        facts.mutable_floor = facts.serial + 1;
+        assert_eq!(facts.get(0).map(Narrowing::value), None);
+        assert_eq!(facts.get(1).map(Narrowing::value), Some(true));
+        facts.set(0, Some(Narrowing::Known(true)));
+        assert_eq!(facts.get(0).map(Narrowing::value), Some(true));
+        facts.restore(mark);
+        assert_eq!(facts.get(0).map(Narrowing::value), None);
+        facts.mutable_floor = 0;
+        assert_eq!(facts.get(0).map(Narrowing::value), Some(true));
+    }
+}
 impl Narrowing {
     pub(super) fn value(self) -> bool {
         match self {
@@ -69,6 +91,8 @@ pub(super) struct Facts {
     log: Vec<usize>,
     nodes: Vec<Change>,
     pub(super) floor: u64,
+    pub(super) mutable_floor: u64,
+    pub(super) mutable: Vec<bool>,
     pub(super) serial: u64,
 }
 impl Facts {
@@ -90,11 +114,16 @@ impl Facts {
     fn kills(&self, head: usize) -> usize {
         self.node(head).map_or(0, |n| n.kills)
     }
+    fn visible(&self, id: usize, value: Option<Fact>) -> Option<Narrowing> {
+        let floor = if self.mutable.get(id).copied().unwrap_or(false) {
+            self.floor.max(self.mutable_floor)
+        } else {
+            self.floor
+        };
+        value.filter(|v| v.1 >= floor).map(|v| v.0)
+    }
     pub(super) fn get(&self, id: usize) -> Option<Narrowing> {
-        self.values
-            .get(&id)
-            .filter(|v| v.1 >= self.floor)
-            .map(|v| v.0)
+        self.visible(id, self.values.get(&id).copied())
     }
     fn put(&mut self, id: usize, value: Option<Fact>) {
         if let Some(value) = value {
@@ -172,17 +201,16 @@ impl Facts {
                 .or_insert((node.value, node.old));
             *head = node.parent;
         }
-        let visible = |value: Option<Fact>| value.filter(|v| v.1 >= self.floor).map(|v| v.0);
         let mut changed = vec![];
         for (id, (value, old)) in &first {
             let other = second.get(id).map_or(*old, |v| v.0);
-            if visible(*value) != visible(other) {
-                changed.push((*id, visible(*value), visible(other)));
+            if self.visible(*id, *value) != self.visible(*id, other) {
+                changed.push((*id, self.visible(*id, *value), self.visible(*id, other)));
             }
         }
         for (id, (value, old)) in &second {
-            if !first.contains_key(id) && visible(*old) != visible(*value) {
-                changed.push((*id, visible(*old), visible(*value)));
+            if !first.contains_key(id) && self.visible(*id, *old) != self.visible(*id, *value) {
+                changed.push((*id, self.visible(*id, *old), self.visible(*id, *value)));
             }
         }
         changed

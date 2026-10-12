@@ -19,5 +19,5 @@ pub const UPVALUE_BUDGET: usize = 192;
 /// Fields per object type or class, including nested anonymous types. Alias names end the count.
 pub const FIELD_BOUND: usize = 1024;
 
-/// Type-link depth; each recursive component contributes its alias count.
+/// Type-link depth; each recursive component includes every internal type node.
 pub const TYPE_DEPTH_BOUND: usize = 48;

@@ -1,6 +1,6 @@
 //! C15 type-link depth: 48 passes the analyzer; 49 gives limit:type-depth.
-//! Recursive alias components contribute their alias count. Shared branches use cached depths.
-//! Measured Debug cost: 2.099 seconds, including ABI execution, tsc, and twenty-nine analyzer witnesses.
+//! Recursive alias components include every internal type node. Shared branches use cached depths.
+//! Measured Debug cost: 2.172 seconds, including ABI execution, tsc, and thirty-nine analyzer witnesses.
 //! Ceiling groups: direct 26, branching 20, nullable 48, array 48, function 41, anonymous 58, array values 63.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
@@ -94,20 +94,39 @@ fn source(shape: &str, depth: usize, groups: usize) -> String {
     format!("{aliases}export function main():void{{{body}}}")
 }
 fn ring(shape: &str, count: usize, above: usize) -> String {
+    linked_ring(shape, count, usize::from(shape != "direct"), above)
+}
+fn linked_ring(shape: &str, count: usize, levels: usize, above: usize) -> String {
     let mut aliases = String::new();
     for i in 0..count {
         let next = format!("R{}", (i + 1) % count);
-        let child = match shape {
-            "nullable" => format!("{next}|null"),
-            "array" => format!("{next}[]"),
-            _ => next,
-        };
+        let mut child = next;
+        for _ in 0..levels {
+            child = match shape {
+                "nullable" => format!("{child}|null"),
+                "array" => format!("{child}[]"),
+                "function-parameter" => format!("(p:{child})=>number"),
+                "function-result" | "function-result-only" => format!("()=>{child}"),
+                _ => child,
+            };
+        }
+        if shape == "function-result" {
+            child = format!("({child})|null");
+        }
         aliases.push_str(&format!("type R{i}={{n{i}:{child};v{i}:number}};"));
     }
     // A direct ring has no finite literal initializer. Its declarations still reach the checker bound.
     let mut body = match shape {
         "nullable" => "const c0:R0={n0:null,v0:0};".to_owned(),
         "array" => "const c0:R0={n0:[],v0:0};".to_owned(),
+        "function-result" => "const c0:R0={n0:null,v0:0};".to_owned(),
+        "function-parameter" => {
+            let mut parameter = format!("R{}", 1 % count);
+            for _ in 1..levels {
+                parameter = format!("(p:{parameter})=>number");
+            }
+            format!("const c0:R0={{n0:(p:{parameter}):number=>0,v0:0}};")
+        }
         _ => String::new(),
     };
     for i in 1..=above {
@@ -175,16 +194,34 @@ fn type_depth_bound_and_ceiling_combinations() {
         );
         Script::compile(&past, CompileLimits::default(), "limit:type-depth");
     }
-    for shape in ["direct", "nullable", "array"] {
-        for count in [1, 2, 16, 47, 48] {
-            let above = TYPE_DEPTH_BOUND - count;
+    for shape in [
+        "direct",
+        "nullable",
+        "array",
+        "function-parameter",
+        "function-result",
+    ] {
+        let steps = match shape {
+            "direct" => 1,
+            "function-result" => 3,
+            _ => 2,
+        };
+        let counts = if steps == 1 {
+            vec![1, 2, 16, 47, 48]
+        } else if steps == 2 {
+            vec![1, 2, 16, 23, 24]
+        } else {
+            vec![1, 2, 8, 15, 16]
+        };
+        for count in counts {
+            let above = TYPE_DEPTH_BOUND - steps * count;
             let name = format!("ring-{shape}-{count}-plus-{above}");
             paths.push(check(&directory, &name, &ring(shape, count, above)));
             let past = ring(shape, count, above + 1);
             let diagnostic = compile(past.as_bytes(), Limits::default())
                 .expect_err("A ring plus a chain of depth 49 must reach the limit");
             assert_eq!(diagnostic.code, "limit:type-depth", "{name}");
-            let past = ring(shape, 49, 0);
+            let past = ring(shape, TYPE_DEPTH_BOUND / steps + 1, 0);
             assert_eq!(
                 compile(past.as_bytes(), Limits::default())
                     .expect_err("A ring of 49 must reach the limit")
@@ -192,6 +229,42 @@ fn type_depth_bound_and_ceiling_combinations() {
                 "limit:type-depth"
             );
         }
+        // A direct bridge keeps all 49 nodes inside the same recursive component.
+        let bound = ring(shape, TYPE_DEPTH_BOUND / steps, 0);
+        let split = bound.find("export function main").unwrap();
+        let aliases = bound[..split]
+            .replace(":R0", ":Extra")
+            .replace("=>R0", "=>Extra");
+        let past = format!("{aliases}type Extra={{bridge:R0}};{}", &bound[split..]);
+        assert_eq!(
+            compile(past.as_bytes(), Limits::default())
+                .expect_err("A recursive component with 49 type links must reach the limit")
+                .code,
+            "limit:type-depth",
+            "{shape}"
+        );
+    }
+    for (shape, count, levels) in [
+        ("array", 12, 45),
+        ("array", 14, 40),
+        ("function-parameter", 47, 16),
+        ("function-result-only", 47, 16),
+    ] {
+        let input = linked_ring(shape, count, levels, 0);
+        let now = Instant::now();
+        let result = compile(input.as_bytes(), Limits::default());
+        eprintln!(
+            "P2.5 deep ring {shape}: aliases={count} levels={levels} bytes={} code={} ms={:.3}",
+            input.len(),
+            result.as_ref().err().map_or("accepted", |d| d.code),
+            now.elapsed().as_secs_f64() * 1000.0
+        );
+        assert_eq!(
+            result
+                .expect_err("The reviewer link ring must reach the limit")
+                .code,
+            "limit:type-depth"
+        );
     }
     for (shape, count, above) in [
         ("direct", 170, 0),

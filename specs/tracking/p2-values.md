@@ -238,6 +238,13 @@ Reviewer: fresh agent, diff `917e951..fad9918`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Th
 | Array, `T \| null`, and function links inside a recursive group count zero: a ring of 12 aliases with 45 nested arrays per link (1,562 B) is accepted and fails `luau-analyze` (ReferenceCountInitializer recursion limit); function-link rings of 47 fail the same way | MAJOR | `pipeline.md` §6 Rev 23: a group counts every type link inside it |
 | A null test inside an arrow never narrows a parameter or `let` of the enclosing function (`(c: O): number => c.v + (b != null ? b.v : 0)`); `tsc` accepts | MINOR | C16.4: it narrows within that body when C16.2 holds, `a47` |
 
+Fix (Codex): a recursive group counts every type link inside it; 48
+links pass, 49 give `limit:type-depth`; the reviewer shapes give the
+limit in 2.5 to 7.2 ms; 39 boundary programs pass `tsc` and
+`luau-analyze` (2.172 s). Nested-body narrowing: 29 accepted forms pass
+`tsc`, `node`, and `luau-analyze`; 17 rejects (0.49 s). Growth test
+9.058 s Debug, largest ratio 3.958. gate full: PASS, 133 entries.
+
 ### P2.5 Phase Review round 9
 
 Reviewer: fresh agent, diff `917e951..5a0258c`. 0 CRITICAL, 1 MAJOR, 0 MINOR. The round 8 resolution holds (depth 48 and 49 in 10 shapes; 35 C12.7 helper forms equal `node`); random campaign 1,000 programs, 809 accepted, 0 differences; cost ratios 1.8 to 3.0.

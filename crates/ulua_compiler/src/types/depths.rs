@@ -1,4 +1,4 @@
-//! Cached type-link depths. Recursive components contribute their alias count.
+//! Cached type-link depths. Recursive components contribute every internal type node.
 use super::{Node, Type, Types};
 use crate::TYPE_DEPTH_BOUND;
 
@@ -82,10 +82,6 @@ impl Types {
         let mut depths = vec![0; groups.len()];
         // Components are in parent-first order. Every outgoing component already has its depth.
         for group in (0..groups.len()).rev() {
-            let aliases = groups[group]
-                .iter()
-                .filter(|id| self.named_records.contains(&Type(**id)))
-                .count();
             let mut outgoing = None;
             let mut recursive = false;
             for id in &groups[group] {
@@ -99,7 +95,7 @@ impl Types {
                 }
             }
             let depth = if recursive {
-                aliases.max(1).saturating_add(outgoing.unwrap_or(0))
+                groups[group].len().saturating_add(outgoing.unwrap_or(0))
             } else {
                 outgoing.map_or(0, |depth| depth + 1)
             };
@@ -114,7 +110,7 @@ impl Types {
 mod tests {
     use super::*;
     #[test]
-    fn component_weights_count_aliases_and_keep_outgoing_depth() {
+    fn component_weights_count_type_links_and_keep_outgoing_depth() {
         for count in [1, 16, 48, 49, 250] {
             for link in 0..4 {
                 let mut types = Types::new();
@@ -133,7 +129,10 @@ mod tests {
                 }
                 types.seal_aliases();
                 for ty in &ring {
-                    assert_eq!(types.depth(*ty), count.min(TYPE_DEPTH_BOUND + 1));
+                    assert_eq!(
+                        types.depth(*ty),
+                        (count * if link == 0 { 1 } else { 2 }).min(TYPE_DEPTH_BOUND + 1)
+                    );
                 }
                 assert_eq!(types.depth(outgoing), 2);
             }
@@ -147,9 +146,9 @@ mod tests {
         types.define_record(a, vec![(0, next), (1, outgoing)]);
         types.define_record(b, vec![(2, a)]);
         types.seal_aliases();
-        assert_eq!(types.depth(a), 4);
-        assert_eq!(types.depth(b), 4);
-        assert_eq!(types.depth(next), 4);
+        assert_eq!(types.depth(a), 5);
+        assert_eq!(types.depth(b), 5);
+        assert_eq!(types.depth(next), 5);
     }
     #[test]
     fn equal_recursive_types_keep_their_source_depths() {
@@ -172,19 +171,19 @@ mod tests {
             }
             types.seal_aliases();
             assert!(types.equal(root, cycle));
-            assert_eq!(types.depth(root), 46);
-            assert_eq!(types.depth(cycle), 1);
+            assert_eq!(types.depth(root), 47);
+            assert_eq!(types.depth(cycle), 2);
             let nullable = types.nullable(root);
-            assert_eq!(types.depth(nullable), 47);
+            assert_eq!(types.depth(nullable), 48);
             let parameter = types.array(nullable);
-            assert_eq!(types.depth(parameter), 48);
+            assert_eq!(types.depth(parameter), 49);
             let function = types.intern(vec![parameter], Type::Void, 1);
             assert_eq!(types.depth(function), 49);
             let array = types.array(cycle);
-            assert_eq!(types.depth(array), 2);
+            assert_eq!(types.depth(array), 3);
             assert_eq!(
                 types.depth(types.signature(function).unwrap().params[0]),
-                48
+                49
             );
         }
     }
@@ -197,13 +196,13 @@ mod tests {
             types.define_record(ring[i], vec![(0, next)]);
         }
         let mut root = ring[0];
-        for _ in 0..32 {
+        for _ in 0..16 {
             let parent = types.reserve_record();
             types.define_record(parent, vec![(1, root), (2, root)]);
             root = parent;
         }
         types.seal_aliases();
-        assert_eq!(types.depth(ring[0]), 16);
+        assert_eq!(types.depth(ring[0]), 32);
         assert_eq!(types.depth(root), 48);
         assert_eq!(types.depth(Type::Number), 0);
         let mut root = types.identity(root);

@@ -282,6 +282,7 @@ impl Checker<'_> {
             reachable: std::mem::replace(&mut self.reachable, true),
             fact_mark: self.facts.mark(),
             fact_floor: self.facts.floor,
+            mutable_fact_floor: self.facts.mutable_floor,
             loop_facts: std::mem::take(&mut self.loop_facts),
             owner: self.owner,
             result: std::mem::replace(&mut self.result, result),
@@ -291,6 +292,7 @@ impl Checker<'_> {
         if !inherit || !state.reachable {
             self.facts.floor = self.facts.serial + 1;
         }
+        self.facts.mutable_floor = self.facts.serial + 1;
         self.owner = id + 1;
         self.scopes.push(HashMap::new());
         state
@@ -299,6 +301,7 @@ impl Checker<'_> {
         self.reachable = state.reachable;
         self.facts.restore(state.fact_mark);
         self.facts.floor = state.fact_floor;
+        self.facts.mutable_floor = state.mutable_fact_floor;
         self.loop_facts = state.loop_facts;
         self.scopes.pop();
         self.owner = state.owner;
@@ -310,6 +313,7 @@ struct FunctionState {
     reachable: bool,
     fact_mark: usize,
     fact_floor: u64,
+    mutable_fact_floor: u64,
     loop_facts: Vec<narrowing::LoopFacts>,
     owner: usize,
     result: Type,

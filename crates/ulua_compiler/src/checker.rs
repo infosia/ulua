@@ -168,6 +168,7 @@ impl Checker<'_> {
             return Err(self.error(span, "C11", "Duplicate declaration"));
         }
         self.binding_starts.insert(binding.start, id);
+        self.facts.mutable.push(binding.mutable);
         self.bindings.push(binding);
         Ok(id)
     }

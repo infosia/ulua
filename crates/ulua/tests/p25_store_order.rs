@@ -147,9 +147,9 @@ fn present_store_receivers_and_compound_reads_match_node() {
 }
 
 #[test]
-fn tsc_recursive_comparison_resource_limit_stays_accepted() {
+fn bounded_recursive_comparisons_stay_accepted() {
     let mut source = String::new();
-    for (prefix, length) in [("A", 25), ("B", 26)] {
+    for (prefix, length) in [("A", 23), ("B", 24)] {
         for i in 0..length {
             source.push_str(&format!(
                 "type {prefix}{i}={{next:{prefix}{}|null}};",
@@ -158,7 +158,7 @@ fn tsc_recursive_comparison_resource_limit_stays_accepted() {
         }
     }
     source.push_str("export function main():void{const a:A0={next:null};const b:B0=a;print(`${b.next==null}`);}");
-    let mut suite = Suite::named("P2.5 tsc recursive resource");
+    let mut suite = Suite::named("P2.5 bounded recursive comparisons");
     suite.source(&source, Some("true\n"));
     suite.finish();
 }
