@@ -229,6 +229,17 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.5 Phase Review round 12
+
+Reviewer: fresh agent, diff `917e951..f4d934c`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 11 resolution holds: the predicate matches only the type `never`; 37 wrong programs in regions that `tsc` narrows to `never` are rejected by the checker; 14 C16 attacks found no unsound program.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `p25_growth.rs:368` asserts a Debug wall-clock budget of 12 s: 9.15 to 9.43 s alone, 14.25 to 19.35 s with 3 or 4 concurrent copies (33 of 33 failed); the ratio stays at about 4.06. The likely cause of the lost `FAIL cargo-test` | MAJOR | a gate test states and prints its cost and asserts no wall-clock budget; ratios use the minimum of repeated runs |
+| `tsc` time on k narrowed lets with k joins: 0.25 s at 13 KB, 2.21 s at 53 KB; the compiler stays linear | MINOR | gap: witness cost only |
+
+One concurrent run also failed at `p25_growth.rs:356` (`luau-analyze` over the ceiling outputs); 38 later runs did not reproduce it; the message is lost.
+
 ### P2.5 Phase Review round 11
 
 Reviewer: fresh agent, diff `917e951..215a26b`. 0 CRITICAL, 1 MAJOR, 0 MINOR. The round 10 resolution holds: nested-body narrowing attacks (stored arrows called after writes, recursion, callbacks, loops, two levels, per-iteration captures) found no unsound program; 20,000 random nested-body programs, 3,638 accepted, 0 differences; cost ratios 2.9 to 3.3.
@@ -699,6 +710,10 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 ## Failures before the fix
 
 ## Gaps
+
+- `tsc` time is super-linear on many narrowed lets with many joins
+  (P2.5 review 12): 0.25 s at 13 KB, 2.21 s at 53 KB. Witness cost
+  only; a corpus entry of that shape costs about 2 s.
 
 - P5: a review of GC work and runtime internals outside the generated
   helpers against the run-time bound of §6.3 (a P2.4 reviewer did not
