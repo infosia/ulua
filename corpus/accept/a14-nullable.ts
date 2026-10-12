@@ -7,7 +7,7 @@
 type Node = { value: number; next: Node | null };
 
 function find(head: Node | null, value: number): Node | null {
-  let current = head;
+  let current: Node | null = head;
   while (current != null) {
     if (current.value === value) {
       return current;

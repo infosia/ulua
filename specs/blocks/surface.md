@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 15, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 16, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -8,7 +8,7 @@ C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
 for function results, default scope, P2.1 review 2; Rev 11: function types
 at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: inferred types from references, D18; Rev 14: D18 for boolean
-references, access paths, P2.3 review 3; Rev 15: string members, P2.4).
+references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -123,14 +123,16 @@ type annotation. At these positions `tsc` takes the narrowed type of a
 reference. A `boolean` reference narrows to `true` or `false` after a
 truth test or a comparison, and a later write of the other value gives
 TS2322 or TS2345. The compiler does not track narrowing (D17). So a
-*boolean reference form* at one of these positions is rejected with
-C11; a type annotation, or a contextual type, accepts it.
+*narrowable reference form* at one of these positions is rejected with
+C11; a type annotation, or a contextual type, accepts it. A `T | null`
+reference narrows to `T` after a null test in the same way, and a later
+write of `null` gives TS2322.
 
 A reference is an `IdentifierReference`, an element read `e[k]`, or a
 member read `e.f` (`length` included) where `e` is a reference. A
-boolean reference form is a reference of type `boolean`, or `(e)`,
-`!e`, `c ? a : b`, `a && b`, or `a || b` where `e`, `a`, or `b` is a
-boolean reference form.
+narrowable reference form is a reference of type `boolean` or
+`T | null`, or `(e)`, `!e`, `c ? a : b`, `a && b`, `a || b`, or `a ?? b`
+where `e`, `a`, or `b` is a narrowable reference form.
 
 A `number` or `string` reference narrows only to a fresh literal, which
 widens, or to `never` after a contradictory comparison; the `never`

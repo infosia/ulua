@@ -16,7 +16,7 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `a34`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
 | P2.3 | Array methods; type-based equality (D17) | `a32`, `a33`, `a35`, `a36`, `t04`, `t05`; `r90` to `r96`, `r98`, `r99`; `r24` becomes `r24-array-find` (P2.2) |
 | P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`, `a37`, `a38`, `a39`, `t06`; `r09`, `r10`, `r18`, `r34`, `r37`, `r57`; retired `r08`, `r21`, `r29` to `r33`, `r38`, `r39` |
-| P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
+| P2.5 | Nullable values and records | `a14`, `a15`, `a40`; `r03`, `r04`, `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69`, `r100`; retired `r05` |
 | P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
 | P2.7 | Exceptions | contract and entries to write |
 
@@ -32,6 +32,24 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   decides its own with the user.
 - A phase that exposes the `buffer` library classifies Luau errors by
   source location, not by text.
+
+## Exit checklist (P2.5)
+
+- [ ] D19 and collisions.md C1.5, C2 (strict null tests), C7 (object
+  identity), C16, surface.md Rev 16 (D18 for nullable references), and
+  pipeline.md §5.18 implemented.
+- [ ] P2.5 entries pass in full, the C16.4 carry-over included (`r68`,
+  `r69` execute it); P2.6 entries stay `unsupported`.
+- [ ] Direct tests: field reads and writes, nested records, records in
+  arrays, null tests in every form, `??`, `?.`, narrowing at each join
+  and its limits; each against `node`.
+- [ ] Growth shapes for records and narrowing; `luau-analyze` passes.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source: the owner's prior project for null tests and narrowing (C17
+shared locations, C24 indexed reads). Changes: records are structural
+object types (D19, owner); `T | null` is accepted for every `T`
+because `nil` represents it in Luau (invariant 4).
 
 ## Exit checklist (P2.4)
 
@@ -477,9 +495,8 @@ generated modules, 13 stress modules. Running tasks at the close: none.
   helpers against the run-time bound of §6.3 (a P2.4 reviewer did not
   finish this line).
 
-- P2.4 and P2.5: after a contradictory accepted equality, a member read
-  on the `never` reference gives TS2339; the contract decides it before
-  string members or record fields open.
+- Closed in P2.5: TS2339 that names `never` joins invariant 3's
+  exception; `a41` pins it.
 - The witness predicate has a copy in `crates/ulua/tests/support/
   equality.mjs`; the next implementation task makes the test import
   `tools/witness/corpus.mjs`'s predicate.

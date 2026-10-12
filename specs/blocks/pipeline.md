@@ -19,6 +19,7 @@ Rev 15: §5.15.2 literal blocks, §6.0 limit positions, §3.10 final check (P2.2
 Rev 16: §5.7 loop locals end with their loop (P2.3).
 Rev 17: §5.17 strings (P2.4).
 Rev 18: §5.17.2 linear Luau-loop search, §6.3 library call rule (P2.4 review).
+Rev 19: §5.18 nullable values and records (P2.5).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -349,6 +350,28 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        `s`; a captured binding is a new local per step (§5.14.1).
     5. The traps `string-boundary`, `index-out-of-range`, and
        `invalid-argument` go through §4.8.
+18. **Nullable values and records (P2.5).**
+    1. `null` lowers to `nil`. `T | null` lowers to the Luau type `T?`,
+       with a function type in parentheses (§5.14.3).
+    2. An object type lowers to a Luau table type with one field per
+       source field. A field name lowers to a generated key, one per
+       distinct source field name in the module, so a script name never
+       reaches the Luau source (C14.5). A `null` field is an absent
+       key (C14.1).
+    3. An object literal lowers to a table constructor; its field
+       values are evaluated in source order (C12).
+    4. A field read `o.f` and a field write `o.f = e` follow C12: `o`,
+       then `e`, then the store.
+    5. A null test is a comparison with `nil`. `a ?? b` lowers as C2
+       states. `a?.f` and `a?.m(args)` evaluate `a` once.
+    6. The checker computes null narrowing (C16) as a flow fact for
+       each function: the true and false edges of a null test, the
+       joins of `if`, loops, `&&`, `||`, and `?:`, the end of the
+       narrowing at an assignment, and the C16 limits for fields and
+       closures. A read of a `T | null` reference as `T` (a field read,
+       a call, an argument of type `T`) needs the fact.
+    7. Object values and nullable values never cross the C ABI
+       (`abi.md` §4).
 
 ## 6. Limits
 

@@ -134,6 +134,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D16 | `undefined` is rejected. No accepted form and no library call gives `undefined` under `node`; a call whose miss is `undefined` under `node` is not in the library | 2026-10-12 | `collisions.md` C2; `tracking/p1-skeleton.md` |
 | D17 | Equality acceptance is type-based (C7): one primitive type, or arrays with identical element types; no literal-type or narrowing rule. TS2367 and TS2845 at an accepted equality are outside invariant 3. D15 no longer covers equality | 2026-10-12 | `collisions.md` C7 Rev 25; `tracking/equality-measurements.md` |
 | D18 | At the three positions where `tsc` infers a type (an unannotated `let` initializer, an array literal element without a contextual type, an arrow expression body without a result annotation), a boolean reference form (access paths included) needs a type annotation; a `never` narrowing after an accepted equality is inside invariant 3's exception (revised after the P2.3 round 3 review) | 2026-10-12 | surface.md Rev 13; owner decision after the P2.3 round 2 review |
+| D19 | Records are structural object types (`type` aliases of object type literals, object literals); relation by identical field sets and types; classes are nominal and never relate to object types | 2026-10-12 | collisions.md C1.5 Rev 27; owner decision at the P2.5 start |
 
 ## 9. Corrections and revisions
 

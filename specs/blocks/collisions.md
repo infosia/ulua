@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 26, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 27, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -11,7 +11,8 @@ literal conditions, strict-mode early errors, round 6; Rev 19:
 set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
 closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
-P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4).
+P2.2 review; Rev 24: C6.9 array methods, P2.3; Rev 25: C7 type-based equality, D17; Rev 26: C4.6, C5 byte semantics, P2.4; Rev 27: C1.5 structural object
+types (D19), C2 strict null tests, C7 object identity, P2.5).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -66,8 +67,11 @@ results, and object fields.
    with fewer required parameters to a function type with more; a call
    through the second type can then omit an argument that the first
    needs (`b ? g : f` with `g(a: number = 7)` and `f(a: number)`).
-5. An object type and a class never relate, in either direction, until
-   P2 decides structural or nominal relation. A call of a field of
+5. Object types are structural (D19): two object types relate when
+   they have the same field names and identical field types; an extra
+   field, a missing field, or an optional field is rejected. A class is
+   nominal. An object type and a class never relate, in either
+   direction. A call of a field of
    function type reads the field and calls it. A method call is a
    direct call of the method's generated function with the receiver as
    its first argument (C14). A class instance seen through an object
@@ -89,10 +93,11 @@ Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`, `r84`,
   JavaScript applies the default to the first only.
 - `void` is a return type only. An expression of type `void` is
   accepted only as an expression statement.
-- A null test is `x == null` or `x != null`. `x === null` and
-  `x !== null` are rejected.
-  - Reason: JavaScript gives `undefined` in places where this language
-    has `null`. `==` agrees for both values. `===` does not.
+- A null test is `x == null`, `x != null`, `x === null`, or
+  `x !== null`, with `x` of type `T | null`. D16 keeps every
+  `undefined` out of accepted programs and of the library, so `===` and
+  `==` agree with `node` here. A null test on a type without `null` is
+  rejected.
 - `a ?? b` is accepted when `a` has type `T | null`. It lowers to an
   if-expression on `a ~= nil` with `a` evaluated once, never to
   `a or b`: `false ?? true` is `false` in JavaScript, and `false or
@@ -104,8 +109,8 @@ Accept: `a01`, `a05`, `a09`, `a15`, `a16`. Reject: `r19`, `r43`, `r53`, `r84`,
   `undefined`. A step after the optional step, as in `a?.f.g`, is
   rejected: JavaScript skips the whole chain when `a` is `null`.
 
-Accept: `a08`, `a14`, `a15`. Reject: `r02`, `r03`, `r04`, `r05`,
-`r12`, `r13`, `r14`, `r48`, `r63`.
+Accept: `a08`, `a14`, `a15`, `a40`. Reject: `r02`, `r03`, `r04`, `r12`, `r13`,
+`r14`, `r48`, `r63`. Retired by P2.5: `retired:r05-strict-null-equality`.
 
 ## C3. Truth tests are `boolean`
 
@@ -350,8 +355,11 @@ Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `
   `number`, `string`, or `boolean`; or two arrays with identical element
   types, compared by identity; or a `null` operand under C2. Each other
   pair is rejected, a mixed `number` and `string` pair included.
-- An operand that is an array literal (in parentheses or not) is
-  rejected: the comparison is by identity, and `tsc` gives TS2839.
+- Two operands of one object type compare by identity, as two arrays
+  do; a class instance compares by identity within its class (P2.6).
+- An operand that is an array literal or an object literal (in
+  parentheses or not) is rejected: the comparison is by identity, and
+  `tsc` gives TS2839.
 - `NaN` is an ordinary `number` operand: `NaN === x` is `false` in both
   JavaScript and Luau.
 - The rule is type-based (D17). It does not depend on the shape of an
@@ -370,7 +378,7 @@ Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `
   `retired:r77-test-in-for-update`, `retired:r79-aliased-condition`,
   `retired:r80-literal-condition-edge`, `retired:r83-alias-test-bound`.
 
-Accept: `a10`, `a14`, `a28`, `a29`, `a35`, `a36`. Reject: `r16`, `r89`, `r95`.
+Accept: `a10`, `a14`, `a28`, `a29`, `a35`, `a36`, `a41`. Reject: `r16`, `r89`, `r95`.
 
 ## C8. Forms outside the subset
 
@@ -456,7 +464,7 @@ explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
 Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
-`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`.
+`r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`.
 Retired: `retired:r97-narrowed-let-copy` (D18 revision).
 
 ## C12. Evaluation order
@@ -602,7 +610,5 @@ Accept: `a14`. Reject: `r67`, `r68`, `r69`.
 
 ## Open items
 
-- P2 decides structural or nominal typing between object types and
-  classes (C1.5).
-- P2 decides array methods beyond `push` and string byte operations
-  beyond `Utf8.byteLength`.
+- Case mapping and normalization of strings wait for a native helper
+  (C5.4).

@@ -56,7 +56,7 @@ function parseHeader(entry) {
   const m = NAME.exec(entry.file);
   if (!m || DIRS[m[1]] !== entry.dir) fail(entry.id, "file name does not match its directory");
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
-  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845|2322|2345)(, TS(2367|2845|2322|2345))*$/.test(header.tsc || ""))
+  if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^equality TS(2367|2845|2322|2345|2339)(, TS(2367|2845|2322|2345|2339))*$/.test(header.tsc || ""))
     fail(entry.id, "accept and trap entries state tsc: accepts or tsc: equality <codes of invariant 3>");
   if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
@@ -110,7 +110,7 @@ function tscCodes(files) {
 // literal types widened; or TS2322 or TS2345 that names `never`, the
 // narrowing that a contradictory accepted equality leaves.
 function isAcceptedEquality(d, checker) {
-  if (d.code === 2322 || d.code === 2345) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+  if (d.code === 2322 || d.code === 2345 || d.code === 2339) return /'never'/.test(ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;
   const kinds = new Set([
     ts.SyntaxKind.EqualsEqualsEqualsToken,

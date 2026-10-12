@@ -42,7 +42,7 @@ Each entry starts with `//` header lines, in this order:
 
 - `tsc` is measured, never assumed. An accept or trap entry states
   `tsc: accepts`, or `tsc: equality <codes>` with codes from TS2367,
-  TS2845, TS2322, and TS2345 when `tsc` gives them only where CLAUDE.md
+  TS2845, TS2322, TS2345, and TS2339 when `tsc` gives them only where CLAUDE.md
   invariant 3 allows (collisions.md C7). A reject entry states the result of `tsc` on
   that file alone with the project options.
 - `rule` names collision ids (`C1`, `C2`, ...) of `collisions.md`.
@@ -70,8 +70,8 @@ Each entry starts with `//` header lines, in this order:
   the codes of an `equality` header: each such diagnostic lies on a
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
   `number`, `string`, or `boolean` type (literal types widened; an
-  operand narrowed to `never` counts as either) for TS2367 and TS2845; each TS2322 or TS2345 names the type `never` in its
-  message; and the codes equal the codes of the header. One
+  operand narrowed to `never` counts as either) for TS2367 and TS2845;
+  each TS2322, TS2345, or TS2339 names the type `never` in its message; and the codes equal the codes of the header. One
   program over the prelude and every reject entry reports, per file,
   the codes that its header states.
 - `node`: the gate runs each entry with `js-comparable: yes`. Each such
