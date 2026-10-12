@@ -285,8 +285,8 @@ impl Checker<'_> {
             result: std::mem::replace(&mut self.result, result),
             loops: std::mem::replace(&mut self.loops, 0),
         };
-        // Stock tsc discards outer const facts at a named declaration (TS18047).
-        if !inherit {
+        // Named declarations and arrows at unreachable points have no outer const facts (TS18047).
+        if !inherit || !state.reachable {
             self.facts.floor = self.facts.serial + 1;
         }
         self.owner = id + 1;

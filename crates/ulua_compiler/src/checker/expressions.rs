@@ -217,9 +217,12 @@ impl Checker<'_> {
                     );
                 }
                 let mark = self.facts.mark();
-                self.edge(&a, op == "&&");
+                let incoming = self.reachable;
+                let right_edge = self.edge(&a, op == "&&");
+                self.reachable = incoming && right_edge;
                 let b = self.expr(&l.right, depth, false)?;
                 self.facts.restore(mark);
+                self.reachable = incoming;
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -234,12 +237,16 @@ impl Checker<'_> {
                     return Err(self.error(c.span, "C3", "Boolean condition is required"));
                 }
                 let mark = self.facts.mark();
-                self.edge(&test, true);
+                let incoming = self.reachable;
+                let true_edge = self.edge(&test, true);
+                self.reachable = incoming && true_edge;
                 let a = self.expr_as(&c.consequent, depth, false, expected)?;
                 self.facts.restore(mark);
-                self.edge(&test, false);
+                let false_edge = self.edge(&test, false);
+                self.reachable = incoming && false_edge;
                 let b = self.expr_as(&c.alternate, depth, false, expected)?;
                 self.facts.restore(mark);
+                self.reachable = incoming;
                 let ty = self
                     .types
                     .join(a.ty, b.ty)

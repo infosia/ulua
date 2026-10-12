@@ -237,6 +237,12 @@ Reviewer: fresh agent, diff `917e951..24c7327`. 0 CRITICAL, 1 MAJOR, 0 MINOR. Ea
 |---|---|---|
 | A narrowed read at an unreachable point keeps the narrowing of the last path: `if (k != null) { return; out += k.v; }` is accepted, `tsc` gives TS18047; also after `break`, `continue`, exiting branches, endless loops, an unreachable `for` update, and inside an arrow | MAJOR | C16.8, `r108` |
 
+Fix (Codex): an unreachable point reads the declared type, also in
+short-circuit operands, `?:` branches, and the facts that an arrow
+inherits. 19 rejected forms give C16 (`tsc` TS18047); 20 reachable
+controls pass `node`, `tsc`, and `luau-analyze`. New test 1.30 s Debug.
+gate full: PASS, 126 entries.
+
 ### P2.5 Phase Review round 2
 
 Reviewer: fresh agent, diff `917e951..b8cbf72`. 0 CRITICAL, 2 MAJOR, 1 MINOR. Each round 1 resolution holds.

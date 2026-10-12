@@ -238,6 +238,10 @@ impl Checker<'_> {
         }
     }
     pub(super) fn read_type(&mut self, id: usize, ty: Type, _offset: u32) -> Type {
+        // C16.8: an unreachable point has no incoming narrowing, even if the log retains a path.
+        if !self.reachable {
+            return ty;
+        }
         let binding = &self.bindings[id];
         if binding.mutable
             && (binding.owner == 0
