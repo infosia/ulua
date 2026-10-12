@@ -9,6 +9,7 @@ pub(super) struct FunctionTypes {
     names: HashMap<Type, String>,
     identities: HashMap<Type, Type>,
     next_name: usize,
+    definitions: HashMap<String, String>,
     pub(super) declarations: String,
 }
 impl FunctionTypes {
@@ -27,6 +28,7 @@ impl FunctionTypes {
             .filter_map(|ty| module.types.primitive(ty).map(|text| (ty, text.to_owned())))
             .collect(),
             next_name: 0,
+            definitions: HashMap::new(),
             declarations: String::new(),
         };
         for binding in &module.bindings {
@@ -186,7 +188,14 @@ impl FunctionTypes {
             } else {
                 continue;
             };
-            let _ = writeln!(self.declarations, "type {name} = {definition}");
+            // Luau classes have structural field types. The checker retains their nominal identities.
+            // Share identical class shapes and signatures instead of separate aliases for each declaration.
+            if let Some(existing) = self.definitions.get(&definition) {
+                self.names.insert(ty, existing.clone());
+            } else {
+                self.definitions.insert(definition.clone(), name.clone());
+                let _ = writeln!(self.declarations, "type {name} = {definition}");
+            }
         }
         Ok(())
     }
@@ -247,5 +256,30 @@ mod tests {
         let types = FunctionTypes::new(&module).unwrap();
         assert_eq!(types.declarations.lines().count(), 4);
         assert!(types.declarations.contains("() -> number"));
+    }
+
+    #[test]
+    fn class_aliases_share_luau_shapes_and_keep_distinct_field_types() {
+        let source = "class A{v:number=1;}class B{v:number=2;}class C{v:string='c';}\
+            function f(a:A,b:B,c:C):void{}export function main():void{}";
+        let allocator = oxc_allocator::Allocator::default();
+        let parsed =
+            oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::ts()).parse();
+        let module =
+            crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                .unwrap();
+        let types = FunctionTypes::new(&module).unwrap();
+        assert_eq!(types.declarations.matches("{__ulua_k0: number}").count(), 1);
+        assert_eq!(types.declarations.matches("{__ulua_k0: string}").count(), 1);
+        let class_types: Vec<_> = module
+            .types
+            .identities()
+            .filter_map(|(ty, _)| module.types.is_class(ty).then_some(ty))
+            .collect();
+        assert_eq!(class_types.len(), 3);
+        assert!(!module.types.equal(class_types[0], class_types[1]));
+        assert_eq!(types.luau(&class_types[0]), types.luau(&class_types[1]));
+        assert_ne!(types.luau(&class_types[0]), types.luau(&class_types[2]));
+        assert_eq!(types.declarations.lines().count(), 6);
     }
 }

@@ -1,6 +1,7 @@
 //! Class field and method bounds, nominal value-flow rejection, and class type-link limits.
-//! Review round 1 Debug cost: 0.590 seconds; four accepted boundaries and twelve rejects.
-//! One analyzer batch checks all accepted boundary modules. Costs are reports, never assertions.
+//! Measured Debug cost: 0.601 seconds; six accepted boundaries and twelve rejects.
+//! Four boundaries use external witnesses. Two initializer boundaries use the native compiler and VM.
+//! Costs are reports, never assertions.
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -53,6 +54,17 @@ fn class_boundaries_and_nominal_flows() {
         std::fs::write(&path, compiled.luau).unwrap();
         paths.push(path);
         std::fs::write(dir.join(format!("{name}.ts")), source).unwrap();
+    }
+    for expression in [
+        format!("{}0{}", "(".repeat(43), ")".repeat(43)),
+        format!("{}0", "- ".repeat(43)),
+    ] {
+        // The ABI passes accepted boundary output to the native luau_compile function.
+        let source =
+            format!("class C{{v:number={expression};}}export function main():void{{new C();}}");
+        let mut script = support::Script::new(&source);
+        assert_eq!(script.instance(ulua::RunLimits::default()).0, ulua::ULUA_OK);
+        assert_eq!(script.call(script.index("main"), &[]).0, ulua::ULUA_OK);
     }
     for source in [fields(1025, false), fields(1025, true)] {
         assert_eq!(
@@ -160,7 +172,7 @@ console.log('P2.6 boundary node matches: '+process.argv.slice(3).length);"#).unw
     );
     eprint!("{}", String::from_utf8_lossy(&out.stdout));
     eprintln!(
-        "P2.6 limits accepted=4 rejected=12 analyzer={analyze:.3}s total_cost={:.3}s",
+        "P2.6 limits accepted=6 external_witnesses=4 rejected=12 analyzer={analyze:.3}s total_cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
     std::fs::remove_dir_all(dir).unwrap();

@@ -263,6 +263,23 @@ Reviewer: fresh agent, diff `4a8a817..29a8f0f`. 0 CRITICAL, 0 MAJOR, 3 MINOR. Th
 | `p26_tests.rs` `class_initializer_depth_has_a_limit_diagnostic` asserts only inside `if let Err`; it passes when every depth compiles | MINOR | the test asserts the boundary (43 accepted, 44 `limit:nesting-depth`) |
 | `luau-analyze` time on 64 KiB of `class Bn{}`: 0.44 s to 9.08 s from 16 to 64 KiB (ratio 20.6); each class emits two Luau type aliases, used or not | MINOR | emit the aliases of a class only when a type refers to them; measure |
 
+Fix (Codex): the accept control and the depth boundary (43 accepted,
+44 `limit:nesting-depth`) are asserted; structurally equal Luau type
+aliases are shared, so 64 KiB of `class Bn{}` emits 3 aliases instead
+of 10,249. `luau-analyze` 16 to 64 KiB, minimum of 2 runs: empty
+classes 0.149 to 1.744 s (11.68), methods 9.83, fields 8.16, used
+classes 7.10 to 8.12. Test costs: compiler 0.98 s, rejects 1.17 s,
+limits 0.60 s, alias count 0.974 s.
+
+Open: `p26_limits.rs:122` (`luau-analyze` over the boundary outputs)
+failed with an empty stdout and stderr in two `cargo test --workspace`
+runs outside the sandbox (0.13 s against 0.57 s for a pass); the same
+files analyze with status 0 by hand; 5 later runs and 2 `gate.sh full`
+runs with a status-logging wrapper (80 analyzer calls, all status 0)
+did not reproduce it. The P2.5 round 11 and round 12 `:356` failures
+are the same shape. An analyzer failure must report its exit status
+and signal.
+
 Observation (over-rejection, consistent with C10.3): a method that calls a function declaration that reaches its own class gives C10; `tsc` and `node` accept it.
 
 ### P2.6 Phase Review round 1

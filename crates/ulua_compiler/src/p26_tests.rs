@@ -1,6 +1,6 @@
 //! P2.6 growth asserts compiler state and output ratios, never elapsed-time ratios.
-//! Review round 1 Debug cost: 0.323 seconds; three unit tests, including ten growth modules.
-//! Ten checked modules and ten emitted modules cost one measured test invocation.
+//! Measured Debug cost: 0.974 seconds; four unit tests, including eighteen growth and alias modules.
+//! The alias count test costs 0.974 seconds. No assertion reads wall-clock time.
 use crate::{checker, emitter, p26_shapes as shapes, *};
 use std::time::Instant;
 
@@ -74,16 +74,64 @@ fn class_identity_and_source_type_links() {
 
 #[test]
 fn class_initializer_depth_has_a_limit_diagnostic() {
-    for depth in 0..56 {
+    for depth in [43, 44] {
         for expression in [
             format!("{}0{}", "(".repeat(depth), ")".repeat(depth)),
             format!("{}0", "- ".repeat(depth)),
         ] {
             let source =
                 format!("class C{{v:number={expression};}}export function main():void{{new C();}}");
-            if let Err(d) = compile(source.as_bytes(), Limits::default()) {
+            if depth == 43 {
+                compile(source.as_bytes(), Limits::default())
+                    .unwrap_or_else(|d| panic!("depth={depth}: {d:?}"));
+            } else {
+                let d = compile(source.as_bytes(), Limits::default()).unwrap_err();
                 assert_eq!(d.code, "limit:nesting-depth", "depth={depth}: {d:?}");
             }
         }
     }
+}
+
+#[test]
+fn class_alias_count_depends_on_luau_shapes() {
+    let start = Instant::now();
+    for (member, used, aliases) in [
+        ("", false, 3),
+        ("m():void{}", false, 4),
+        ("v:number=1;", false, 3),
+        ("v:number=1;", true, 4),
+    ] {
+        for bytes in [16384, 65536] {
+            let mut source = String::new();
+            let tail = "export function main():void{}";
+            let mut count = 0;
+            loop {
+                let mut unit = format!("class B{count}{{{member}}}");
+                if used {
+                    unit.push_str(&format!("function f{count}(b:B{count}):void{{}} "));
+                }
+                if source.len() + unit.len() + tail.len() > bytes {
+                    break;
+                }
+                source.push_str(&unit);
+                count += 1;
+            }
+            source.push_str(tail);
+            source.extend(std::iter::repeat_n(' ', bytes - source.len()));
+            let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
+            assert_eq!(
+                compiled
+                    .luau
+                    .lines()
+                    .filter(|s| s.starts_with("type "))
+                    .count(),
+                aliases,
+                "member={member} used={used} bytes={bytes} classes={count}"
+            );
+        }
+    }
+    eprintln!(
+        "P2.6 class alias count cost={:.3}s",
+        start.elapsed().as_secs_f64()
+    );
 }

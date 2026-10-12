@@ -1,9 +1,15 @@
 //! Rejection witnesses pin C13 path shapes and the class surface boundaries.
-//! Review round 1 Debug cost: 1.147 seconds; 143 rejects in four parallel tests with tsc batches.
+//! Measured Debug cost: 1.169 seconds; 143 rejects and one accept control in four parallel tests.
 //! One tsc batch checks each diagnostic set. The test prints its cost without a time assertion.
+#[allow(dead_code)]
+#[path = "support/script.rs"]
+mod support;
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod witness;
+#[allow(dead_code)]
+#[path = "support/equality.rs"]
+mod witnesses;
 use std::time::Instant;
 
 #[test]
@@ -45,19 +51,20 @@ fn constructor_paths_and_receiver_uses() {
             "constructor(b:boolean){for(;b;this.v=1){continue;}}",
             &[2564],
         ),
-        (
-            "constructor(){while(true){this.v=1;break;}const f=():number=>this.v;}",
-            &[],
-        ),
     ];
-    // The last shape is an accept control, separate from the C13 rejects.
-    let programs: Vec<_> = cases[..cases.len()-1].iter().map(|(member,codes)| (
+    let programs: Vec<_> = cases.iter().map(|(member,codes)| (
         format!("class C{{v:number;{member}read():number{{return this.v;}}}}export function main():void{{}}"), *codes)).collect();
     let references: Vec<_> = programs
         .iter()
         .map(|(source, codes)| (source.as_str(), *codes))
         .collect();
     witness::rejected_programs("P2.6-construction", "C13", &references);
+    let mut accepted = witnesses::Suite::named("P2.6 construction control");
+    accepted.source(
+        "class C{v:number;constructor(){while(true){this.v=1;break;}const f=():number=>this.v;}read():number{return this.v;}}export function main():void{print(`${new C().read()}`);}",
+        Some("1\n"),
+    );
+    accepted.finish();
     for (field, codes) in [
         ("v:number=this.read();", &[][..]),
         ("v:()=>number=():number=>this.read();", &[][..]),
@@ -67,7 +74,7 @@ fn constructor_paths_and_receiver_uses() {
         witness::rejected_programs("P2.6-initializer", "C13", &[(source.as_str(), codes)]);
     }
     eprintln!(
-        "P2.6 C13 rejects={} cost={:.3}s",
+        "P2.6 C13 rejects={} accepted=1 cost={:.3}s",
         programs.len() + 2,
         start.elapsed().as_secs_f64()
     );
