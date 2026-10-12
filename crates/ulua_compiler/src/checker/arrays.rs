@@ -40,17 +40,9 @@ impl Checker<'_> {
             .element(receiver.ty)
             .ok_or_else(|| self.error(f.span, "C6", "For-of requires an array"))?;
         self.bindings[id].ty = Some(element);
-        self.equality.bindings[id] = true;
-        let mut exit = self.equality.join();
-        exit.edge(&self.equality, self.reachable);
-        let update = self.equality.join();
-        self.loops.push(equality::LoopFlow { exit, update });
+        self.loops += 1;
         let body = self.statement(&f.body, depth)?;
-        let flow = self
-            .loops
-            .pop()
-            .ok_or_else(|| self.error(f.span, "C11", "Missing loop flow"))?;
-        self.reachable = self.equality.finish(flow.exit);
+        self.loops -= 1;
         self.scopes.pop();
         // Entry makes captured storage local to each execution of the loop body.
         let body = S::Block(vec![S::Entry(vec![id]), body]);

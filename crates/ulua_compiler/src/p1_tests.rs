@@ -94,7 +94,7 @@ fn c7_equal_types_and_function_identity() {
         "function f(): void {} export function main(): void { const x = f === f; }",
         "C7",
     );
-    reject(&body("const x = 1 != 1;"), "C7");
+    accept(&body("const x = 1 != 1;"));
 }
 
 #[test]

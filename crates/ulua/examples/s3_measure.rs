@@ -17,8 +17,6 @@ mod functions;
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
-#[path = "../tests/support/growth_joins.rs"]
-mod joins;
 #[path = "../src/s6_inputs.rs"]
 mod review;
 #[path = "support/alloc.rs"]
@@ -295,7 +293,6 @@ fn main() {
                     .iter()
                     .chain(inputs::SOURCE_SHAPES)
                     .chain(review::SHAPES)
-                    .chain(joins::SHAPES)
                     .chain(functions::SHAPES)
                     .chain(arrays::SHAPES)
                 {
@@ -312,8 +309,6 @@ fn main() {
                         arrays::source(label, bytes)
                     } else if functions::SHAPES.contains(label) {
                         functions::source(label, bytes)
-                    } else if joins::SHAPES.contains(label) {
-                        joins::source(label, bytes)
                     } else if review::SHAPES.contains(label) {
                         review::source(label, bytes)
                     } else if matches!(*label, "forward" | "backward" | "star") {
@@ -363,14 +358,8 @@ fn main() {
             }
             "heap" => {
                 let mut worst = [("", 0); 3];
-                for label in inputs::SOURCE_SHAPES
-                    .iter()
-                    .chain(review::SHAPES)
-                    .chain(joins::SHAPES)
-                {
-                    let source = if joins::SHAPES.contains(label) {
-                        joins::source(label, SOURCE_CEILING as usize)
-                    } else if review::SHAPES.contains(label) {
+                for label in inputs::SOURCE_SHAPES.iter().chain(review::SHAPES) {
+                    let source = if review::SHAPES.contains(label) {
                         review::source(label, SOURCE_CEILING as usize)
                     } else if matches!(*label, "forward" | "backward" | "star") {
                         inputs::call_graph(label, SOURCE_CEILING as usize)

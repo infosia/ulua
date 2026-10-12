@@ -2,9 +2,8 @@
 mod arrays;
 mod equality;
 mod expressions;
-mod methods;
-use equality::Equality;
 mod functions;
+mod methods;
 mod order;
 mod statements;
 mod strict;
@@ -24,11 +23,9 @@ pub(crate) struct Checker<'s> {
     owner: usize,
     result: Type,
     types: ir::Types,
-    loops: Vec<equality::LoopFlow>,
-    reachable: bool,
+    loops: usize,
     limit: u32,
     references: Vec<(usize, usize, u32)>,
-    equality: Equality,
     functions: Vec<ir::Function>,
     default_scopes: Vec<(usize, std::collections::HashSet<String>)>,
 }
@@ -119,9 +116,6 @@ impl Checker<'_> {
             return Err(self.error(span, "C11", "Duplicate declaration"));
         }
         self.bindings.push(binding);
-        self.equality.bindings.push(true);
-        self.equality.aliases.push([vec![], vec![]]);
-        self.equality.tested.push(false);
         Ok(id)
     }
     fn lookup(&mut self, name: &str, span: Span) -> Result<usize, Diagnostic> {
@@ -222,11 +216,9 @@ pub(crate) fn check(
         owner: 0,
         result: Type::Void,
         types: ir::Types::new(),
-        loops: vec![],
-        reachable: true,
+        loops: 0,
         limit,
         references: vec![],
-        equality: Equality::new(),
         functions: vec![],
         default_scopes: vec![],
     };
@@ -280,8 +272,6 @@ pub(crate) fn check(
             body.extend(c.variables(d, 0)?);
         }
     }
-    c.equality.restore(0);
-    c.reachable = true;
     for (id, f, exported, offset) in declarations {
         c.function_body(id, f, exported, 0)?;
         body.insert(

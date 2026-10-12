@@ -19,8 +19,8 @@ use oxc_parser::{ParseOptions, Parser};
 use oxc_span::SourceType;
 
 pub use bounds::{
-    ALIAS_TEST_BOUND, ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND,
-    TEMPORARY_BOUND, UPVALUE_BUDGET,
+    ARGUMENT_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND, TEMPORARY_BOUND,
+    UPVALUE_BUDGET,
 };
 
 /// Source ceiling in bytes.
@@ -175,7 +175,6 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     for i in 0..=substitutions {
         source.push_str(&format!("x{i}"));
         parts.push(Expr {
-            wide: false,
             bare_true: false,
             start: 0,
             ty: Type::String,
@@ -184,7 +183,6 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         if i < substitutions {
             source.push_str(&format!("${{{i}}}"));
             parts.push(Expr {
-                wide: false,
                 bare_true: false,
                 start: 0,
                 ty: Type::Number,
@@ -226,7 +224,6 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 body: vec![Statement::Block(vec![Statement::Declare(
                     1,
                     Expr {
-                        wide: false,
                         bare_true: false,
                         start: 0,
                         ty: Type::String,

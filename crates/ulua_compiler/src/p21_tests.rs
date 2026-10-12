@@ -232,7 +232,7 @@ fn function_valued_bindings_keep_their_declaration_tdz() {
     ));
 }
 #[test]
-fn callback_creation_preserves_parameter_let_and_const_tests() {
+fn callback_equality_does_not_depend_on_enclosing_tests() {
     for binding in ["", "let x:number=p+1;", "const x:number=p+1;"] {
         let name = if binding.is_empty() { "p" } else { "x" };
         for comparison in ["===", "==", "!==", "!="] {
@@ -252,19 +252,13 @@ fn callback_creation_preserves_parameter_let_and_const_tests() {
             } else {
                 format!("{{}}else{{{callback}}}")
             };
-            reject(
-                &format!(
-                    "function take(f:()=>boolean):void{{}}function run(p:number):void{{{binding}if({name}{test}1){arms}}}export function main():void{{}}"
-                ),
-                "C7",
-            );
+            accept(&format!(
+                "function take(f:()=>boolean):void{{}}function run(p:number):void{{{binding}if({name}{test}1){arms}}}export function main():void{{}}"
+            ));
         }
-        reject(
-            &format!(
-                "function run(p:number):void{{{binding}if({name}===1){{function f():boolean{{return {name}===2;}}f();}}}}export function main():void{{}}"
-            ),
-            "C7",
-        );
+        accept(&format!(
+            "function run(p:number):void{{{binding}if({name}===1){{function f():boolean{{return {name}===2;}}f();}}}}export function main():void{{}}"
+        ));
         accept(&format!(
             "function run(p:number):void{{{binding}const f=():boolean=>{name}===2;f();}}export function main():void{{}}"
         ));

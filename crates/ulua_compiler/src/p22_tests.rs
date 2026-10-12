@@ -126,7 +126,7 @@ fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
 }
 
 #[test]
-fn equality_rejects_literal_arrays_and_tracks_iteration_tests() {
+fn equality_rejects_literal_arrays_and_accepts_repeated_iteration_tests() {
     for op in ["===", "!==", "==", "!="] {
         for rhs in ["[]", "([])", "[1]", "([1])", "(([1]))"] {
             assert_eq!(
@@ -139,10 +139,5 @@ fn equality_rejects_literal_arrays_and_tracks_iteration_tests() {
     }
     assert_eq!(check("const a=[1];if(([])===a){}").unwrap_err().code, "C7");
     check("const a=[1];for(const x of a){if(x===6){}} ").unwrap();
-    assert_eq!(
-        check("const a=[1];for(const x of a){if(x===6){if(x===7){}}}")
-            .unwrap_err()
-            .code,
-        "C7"
-    );
+    check("const a=[1];for(const x of a){if(x===6){if(x===7){}}}").unwrap();
 }

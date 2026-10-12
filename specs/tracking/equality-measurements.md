@@ -72,5 +72,24 @@ programs above with a diagnostic stays rejected under it.
 
 ## Decision
 
-Open. The proposal requires a change of invariant 3 and D15 by the
-owner. The measurement alone does not authorize it.
+The owner chose type-based equality on 2026-10-12 (D17). Invariant 3
+allows TS2367 and TS2845 at an accepted equality expression.
+
+## Implementation record
+
+- Codex task. `checker/equality.rs` 292 to 39 lines; the checker 2,312
+  to 1,929 lines. Removed: tested sets, alias sets, literal edges,
+  checkpoints and joins of the checker, the wide-operand attribute,
+  `ALIAS_TEST_BOUND`. Kept, with their consumers: `bare_true` and
+  `loop_break` (the end of a function, surface.md), declaration order
+  and owners (C10, captures), `boolean_initializer` (the boolean `let`
+  rule), loop depth (`break`, `continue`), type agreement (C1), and the
+  emitter join writes (pipeline.md §5.10).
+- Growth: the join and alias-chain shapes that measured only the
+  equality flow state are removed; `nested-writes` and `spilled-and`
+  stay for the emitter joins. 51 shapes; largest time ratio 6.60;
+  largest output ratio 63.17; 9.75 s Debug.
+- Random: 368 programs; 320 accepted, each equal to `node`, through the
+  ABI, and `luau-analyze` clean; `tsc` gives TS2367 (83) and TS2845
+  (55) in 93 programs, each at an accepted equality; no other code.
+- `gate.sh full` passes: 77 entries in P2.3 or earlier.

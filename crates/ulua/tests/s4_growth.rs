@@ -2,7 +2,8 @@
 //! Dense fixtures cover P1 and P2.1 to P2.3 emitted constructs.
 //! Ratios above 6.5 use the minimum of two runs per size.
 //! Largest measured output ratio: 63.167435; this measurement does not prove a margin.
-//! Measured Debug cost: 10.22 seconds, with serial ABI timing and two joined size-check workers.
+//! Measured Debug cost: 9.75 seconds, with serial ABI timing and two joined size-check workers.
+//! D17 removes five equality-state shapes. Nested writes and spilled logic still measure emitter joins.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
 #[path = "../src/p22_inputs.rs"]
@@ -12,8 +13,6 @@ mod dense;
 #[allow(dead_code)]
 #[path = "../src/s3_inputs.rs"]
 mod inputs;
-#[path = "support/growth_joins.rs"]
-mod joins;
 #[path = "../src/p23_inputs.rs"]
 mod methods;
 #[path = "../src/s6_inputs.rs"]
@@ -39,7 +38,6 @@ fn full_pipeline_growth_stays_below_eight() {
     for shape in inputs::SOURCE_SHAPES
         .iter()
         .chain(review::SHAPES)
-        .chain(joins::SHAPES)
         .chain(functions::SHAPES)
         .chain(arrays::SHAPES)
         .chain(methods::SHAPES)
@@ -51,8 +49,6 @@ fn full_pipeline_growth_stays_below_eight() {
                 arrays::source(shape, bytes)
             } else if functions::SHAPES.contains(shape) {
                 functions::source(shape, bytes)
-            } else if joins::SHAPES.contains(shape) {
-                joins::source(shape, bytes)
             } else if review::SHAPES.contains(shape) {
                 review::source(shape, bytes)
             } else if matches!(*shape, "forward" | "backward" | "star") {
@@ -83,11 +79,9 @@ fn full_pipeline_growth_stays_below_eight() {
         let large = make(4 * n);
         assert_eq!(small.len(), n);
         assert_eq!(large.len(), 4 * n);
-        // Dense fixtures replace sparse output samples. Keep independent type, join, and spill stress cases.
+        // Dense fixtures replace sparse output samples. Keep independent type and spill stress cases.
         if methods::SHAPES.contains(shape)
             || shape.starts_with("type-product-")
-            || shape.starts_with("join-")
-            || shape.starts_with("alias-chain")
             || shape.starts_with("spilled-")
             || matches!(
                 *shape,

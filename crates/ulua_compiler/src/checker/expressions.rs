@@ -169,17 +169,7 @@ impl Checker<'_> {
                     return Err(self.unsupported(l.span));
                 }
                 let a = self.expr(&l.left, depth, false)?;
-                let [t, f] = self.equality.regions(&a);
-                let (ids, skipped) = if op == "&&" { (t, f) } else { (f, t) };
-                let checkpoint = self.equality.checkpoint();
-                let entry = self.reachable;
-                let mut join = self.equality.join();
-                self.enter_region(&skipped);
-                join.edge(&self.equality, self.reachable);
-                self.equality.restore(checkpoint);
-                self.reachable = entry;
-                let b = self.edge_expr(&l.right, depth, &ids, &mut join, None)?;
-                self.reachable = self.equality.finish(join);
+                let b = self.expr(&l.right, depth, false)?;
                 if a.ty != Type::Boolean || b.ty != Type::Boolean {
                     return Err(self.error(l.span, "C3", "Boolean operands are required"));
                 }
@@ -193,11 +183,8 @@ impl Checker<'_> {
                 if test.ty != Type::Boolean {
                     return Err(self.error(c.span, "C3", "Boolean condition is required"));
                 }
-                let [t, f] = self.equality.regions(&test);
-                let mut join = self.equality.join();
-                let a = self.edge_expr(&c.consequent, depth, &t, &mut join, expected)?;
-                let b = self.edge_expr(&c.alternate, depth, &f, &mut join, expected)?;
-                self.reachable = self.equality.finish(join);
+                let a = self.expr_as(&c.consequent, depth, false, expected)?;
+                let b = self.expr_as(&c.alternate, depth, false, expected)?;
                 self.flow(&a.ty, Some(&b.ty), c.span)?;
                 (
                     a.ty,
@@ -281,7 +268,6 @@ impl Checker<'_> {
                             let value = self.expr_as(arg, depth, false, Some(element))?;
                             self.flow(&value.ty, Some(&element), arg.span())?;
                             return Ok(Expr {
-                                wide: false,
                                 bare_true: false,
                                 start: call.span.start,
                                 ty: Type::Void,
@@ -312,7 +298,6 @@ impl Checker<'_> {
                             ("__ulua_format", Type::Number, Type::String)
                         };
                         Expr {
-                            wide: false,
                             bare_true: false,
                             start: call.callee.span().start,
                             ty: self.types.intern(vec![p], r, 1),
@@ -398,7 +383,6 @@ impl Checker<'_> {
                             self.error(q.span, "syntax", "Invalid template escape")
                         })?;
                     parts.push(Expr {
-                        wide: false,
                         bare_true: false,
                         start: q.span.start,
                         ty: Type::String,
@@ -454,14 +438,12 @@ impl Checker<'_> {
         if ty == Type::Void && !statement {
             return Err(self.error(e.span(), "C2", "Void is a statement result only"));
         }
-        let mut value = Expr {
-            wide: false,
+        let value = Expr {
             bare_true: matches!(e, Expression::BooleanLiteral(b) if b.value),
             start: e.span().start,
             ty,
             kind,
         };
-        value.wide = self.is_wide(e, &value);
         Ok(value)
     }
     pub(super) fn index(

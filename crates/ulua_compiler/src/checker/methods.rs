@@ -177,7 +177,6 @@ impl Checker<'_> {
         };
         self.methods.insert((method, arity));
         Ok(Expr {
-            wide: false,
             bare_true: false,
             start: call.span.start,
             ty,
@@ -214,11 +213,9 @@ mod tests {
                     owner: 0,
                     result: Type::Void,
                     types: ir::Types::new(),
-                    loops: vec![],
-                    reachable: true,
+                    loops: 0,
                     limit: crate::DEPTH_CEILING,
                     references: vec![],
-                    equality: Equality::new(),
                     functions: vec![],
                     default_scopes: vec![],
                 };
@@ -249,7 +246,6 @@ mod tests {
                 )
                 .unwrap();
                 let receiver = Expr {
-                    wide: false,
                     bare_true: false,
                     start: 0,
                     ty: c.types.array(Type::Number),

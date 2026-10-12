@@ -272,9 +272,7 @@ impl Checker<'_> {
         let state = FunctionState {
             owner: self.owner,
             result: std::mem::replace(&mut self.result, result),
-            reachable: self.reachable,
-            loops: std::mem::take(&mut self.loops),
-            equality: self.equality.suspend(),
+            loops: std::mem::replace(&mut self.loops, 0),
         };
         self.owner = id + 1;
         self.scopes.push(HashMap::new());
@@ -284,15 +282,11 @@ impl Checker<'_> {
         self.scopes.pop();
         self.owner = state.owner;
         self.result = state.result;
-        self.reachable = state.reachable;
         self.loops = state.loops;
-        self.equality.resume(state.equality);
     }
 }
 struct FunctionState {
     owner: usize,
     result: Type,
-    reachable: bool,
-    loops: Vec<equality::LoopFlow>,
-    equality: equality::BodyState,
+    loops: usize,
 }
