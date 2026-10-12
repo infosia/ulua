@@ -268,7 +268,7 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
-Accept: `a09`, `a13`, `a32`, `a33`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`,
+Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`,
 `r90`, `r91`, `r92`, `r93`, `r94`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`.
 
 ## C7. Equality

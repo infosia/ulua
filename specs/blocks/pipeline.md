@@ -15,6 +15,7 @@ Rev 11: §4.8 traps, §5.15 arrays (P2.2).
 Rev 12: §4.8 chunk argument, §3.10 densest shapes, §5.15 helpers (P2.2 review).
 Rev 13: §3.10 `limit:output` (P2.2 review 2).
 Rev 14: §5.16 array methods (P2.3).
+Rev 15: §5.15.2 literal blocks, §6.0 limit positions, §3.10 final check (P2.2 review 3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -114,7 +115,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     byte, plus a fixed prelude. The bound is a compiler limit
     (invariant 2): the emitter checks it as it writes, and the first
     statement that crosses it gives `limit:output` with the source
-    offset of that statement. A measured ratio is a lower bound of the
+    offset of that statement. The final check also compares the
+    counter with the length of the written text; a difference is
+    `internal`. A measured ratio is a lower bound of the
     worst case only, so the bound is not a defect test. §7 records the
     value and the largest measured ratio. The factor does not depend on the
     nesting depth or on the number of bindings. The shapes of the growth
@@ -265,8 +268,14 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 15. **Arrays (P2.2).**
     1. `T[]` lowers to the Luau type `{T}`. A function element type is
        in parentheses where Luau needs them (§5.14.3).
-    2. An array literal lowers to a table constructor of its elements,
-       each through the C12 temporaries in source order.
+    2. An array literal evaluates its elements in source order (C12).
+       A constant element (a literal, `-` of a numeric literal) is
+       written in place and takes no temporary. The other elements are
+       evaluated in blocks of at most 32 temporaries; after each block
+       the lowering appends the block to the array. So the
+       temporaries of one literal are at most 32 plus the array local,
+       whatever its width. A literal of any width inside the source
+       ceiling needs no width bound.
     The checks of rules 3 to 5 run in generated helper functions of the
     chunk prelude, one call per element access, so the emitted size of
     one access is a small constant.
@@ -336,6 +345,9 @@ C15 bounds of P1, each a fixed compiler constant:
 below the Luau parser recursion limit of 1000. A bound that S3 finds
 necessary and that this table does not name is a contract question.
 
+0. Each limit diagnostic carries the source offset, line, and column
+   of the form whose lowering reaches the limit, never of a later
+   statement.
 1. A zero limit is a zero limit. It is never "no limit".
 2. The library has a ceiling for `max_source_bytes` and
    `max_nesting_depth`. A request above the ceiling uses the ceiling.
