@@ -310,12 +310,14 @@ Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `
   (corpus.md §4). Measured: 30 programs that the earlier structural
   rule rejected run equal to `node`; 20 of them show TS2367 or TS2845
   and no other diagnostic (`tracking/equality-measurements.md`).
-- The entries that pin the earlier structural rule (`r17`, `r70` to
-  `r74`, `r76`, `r77`, `r79`, `r80`, `r83`) retire when the corpus
-  moves to this rule, after slice P2.3.
+- Retired with the structural rule: `retired:r17-loose-equality`,
+  `retired:r70-constant-equality`, `retired:r71-boolean-let-equality`,
+  `retired:r72-tested-reference-equality`, `retired:r73-nan-equality`,
+  `retired:r74-template-equality`, `retired:r76-test-after-block`,
+  `retired:r77-test-in-for-update`, `retired:r79-aliased-condition`,
+  `retired:r80-literal-condition-edge`, `retired:r83-alias-test-bound`.
 
-Accept: `a10`, `a14`, `a28`, `a29`. Reject: `r16`, `r17`, `r70`, `r71`, `r72`, `r73`,
-`r74`, `r76`, `r77`, `r79`, `r80`, `r83`, `r89`.
+Accept: `a10`, `a14`, `a28`, `a29`, `a35`. Reject: `r16`, `r89`, `r95`.
 
 ## C8. Forms outside the subset
 
