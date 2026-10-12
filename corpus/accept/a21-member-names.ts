@@ -1,7 +1,7 @@
 // corpus: accept/a21-member-names
 // purpose: Uses member names that Luau gives a meaning as plain keys.
 // rule: C14
-// phase: P2.5
+// phase: P2.6
 // tsc: accepts
 // js-comparable: yes
 type R = { __index: number; nil: number; end: number };

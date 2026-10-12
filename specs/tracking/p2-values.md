@@ -14,16 +14,17 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 |---|---|---|
 | P2.1 | Nested functions and arrows | `a23`, `a27`, `a30`; `r13`, `r16`, `r20`, `r35`, `r36`, `r41`, `r42`, `r49`, `r51`, `r66`, `r84` to `r88` |
 | P2.2 | Arrays | `a09`, `a13`, `a17`, `a31`, `t01`, `t02`, `t03`; `r23`, `r24`, `r55`, `r64`, `r89` |
-| P2.3 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
-| P2.4 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
-| P2.5 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
-| P2.6 | Exceptions | contract and entries to write |
+| P2.3 | Array methods | `a32`, `a33`, `t04`, `t05`; `r90` to `r94`; `r24` becomes `r24-array-find` (P2.2) |
+| P2.4 | Strings | `a11`, `a12`, `a19`, `a20`, `a24`; `r08`, `r09`, `r10`, `r18`, `r21`, `r29` to `r34`, `r37`, `r38`, `r39`, `r57` |
+| P2.5 | Nullable values and records | `a14`, `a15`; `r03` to `r06`, `r14`, `r19`, `r28`, `r43`, `r44`, `r45`, `r48`, `r61`, `r62`, `r63`, `r67`, `r68`, `r69` |
+| P2.6 | Classes | `a16`, `a18`, `a21`; `r40`, `r47`, `r52`, `r53`, `r54`, `r59` |
+| P2.7 | Exceptions | contract and entries to write |
 
 ## Carry-over into P2
 
-- P2.2 runs entries that execute C12.6 (`push` order); P2.4 runs entries
+- P2.2 runs entries that execute C12.6 (`push` order); P2.5 runs entries
   that execute C16.4 (`plan.md` §9 Rev 4).
-- P2.4 and P2.5: C7 rule 3 lists no member read and no object operand;
+- P2.5 and P2.6: C7 rule 3 lists no member read and no object operand;
   `a21` needs a revision.
 - D16: no accepted form and no library call gives `undefined`. P2.4
   states the consequence for `x === null` in C2.
@@ -31,6 +32,20 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   decides its own with the user.
 - A phase that exposes the `buffer` library classifies Luau errors by
   source location, not by text.
+
+## Exit checklist (P2.3)
+
+- [ ] collisions.md C6.9 and pipeline.md §5.16 implemented; the prelude
+  declares `pop`, `shift`, `at` with result `T` and `findLastIndex`.
+- [ ] P2.3 entries pass in full; later slices stay `unsupported`.
+- [ ] Each method has a direct test against `node` for its position
+  and edge rules; `sort` stability; the `array-modified` trap.
+- [ ] Growth shapes for method calls (many calls, long arrays are a
+  run cost, not a compile cost); `luau-analyze` passes.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source of the method set: the owner's prior project, with one change:
+`find` and `findLast` stay rejected (D16).
 
 ## Exit checklist (P2.2)
 
@@ -239,8 +254,8 @@ the 62.1 MB value of §7. Growth test 8.87 s Debug.
 
 ## Gaps
 
-- P2.2 and P2.4: an arrow whose inferred result contains a function
+- P2.2 and P2.5: an arrow whose inferred result contains a function
   type at any depth (array element, nullable member, record field)
   needs a result annotation, as a bare function result does now.
-- P2.2 and P2.4: the parentheses rule for function types applies to
+- P2.2 and P2.5: the parentheses rule for function types applies to
   every composite type they add (unions, arrays).

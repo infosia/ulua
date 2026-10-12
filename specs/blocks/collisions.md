@@ -1,6 +1,6 @@
 # Semantic collisions — decided rules
 
-Status: Rev 23, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
+Status: Rev 24, 2026-10-12 (Rev 0 to Rev 11 the same day; P0 Phase
 Review rounds 1 to 12 changed C1 to C6, C9, C10, C12, C14, C16 and added C11
 to C16; Rev 13: C7 literal operands, P1 Phase Review round 3; Rev 14: C7
 structural operand rule, round 4; Rev 15: C7 accepts `==` and `!=`;
@@ -11,7 +11,7 @@ literal conditions, strict-mode early errors, round 6; Rev 19:
 set, P2.1; Rev 21: C1.4 function type equality, P2.1 review; Rev 22: C10.3
 closures inside a declaration, C15 closures note, P2.1 review 2; Rev 23:
 C6.3 divergence text, C7 array literal operands and `for…of` bindings,
-P2.2 review).
+P2.2 review; Rev 24: C6.9 array methods, P2.3).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -219,15 +219,57 @@ Accept: `a11`, `a12`, `a19`. Reject: `r08`, `r09`, `r10`, `r18`, `r29`,
 6. `for (const x of xs)` evaluates `xs` once. Before each step it reads
    the live length of that array. A later assignment to the binding
    `xs` does not change the iteration (C12).
-7. The accepted members are `length` and `push` (surface.md §6). Every
-   other member is rejected. A later revision opens a member with the
-   user. A member whose TypeScript result includes `undefined`, such as
-   `pop` and `find`, stays rejected (D16).
+7. The accepted members are those of rule 9 and surface.md §6. Every
+   other member is rejected.
+9. **Array methods (P2.3).** The set follows the owner's prior project.
+   Each method lowers to a prelude helper that implements the
+   ECMAScript algorithm for the accepted forms.
+   - Without a callback: `indexOf(x, from?)`, `lastIndexOf(x, from?)`,
+     `includes(x, from?)`, `join(sep?)`, `slice(start?, end?)`,
+     `concat(other)` with exactly one array, `fill(x, start?, end?)`,
+     `reverse()`, `splice(start, count?)` (delete only, returns the
+     removed elements), `unshift(x)` (one element, returns the new
+     length), `copyWithin(target, start, end?)`, `at(i)`, `pop()`,
+     `shift()`, and the statement `xs.length = 0`.
+   - With a callback: `forEach`, `map`, `filter`, `some`, `every`,
+     `findIndex`, `findLastIndex`, `flatMap` (the callback returns an
+     array), `reduce(f, init)` and `reduceRight(f, init)` with `init`
+     required, and `sort(cmp)` with the comparator required.
+   - A callback takes `(v)` or `(v, i)`. The third parameter, the
+     array, is rejected.
+   - A number argument (`from`, `start`, `end`, `count`, `target`,
+     `i`) is converted as ECMAScript ToIntegerOrInfinity converts it:
+     NaN is 0, a fraction truncates toward 0. A negative position is
+     `length + position`, clamped as ECMAScript clamps it.
+   - `indexOf` and `lastIndexOf` compare with `===`; `includes` uses
+     SameValueZero and finds `NaN`. An element type of function type
+     is rejected for these three (C7: closure identity).
+   - `join` formats a number element as `String(n)` (C4.5), a boolean
+     as `true` or `false`, and a string as itself. An element type of
+     array or function type is rejected for `join`.
+   - `sort` is stable. A comparator result that is NaN counts as 0.
+     Divergence: the number and the order of comparator calls are not
+     those of `node`; an entry whose comparator has a visible effect is
+     `js-comparable: no C6`.
+   - `pop()`, `shift()` on an empty array and `at(i)` outside the array
+     trap `index-out-of-range`. Divergence: `node` gives `undefined`.
+     The prelude declares their result as `T` (D16: no `undefined`).
+   - A method with a callback reads the length at its start. If a
+     callback changes the length of the receiver, the method traps
+     `array-modified` after that callback. Divergence: `node`
+     continues, skips or reads missing elements, or makes holes.
+   - `xs.length = n` with `n` other than the literal `0` stays rejected:
+     a larger length makes holes.
+   - Rejected: `find` and `findLast` (D16: a miss is `undefined`), a
+     `sort` without a comparator (it compares strings), a `reduce`
+     without `init` (it changes meaning with the argument count),
+     `flat`, `entries`, `keys`, `values`, `toString`, a method read as
+     a value, and every variadic form.
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
-Accept: `a09`, `a13`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`. Trap:
-`t01`, `t02`, `t03`.
+Accept: `a09`, `a13`, `a32`, `a33`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`,
+`r90`, `r91`, `r92`, `r93`, `r94`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`.
 
 ## C7. Equality
 

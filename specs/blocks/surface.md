@@ -1,13 +1,13 @@
 # Accepted surface
 
-Status: Rev 11, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 12, 2026-10-12 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
 C7 Rev 15; Rev 8: unannotated boolean `let`, the end of a function, round 5;
 Rev 9: trailing defaults, P2.1 review; Rev 10: arrow result annotation
 for function results, default scope, P2.1 review 2; Rev 11: function types
-at any depth of an arrow result, P2.2).
+at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -120,7 +120,7 @@ its target.
 | prelude | `print(text: string)`, `Utf8.byteLength(text: string)` |
 | global | `Infinity`, `NaN`, `String(n)` with `n: number` |
 | `string` | the members of collisions.md C5.2 |
-| `T[]` | `length` (read); `push` with one argument of type `T`, as an expression statement only |
+| `T[]` | `length` (read; the statement `xs.length = 0`); `push` with one argument of type `T`, as an expression statement only; the methods of collisions.md C6.9 |
 
 Every other global, namespace, and member is rejected, for example
 `Math`, `Number`, `Array`, `Object`, `JSON`, and every other method of

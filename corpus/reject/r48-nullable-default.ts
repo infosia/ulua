@@ -1,7 +1,7 @@
 // corpus: reject/r48-nullable-default
 // purpose: Rejects a default on a parameter whose type includes null.
 // rule: C2
-// phase: P2.4
+// phase: P2.5
 // tsc: accepts
 // expected-error: C2: a parameter with a default cannot include null
 function show(x: number | null = 5): string {

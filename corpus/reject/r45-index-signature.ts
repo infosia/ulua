@@ -1,7 +1,7 @@
 // corpus: reject/r45-index-signature
 // purpose: Rejects an index signature type.
 // rule: C6
-// phase: P2.4
+// phase: P2.5
 // tsc: accepts
 // expected-error: C6: an index signature type is not part of the language
 type Table = { [key: string]: number };

@@ -14,6 +14,7 @@ Rev 10: §3.10 interned types and product shapes (P2.1 review 3).
 Rev 11: §4.8 traps, §5.15 arrays (P2.2).
 Rev 12: §4.8 chunk argument, §3.10 densest shapes, §5.15 helpers (P2.2 review).
 Rev 13: §3.10 `limit:output` (P2.2 review 2).
+Rev 14: §5.16 array methods (P2.3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -287,6 +288,27 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        each step (C6.6). The binding `x` follows §5.14.1: a captured
        binding is a new local per step.
     9. An array value never crosses the C ABI (`abi.md` §4).
+16. **Array methods (P2.3).**
+    1. Each method of collisions.md C6.9 lowers to one call of a
+       generated helper of the chunk prelude. A module holds the
+       helpers that it uses and no other; the prelude of §3.10 is the
+       base prelude plus the used helpers, a bounded constant.
+    2. A helper takes its receiver and its arguments after the C12
+       evaluation of the call: the receiver, then the arguments from
+       left to right. It converts a number argument as ECMAScript
+       ToIntegerOrInfinity converts it.
+    3. A callback helper reads the length at its start, calls the
+       callback with the value and, if the callback takes it, the
+       zero-based index, and checks the length after each callback.
+       A changed length raises the trap `array-modified` (§4.8).
+    4. `sort` is a stable merge sort in the helper; it never calls
+       `table.sort`, which is not stable and raises on an
+       inconsistent comparator.
+    5. `pop`, `shift`, and `at` raise `index-out-of-range` where C6.9
+       says so. `xs.length = 0` clears the array in place.
+    6. Each helper is generic in the element type, so `luau-analyze`
+       checks each call. A helper loop counts toward `max_steps` as any
+       loop does.
 
 ## 6. Limits
 

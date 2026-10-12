@@ -104,6 +104,7 @@ recorded defect of the golden, in the same commit.
 | Kind | Rule |
 |---|---|
 | `index-out-of-range` | collisions.md C6 |
+| `array-modified` | collisions.md C6.9 |
 
 Resource limit traps (depth, time, memory; `CLAUDE.md` invariant 2) join
 this table at P1 with their own entries. The `node` comparison does not

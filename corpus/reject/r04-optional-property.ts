@@ -1,7 +1,7 @@
 // corpus: reject/r04-optional-property
 // purpose: Rejects an optional property.
 // rule: C2
-// phase: P2.4
+// phase: P2.5
 // tsc: accepts
 // expected-error: C2: an optional property is not part of the language
 type Item = { name: string; note?: string };
