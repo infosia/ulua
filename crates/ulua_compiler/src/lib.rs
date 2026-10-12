@@ -457,6 +457,8 @@ mod tests {
 #[cfg(test)]
 mod equality_tests;
 #[cfg(test)]
+mod inference_tests;
+#[cfg(test)]
 mod p1_tests;
 
 #[cfg(test)]

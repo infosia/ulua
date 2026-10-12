@@ -72,7 +72,7 @@ fn methods_keep_exact_argument_and_callback_types() {
     )
     .unwrap();
     for method in ["indexOf", "lastIndexOf", "includes"] {
-        let body = format!("const f=()=>1;const xs=[f];xs.{method}(f);");
+        let body = format!("const f=()=>1;const xs:(()=>number)[]=[f];xs.{method}(f);");
         assert_eq!(
             compile(module(&body).as_bytes(), Limits::default())
                 .unwrap_err()

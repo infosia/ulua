@@ -1,4 +1,4 @@
-//! Batch witnesses for D17. Each accepted source also runs through the C ABI.
+//! Batch equality witnesses. Each accepted source also runs through the C ABI.
 use super::support::Script;
 use std::{
     ffi::{c_char, c_void},
@@ -9,14 +9,19 @@ use ulua::*;
 
 pub struct Suite {
     directory: PathBuf,
+    label: &'static str,
     pub count: usize,
 }
 impl Suite {
     pub fn new() -> Self {
-        let directory = std::env::temp_dir().join(format!("ulua-d17-{}", std::process::id()));
+        Self::named("D17")
+    }
+    pub fn named(label: &'static str) -> Self {
+        let directory = std::env::temp_dir().join(format!("ulua-{label}-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         Self {
             directory,
+            label,
             count: 0,
         }
     }
@@ -52,6 +57,7 @@ impl Suite {
             .arg(&runner)
             .arg(&root)
             .arg(&self.directory)
+            .arg(self.label)
             .output()
             .unwrap();
         assert!(
@@ -74,7 +80,10 @@ impl Suite {
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
-        eprintln!("D17 ABI and luau-analyze: {} accepted", self.count);
+        eprintln!(
+            "{} ABI and luau-analyze: {} accepted",
+            self.label, self.count
+        );
     }
 }
 impl Drop for Suite {

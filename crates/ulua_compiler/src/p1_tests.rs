@@ -276,7 +276,7 @@ fn c12_binary_call_and_compound_reads_precede_a_mutating_call() {
 
 #[test]
 fn c10_a_multi_declarator_statement_finishes_before_any_reference() {
-    reject(&body("let a = 1, b = a;"), "C10");
+    reject(&body("let a = 1, b: number = a;"), "C10");
     reject(
         "function f(x: number): void { let x = 1; } export function main(): void {}",
         "C11",

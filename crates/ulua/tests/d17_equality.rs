@@ -1,4 +1,5 @@
 //! Direct results, operand effects, and seeded random programs for D17.
+//! Measured Debug cost: 1.23 s (P2.3 phase review).
 #[allow(dead_code)]
 #[path = "support/script.rs"]
 mod support;
@@ -133,7 +134,7 @@ fn random(s: &mut Suite) {
             ),
             6 => format!("const a={eq};const b=NaN{other_op}NaN;return a{op}b;"),
             _ => format!(
-                "const a=[x];const b=a;const d=[y];let result:boolean=a{op}b;for(const value of a){{const alias=value{other_op}y;const f=():boolean=>(a{op}d){other_op}alias;result=f();}}return result;"
+                "const a:{ty}[]=[x];const b=a;const d:{ty}[]=[y];let result:boolean=a{op}b;for(const value of a){{const alias=value{other_op}y;const f=():boolean=>(a{op}d){other_op}alias;result=f();}}return result;"
             ),
         };
         shapes[i % 8] += 1;

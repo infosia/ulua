@@ -189,6 +189,7 @@ impl Checker<'_> {
         &mut self,
         a: &ArrowFunctionExpression<'_>,
         depth: u32,
+        expected: Option<Type>,
     ) -> Result<(Type, ExprKind), Diagnostic> {
         if a.r#async || a.type_parameters.is_some() {
             return Err(self.unsupported(a.span));
@@ -202,6 +203,9 @@ impl Checker<'_> {
         if a.body.as_expression().is_none() && result.is_none() {
             return Err(self.error(a.span, "C11", "Block arrow needs a result annotation"));
         }
+        let result = result.or_else(|| {
+            expected.and_then(|ty| self.types.function(ty).map(|signature| signature.result))
+        });
         // Anonymous identities never enter a source scope or the parent's local budget.
         self.scopes.push(HashMap::new());
         let id = self.bind(
@@ -221,6 +225,9 @@ impl Checker<'_> {
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
+            if result.is_none() {
+                self.inferred_reference(e)?;
+            }
             let value = self.expr_as(e, body_depth, true, result)?;
             if value.ty == Type::Void
                 && !matches!(value.kind, ExprKind::Call(..) | ExprKind::Method(..))
@@ -230,7 +237,7 @@ impl Checker<'_> {
             if let Some(result) = &result {
                 self.flow(&value.ty, Some(result), a.span)?;
             }
-            if result.is_none() && self.types.contains_function(value.ty) {
+            if a.return_type.is_none() && self.types.contains_function(value.ty) {
                 return Err(self.error(a.span, "C11", "Function result needs an annotation"));
             }
             let result = result.unwrap_or(value.ty);

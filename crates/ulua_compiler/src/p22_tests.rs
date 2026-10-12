@@ -65,8 +65,13 @@ fn array_flows_are_invariant_at_every_depth() {
 #[test]
 fn array_literal_width_does_not_consume_the_temporary_budget() {
     for entry in ["1", "-1", "1+1", "x", "[x]", "f()"] {
+        let ty = if entry == "[x]" {
+            "number[][]"
+        } else {
+            "number[]"
+        };
         let body = format!(
-            "const x=1;function f():number{{return x;}}const xs=[{}];",
+            "const x=1;function f():number{{return x;}}const xs:{ty}=[{}];",
             vec![entry; 1000].join(",")
         );
         for source in [

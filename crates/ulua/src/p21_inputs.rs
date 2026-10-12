@@ -86,7 +86,7 @@ fn type_product(shape: &str, bytes: usize) -> String {
     }
     out.push_str(&format!("function f(g:{ty}):void{{"));
     if matches!(shape, "type-product-assign" | "type-product-self") {
-        out.push_str("let k=g;");
+        out.push_str(&format!("let k:{ty}=g;"));
     }
     let mut count = 0;
     loop {

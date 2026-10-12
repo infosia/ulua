@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const [root, directory] = process.argv.slice(2);
+const [root, directory, label] = process.argv.slice(2);
 const ts = require(process.env.TSC_JS || path.join(root, "node_modules/typescript/lib/typescript.js"));
 const config = ts.getParsedCommandLineOfConfigFile(path.join(root, "tsconfig.json"), {}, {
   ...ts.sys, onUnRecoverableConfigFileDiagnostic: d => { throw Error(ts.flattenDiagnosticMessageText(d.messageText, "\n")); },
@@ -16,7 +16,10 @@ const checker = program.getTypeChecker();
 const diagnostics = ts.getPreEmitDiagnostics(program);
 const codes = new Map();
 const affected = new Set();
-const randomFiles = new Set(files.filter(f => fs.readFileSync(f, "utf8").startsWith("function identity(")));
+const randomFiles = new Set(files.filter(f => {
+  const source = fs.readFileSync(f, "utf8");
+  return source.startsWith("function identity(") || source.startsWith("// D18 random\n");
+}));
 const randomCodes = new Map();
 const randomAffected = new Set();
 for (const d of diagnostics) {
@@ -52,9 +55,9 @@ for (const file of files) {
   if (actual !== expected) throw Error(`${file}\n${source}\nNode: ${actual}\nUlua: ${expected}`);
   node++;
 }
-console.log(`D17 witnesses: node=${node} tsc=${files.length} diagnostic_programs=${affected.size} codes=${JSON.stringify([...codes].sort())} other_codes=[]`);
-console.log(`D17 random tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
-console.log('D17 exception negative control: TS2322 and mixed TS2367 denied');
+console.log(`${label} witnesses: node=${node} tsc=${files.length} diagnostic_programs=${affected.size} codes=${JSON.stringify([...codes].sort())} other_codes=[]`);
+console.log(`${label} random tsc: programs=${randomFiles.size} diagnostic_programs=${randomAffected.size} codes=${JSON.stringify([...randomCodes].sort())} other_codes=[]`);
+console.log(`${label} exception negative control: TS2322 and mixed TS2367 denied`);
 
 function isAcceptedEquality(d, checker) {
   if ((d.code !== 2367 && d.code !== 2845) || !d.file || d.start === undefined) return false;

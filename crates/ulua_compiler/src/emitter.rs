@@ -270,7 +270,7 @@ mod output_tests {
         for source in [
             "\nexport function main():void{print('a');}",
             "\nexport function main():void{function f(x:number=1):number{return x;}let g=():number=>f();print(`${g()}`);}",
-            "\nexport function main():void{for(let i=0;i<2;i++){let g=()=>i;print(`${g()}`);}}",
+            "\nexport function main():void{for(let i=0;i<2;i++){let g=():number=>i;print(`${g()}`);}}",
         ] {
             let allocator = oxc_allocator::Allocator::default();
             let parsed =

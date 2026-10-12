@@ -90,17 +90,17 @@ pub fn source(shape: &str, bytes: usize) -> String {
             "];}",
         ),
         "array-wide-computed" => (
-            "export function main():void{let n=1;const xs=[".into(),
+            "export function main():void{let n=1;const xs:number[]=[".into(),
             "n,".into(),
             "];}",
         ),
         "array-wide-nested" => (
-            "export function main():void{let n=1;const xs=[".into(),
+            "export function main():void{let n=1;const xs:number[][]=[".into(),
             "[n],".into(),
             "];}",
         ),
         "array-wide-computed-module" => (
-            "let n=1;const xs=[".into(),
+            "let n=1;const xs:number[]=[".into(),
             "n,".into(),
             "];export function main():void{}",
         ),

@@ -3,6 +3,7 @@ mod arrays;
 mod equality;
 mod expressions;
 mod functions;
+mod inference;
 mod methods;
 mod order;
 mod statements;

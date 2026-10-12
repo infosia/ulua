@@ -192,13 +192,17 @@ impl Checker<'_> {
                 )
             }
             Expression::ArrayExpression(a) => {
-                let mut element = expected.and_then(|ty| self.types.element(ty));
+                let contextual_element = expected.and_then(|ty| self.types.element(ty));
+                let mut element = contextual_element;
                 let mut entries = vec![];
                 for entry in &a.elements {
                     let e = entry.as_expression().ok_or_else(|| {
                         self.error(entry.span(), "C6", "Array holes and spreads are rejected")
                     })?;
-                    let value = self.expr_as(e, depth, false, element)?;
+                    if contextual_element.is_none() {
+                        self.inferred_reference(e)?;
+                    }
+                    let value = self.expr_as(e, depth, false, contextual_element)?;
                     if let Some(element) = element {
                         self.flow(&value.ty, Some(&element), e.span())?;
                     } else {
@@ -412,7 +416,7 @@ impl Checker<'_> {
             Expression::SequenceExpression(_) | Expression::TaggedTemplateExpression(_) => {
                 return Err(self.error(e.span(), "C8", "Expression has no lowering"));
             }
-            Expression::ArrowFunctionExpression(a) => self.arrow(a, depth)?,
+            Expression::ArrowFunctionExpression(a) => self.arrow(a, depth, expected)?,
             Expression::ObjectExpression(_)
             | Expression::NullLiteral(_)
             | Expression::NewExpression(_)

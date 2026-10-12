@@ -44,7 +44,7 @@ fn wide_literals_keep_constants_reads_and_side_effects_in_source_order() {
     let entries = vec!["7,n,next()"; 150].join(",");
     result(
         &format!(
-            "let n=0;function next():number{{n++;return n;}}const xs=[{entries}];let total=0;for(const x of xs){{total+=x;}}return total;"
+            "let n=0;function next():number{{n++;return n;}}const xs:number[]=[{entries}];let total=0;for(const x of xs){{total+=x;}}return total;"
         ),
         23550.0,
     );
@@ -56,7 +56,7 @@ fn wide_literals_keep_constants_reads_and_side_effects_in_source_order() {
     );
     source_result(
         &format!(
-            "let n=0;function next():number{{n++;return n;}}const xs=[{entries}];export function score():number{{let total=0;for(const x of xs){{total+=x;}}return total;}}export function main():void{{}}"
+            "let n=0;function next():number{{n++;return n;}}const xs:number[]=[{entries}];export function score():number{{let total=0;for(const x of xs){{total+=x;}}return total;}}export function main():void{{}}"
         ),
         23550.0,
     );

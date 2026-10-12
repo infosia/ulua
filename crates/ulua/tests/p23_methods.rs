@@ -89,7 +89,7 @@ fn positions(s: &mut Suite) {
             "const xs=[true,false,true];return `${{xs.{method}(false)}}`;"
         ));
         s.case(&format!(
-            "const x=[1];const xs=[x,[1]];return `${{xs.{method}(x)}}`;"
+            "const x=[1];const xs:number[][]=[x,[1]];return `${{xs.{method}(x)}}`;"
         ));
     }
     for array in [
@@ -98,7 +98,11 @@ fn positions(s: &mut Suite) {
         "['','a','😀','é']",
         "[]",
     ] {
-        let annotation = if array == "[]" { ":number[]" } else { "" };
+        let annotation = if array == "[]" || array.starts_with("[NaN") {
+            ":number[]"
+        } else {
+            ""
+        };
         for args in ["", "''", "'|'", "'😀'"] {
             s.case(&format!(
                 "const xs{annotation}={array};return xs.join({args});"

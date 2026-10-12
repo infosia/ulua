@@ -3,7 +3,7 @@ use crate::{Limits, compile};
 
 fn check(expression: &str, reject: bool) {
     let source = format!(
-        "function value():number{{return 1;}}function text():string{{return 'x';}}function f(n:number,m:number,s:string,c:boolean,p:boolean):boolean{{let x=0;const k=1;const wide=n+1;const na=[1];const nb=[2];const sa=['x'];const ba=[true];const nested=[[1]];const funcs=[value];return {expression};}}export function main():void{{}}"
+        "function value():number{{return 1;}}function text():string{{return 'x';}}function f(n:number,m:number,s:string,c:boolean,p:boolean):boolean{{let x=0;const k=1;const wide=n+1;const na=[1];const nb=[2];const sa=['x'];const ba=[true];const nested=[[1]];const funcs:(()=>number)[]=[value];return {expression};}}export function main():void{{}}"
     );
     let result = compile(source.as_bytes(), Limits::default());
     if reject {

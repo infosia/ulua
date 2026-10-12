@@ -84,6 +84,13 @@ fixes hold.
 | `d17_equality.rs` states no cost (1.23 s) | MINOR | Cost statement |
 | The witness predicate reads the narrowed `tsc` type; the compiler reads declared types (a false alarm is possible, no hole) | MINOR | Note; no case found |
 
+D18 implementation record: the checker rejects a reference form at
+the three inference positions with C11 at the offset of the form.
+Random: 576 programs; 288 accepted (each equal to `node`, `luau-analyze`
+clean; `tsc` TS2367 18 and TS2845 5, each at an accepted equality; no
+other code), 288 rejected with C11. Growth and test fixtures that
+copied references into unannotated `let` bindings now annotate them.
+
 ### P2.3 Phase Review round 1
 
 Reviewer: fresh agent, diff `ebd372c..9a74af7`. 2 MAJOR, 5 MINOR.

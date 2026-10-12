@@ -88,16 +88,20 @@ fn function_type_equality_applies_at_each_value_flow() {
 fn inferred_function_values_compare_defaults_in_both_directions() {
     for left_default in ["", "=1", "=2"] {
         for right_default in ["", "=3"] {
-            for flow in ["let h=f;h=g;", "const h=true?f:g;"] {
-                let source = body(&format!(
-                    "function f(n:number{left_default}):number{{return n;}}function g(n:number{right_default}):number{{return n;}}{flow}h(1);"
-                ));
-                if left_default.is_empty() == right_default.is_empty() {
-                    accept(&source);
-                } else {
-                    reject(&source, "C1");
-                }
+            let source = body(&format!(
+                "function f(n:number{left_default}):number{{return n;}}function g(n:number{right_default}):number{{return n;}}const h=true?f:g;h(1);"
+            ));
+            if left_default.is_empty() == right_default.is_empty() {
+                accept(&source);
+            } else {
+                reject(&source, "C1");
             }
+            reject(
+                &body(&format!(
+                    "function f(n:number{left_default}):number{{return n;}}function g(n:number{right_default}):number{{return n;}}let h=f;h=g;h(1);"
+                )),
+                "C11",
+            );
         }
     }
     // The result type contains another function signature with its own default count.
@@ -337,7 +341,7 @@ fn closures_in_each_for_head_position_give_c9_first() {
 fn assignments_do_not_remove_required_arguments_from_a_function_value() {
     reject(
         &body(
-            "function f(n:number=1):number{return n;}function g(n:number):number{return n;}let call=f;call=g;call();",
+            "function f(n:number=1):number{return n;}function g(n:number):number{return n;}let call:(n:number)=>number=f;call=g;call();",
         ),
         "C1",
     );
