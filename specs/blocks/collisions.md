@@ -640,7 +640,11 @@ says `T`. The checker narrows only where nothing else can run a write:
 4. A null test inside a nested function or arrow body narrows a `let`
    binding or a parameter of an enclosing function, within that body,
    when rule 2 holds for it: the enclosing activation does not run
-   between the test and the read. The narrowing of a `let` binding or
+   between the test and the read. An `await` in the nested body
+   suspends it, and the enclosing activation can run and assign the
+   binding: each `await` of the nested body ends the narrowings of the
+   `let` bindings and the parameters of the enclosing functions on its
+   path (C19). The narrowing of a `let` binding or
    a parameter does not continue
    into a nested function or arrow body. The body can run after a later
    assignment. The narrowing of a `const` binding continues into an
@@ -867,11 +871,15 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    `await` as `Awaited<T>`. The job model holds native promises only. A promise relates only to an identical promise type
    (C1): `Promise<number>` does not flow to `Promise<number | null>`,
    which `tsc` accepts. A promise value has no member and no operator
-   in P4.1: an equality, a template substitution, a truth test, and
-   `typeof` are rejected (C19). The `Promise` identifier as a value
-   (`new Promise`, `Promise.resolve`) is rejected (C19).
+   in P4.1: an equality, a template substitution, a truth test,
+   `typeof`, and an array search (`indexOf`, `lastIndexOf`,
+   `includes`) over promise elements are rejected (C19). The `Promise`
+   identifier as a value (`new Promise`, `Promise.resolve`) is rejected
+   (C19). A script declaration named `Promise` (a class, a type alias)
+   is rejected (C19): `tsc` then resolves `Promise<T>` to it (TS2315).
 3. **`await`.** `await e` is accepted only in an `async` body, not in
-   a nested non-`async` function, and not at module level (`tsc`
+   a nested non-`async` function, not in a parameter default (`tsc`
+   TS2524), and not at module level (`tsc`
    accepts top-level `await` in a module). `e` has a `Promise<T>`
    type; `await` of another type is rejected (C19), where `tsc`
    accepts it. The result has type `T`; an `await` of
@@ -897,7 +905,9 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
 7. **Unhandled rejection.** At the end of a drain, a rejected promise
    that has no reaction stops the run: `trap:uncaught-exception` with
    the message `name: message` of the first such promise in rejection
-   order (corpus.md §6). `node` reports it after the same drain
+   order (corpus.md §6). For an `async` export whose own promise is
+   rejected, the message is the reason of that promise: the host is its
+   awaiter, as the `node` runner awaits `main`. `node` reports it after the same drain
    (`unhandledRejection`) and ends the process. A reaction added in the
    same drain handles it. The instance stays usable (C17.8).
 8. **Array callbacks.** An argument of an array method whose result

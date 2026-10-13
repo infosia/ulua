@@ -32,6 +32,7 @@ Rev 27: §3.10 witness time at the source ceiling (P2.7 review 2).
 Rev 28: §4.10 host functions, §8 grants (P3).
 Rev 29: §4.10 one grant table (P3 review).
 Rev 30: §4.11 async (P4.1).
+Rev 31: §4.11 a stop clears the queue before the collection (P4.1 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -246,6 +247,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    host-started run (`ulua_instance_new`, `ulua_call`) inside the same
    protected call, under the same `max_steps` and `max_memory_bytes`.
    The unhandled-rejection check (C19.7) runs at the end of the drain.
+   A stop during a run clears the job queue: no job of that run runs in
+   a later run. The queue is cleared before the full collection of
+   §4.6, so the collection can free the jobs and the promises that only
+   the queue holds.
    Each `await` lowers to a yield through the private channel; the
    resumed value carries a type assertion to `T` at that one point
    (M3). The witness time of await shapes follows §3.10.

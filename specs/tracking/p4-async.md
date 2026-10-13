@@ -54,6 +54,19 @@ Implementation record (Codex), Debug, one machine:
 - `sh tools/gate.sh full` by the primary agent: `cargo-test` 584 s (P3 close: 473 s), `luau-witnesses` 53 s; hygiene passes.
 - Decided gaps: a function value with a `Promise` result as an array method argument is rejected (C19.8 text widened to match); self-adoption rejects with `TypeError`, as in `node`.
 
+### P4.1 Phase Review round 1
+
+Reviewer: fresh agent, diff `40f3806..9d0179e`. 1 CRITICAL, 3 MAJOR, 2 MINOR. Held: 9 hand programs and 200 random programs equal `node` (interleaving, adoption, `try`/`finally` with pending awaits, loops, methods, captures, async calls in every expression position, recursion, self-adoption); unhandled rejection timing in 5 cases; 8 stop kinds in resumed and immediate activations (24 calls), no `catch` or `finally` after a stop; drain limits give `limit:steps` and `limit:memory`; deep immediate starts give `limit:stack`; 15 floating positions, 11 `then` forms, 9 relation forms, 6 identifier forms rejected; every accepted output passes `luau-analyze -j1`; await shapes 4 to 16 KiB ratio at most 3.9, ceiling 14 times `dense-assign`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A nested async arrow tests an enclosing `let x: number \| null`, awaits, and reads `x + 1`; the enclosing function assigns `x = null` meanwhile: `tsc` and `node` accept (`1`); Ulua gives `internal` "attempt to perform arithmetic (add) on nil" and poisons the context | CRITICAL | C16.4: each `await` of a nested body ends the narrowings of enclosing `let` bindings and parameters |
+| `await` in a parameter default of an async function or method is accepted; `tsc` TS2524, `node` SyntaxError | MAJOR | C19.3 names the position; fix the check |
+| A script `class Promise` or `type Promise` is ignored by `Promise<T>`; `tsc` TS2315 | MAJOR | C19.2: a declaration named `Promise` is rejected |
+| After `limit:memory` in a drain (async recursion), 3 of 50 runs leave every later call at `limit:memory` (300 calls of a sync export); the collection runs while the queue still holds the jobs | MAJOR | pipeline.md Rev 31 §4.11: a stop clears the queue before the collection |
+| An async export that rejects with `A` while another promise rejects unhandled with `B`: Ulua reports `B`, the `node` runner `A` | MINOR | C19.7: the export's own rejection gives the message |
+| `indexOf`, `includes`, `lastIndexOf` over `Promise<number>[]` compare promise identity; C19.2 rejects promise equality | MINOR | C19.2: array search over promise elements is rejected |
+
 ## Gaps
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
