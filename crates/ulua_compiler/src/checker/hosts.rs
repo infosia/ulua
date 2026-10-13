@@ -61,6 +61,7 @@ impl Checker<'_> {
                 Expression::TSSatisfiesExpression(t) => &t.expression,
                 Expression::TSNonNullExpression(t) => &t.expression,
                 Expression::ParenthesizedExpression(p) => &p.expression,
+                Expression::NewExpression(n) => &n.callee,
                 Expression::CallExpression(c)
                     if c.optional || !matches!(c.callee, Expression::Identifier(_)) =>
                 {
@@ -104,8 +105,5 @@ impl Checker<'_> {
 }
 
 pub(super) fn known_global(name: &str) -> bool {
-    matches!(
-        name,
-        "print" | "Utf8" | "String" | "Math" | "Infinity" | "NaN"
-    ) || super::exceptions::family(name).is_some()
+    crate::GLOBAL_NAMES.contains(&name)
 }

@@ -12,7 +12,7 @@ fn host_signature_and_grant_compiler_api() {
     let source = b"export function main():void{const n=host(1,true,'x');}";
     let c = compile_with_grants(source, Limits::default(), &[g]).unwrap();
     assert_eq!(c.hosts, ["host"]);
-    assert!(c.luau.contains("__ulua_grants[2]"));
+    assert!(c.luau.contains("__ulua_grants[1]"));
     assert_eq!(compile(source, Limits::default()).unwrap_err().code, "C18");
     let c = compile_with_grants(
         b"export function main():void{}",
@@ -114,4 +114,69 @@ fn native_closures_follow_grant_order_and_grants_have_no_tdz() {
     ];
     let c=compile_with_grants(b"function f():number{return first()+second();}export function main():void{print(`${f()}`);}",Limits::default(),&grants).unwrap();
     assert_eq!(c.hosts, ["second", "first"]);
+}
+
+#[test]
+fn library_names_outside_the_surface_are_c11() {
+    for body in [
+        "Number('1');",
+        "JSON.stringify(1);",
+        "parseInt('1');",
+        "isNaN(1);",
+        "Date.now();",
+        "const x=globalThis;",
+        "Boolean(1);",
+        "Array.isArray([1]);",
+    ] {
+        let source = format!("export function main():void{{{body}}}");
+        assert_eq!(
+            compile(source.as_bytes(), Limits::default())
+                .unwrap_err()
+                .code,
+            "C11",
+            "{body}"
+        );
+    }
+    for body in ["missing();", "const x=missing;", "missing.method();"] {
+        let source = format!("export function main():void{{{body}}}");
+        assert_eq!(
+            compile(source.as_bytes(), Limits::default())
+                .unwrap_err()
+                .code,
+            "C18",
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn namespaces_and_modules_without_declare_are_c11() {
+    for form in [
+        "namespace N{}",
+        "module M{}",
+        "export namespace N{}",
+        "export module M{}",
+    ] {
+        let source = format!("{form}export function main():void{{}}");
+        assert_eq!(
+            compile(source.as_bytes(), Limits::default())
+                .unwrap_err()
+                .code,
+            "C11",
+            "{form}"
+        );
+    }
+}
+
+#[test]
+fn host_construction_states_the_call_only_rule() {
+    let source = b"export function main():void{new hostAdd(1,2);}";
+    let diagnostic = compile_with_grants(
+        source,
+        Limits::default(),
+        &[HostSignature::new("hostAdd", vec![1, 1], 1)],
+    )
+    .unwrap_err();
+    assert_eq!(diagnostic.code, "C18");
+    assert_eq!(diagnostic.message, "A host function is only called");
 }

@@ -6,6 +6,7 @@ mod bounds;
 mod checker;
 mod depth;
 mod emitter;
+mod host_names;
 mod ir;
 mod methods;
 #[cfg(test)]
@@ -24,6 +25,8 @@ mod types;
 use oxc_allocator::Allocator;
 use oxc_parser::{ParseOptions, Parser};
 use oxc_span::SourceType;
+
+pub use host_names::GLOBAL_NAMES;
 
 pub use bounds::{
     ARGUMENT_BOUND, FIELD_BOUND, LOCAL_BUDGET, PARAMETER_BOUND, TEMPLATE_PART_BOUND,

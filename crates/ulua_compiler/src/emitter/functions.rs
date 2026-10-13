@@ -199,10 +199,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
     if module.exceptions {
-        out.push_str(&prelude::EXCEPTIONS.replace(
-            "select(2, ...)",
-            &format!("select({}, ...)", module.hosts.len() + 2),
-        ));
+        out.push_str(prelude::EXCEPTIONS);
     }
     out.push_str(&method_prelude);
     out.push_str(&types.declarations);
@@ -226,7 +223,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         chunk.statements(std::slice::from_ref(entry), 0)?;
     }
     if !module.hosts.is_empty() {
-        chunk.line("local __ulua_grants: {any} = {...}");
+        chunk.line("local __ulua_grants: {any} = select(2, ...)");
     }
     for (i, (id, _)) in module.hosts.iter().enumerate() {
         let ty = module.bindings[*id]
@@ -234,7 +231,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
             .ok_or_else(|| chunk.limit("internal", "Missing host type"))?;
         chunk.write_binding(
             *id,
-            format!("__ulua_grants[{}] :: {}", i + 2, types.luau(&ty)),
+            format!("__ulua_grants[{}] :: {}", i + 1, types.luau(&ty)),
         )?;
     }
     chunk.statements(&module.body[1..], 0)?;

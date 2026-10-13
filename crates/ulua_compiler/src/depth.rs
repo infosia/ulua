@@ -61,9 +61,9 @@ pub(crate) fn check<'a>(
                 Statement::TSTypeAliasDeclaration(d) => d.declare,
                 Statement::TSInterfaceDeclaration(d) => d.declare,
                 Statement::TSEnumDeclaration(d) => d.declare,
-                Statement::TSNamespaceDeclaration(_)
-                | Statement::TSExternalModuleDeclaration(_)
-                | Statement::TSGlobalDeclaration(_) => true,
+                Statement::TSNamespaceDeclaration(d) => d.declare,
+                Statement::TSExternalModuleDeclaration(d) => d.declare,
+                Statement::TSGlobalDeclaration(_) => true,
                 _ => false,
             },
             Node::Declaration(d) => match d {
@@ -71,9 +71,9 @@ pub(crate) fn check<'a>(
                 Declaration::TSTypeAliasDeclaration(d) => d.declare,
                 Declaration::TSInterfaceDeclaration(d) => d.declare,
                 Declaration::TSEnumDeclaration(d) => d.declare,
-                Declaration::TSNamespaceDeclaration(_)
-                | Declaration::TSExternalModuleDeclaration(_)
-                | Declaration::TSGlobalDeclaration(_) => true,
+                Declaration::TSNamespaceDeclaration(d) => d.declare,
+                Declaration::TSExternalModuleDeclaration(d) => d.declare,
+                Declaration::TSGlobalDeclaration(_) => true,
                 _ => false,
             },
             _ => false,
@@ -84,6 +84,22 @@ pub(crate) fn check<'a>(
                 offset as usize,
                 "C18",
                 "Script declare forms are rejected",
+            ));
+        }
+        if matches!(
+            &node,
+            Node::Statement(
+                Statement::TSNamespaceDeclaration(_) | Statement::TSExternalModuleDeclaration(_)
+            ) | Node::Declaration(
+                Declaration::TSNamespaceDeclaration(_)
+                    | Declaration::TSExternalModuleDeclaration(_)
+            )
+        ) {
+            return Err(Diagnostic::at(
+                source,
+                offset as usize,
+                "C11",
+                "Namespace and module forms are outside the surface",
             ));
         }
         match node {

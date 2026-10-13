@@ -104,6 +104,13 @@ Reviewer: fresh agent, diff `1fba8ff..282d71f`. 0 CRITICAL, 0 MAJOR, 6 MINOR. He
 | The unused-field check accepts `number = -0.0` (§4.1: zero) | MINOR | Fix: compare the bits |
 | `string_exports_compile` repeats one assertion; `new hostAdd(1, 2)` says "Unknown identifier" | MINOR | Fix |
 
+Fix measurements (Debug, one machine):
+
+- Grant table: 8,100 grants (63,722 B) compile, instantiate, run, and pass `luau-analyze -j1` (0.342 s); the most that fit the ceiling, 8,326 grants (65,530 B), also (0.353 s); the next one gives `limit:source-bytes`. Spill from 161 called grants; 192 upvalues compile, 193 give `limit:upvalues`.
+- Steps with the VM interrupt on, minimum `max_steps` over 4,096 iterations with 0, 1, 2 host calls each: 4,097, 12,289, 20,481. A host call costs 2 steps: the call instruction and the host charge (abi.md §6.2.8).
+- One name list (`ulua_compiler::host_names`) serves the checker and the ABI. `-0.0` in an unused number field gives `host:result`.
+- Witness time, 187 shapes: 4 to 16 KiB largest ratio 8.45 (79.4 s); largest ceiling ratio 30.9 (`P27-sequential-catch`); P3 shapes: protected 24.5, arrows 2.5, declarations 1.0. `measurements` 645.3 s.
+
 ## Failures before the fix
 
 ## Gaps

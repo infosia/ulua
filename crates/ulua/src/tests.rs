@@ -711,7 +711,6 @@ fn string_exports_compile() {
             );
         }
         assert!(!module.is_null());
-        assert!(!module.is_null());
     }
 }
 

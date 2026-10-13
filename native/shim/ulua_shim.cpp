@@ -183,15 +183,17 @@ struct Load {
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
-    if (!lua_checkstack(state, static_cast<int>(args->grant_count + 3))) luaL_error(state, "stack limit");
+    if (!lua_checkstack(state, 5)) luaL_error(state, "stack limit");
     lua_pushcfunction(state, trap, "__ulua_trap");
+    lua_createtable(state, static_cast<int>(args->grant_count), 0);
     for (size_t i = 0; i < args->grant_count; ++i) {
         void* storage = lua_newuserdata(state, sizeof(ulua_internal_capability));
         std::memcpy(storage, &args->grants[i], sizeof(ulua_internal_capability));
         lua_pushcclosure(state, host_call, "host", 1);
+        lua_rawseti(state, -2, static_cast<int>(i + 1));
     }
     lua_pushcfunction(state, register_errors, "register_errors");
-    if (lua_pcall(state, static_cast<int>(args->grant_count + 2), 1, 0) != LUA_OK) raise_call_error(state, args->vm);
+    if (lua_pcall(state, 3, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
     return 0;

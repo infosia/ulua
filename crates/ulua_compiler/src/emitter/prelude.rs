@@ -46,7 +46,7 @@ local function __ulua_set<T>(a: {T}, i: number, v: T): ()
 end
 "#;
 
-pub(super) const EXCEPTIONS: &str = r#"local __ulua_register: (any) -> () = select(2, ...)
+pub(super) const EXCEPTIONS: &str = r#"local __ulua_register: (any) -> () = select(3, ...)
 type __ulua_Error = {name: string, message: string}
 local __ulua_errors: {[__ulua_Error]: string} = setmetatable({}, {__mode = "k"})
 __ulua_register(__ulua_errors)

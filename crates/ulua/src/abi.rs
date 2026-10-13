@@ -625,11 +625,15 @@ pub unsafe extern "C" fn ulua_call(
 }
 pub(crate) fn value_valid(v: &Value) -> bool {
     match v.r#type {
-        ULUA_TYPE_VOID => v.boolean == 0 && v.number == 0.0 && v.data.is_null() && v.length == 0,
+        ULUA_TYPE_VOID => {
+            v.boolean == 0 && v.number.to_bits() == 0 && v.data.is_null() && v.length == 0
+        }
         ULUA_TYPE_NUMBER => v.boolean == 0 && v.data.is_null() && v.length == 0,
-        ULUA_TYPE_BOOLEAN => v.boolean <= 1 && v.number == 0.0 && v.data.is_null() && v.length == 0,
+        ULUA_TYPE_BOOLEAN => {
+            v.boolean <= 1 && v.number.to_bits() == 0 && v.data.is_null() && v.length == 0
+        }
         ULUA_TYPE_STRING => {
-            v.boolean == 0 && v.number == 0.0 && {
+            v.boolean == 0 && v.number.to_bits() == 0 && {
                 // SAFETY: The host guarantees readable value storage.
                 unsafe { bytes(v.data, v.length).is_some_and(|b| std::str::from_utf8(b).is_ok()) }
             }

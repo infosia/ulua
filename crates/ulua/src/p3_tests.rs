@@ -595,6 +595,29 @@ fn malformed_results_have_named_stops_and_recovery() {
         assert_eq!(r.call("ok", &[]).2.number, 42.0);
     }
 }
+
+#[test]
+fn unused_number_requires_positive_zero_bits() {
+    let start = Instant::now();
+    for tag in [ULUA_TYPE_VOID, ULUA_TYPE_BOOLEAN, ULUA_TYPE_STRING] {
+        let mut r = Run::new();
+        r.capability(&[], tag);
+        r.result.r#type = tag;
+        r.ready("", "host();");
+        assert_eq!(r.call("f", &[]).0, ULUA_OK);
+        r.result.number = -0.0;
+        let (status, diagnostic, _) = r.call("f", &[]);
+        assert_eq!(status, ULUA_HOST_ERROR);
+        assert_eq!(code(&diagnostic), "host:result");
+        assert_eq!(message(&diagnostic), "host");
+        r.result.number = 0.0;
+        assert_eq!(r.call("f", &[]).0, ULUA_OK);
+    }
+    eprintln!(
+        "P3 unused number positive/negative zero tags=3 cost={:.3}s",
+        start.elapsed().as_secs_f64()
+    );
+}
 #[test]
 fn revoke_and_free_keep_module_and_instance_references() {
     for free in [false, true] {
@@ -709,6 +732,70 @@ fn exactly_one_step_per_host_call() {
     assert_eq!(charges[1] - charges[0], 1);
     assert_eq!(charges[2] - charges[1], 1);
     eprintln!("P3 host charges calls=1/2/3 total_steps={charges:?}");
+}
+
+#[test]
+fn host_steps_include_the_vm_call_interrupt() {
+    let start = Instant::now();
+    let mut r = Run::new();
+    r.capability(&[], ULUA_TYPE_VOID);
+    let mut source = String::from("export function main():void{}");
+    for (name, calls) in [("zero", 0), ("one", 1), ("two", 2)] {
+        source.push_str(&format!(
+            "export function {name}(n:number):number{{let i=0;while(i<n){{{}i++;}}return i;}}",
+            "host();".repeat(calls)
+        ));
+    }
+    assert_eq!(r.compile(&source, &[r.cap]).0, ULUA_OK);
+    // These loops cost more steps than instance setup, so setup cannot set the measured threshold.
+    for iterations in [4096, 8192] {
+        let mut costs = vec![];
+        for (name, calls) in [("zero", 0), ("one", 1), ("two", 2)] {
+            let mut low = 0;
+            let mut high = DEFAULT_STEPS;
+            while high - low > 1 {
+                let budget = low + (high - low) / 2;
+                let limits = RunLimits {
+                    max_steps: budget,
+                    ..RunLimits::default()
+                };
+                assert_eq!(r.instance(limits).0, ULUA_OK);
+                let before = r.calls;
+                let (status, diagnostic, result) = r.call(
+                    name,
+                    &[Value {
+                        r#type: ULUA_TYPE_NUMBER,
+                        number: iterations as f64,
+                        ..Value::default()
+                    }],
+                );
+                if status == ULUA_OK {
+                    assert_eq!(result.number, iterations as f64);
+                    assert_eq!(r.calls - before, iterations * calls);
+                    high = budget;
+                } else {
+                    assert_eq!(status, ULUA_FAILED);
+                    assert_eq!(code(&diagnostic), "limit:steps");
+                    low = budget;
+                }
+                // SAFETY: The fixture releases each live instance after its budget probe.
+                unsafe {
+                    assert_eq!(ulua_instance_free(r.i), ULUA_OK);
+                }
+                r.i = ptr::null_mut();
+            }
+            costs.push(high);
+        }
+        assert_eq!(costs[1] - costs[0], 2 * iterations as u64);
+        assert_eq!(costs[2] - costs[1], 2 * iterations as u64);
+        eprintln!(
+            "P3 interrupt-on iterations={iterations} calls=0/1/2 minimum_steps={costs:?} host_cost=2"
+        );
+    }
+    eprintln!(
+        "P3 interrupt-on bisection cost={:.3}s",
+        start.elapsed().as_secs_f64()
+    );
 }
 #[test]
 fn descriptor_storage_is_copied_and_sixteen_arguments_work() {
