@@ -1,5 +1,5 @@
 //! C16.8 checks declared types at unreachable points against stock tsc.
-//! Single-worker Debug cost: 1.31 seconds for this test target.
+//! Single-worker Debug cost: 2.04 seconds for this test target.
 #[allow(dead_code)]
 #[path = "support/p25.rs"]
 mod oracle;
@@ -113,6 +113,17 @@ fn unreachable_operations_use_declared_types() {
             &cases,
         );
     }
+    oracle::rejected_programs(
+        "unreachable-arrow-own-test",
+        "C16",
+        &[(
+            &source(
+                "if(k!=null){return;const f=():number=>{if(k==null){return 0;}return k.v;};out+=f();}",
+                true,
+            ),
+            &[],
+        )],
+    );
     let mut suite = Suite::named("P2.5 unreachable declared types");
     for body in [
         // Null tests, annotations, optional reads, and coalescing use the declared nullable type.
@@ -120,7 +131,6 @@ fn unreachable_operations_use_declared_types() {
         "print('before');if(k!=null){return;const y:B|null=k;print(`${y?.v??0}`);}",
         "print('before');if(k!=null){return;print(`${k?.v??0}:${(k??{v:0}).v}`);}",
         "print('before');if(a!=null){return;a=null;const y:B|null=a;print(`${y?.v??0}`);}",
-        "print('before');if(k!=null){return;const f=():number=>{if(k==null){return 0;}return k.v;};out+=f();}",
         "print('before');if(k==null){return;}for(let i=0;i<3;out+=k?.v??0){return;}",
     ] {
         suite.source(&source(body, true), Some("before\n"));

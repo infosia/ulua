@@ -2,6 +2,18 @@
 use super::*;
 use crate::ir::{Expr, ExprKind, Statement as S};
 impl Checker<'_> {
+    fn for_head_check(
+        &self,
+        e: &Expression<'_>,
+        diagnostic: Option<&Diagnostic>,
+    ) -> Result<(), Diagnostic> {
+        // C16.8 takes precedence once flow proves that an arrow has no incoming edge.
+        if diagnostic.is_some_and(|d| d.code == "C16" && d.message == UNREACHABLE_ARROW) {
+            return Ok(());
+        }
+        crate::depth::check_head(e, self.source, !self.reachable)
+    }
+
     pub(super) fn variables(
         &mut self,
         d: &VariableDeclaration<'_>,
@@ -419,7 +431,11 @@ impl Checker<'_> {
                         return Err(self.error(d.span, "C11", "For initializer requires let"));
                     }
                     self.variable_names(d)?;
-                    self.variables(d, depth)?
+                    let result = self.variables(d, depth);
+                    for e in d.declarations.iter().filter_map(|d| d.init.as_ref()) {
+                        self.for_head_check(e, result.as_ref().err())?;
+                    }
+                    result?
                 } else if f.init.is_none() {
                     vec![]
                 } else {
@@ -436,7 +452,15 @@ impl Checker<'_> {
                     })
                     .collect();
                 self.loop_writes(f.span);
-                let test = f.test.as_ref().map(|e| self.test(e, depth)).transpose()?;
+                let test = f
+                    .test
+                    .as_ref()
+                    .map(|e| {
+                        let result = self.test(e, depth);
+                        self.for_head_check(e, result.as_ref().err())?;
+                        result
+                    })
+                    .transpose()?;
                 self.enter_loop();
                 if let Some(test) = &test {
                     self.reachable = self.reachable && self.edge(test, true);
@@ -448,7 +472,11 @@ impl Checker<'_> {
                 let update = f
                     .update
                     .as_ref()
-                    .map(|e| self.effect(e, depth, true).map(Box::new))
+                    .map(|e| {
+                        let result = self.effect(e, depth, true).map(Box::new);
+                        self.for_head_check(e, result.as_ref().err())?;
+                        result
+                    })
                     .transpose()?;
                 self.leave_loop(test.as_ref());
                 self.scopes.pop();

@@ -1,10 +1,10 @@
 //! Analyzer growth covers every shape of s4_growth and p2x_growth.
 //! The default gate bounds 4/16 KiB ratios at twelve; the measurements feature reports 16/64 KiB ratios.
 //! At 64 KiB, each shape takes at most fifty times dense-assign.
-//! The largest measured ceiling ratio is 30.435 for P27-sequential-catch.
+//! The largest measured ceiling ratio is 30.662 for P27-sequential-catch.
 //! Each size uses the minimum of two single-worker analyzer runs. Only ratios are asserted.
-//! Measured Debug default cost: 67.699 seconds for 167 measured shapes and one C11 fixture.
-//! Measured Debug full cost: 489.989 seconds for the same shapes and fixture.
+//! Measured Debug default cost: 71.167 seconds for 178 measured shapes and one C11 fixture.
+//! Measured Debug full cost: 524.468 seconds for the same shapes and fixture.
 //! Stock tsc resource exceptions include TS2321 and TS2563 (CLAUDE.md invariant 3).
 #[path = "support/analyzer.rs"]
 mod analyzer;
@@ -51,6 +51,12 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                     compiled
                 }
                 Err(diagnostic) => {
+                    // Protected witnesses must compile. A new limit cannot hide their analyzer cost.
+                    assert!(
+                        !shape.label.starts_with("P27-"),
+                        "{} must compile for the analyzer witness: {diagnostic:?}",
+                        shape.label
+                    );
                     assert!(
                         Some(diagnostic.code) == shape.diagnostic
                             || diagnostic.code.starts_with("limit:"),

@@ -25,6 +25,8 @@ impl Emitter<'_> {
         let previous =
             binding.map(|(id, _)| (id, self.copies.insert(id, format!("__ulua_caught{id}"))));
         let offset = self.statement_offset;
+        let index = self.protected_slots.len();
+        self.protected_slots.push(vec![]);
         self.protected.push(Protection {
             loop_base: self.loops.len(),
             locals: binding
@@ -32,8 +34,36 @@ impl Emitter<'_> {
                 .into_iter()
                 .collect(),
             upvalues: Default::default(),
+            slots: Default::default(),
         });
         self.indent += 1;
+        // Each completion edge otherwise versions the owner's mutable temporary upvalues.
+        // Local shadows give this closure its own temporary flow graph and preserve scalar returns.
+        let slots = if let Some(context) = self.context {
+            context.layouts[self.owner]
+                .as_ref()
+                .and_then(|layout| layout.protected_slots.get(index))
+                .ok_or_else(|| self.limit("internal", "Missing protected temporary layout"))?
+                .clone()
+        } else {
+            vec![]
+        };
+        for i in slots {
+            let name = self.temp(i);
+            let ty = self
+                .slots
+                .get(i)
+                .ok_or_else(|| self.limit("internal", "Missing protected temporary slot"))?
+                .ty;
+            if let Some(frame) = self.protected.last_mut() {
+                frame.locals.insert(name.clone());
+            }
+            self.line(format!(
+                "local {name}: {0} = {1}",
+                self.function_types.luau(&ty),
+                initial(&ty)
+            ));
+        }
         // A protected closure has its own flow graph, like a source function.
         // Its captured writes do not create parent joins across successive calls.
         let parent_joins = std::mem::take(&mut self.joins);
@@ -47,6 +77,7 @@ impl Emitter<'_> {
             .protected
             .pop()
             .ok_or_else(|| self.limit("internal", "Missing protected closure capture frame"))?;
+        self.protected_slots[index] = frame.slots.into_iter().collect();
         if frame.upvalues.len() > crate::UPVALUE_BUDGET {
             return Err(Diagnostic::at(
                 &self.module.source,

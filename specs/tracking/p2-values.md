@@ -325,6 +325,23 @@ Reviewer: fresh agent, diff `1ac5397..ac26d74`. 0 CRITICAL, 2 MAJOR, 0 MINOR. He
 
 At `ac26d74` (contract pin), `tools/witness/luau.mjs` gives `r124` and `r125` status ok, want rejected.
 
+Fix measurements (`luau-analyze -j1`, minimum of two runs, one machine; seconds at 4, 16, and 64 KiB; ceiling ratio against `dense-assign`):
+
+- Trigger: the mutable boolean temporaries of the jump conditions are upvalues of the protected closure. At 16 KiB, with only the boolean temporaries made local: 0.107 s; with only the number temporaries: 0.728 s. The storage pass records the temporaries that each protected closure uses and declares them as its own locals.
+
+| Shape | Before | After | Ceiling ratio |
+|---|---|---|---|
+| `break` in `try` | 0.033 / 0.723 / 35.119 | 0.022 / 0.111 / 1.133 | 108.4 to 3.45 |
+| `break` in `catch` | 0.033 / 0.720 / 35.062 | 0.022 / 0.111 / 1.154 | 108.2 to 3.52 |
+| `break` in `finally` | 0.033 / 0.723 / 35.128 | 0.022 / 0.109 / 1.136 | 108.4 to 3.46 |
+| `continue` (try, catch, finally) | 0.028 / 0.510 / 24.2 | 0.020 / 0.092 / 0.912 | 74.8 to 2.78 |
+| `return` (try, catch, finally) | 0.028 / 0.512 / 24.3 | 0.021 / 0.099 / 0.987 | 75.0 to 3.01 |
+| `break`, no source write | 0.023 / 0.335 / 15.655 | 0.018 / 0.071 / 0.647 | 48.3 to 1.97 |
+| `break`, no `try` | 0.019 / 0.097 / 0.991 | 0.019 / 0.095 / 1.004 | 3.06 |
+
+- The witness-time test has 178 shapes, with 9 jump shapes. Gate ratio of the jump shapes: at most 4.96. Largest ceiling ratio of all shapes: 30.7. Cost: default 71.2 s, `measurements` 524.5 s Debug.
+- C16.8 arrows: 103 rejected programs over every unreachable kind and arrow position; 20 reachable counterparts accepted. `r124`, `r125` give C16. 13 `instanceof` tests on a catch binding at an unreachable point: Ulua C17, `tsc` TS18046 in each. New test target 0.82 s.
+
 ### P2.7 Phase Review round 2
 
 Reviewer: fresh agent, diff `1ac5397..57bd020`. 0 CRITICAL, 2 MAJOR, 2 MINOR. The round 1 resolution holds: hand-written jump cases and 1,434 random programs with jumps, try, and arrows match `node`; `try` analyzer ratios 5.0 to 8.0 for 8 more shapes.

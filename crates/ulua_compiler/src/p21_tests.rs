@@ -70,8 +70,9 @@ fn function_type_equality_applies_at_each_value_flow() {
             format!("function give():{target}{{return f;}}give();"),
             format!("const give=():{target}=>f;give();"),
             format!("let g:{target}=(n:number):number=>n;g=f;"),
-            "const g=true?f:(n:number):number=>n;".into(),
-            "const g=true?(n:number):number=>n:f;".into(),
+            // C16.9 keeps both edges of a parenthesized literal leaf.
+            "const g=(true)?f:(n:number):number=>n;".into(),
+            "const g=(true)?(n:number):number=>n:f;".into(),
             format!("function take(g:{target}=f):void{{}}take();"),
         ] {
             let source = body(&format!("{declaration}{flow}"));
@@ -131,8 +132,8 @@ fn function_type_equality_is_recursive_at_each_value_flow() {
             format!("const g:{target}=f;"),
             format!("function give():{target}{{return f;}}give();"),
             format!("let g:{target}={matching};g=f;"),
-            format!("const g=true?f:{matching};"),
-            format!("const g=true?{matching}:f;"),
+            format!("const g=(true)?f:{matching};"),
+            format!("const g=(true)?{matching}:f;"),
         ] {
             reject(&body(&format!("{setup}{flow}")), "C1");
         }

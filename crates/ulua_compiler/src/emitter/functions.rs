@@ -7,6 +7,7 @@ pub(super) struct Layout {
     pub(super) entries: HashMap<usize, String>,
     pub(super) entry_locals: HashMap<usize, std::collections::HashSet<String>>,
     pub(super) slots: Vec<Slot>,
+    pub(super) protected_slots: Vec<Vec<usize>>,
     pub(super) overhead: usize,
 }
 pub(super) struct Emission {

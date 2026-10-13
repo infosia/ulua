@@ -88,6 +88,7 @@ impl Emitter<'_> {
             entries: HashMap::new(),
             entry_locals: HashMap::new(),
             slots: self.slots.clone(),
+            protected_slots: std::mem::take(&mut self.protected_slots),
         };
         let mut tables = SpillTables::new();
         let mut field_ids = HashMap::new();

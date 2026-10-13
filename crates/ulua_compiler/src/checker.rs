@@ -24,6 +24,8 @@ use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
 use std::collections::HashMap;
 
+pub(crate) const UNREACHABLE_ARROW: &str = "an arrow function at a point that no edge reaches";
+
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
     catch_use: bool,

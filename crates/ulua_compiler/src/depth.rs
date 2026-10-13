@@ -100,19 +100,6 @@ pub(crate) fn check<'a>(
                     pending.push((Node::Statement(&n.body), next));
                 }
                 Statement::ForStatement(n) => {
-                    let mut heads = vec![];
-                    heads.extend(n.test.iter());
-                    heads.extend(n.update.iter());
-                    if let Some(init) = &n.init {
-                        if let Some(e) = init.as_expression() {
-                            heads.push(e);
-                        } else if let ForStatementInit::VariableDeclaration(d) = init {
-                            heads.extend(d.declarations.iter().filter_map(|d| d.init.as_ref()));
-                        }
-                    }
-                    for e in heads {
-                        check_head(e, source)?;
-                    }
                     pending.push((Node::Statement(&n.body), next));
                     for e in [&n.test, &n.update].into_iter().flatten() {
                         pending.push((Node::Expression(e), next));
@@ -283,11 +270,23 @@ pub(crate) fn check<'a>(
     Ok(())
 }
 
-// Head inspection precedes subset checking, including later-slice module declarations.
-fn check_head(e: &Expression<'_>, source: &[u8]) -> Result<(), Diagnostic> {
+// The checker calls this after it determines the reachability of a head.
+pub(crate) fn check_head(
+    e: &Expression<'_>,
+    source: &[u8],
+    unreachable: bool,
+) -> Result<(), Diagnostic> {
     let mut pending = vec![e];
     while let Some(e) = pending.pop() {
         match e {
+            Expression::ArrowFunctionExpression(_) if unreachable => {
+                return Err(Diagnostic::at(
+                    source,
+                    e.span().start as usize,
+                    "C16",
+                    crate::checker::UNREACHABLE_ARROW,
+                ));
+            }
             Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_) => {
                 return Err(Diagnostic::at(
                     source,

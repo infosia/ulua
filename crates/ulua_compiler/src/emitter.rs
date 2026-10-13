@@ -84,6 +84,7 @@ struct Emitter<'a> {
     storage_offset: usize,
     loops: Vec<Loop>,
     protected: Vec<Protection>,
+    protected_slots: Vec<Vec<usize>>,
     joins: joins::Joins,
     context: Option<&'a functions::Emission>,
     upvalues: std::collections::HashSet<String>,
@@ -96,6 +97,7 @@ struct Protection {
     loop_base: usize,
     locals: std::collections::HashSet<String>,
     upvalues: std::collections::HashSet<String>,
+    slots: std::collections::BTreeSet<usize>,
 }
 impl<'a> Emitter<'a> {
     fn new(
@@ -131,6 +133,7 @@ impl<'a> Emitter<'a> {
             storage_offset: 0,
             loops: vec![],
             protected: vec![],
+            protected_slots: vec![],
             joins: joins::Joins::default(),
             context: None,
             upvalues: std::collections::HashSet::new(),
@@ -288,6 +291,9 @@ impl<'a> Emitter<'a> {
         let ty = &self.module.types.identity(*ty);
         if let Some(i) = self.slots.iter().position(|s| !s.busy && s.ty == *ty) {
             self.slots[i].busy = true;
+            if let Some(frame) = self.protected.last_mut() {
+                frame.slots.insert(i);
+            }
             self.capture(&self.temp(i));
             Ok(i)
         } else {
@@ -298,6 +304,9 @@ impl<'a> Emitter<'a> {
                 ty: *ty,
                 busy: true,
             });
+            if let Some(frame) = self.protected.last_mut() {
+                frame.slots.insert(i);
+            }
             self.capture(&self.temp(i));
             Ok(i)
         }

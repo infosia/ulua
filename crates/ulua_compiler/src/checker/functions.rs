@@ -193,6 +193,9 @@ impl Checker<'_> {
         depth: u32,
         expected: Option<Type>,
     ) -> Result<(Type, ExprKind), Diagnostic> {
+        if !self.reachable {
+            return Err(self.error(a.span, "C16", UNREACHABLE_ARROW));
+        }
         if a.r#async || a.type_parameters.is_some() {
             return Err(self.unsupported(a.span));
         }
@@ -318,7 +321,7 @@ impl Checker<'_> {
         if !inherit {
             self.this_binding = None;
         }
-        // Named declarations and arrows at unreachable points have no outer const facts (TS18047).
+        // Named declarations have no outer const facts (TS18047).
         if !inherit || !state.reachable {
             self.facts.floor = self.facts.serial + 1;
         }
