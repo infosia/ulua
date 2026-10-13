@@ -183,7 +183,10 @@ typedef struct ulua_capability_desc {
 1. A capability is one host function with a name and a signature.
    `ulua_capability_new` copies the descriptor. The name is 1 to 64
    bytes and matches `[A-Za-z_$][A-Za-z0-9_$]*`. It is not a reserved
-   word of ES2022 and not a prelude name (`print`, `Utf8`, and the
+   word of ES2022, not `eval` or `arguments` (strict-mode binding
+   names: inside a function, `arguments` names the implicit arguments
+   object, and `tsc` gives TS2349 for `arguments()`), and not a prelude
+   name (`print`, `Utf8`, and the
    global names of the ES2022 library that collisions.md accepts).
    There are at most `ULUA_MAX_HOST_PARAMETERS` (16) parameters. Each
    parameter type is `NUMBER`, `BOOLEAN`, or `STRING`. The result type

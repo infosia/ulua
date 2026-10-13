@@ -61,13 +61,19 @@ export can take and give strings.
 
 ## Contract pin
 
-At the P3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P3"`)
-gives: `a55`, `a56` status rejected, code `unsupported`; `r126` to
-`r129`, `r131`, `r132` code `unsupported`; `r130` code C11. Every
-earlier entry passes.
+At `5b29edf` (first form of D20), `tools/witness/luau.mjs`
+(`PHASE = "P3"`) gave: `a55`, `a56` rejected `unsupported`; `r126` to
+`r129`, `r131`, `r132` `unsupported`; `r130` C11.
+
+At `2e80285` (D20 revised), built in a separate worktree: `a55`,
+`a56`, `a57` rejected C11; `r126`, `r128`, `r130` C11; `r131` C2;
+`r132`, `r133` `unsupported`; want C18 for each reject. Every earlier
+entry passes.
 
 ## Measurements
 
 ## Failures before the fix
 
 ## Gaps
+
+- Contract gap found in implementation: ES2022 does not reserve `eval` and `arguments`. A grant `arguments` called inside a function gives `tsc` TS2349 and a `node` TypeError. abi.md §6.2.1 now rejects both names.
