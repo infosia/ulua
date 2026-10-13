@@ -326,6 +326,19 @@ Reviewer: fresh agent, diff `1ac5397..3fafd70`. 1 CRITICAL, 1 MAJOR, 3 MINOR. St
 | C17.1 named C11 for Error misuse; the implementation and `r122`, `r123` use C17 | MINOR | C17.1 names C17 |
 | C17.9 said one closure per `try` entry; each block that runs allocates one | MINOR | C17.9 text |
 
+Fix (Codex): a `try` statement terminates only when no `break` or
+`continue` of its blocks reaches an outer loop; the tags dispatch
+otherwise; the return casts that hid `nil` are gone; each protected
+closure has its own joins; catch bindings add no upvalue count.
+`luau-analyze -j1` from 16 to 64 KiB, before and after: finally
+101.8 s / over 180 s, after 0.709 / 7.768 s (10.95); catch 0.847 /
+10.059 s (11.87); catch and finally 0.622 / 6.356 s (10.22); nested
+1.109 / 7.282 s (6.57); loop 0.343 / 3.239 s (9.45). The gate measures
+4 to 16 KiB (ratios 5.54 to 6.94, 14.64 s); the 16 to 64 KiB run is
+behind the `measurements` feature (86.2 s). 26 mixed-jump tests,
+2 catch-count tests, 240 random programs: 0 differences.
+`cargo-test` 279 s. gate full: PASS, 164 entries.
+
 ### P2.7 implementation record
 
 - Codex task (fresh agent), 34 files. Error family, weak-keyed class

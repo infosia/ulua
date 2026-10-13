@@ -109,6 +109,10 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         context.locals[module.bindings[id].owner]
             .insert(location.split('.').next().unwrap_or(location).to_owned());
     }
+    // Catch parameters belong to protected closures of this owner, not to its upvalues.
+    for id in catch_ids {
+        context.locals[module.bindings[id].owner].insert(format!("__ulua_b{id}"));
+    }
     for f in &module.functions {
         for (id, _) in &f.parameters {
             context.locals[f.binding + 1].insert(format!("__ulua_b{id}"));

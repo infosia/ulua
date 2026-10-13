@@ -21,17 +21,19 @@ impl Emitter<'_> {
         let parameter = binding
             .map(|(id, _)| format!("__ulua_caught{id}: unknown"))
             .unwrap_or_default();
-        self.line(format!("local {ok}, {tag}, {value}, {target} = pcall(function({parameter}): (number, any, number)"));
+        self.line(format!("local {ok}: boolean, {tag}: any, {value}: any, {target}: number = pcall(function({parameter}): (number, any, number)"));
         let previous =
             binding.map(|(id, _)| (id, self.copies.insert(id, format!("__ulua_caught{id}"))));
         self.protected.push(self.loops.len());
         self.indent += 1;
-        self.joins.enter();
+        // A protected closure has its own flow graph, like a source function.
+        // Its captured writes do not create parent joins across successive calls.
+        let parent_joins = std::mem::take(&mut self.joins);
         self.statement(block, depth)?;
         if !ir::abrupt(block, true) {
             self.line("return 0, nil, 0");
         }
-        self.joins.leave();
+        self.joins = parent_joins;
         self.indent -= 1;
         self.protected.pop();
         if let Some((id, old)) = previous {
@@ -68,6 +70,12 @@ impl Emitter<'_> {
         ends_block: bool,
         depth: u32,
     ) -> Result<(), Diagnostic> {
+        let breaks = ir::loop_break(body)
+            || catch.is_some_and(|(_, c)| ir::loop_break(c))
+            || finalizer.is_some_and(ir::loop_break);
+        let continues = ir::loop_continue(body)
+            || catch.is_some_and(|(_, c)| ir::loop_continue(c))
+            || finalizer.is_some_and(ir::loop_continue);
         let before = self.generated_live;
         self.line("do");
         let names = self.completion_names()?;
@@ -119,18 +127,19 @@ impl Emitter<'_> {
                     self.line(format!("if {tag} == 1 then return end"));
                 }
             } else {
+                // Tag 1 holds a checked return operand. Jumps retain nil and use their own dispatch.
                 self.line(format!(
-                    "{} return {value} :: {} end",
+                    "{} return {value} end",
                     if terminates {
                         "do".to_owned()
                     } else {
                         format!("if {tag} == 1 then")
-                    },
-                    self.function_types.luau(&result)
+                    }
                 ));
             }
         }
-        if !terminates
+        if (breaks || continues)
+            && !terminates
             && !ends_block
             && let Some(base) = self.protected.last()
         {
@@ -138,12 +147,16 @@ impl Emitter<'_> {
         }
         // The remaining jump belongs to a loop within this protected function.
         if !terminates && !self.loops.is_empty() && !self.crosses_protection() {
-            self.line(format!("if {tag} == 3 then"));
-            self.statement(&S::Break, depth)?;
-            self.line("end");
-            self.line(format!("if {tag} == 4 then"));
-            self.statement(&S::Continue, depth)?;
-            self.line("end");
+            if breaks {
+                self.line(format!("if {tag} == 3 then"));
+                self.statement(&S::Break, depth)?;
+                self.line("end");
+            }
+            if continues {
+                self.line(format!("if {tag} == 4 then"));
+                self.statement(&S::Continue, depth)?;
+                self.line("end");
+            }
         }
         self.line("end");
         self.generated_live = before;

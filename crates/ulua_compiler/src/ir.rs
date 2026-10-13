@@ -130,15 +130,18 @@ impl Statement {
 
 // Nested loop exits do not exit this loop. The work list avoids another recursive walk.
 pub(crate) fn loop_break(body: &Statement) -> bool {
-    loop_jump(body, false)
+    loop_jump(body, 1)
 }
-fn loop_jump(body: &Statement, continuing: bool) -> bool {
+pub(crate) fn loop_continue(body: &Statement) -> bool {
+    loop_jump(body, 2)
+}
+fn loop_jump(body: &Statement, kinds: u8) -> bool {
     let mut pending = vec![body];
     while let Some(s) = pending.pop() {
         match s {
             Statement::Located(_, s) => pending.push(s),
-            Statement::Break => return true,
-            Statement::Continue if continuing => return true,
+            Statement::Break if kinds & 1 != 0 => return true,
+            Statement::Continue if kinds & 2 != 0 => return true,
             Statement::Try(a, b, f) => {
                 pending.push(a);
                 if let Some((_, b)) = b {
@@ -264,7 +267,14 @@ pub(crate) fn abrupt(s: &Statement, jumps: bool) -> bool {
         Statement::Break | Statement::Continue => jumps,
         Statement::Block(body) => body.iter().any(|s| abrupt(s, jumps)),
         Statement::If(_, a, Some(b)) => abrupt(a, jumps) && abrupt(b, jumps),
-        Statement::Try(_, _, Some(f)) if !jumps && loop_jump(f, true) => false,
+        Statement::Try(a, b, f)
+            if !jumps
+                && (loop_jump(a, 3)
+                    || b.as_ref().is_some_and(|(_, b)| loop_jump(b, 3))
+                    || f.as_ref().is_some_and(|f| loop_jump(f, 3))) =>
+        {
+            false
+        }
         Statement::Try(a, b, f) => {
             f.as_ref().is_some_and(|f| abrupt(f, jumps))
                 || (abrupt(a, jumps) && b.as_ref().is_none_or(|(_, b)| abrupt(b, jumps)))

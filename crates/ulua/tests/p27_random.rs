@@ -35,20 +35,36 @@ fn random_exceptions_match_three_witnesses() {
         let kind = kinds[r.next() % 7];
         let tested = kinds[r.next() % 7];
         let n = r.next() % 9;
-        let pending = match r.next() % 5 {
+        let mut pending = match r.next() % 5 {
             0 => format!("return {n};"),
             1 => "throw err;".into(),
             2 => "break;".into(),
             3 => "continue;".into(),
             _ => "score++;".into(),
         };
-        let caught = match r.next() % 5 {
+        let mut caught = match r.next() % 5 {
             0 => format!("return {};", n + 10),
             1 => "throw e;".into(),
             2 => "break;".into(),
             3 => "continue;".into(),
             _ => "score+=2;".into(),
         };
+        if r.next().is_multiple_of(2) {
+            let jump = if r.next().is_multiple_of(2) {
+                "break"
+            } else {
+                "continue"
+            };
+            pending = format!("if(k=={}){{{jump};}}return {n};", r.next() % 3);
+        }
+        if r.next().is_multiple_of(2) {
+            let jump = if r.next().is_multiple_of(2) {
+                "break"
+            } else {
+                "continue"
+            };
+            caught = format!("if(k=={}){{{jump};}}return {};", r.next() % 3, n + 10);
+        }
         let finalizer = match r.next() % 5 {
             0 => format!("return {};", n + 20),
             1 => "throw new URIError('final');".into(),

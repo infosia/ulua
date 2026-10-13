@@ -202,6 +202,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     let main_type = types.intern(vec![], Type::Void, 0);
     emitter::emit(
         &Module {
+            exceptions: false,
             types,
             methods: Default::default(),
             captured: vec![true, false],
