@@ -8,7 +8,7 @@ Status: open; P4.1 and P4.2 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md
 |---|---|---|
 | P4.1 | Async functions, `await`, promise values, the job queue | `a58` to `a61`; `r134` to `r141`; `t10` |
 | P4.2 | `then`, `catch`, `finally`, `Promise.all`, `map` with a promise callback | `a62`, `a63`; `r143` to `r147`; `t11` |
-| P4.3 | Host async requests, completion ABI, pump | later |
+| P4.3 | Async host requests, the completion ABI, the pump, call tasks | `a64`; `r148` |
 
 ## Exit checklist (P4.1)
 
@@ -99,6 +99,39 @@ Reviewer: fresh agent, diff `bbdcb7c..f6230dd`, priority `f6230dd`. 0 CRITICAL, 
 Fix (Codex): promise containment follows fields only; 10 rejections and 4 accepted controls; the random check unchanged (600 programs). A regression of the round 1 test move: the first gate run failed a compiler growth ratio (8.72, bound 8) that passes alone (3.99) and with `RUST_TEST_THREADS=1`. The merged binaries run the timing-ratio tests (`p25_growth`, `p3_growth`, `s4_growth`, and the others that assert a ratio) in parallel with other tests of the same binary, so the load changes the ratio (principle 15). Resolution: every test that asserts a time ratio moves into one binary whose tests take one process-wide lock; cargo runs test binaries one at a time.
 
 Timing fix (Codex): 7 tests that assert a time ratio moved into the `witnesses` binary; each holds one process-wide mutex for its whole body; 133 test names, inputs, assertions, feature gates, and cost statements kept; the allocator measurement keeps its own binary. Three `gate.sh full` runs with the default thread count pass: `cargo-test` 242, 246, 244 s; largest ratios S4 6.40, 6.38, 6.32; P2.5 4.01, 3.99, 3.99; P3 3.93, 3.95, 3.92; P4 4.10, 4.54, 4.12; analyzer 8.50, 8.51, 8.54. `measurements`: 7 passed, 970.5 s, largest ceiling ratio 22.4.
+
+## Exit checklist (P4.3)
+
+- [ ] abi.md Rev 8 (§2 `ULUA_PENDING`, §5 `max_open_requests`, §6.2
+  `start`, §6.3 async declarations, §6.4, §7); collisions.md C19.16;
+  pipeline.md §6; corpus.md Rev 11 §7 (`hostLater` and the settle
+  loop) implemented; `include/ulua.h` declares every new item.
+- [ ] P4.3 entries pass in full; every earlier entry keeps passing.
+- [ ] Direct tests (one per public function): start with each value
+  type; complete with each type, a wrong type, an unknown id, twice,
+  from a host callback (`ULUA_BUSY`); fail gives `host:request` and
+  runs no `catch`; the pump order, `max_requests`, the step charge,
+  `max_steps` per settle; a stop during a settle keeps the later
+  completions recorded; `limit:requests` at and past the bound; call
+  tasks for sync and async exports (pending, fulfilled, rejected,
+  consumed); counts; revocation keeps open requests; instance free
+  with open requests; the declarations text of an async capability;
+  layout and link tests for the new items.
+- [ ] Job order against `node` with the settle loop of corpus.md §7
+  for interleaved requests, `Promise.all`, `then`, and `finally`.
+- [ ] A random check of programs with async host requests against
+  `node`, `tsc` (with the declarations), and `luau-analyze -j1`.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source: the owner's prior projects. The push completion that runs no
+script and the host-driven step follow the project that holds promises
+as values; the request cap and the stop of a failed request follow the
+other. Changes: one pump run per settle (`node` macrotask order, Step 0
+M6); call tasks for async exports.
+
+## Contract pin (P4.3)
+
+At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).
 
 ## Contract pin (P4.2)
 

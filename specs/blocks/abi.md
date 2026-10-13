@@ -1,6 +1,6 @@
 # C ABI
 
-Status: Rev 6, 2026-10-13. ABI version 1. No binary compatibility
+Status: Rev 8, 2026-10-14. ABI version 1. No binary compatibility
 rule applies (D23): a change of this file changes `include/ulua.h`, the
 implementation, and the tests in one commit.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
@@ -12,6 +12,8 @@ tests (P3; D20 to D22). §6.2 grants without script declarations, §6.3
 host declarations (D20 revised).
 Rev 6: status, no compatibility rule (D23).
 Rev 7: §3, §4.7 async exports (P4.1).
+Rev 8: §2 `ULUA_PENDING`, §5 `max_open_requests`, §6.2 `start`, §6.4
+async host requests, §7 (P4.3).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -63,6 +65,7 @@ without a second call path.
 | `ULUA_BUSY` | 5 | A call during a callback of the same context |
 | `ULUA_INTERNAL` | 6 | A defect of this library |
 | `ULUA_POISONED` | 7 | The context had `ULUA_INTERNAL` before |
+| `ULUA_PENDING` | 8 | A task whose promise is pending (§6.4) |
 
 ## 3. Diagnostic
 
@@ -84,7 +87,9 @@ The parameter can be null. Run codes: `trap:<kind>` (corpus.md §6),
 `limit:memory`, `limit:steps`, `limit:stack`. `ULUA_HOST_ERROR` has the
 code `host:output`, `host:capability`, `host:revoked`, or `host:result`
 (§6). The message of a `host:capability`, `host:revoked`, or
-`host:result` diagnostic is the name of the capability. An async
+`host:result` diagnostic is the name of the capability. A failed
+request (§6.4) has the code `host:request`; more open requests than
+`max_open_requests` have the code `limit:requests`. An async
 export whose promise is pending after the drain has the code
 `async:pending` (§4.7). `ULUA_INTERNAL` has the code `internal`. If the OS
 refuses the compiler thread, `ulua_compile` gives `ULUA_FAILED` with the
@@ -147,7 +152,9 @@ typedef struct ulua_run_limits {
     uint32_t struct_size;
     uint32_t reserved;
     uint64_t max_memory_bytes;  /* per instance */
-    uint64_t max_steps;         /* per ulua_instance_new or ulua_call */
+    uint64_t max_steps;         /* per host-started run */
+    uint32_t max_open_requests; /* per instance, §6.4 */
+    uint32_t reserved2;
 } ulua_run_limits;
 ```
 
@@ -177,6 +184,8 @@ The bytes are valid until `output` returns.
 ```c
 typedef int32_t (*ulua_host_fn)(void* userdata, const ulua_value* arguments,
     size_t argument_count, ulua_value* result);
+typedef int32_t (*ulua_host_start_fn)(void* userdata, const ulua_value* arguments,
+    size_t argument_count, uint64_t request);
 
 typedef struct ulua_capability_desc {
     uint32_t struct_size;
@@ -187,7 +196,8 @@ typedef struct ulua_capability_desc {
     size_t parameter_count;
     uint32_t result_type;
     uint32_t reserved2;
-    ulua_host_fn function;
+    ulua_host_fn function;      /* a sync capability, or null */
+    ulua_host_start_fn start;   /* an async capability (§6.4), or null */
     void* userdata;
 } ulua_capability_desc;
 ```
@@ -204,8 +214,9 @@ typedef struct ulua_capability_desc {
    also for a name that collisions.md does not accept.
    There are at most `ULUA_MAX_HOST_PARAMETERS` (16) parameters. Each
    parameter type is `NUMBER`, `BOOLEAN`, or `STRING`. The result type
-   is `VOID`, `NUMBER`, `BOOLEAN`, or `STRING`. `function` is not null.
-   Else the call gives `ULUA_INVALID_ARGUMENT`.
+   is `VOID`, `NUMBER`, `BOOLEAN`, or `STRING`. Exactly one of
+   `function` and `start` is not null. Else the call gives
+   `ULUA_INVALID_ARGUMENT`.
 2. **Grant.** `ulua_compile` takes a list of capabilities: the grants.
    Two grants with one name, or a revoked grant, give
    `ULUA_INVALID_ARGUMENT`. Each grant is a host function of the
@@ -260,6 +271,7 @@ The host gives the text, as a `.d.ts` file, to script authors and to
    one line per grant, in grant order:
    `declare function <name>(p0: <T>, p1: <T>, ...): <R>;`
    `<T>` is `number`, `boolean`, or `string`; `<R>` is also `void`.
+   For an async capability (§6.4), `<R>` is `Promise<R>`.
    The text ends with a line end. The same grant list gives the same
    bytes.
 2. Two grants with one name give `ULUA_INVALID_ARGUMENT`. A revoked
@@ -270,6 +282,54 @@ The host gives the text, as a `.d.ts` file, to script authors and to
 4. A script that `tsc` checks with this text and the prelude, and that
    `ulua_compile` compiles with the same grants, sees one signature per
    host function on both sides.
+
+### 6.4 Async host requests (P4.3)
+
+An async capability has a `start` function. A script call gives a
+`Promise<R>` (collisions.md C19.16), where `R` is the result type.
+
+1. **Start.** A script call creates a request with an id that is
+   unique in the instance and never reused, and calls `start` once
+   with the arguments and the id, on the thread of the run. A non-zero
+   return stops the run with `ULUA_HOST_ERROR` and `host:capability`;
+   a revoked capability gives `host:revoked` before `start` (§6.2).
+   More than `max_open_requests` open requests in the instance stop
+   the run with `ULUA_FAILED` and `limit:requests`. A request is open
+   from its start until the pump settles it.
+2. **Complete.** `ulua_request_complete(instance, request, value)`
+   records the value of an open request; `ulua_request_fail(instance,
+   request)` records a failure. Neither runs script code. The value
+   follows §4 and the result type; a `STRING` value is valid UTF-8 and
+   is copied at the call. A wrong type, an unknown id, or a request
+   that has a recorded completion gives `ULUA_INVALID_ARGUMENT` and
+   records nothing. From a host callback of the context, each gives
+   `ULUA_BUSY` (§1.7).
+3. **Pump.** `ulua_pump(instance, max_requests, settled, diagnostic)`
+   settles recorded completions in the order of their record, at most
+   `max_requests` (0 means no limit), and writes their count to
+   `*settled`. Each settle is one host-started run (collisions.md
+   C19.6): it fulfills the promise of the request with the value, then
+   drains the job queue and checks for unhandled rejections (C19.7).
+   `max_steps` applies to each settle. A recorded failure stops that
+   run with `ULUA_HOST_ERROR` and `host:request` (D26): the promise is
+   not rejected and no script code runs. After a stop, the pump
+   returns at once; completions not yet settled stay recorded.
+4. **Call tasks.** `ulua_call_start(instance, export_index, arguments,
+   argument_count, task, diagnostic)` runs an export as `ulua_call`
+   does and writes a task id. `ulua_task_result(instance, task, result,
+   diagnostic)` gives `ULUA_PENDING` while the export's promise is
+   pending; then the result of §4.7, once. A sync export gives its
+   result at the first query. An unknown or consumed task id gives
+   `ULUA_INVALID_ARGUMENT`. `ulua_call` of an async export keeps §4.7:
+   a pending promise gives `async:pending`.
+5. **Counts.** `ulua_instance_requests(instance, open, recorded)`
+   writes the count of open requests and of recorded completions.
+6. **Lifetime.** `ulua_instance_free` discards each request and task
+   of the instance; a later id of it is invalid. Revoking a capability
+   does not cancel its open requests: their completions settle.
+7. **Costs.** Each start and each settle charges one step to its run.
+   The time and memory of the host between start and complete are
+   outside the run limits.
 
 ## 7. Functions
 
@@ -307,6 +367,18 @@ ulua_status ulua_instance_free(ulua_instance* instance);
 ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,
     const ulua_value* arguments, size_t argument_count, ulua_value* result,
     ulua_diagnostic* diagnostic);
+ulua_status ulua_call_start(ulua_instance* instance, uint32_t export_index,
+    const ulua_value* arguments, size_t argument_count, uint64_t* task,
+    ulua_diagnostic* diagnostic);
+ulua_status ulua_task_result(ulua_instance* instance, uint64_t task,
+    ulua_value* result, ulua_diagnostic* diagnostic);
+ulua_status ulua_request_complete(ulua_instance* instance, uint64_t request,
+    const ulua_value* value);
+ulua_status ulua_request_fail(ulua_instance* instance, uint64_t request);
+ulua_status ulua_pump(ulua_instance* instance, uint32_t max_requests,
+    uint32_t* settled, ulua_diagnostic* diagnostic);
+ulua_status ulua_instance_requests(const ulua_instance* instance,
+    uint32_t* open, uint32_t* recorded);
 ```
 
 1. `ulua_context_free` frees each module, instance, and capability of

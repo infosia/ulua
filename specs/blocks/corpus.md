@@ -1,13 +1,13 @@
 # Corpus contract
 
-Status: Rev 10, 2026-10-13 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 11, 2026-10-14 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
 `phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
 codes to it; Rev 6 renames it to `exception`, P2.5 review; Rev 7: any code that names `never`,
 P2.5 review 11; Rev 8: `luau-analyze -j1`, P2.6 review 3; Rev 9: the
 `grants` header and the host fixtures, P3; Rev 10: `async` `main`, unhandled
-rejection, P4.1).
+rejection, P4.1; Rev 11: the `hostLater` fixture, P4.3).
 
 ## 1. Layout
 
@@ -153,3 +153,14 @@ granted fixture to the program as a function value, as it passes
 | `hostConcat` | `(a: string, b: string): string` | `a + b` |
 | `hostNot` | `(b: boolean): boolean` | `!b` |
 | `hostLog` | `(text: string): void` | writes one output line, `log:` then `text` |
+| `hostLater` | `(n: number): Promise<number>` (async, `abi.md` §6.4) | a request; the harness settles it with `n` |
+
+The harness settles the requests of `hostLater` one at a time, in the
+order of their start: after `main` and its drain, while a request is
+open, it completes the oldest one and pumps one settle. The `node`
+runner keeps the same queue: `hostLater` returns a pending promise and
+queues its resolver; after `main`, the runner resolves the oldest one
+and waits one macrotask (`setImmediate`), while the queue is not
+empty. Each settle is one host-started run, followed by a drain (P4
+Step 0 M6). An `async` `main` that is pending after the last settle
+fails with `async:pending`.

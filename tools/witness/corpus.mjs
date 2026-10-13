@@ -159,8 +159,9 @@ function isAcceptedEquality(d, checker) {
 
 async function runNode(entry) {
   const output = [];
+  const requests = [];
   const grants = headers.get(entry.id).grants;
-  install(output, grants === undefined ? [] : grants.split(", "));
+  install(output, grants === undefined ? [] : grants.split(", "), requests);
   let thrown = null;
   // collisions.md C19.7: node reports an unhandled rejection after the
   // job drain; the runner records the first one as the throw.
@@ -171,12 +172,27 @@ async function runNode(entry) {
   try {
     const mod = await import(pathToFileURL(entry.path).href);
     const result = mod.main();
-    if (result instanceof Promise) await result;
+    let settled = !(result instanceof Promise);
+    if (!settled) {
+      result.then(
+        () => (settled = true),
+        (e) => {
+          settled = true;
+          if (thrown === null) thrown = e;
+        },
+      );
+    }
+    // One macrotask lets node finish the drain and report rejections.
+    await new Promise((resolve) => setImmediate(resolve));
+    // corpus.md section 7: settle the open requests one per macrotask.
+    while (requests.length > 0 && thrown === null) {
+      requests.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    if (!settled && thrown === null) thrown = new Error("async:pending");
   } catch (e) {
     if (thrown === null) thrown = e;
   }
-  // One macrotask lets node finish the drain and report rejections.
-  await new Promise((resolve) => setImmediate(resolve));
   process.off("unhandledRejection", onRejection);
   return { output, thrown };
 }

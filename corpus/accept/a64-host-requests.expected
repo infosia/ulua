@@ -1,0 +1,9 @@
+log:A start
+log:B start
+main waits
+log:A got 1
+log:B got 10
+log:A got 2
+log:B got 20
+totals 3,30
+doubled 10

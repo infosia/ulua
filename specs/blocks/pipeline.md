@@ -34,6 +34,7 @@ Rev 29: §4.10 one grant table (P3 review).
 Rev 30: §4.11 async (P4.1).
 Rev 31: §4.11 a stop clears the queue before the collection (P4.1 review).
 Rev 32: §4.9 one completion helper (P4.1 review 3).
+Rev 33: §6 `max_open_requests`, host-started runs (P4.3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -476,7 +477,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
 | `max_nesting_depth` | `ulua_compile`: parser guard and every compiler recursion | `limit:nesting-depth` |
 | C15 bounds | `ulua_compile` | `limit:<name>` (collisions.md C15) |
 | `max_memory_bytes` | each instance: the budget of its `lua_Alloc` | `limit:memory` |
-| `max_steps` | each `ulua_instance_new` and `ulua_call`: interrupt callbacks | `limit:steps` |
+| `max_steps` | each host-started run (`ulua_instance_new`, `ulua_call`, `ulua_call_start`, each settle of `ulua_pump`): interrupt callbacks | `limit:steps` |
+| `max_open_requests` | each instance: open async host requests (`abi.md` §6.4); default 256 | `limit:requests` |
 | Luau call depth | each call (`LUAI_MAXCALLS`, `LUAI_MAXCCALLS`) | `limit:stack` |
 
 C15 bounds of P1, each a fixed compiler constant:

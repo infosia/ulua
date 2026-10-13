@@ -9,6 +9,9 @@ const FIXTURES = {
   hostLog: (output) => (text) => {
     output.push(`log:${text}`);
   },
+  // An async fixture (corpus.md section 7): the runner settles the
+  // queued requests one per macrotask, oldest first.
+  hostLater: (output, requests) => (n) => new Promise((resolve) => requests.push(() => resolve(n))),
 };
 
 export const FIXTURE_NAMES = Object.keys(FIXTURES);
@@ -19,6 +22,7 @@ const SIGNATURES = {
   hostConcat: [["string", "string"], "string"],
   hostNot: [["boolean"], "boolean"],
   hostLog: [["string"], "void"],
+  hostLater: [["number"], "Promise<number>"],
 };
 
 // The host declarations of a grant list, in the format of abi.md
@@ -32,8 +36,9 @@ export function declarations(grants) {
   return lines.join("\n") + "\n";
 }
 
-// grants: the fixture names of the entry's `grants` header.
-export function install(output, grants = []) {
+// grants: the fixture names of the entry's `grants` header; requests:
+// the queue of open async requests, which the runner settles.
+export function install(output, grants = [], requests = []) {
   globalThis.print = (text) => {
     output.push(String(text));
   };
@@ -41,5 +46,5 @@ export function install(output, grants = []) {
     byteLength: (text) => Buffer.byteLength(text, "utf8"),
   });
   for (const name of FIXTURE_NAMES) delete globalThis[name];
-  for (const name of grants) globalThis[name] = FIXTURES[name](output);
+  for (const name of grants) globalThis[name] = FIXTURES[name](output, requests);
 }

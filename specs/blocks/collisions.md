@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -967,9 +967,16 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    follows rules 2, 4, 6, and 7: it is not floating, it has no
    operator, its jobs run in the queue, and its unhandled rejection
    stops the run.
+16. **Async host functions.** A grant of an async capability
+   (`abi.md` §6.4) is a host function with the result type
+   `Promise<R>`. A call starts a request and gives its promise; the
+   host settles it later through `ulua_pump`, one host-started run per
+   settle, so the jobs after it run before the next settle. A failed
+   request stops the run (D26): no `catch` runs. Every rule of this
+   section applies to the promise.
 
-Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`. Reject: `r134`, `r135`, `r136`,
-`r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`. Trap: `t10`, `t11`.
+Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`, `a64`. Reject: `r134`, `r135`, `r136`,
+`r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`, `r148`. Trap: `t10`, `t11`.
 
 ## Open items
 
