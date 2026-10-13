@@ -7,7 +7,7 @@ Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 | Slice | Family | Entries |
 |---|---|---|
 | P4.1 | Async functions, `await`, promise values, the job queue | `a58` to `a61`; `r134` to `r141`; `t10` |
-| P4.2 | `then`, `catch`, `finally`, `Promise.all`, `map` with a promise callback | `a62`, `a63`; `r143` to `r147` |
+| P4.2 | `then`, `catch`, `finally`, `Promise.all`, `map` with a promise callback | `a62`, `a63`; `r143` to `r147`; `t11` |
 | P4.3 | Host async requests, completion ABI, pump | later |
 
 ## Exit checklist (P4.1)
@@ -69,9 +69,20 @@ Implementation record (Codex), Debug, one machine:
 - Decided gaps: an `unknown` parameter of a function value follows C17.4; a sync callback with a `Promise<void>` result is a C19.12 `finally` callback; an empty array follows the element type rule; rejected `all` inputs register in the order of C19.6.
 - `cargo-test` 905 s in Codex's gate run.
 
+### P4.2 Phase Review round 1
+
+Reviewer: fresh agent, diff `bbdcb7c..aed0365`. 0 CRITICAL, 2 MAJOR, 2 MINOR. Held: 31 order programs and 2,600 random programs (408 unhandled-rejection traps) equal `node` in output and message; `tsc` and `luau-analyze -j1` clean on the first 600; 15 derived-promise rejection cases; 81 checker probes; limits give `limit:memory` (1,000,000 chained `then`) and `limit:steps` (`all` over 2M elements); nesting gives `limit:nesting-depth`; growth: compile linear, analyzer 4x ratio at most 6.9, ceiling 7.7 times `dense-assign`.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `catch` and `finally` over a nullable source (`Promise<number \| null>`): Ulua and `node` agree, `luau-analyze -j1` gives a TypeError (`__ulua_new(nil :: (T)?)` infers `number` for `number?`); 16 of 24 accepted programs | MAJOR | Fix the typed lowering; direct tests over nullable sources |
+| An unhandled rejection that module-level statements leave: Ulua stops `ulua_instance_new` with no output; the `node` runner writes `main` first; no rule named it | MAJOR | C19.7 names the divergence; `t11` (`js-comparable: no C19`) |
+| `xs.map(async ...)` as an `ExpressionStatement` drops a `Promise<T>[]` | MINOR | C19.4: a statement whose type contains a promise type is rejected |
+| The P4.2 pin cites `b17d7f2`, which the amend replaced | MINOR | Cite `3ea2b96` |
+
 ## Contract pin (P4.2)
 
-At `b17d7f2` (P4.1 compiler), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.
+At `3ea2b96` (P4.1 compiler, as at `bbdcb7c`), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.
 
 ## Contract pin (P4.1)
 
@@ -136,7 +147,7 @@ Fix measurements (Codex): the cause was the branch-local writes of each protecte
 
 ## Gaps
 
-- Gate cost: `cargo-test` grew from 473 s (P3 close) to 710 s (P4.1 round 2). Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
+- Gate cost: `cargo-test` grew from 473 s (P3 close) to 922 s (P4.2, `aed0365`). The 60 test targets run 296 s in sum (one target 138 s: the default witness-time test over 269 shapes); the other 626 s build and link 55 integration test binaries, each with the library and Luau. Plan: merge the integration tests into a few binaries; no test assertion changes. Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
 

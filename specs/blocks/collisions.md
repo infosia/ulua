@@ -888,7 +888,8 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    accepts it. The result has type `T`; an `await` of
    `Promise<void>` is an `ExpressionStatement`.
 4. **No floating promise.** An `ExpressionStatement` whose value has
-   a `Promise<T>` type is rejected (C19): the script stores, passes,
+   a type that contains a `Promise` type (`Promise<T>`, `Promise<T>[]`,
+   a record with a promise field) is rejected (C19): the script stores, passes,
    returns, or awaits each promise. `tsc` accepts it.
 5. **Start and settle.** A call of an `async` function runs its body
    at once, up to its first `await` or its end, and gives its
@@ -913,6 +914,13 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    awaiter, as the `node` runner awaits `main`. `node` reports it after the same drain
    (`unhandledRejection`) and ends the process. A reaction added in the
    same drain handles it. The instance stays usable (C17.8).
+   Divergence: an unhandled rejection that the module-level statements
+   leave stops `ulua_instance_new` at the end of its drain, before any
+   export runs. The `node` runner evaluates the module and calls `main`
+   in the same job checkpoint, so `node` runs `main` first and then
+   reports the rejection. Measured (`t11`): Ulua writes nothing and
+   stops with `trap:uncaught-exception` `Error: module`; `node` writes
+   `main`, then reports `Error: module`.
 8. **Array callbacks.** An argument of an array method other than
    `map` (rule 14) whose result type is a `Promise` type (an `async`
    arrow, or a function value) is rejected (C19): `forEach` drops the promise of its callback.
@@ -957,7 +965,7 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    stops the run.
 
 Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`. Reject: `r134`, `r135`, `r136`,
-`r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`. Trap: `t10`.
+`r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`. Trap: `t10`, `t11`.
 
 ## Open items
 
