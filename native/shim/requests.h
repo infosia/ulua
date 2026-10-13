@@ -1,28 +1,13 @@
 #ifndef ULUA_REQUESTS_H
 #define ULUA_REQUESTS_H
-// Included inside the protected shim. Records use the instance allocator.
-struct ulua_request {
-    uint64_t id;
-    uint32_t type;
-    int promise;
-    int value;
-    bool recorded;
-    bool failed;
-    ulua_request* next;
-    ulua_request* completion_next;
-};
-struct ulua_task {
-    uint64_t id;
-    uint32_t type;
-    int reference;
-    bool promise;
-    ulua_task* next;
-};
+// Included inside the protected shim.
+#include "async_records.h"
 static void begin_run(ulua_vm* vm) {
     vm->steps = 0;
     vm->flag = 0;
     vm->trap_kind = 0;
     vm->charging = true;
+    vm->request_starting = false;
 #ifdef ULUA_MEASUREMENTS
     vm->allocation_bytes = 0;
     vm->allocation_steps = 0;
@@ -65,17 +50,22 @@ static int start_request(lua_State* state, ulua_vm* vm, const ulua_internal_capa
     std::memset(request, 0, sizeof(*request));
     request->id = ++vm->next_request;
     request->type = cap->desc.result_type;
-    request->next = vm->requests;
-    vm->requests = request;
-    ++vm->open_requests;
     request->promise = promise;
     int code = cap->desc.start(cap->desc.userdata, arguments, cap->desc.parameter_count, request->id);
     if (code) {
+        // No raising VM operation occurs between allocation and this release.
+        lua_unref(state, promise);
+        allocate(vm, request, sizeof(*request), 0);
         vm->flag = code;
         std::memcpy(vm->capability_name, cap->desc.name, cap->desc.name_length);
         vm->capability_name[cap->desc.name_length] = 0;
         luaL_error(state, "Host start stopped");
     }
+    // Publish only after the host accepts the request. Failed starts own no roots or records.
+    request->next = vm->requests;
+    vm->requests = request;
+    ++vm->open_requests;
+    vm->request_starting = false;
     return 1;
 }
 static ulua_request* find_request(ulua_vm* vm, uint64_t id) {

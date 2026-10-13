@@ -622,10 +622,18 @@ fn async_start_error_stops_and_no_later_callback() {
         RunLimits::default(),
     );
     r.data.fail = true;
+    let before = r.counts();
     let result = r.start("main");
     assert_eq!(result.0, ULUA_HOST_ERROR);
     assert_eq!(code(&result.1), "host:capability");
     assert_eq!(r.data.requests.len(), 1);
+    assert_eq!(r.counts(), before);
+    let id = r.data.requests[0].0;
+    assert_eq!(r.complete(id, number(1.0)), ULUA_INVALID_ARGUMENT);
+    // SAFETY: The fixture owns this live instance and uses the rejected request id.
+    unsafe {
+        assert_eq!(ulua_request_fail(r.i, id), ULUA_INVALID_ARGUMENT);
+    }
     assert!(r.data.output.is_empty());
 }
 #[test]
@@ -786,3 +794,6 @@ fn each_start_and_settle_charges_exactly_one_explicit_step() {
 
 #[path = "p43_limits.rs"]
 mod limits;
+
+#[path = "p43_start_stops.rs"]
+mod start_stops;

@@ -34,6 +34,7 @@ struct ulua_vm {
     int rejections;
     int collection;
     bool async_failed;
+    bool request_starting;
     int result_ref;
     char capability_name[65];
     char exception[256];

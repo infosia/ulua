@@ -49,6 +49,7 @@ static int start_request(lua_State*, ulua_vm*, const ulua_internal_capability*, 
 static int host_call(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
     const ulua_internal_capability* cap = static_cast<const ulua_internal_capability*>(lua_touserdata(state, lua_upvalueindex(1)));
+    if (cap->desc.start) vm->request_starting = true;
     int code = 0;
     if (*cap->revoked) code = 12;
     else if (vm->steps >= vm->max_steps) code = SHIM_STEPS;
@@ -185,6 +186,8 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     }
 #endif
     vm->charging = false;
+    const bool request_starting = vm->request_starting;
+    vm->request_starting = false;
     vm->async_failed = status != LUA_OK;
     if (status == LUA_OK) return SHIM_OK;
     const char* text = run_message(lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error");
@@ -226,7 +229,8 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         lua_pop(state, 1);
     }
     // Collection also has a native protection boundary.
-    if (code == SHIM_MEMORY || code == SHIM_STEPS) {
+    // Reclaim discarded factory objects before another failed start can enlarge the weak promise table.
+    if (request_starting || code == SHIM_MEMORY || code == SHIM_STEPS) {
         lua_getref(state, vm->collection);
         lua_pcall(state, 0, 0, 0);
         lua_settop(state, 0);

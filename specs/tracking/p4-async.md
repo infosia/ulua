@@ -142,6 +142,8 @@ Reviewer: fresh agent, diff `b105752..86432d3`. 0 CRITICAL, 1 MAJOR, 1 MINOR. He
 | A `start` that returns non-zero leaves its request linked and open (`native/shim/requests.h:59-73`): 256 failed starts and every later async start gives `limit:requests`; with a large limit, 68,907 failed starts reach `limit:memory` and each later collection walks the leaked records | MAJOR | abi.md §6.4.1: a failed start discards its request (not open, no limit, invalid id); a test checks the counts |
 | C19.6 names two host-started runs; pipeline.md §6 and abi.md §6.4.3 name four | MINOR | C19.6 lists all four |
 
+Fix (Codex): every path that leaves a run between the creation of a request and the return of `start` (a non-zero return, a revoked grant, a memory failure while the record or the promise is created, `limit:requests`, and the start trampoline) leaves no open request, no record, and no reachable promise. 5 paths, sync and async, 10,000 repetitions each: the counts and the existing records and promises do not change, the id is invalid, retained memory does not grow (0.68 s). The count violation reproduces at `86432d3`. Not tested: OS allocation exhaustion and a direct injection of a `lua_ref` registry failure.
+
 ## Contract pin (P4.3)
 
 At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).
@@ -212,6 +214,8 @@ Reviewer: fresh agent, diff `40f3806..b7ff68a`, priority `b7ff68a`. 0 CRITICAL, 
 Fix measurements (Codex): the cause was the branch-local writes of each protected call's completion locals and the type state that `luau-analyze` carries through them. Completion handling moves into one fixed helper; the caller tests the tag only when the source has a `return`, `break`, or `continue`. A type annotation or a loop-exit flag alone did not change the time. `luau-analyze -j1` at 64 KiB (Release, minimum of 2), before and after, at loop depth 0 and at the ceiling: async `finally` 5.62 to 1.04 s and 24.30 to 1.23 s; async `catch` 5.23 to 1.15 and 22.98 to 1.35; sync `finally` 7.28 to 0.99 and 43.72 to 1.18; sync `catch` 7.92 to 1.24 and 47.77 to 1.45; nested 5.65 to 0.84 and 13.86 to 0.98. 60 new growth shapes: 4 to 16 KiB largest 4.75, ceiling largest 4.85; all 260 shapes ceiling largest 22.4 (`dense-assign` 0.321 s). No C15 bound is needed. `measurements` 702 s; `cargo-test` 718 s in Codex's gate run.
 
 ## Gaps
+
+- P4.3: no test injects an OS allocation failure or a `lua_ref` registry failure on the request path (P5 fault injection).
 
 - Gate cost: `cargo-test` grew from 473 s (P3 close) to 922 s (P4.2, `aed0365`). The 60 test targets run 296 s in sum (one target 138 s: the default witness-time test over 269 shapes); the other 626 s build and link 55 integration test binaries, each with the library and Luau. Resolved in P4.2 round 1: 6 binaries, `cargo-test` 226 s. Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
 
