@@ -1,9 +1,10 @@
 //! Analyzer growth covers every shape of s4_growth and p2x_growth.
-//! The default gate measures 4/16 KiB; the measurements feature reports 16/64 KiB.
+//! The default gate bounds 4/16 KiB ratios at twelve; the measurements feature reports 16/64 KiB ratios.
+//! At 64 KiB, each shape takes at most fifty times dense-assign.
+//! The largest measured ceiling ratio is 30.435 for P27-sequential-catch.
 //! Each size uses the minimum of two single-worker analyzer runs. Only ratios are asserted.
-//! Measured Debug default cost: 69.593 seconds for 167 measured shapes and one C11 fixture.
-//! Measured Debug full cost: 494.678 seconds; the prior full probe costs 627.296 seconds.
-//! The full run reports eleven ratios above twelve; their forms need further lowering or contract bounds.
+//! Measured Debug default cost: 67.699 seconds for 167 measured shapes and one C11 fixture.
+//! Measured Debug full cost: 489.989 seconds for the same shapes and fixture.
 //! Stock tsc resource exceptions include TS2321 and TS2563 (CLAUDE.md invariant 3).
 #[path = "support/analyzer.rs"]
 mod analyzer;
@@ -20,7 +21,7 @@ fn all_growth_shapes_have_bounded_analyzer_time() {
 
 #[cfg(feature = "measurements")]
 #[test]
-fn all_growth_shapes_report_full_analyzer_time() {
+fn all_growth_shapes_have_bounded_ceiling_analyzer_time() {
     measure("full", [16384, 65536]);
 }
 
@@ -37,8 +38,10 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
     let mut measured = 0;
     let mut bounded = 0;
     let mut failures = vec![];
+    let mut ceiling_times = vec![];
     for shape in shapes::all() {
         let mut times = vec![];
+        let mut ceiling_time = None;
         for bytes in sizes {
             let source = (shape.make)(shape.key, bytes);
             assert_eq!(source.len(), bytes, "{}", shape.label);
@@ -92,6 +95,9 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
             );
             if valid {
                 times.push(minimum);
+                if bytes == 65536 {
+                    ceiling_time = Some(minimum);
+                }
             }
             // Keep the existing tsc witnesses; the ABI growth gates cover the other generators.
             if shape.label.starts_with("P27-")
@@ -100,18 +106,49 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 paths.push(path);
             }
         }
-        if times.len() == 2 {
+        let growth_ratio = if times.len() == 2 {
             let ratio = times[1] / times[0];
             largest = largest.max(ratio);
             measured += 1;
-            eprintln!(
-                "analyzer {label} {}: ratio={ratio:.3}{}",
-                shape.label,
-                if ratio > 12.0 { " EXCEEDS_12" } else { "" }
-            );
+            if label == "default" {
+                eprintln!(
+                    "analyzer {label} {}: ratio={ratio:.3}{}",
+                    shape.label,
+                    if ratio > 12.0 { " EXCEEDS_12" } else { "" }
+                );
+            }
+            Some(ratio)
         } else {
             bounded += 1;
+            None
+        };
+        if let Some(time) = ceiling_time {
+            ceiling_times.push((shape.label, time, growth_ratio));
         }
+    }
+    let mut ceiling_ratios = vec![];
+    if label == "full" {
+        let reference = ceiling_times
+            .iter()
+            .find(|(shape, _, _)| shape == "dense-assign")
+            .expect("dense-assign must pass the analyzer at 64 KiB")
+            .1;
+        for (shape, time, growth_ratio) in ceiling_times {
+            let ceiling_ratio = time / reference;
+            let growth =
+                growth_ratio.map_or_else(|| "bounded".into(), |ratio| format!("{ratio:.3}"));
+            eprintln!(
+                "analyzer {label} {shape}: ratio_16_to_64={growth} ceiling_ratio={ceiling_ratio:.3}"
+            );
+            ceiling_ratios.push((shape, ceiling_ratio));
+        }
+        let largest_ceiling = ceiling_ratios
+            .iter()
+            .map(|(_, ratio)| *ratio)
+            .fold(0.0, f64::max);
+        eprintln!(
+            "analyzer {label} reference=dense-assign bytes=65536 seconds={reference:.6} largest_ceiling={largest_ceiling:.3}"
+        );
     }
     // Separate modules permit reused fixture names. Batches keep tsc resource costs bounded.
     for batch in paths.chunks(32) {
@@ -159,5 +196,8 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
         failures.len(),
         failures.join("\n")
     );
+    for (shape, ratio) in ceiling_ratios {
+        assert!(ratio <= 50.0, "{shape} ceiling analyzer ratio: {ratio:.3}");
+    }
     largest
 }

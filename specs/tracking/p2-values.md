@@ -348,6 +348,8 @@ Fix measurements (`luau-analyze -j1`, minimum of two runs, one machine):
 
 Contract (pipeline.md Rev 27): the source ceiling bounds the input, so the bound applies at the ceiling: each growth shape takes at most 50 times `dense-assign` (largest measured 30.3; the arrow defect 388). The gate keeps the 4 to 16 KiB ratio of 12. A raise of the ceiling measures every shape again; `dense-break` and `dense-continue` grow faster than quadratic.
 
+The `measurements` feature asserts the ceiling bound: `dense-assign` 0.320 s at 64 KiB; largest ceiling ratio 30.4 (`P27-sequential-catch`, 9.73 s); no other ratio above 25. Cost 490.0 s Debug; default 67.7 s.
+
 ### P2.7 Phase Review round 1
 
 Reviewer: fresh agent, diff `1ac5397..3fafd70`. 1 CRITICAL, 1 MAJOR, 3 MINOR. Stops are never caught: 130 stack, 2,759 memory, and 3,501 step sweeps report the stop code, run no catch or finally, and leave the instance usable. 965 random `finally` programs match `node`.
