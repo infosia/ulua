@@ -266,7 +266,9 @@ fn c12_binary_call_and_compound_reads_precede_a_mutating_call() {
             "let n = 0; function inc(): number {{ n++; return n; }} function pair(a: number, b: number): void {{}} export function main(): void {{ {effect} }}"
         ));
         let main = c.luau.split("__ulua_b3 = (function").nth(1).unwrap();
-        let read = main.find("= (__ulua_b0) :: number\n").unwrap();
+        let read = main
+            .find("= (__ulua_access0(false, (0) :: number)) :: number\n")
+            .unwrap();
         let call = main.find("= (__ulua_b1) :: ").unwrap();
         assert!(read < call, "{effect}");
     }

@@ -5,7 +5,7 @@ impl Emitter<'_> {
     pub(super) fn crosses_protection(&self) -> bool {
         self.protected
             .last()
-            .is_some_and(|base| self.loops.len() <= *base)
+            .is_some_and(|frame| self.loops.len() <= frame.loop_base)
     }
     pub(super) fn jump_completion(&mut self, tag: u32) {
         self.line(format!("do return {tag}, nil, {} end", self.loops.len()));
@@ -24,7 +24,15 @@ impl Emitter<'_> {
         self.line(format!("local {ok}: boolean, {tag}: any, {value}: any, {target}: number = pcall(function({parameter}): (number, any, number)"));
         let previous =
             binding.map(|(id, _)| (id, self.copies.insert(id, format!("__ulua_caught{id}"))));
-        self.protected.push(self.loops.len());
+        let offset = self.statement_offset;
+        self.protected.push(Protection {
+            loop_base: self.loops.len(),
+            locals: binding
+                .map(|(id, _)| format!("__ulua_caught{id}"))
+                .into_iter()
+                .collect(),
+            upvalues: Default::default(),
+        });
         self.indent += 1;
         // A protected closure has its own flow graph, like a source function.
         // Its captured writes do not create parent joins across successive calls.
@@ -35,7 +43,18 @@ impl Emitter<'_> {
         }
         self.joins = parent_joins;
         self.indent -= 1;
-        self.protected.pop();
+        let frame = self
+            .protected
+            .pop()
+            .ok_or_else(|| self.limit("internal", "Missing protected closure capture frame"))?;
+        if frame.upvalues.len() > crate::UPVALUE_BUDGET {
+            return Err(Diagnostic::at(
+                &self.module.source,
+                offset,
+                "limit:upvalues",
+                "Protected closure upvalue limit exceeded",
+            ));
+        }
         if let Some((id, old)) = previous {
             if let Some(old) = old {
                 self.copies.insert(id, old);
@@ -141,8 +160,9 @@ impl Emitter<'_> {
         if (breaks || continues)
             && !terminates
             && !ends_block
-            && let Some(base) = self.protected.last()
+            && let Some(frame) = self.protected.last()
         {
+            let base = frame.loop_base;
             self.line(format!("if ({tag} == 3 or {tag} == 4) and {target} <= {base} then return {tag}, {value}, {target} end"));
         }
         // The remaining jump belongs to a loop within this protected function.

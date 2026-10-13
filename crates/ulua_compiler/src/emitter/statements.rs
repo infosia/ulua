@@ -48,6 +48,14 @@ impl Emitter<'_> {
             S::Entry(ids) => {
                 if let Some(context) = self.context {
                     let key = ids.iter().min().map_or(0, |id| id + 1);
+                    if key != 0
+                        && let Some(frame) = self.protected.last_mut()
+                        && let Some(locals) = context.layouts[self.owner]
+                            .as_ref()
+                            .and_then(|l| l.entry_locals.get(&key))
+                    {
+                        frame.locals.extend(locals.iter().cloned());
+                    }
                     if let Some(headers) = context.layouts[self.owner]
                         .as_ref()
                         .and_then(|l| l.entries.get(&key))

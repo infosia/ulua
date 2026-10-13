@@ -28,6 +28,7 @@ Rev 24: §6 `limit:fields` counts the methods of a class (P2.6).
 Rev 25: §4.9 exceptions (P2.7).
 Rev 26: §3.10 witness time of every growth shape, §4.9 protected closure
 upvalues (P2.7 review 2).
+Rev 27: §3.10 witness time at the source ceiling (P2.7 review 2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -137,14 +138,22 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     §7 records the compiler heap peak of the worst shape at the source
     ceiling.
     The time of `luau-analyze -j1` over the output of each growth shape
-    grows at most 12 times for 4 times the input. The gate measures
-    each shape from 4 KiB to 16 KiB; each Phase Review runs the
-    `measurements` feature, which measures from 16 KiB to 64 KiB, and
-    records the ratios in the tracking note. If no lowering form keeps
-    a shape inside the bound, a C15 bound with a measured value and a
-    limit diagnostic takes its place. Measured at `57bd020`: N arrows
+    grows at most 12 times for 4 times the input from 4 KiB to 16 KiB.
+    The gate asserts this ratio. At the ceiling of `max_source_bytes`,
+    the time of each growth shape is at most 50 times the time of the
+    reference shape `dense-assign`. Each Phase Review runs the
+    `measurements` feature: it asserts the ceiling bound, prints each
+    ratio from 16 KiB to 64 KiB, and the tracking note records them.
+    The ceiling bounds the input, so a super-linear shape inside the
+    ceiling bound is not a defect. A change of the ceiling measures
+    every shape again. If no lowering form keeps a shape inside these
+    bounds, a C15 bound with a measured value and a limit diagnostic
+    takes its place. Measured at `57bd020`: N arrows
     `const g = (): number => { ... }` in one function take 0.72 s at
     16 KiB and 63.0 s at 64 KiB (ratio 88), with or without a `try`.
+    Measured on one machine at the round 2 fix: the arrow growth shape takes
+    124.3 s at 64 KiB before the fix and 0.45 s after it;
+    `dense-assign` takes 0.32 s; the largest growth shape takes 9.73 s.
 
 ## 4. Shim and the Luau C API
 

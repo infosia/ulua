@@ -325,6 +325,29 @@ Reviewer: fresh agent, diff `1ac5397..57bd020`. 0 CRITICAL, 2 MAJOR, 2 MINOR. Th
 | The gate measures `try` shapes from 4 to 16 KiB; §4.9 stated 16 to 64 KiB | MINOR | §3.10 states both: the gate at 4 to 16 KiB, each Phase Review at 16 to 64 KiB |
 | `p25_witness_time.rs` lets TS2321 pass; its comment names only TS2563 | MINOR | TS2321 is a resource limit (invariant 3); the comment names both |
 
+Fix measurements (`luau-analyze -j1`, minimum of two runs, one machine):
+
+- Protected closures count real upvalues; a spill table counts as one. 192 upvalues compile; 193 give `limit:upvalues`. 20 accepted and 45 rejected cases pass.
+- The arrow lowering separates the write of a captured binding from each closure with typed accessors. Arrow shape at 16 and 64 KiB: 1.302 s and 124.311 s before (ratio 95.4), 0.071 s and 0.454 s after (ratio 6.4). With a `try`: 3.356 s and 373.060 s before, 0.219 s and 1.527 s after (ratio 7.0).
+- The witness-time test covers every shape of `s4_growth` and `p2x_growth`: 167 shapes. Default gate (4 to 16 KiB): largest ratio 8.48, cost 69.6 s Debug. `measurements` feature (16 to 64 KiB): cost 494.7 s Debug.
+- Eleven shapes have a ratio from 16 to 64 KiB above 12. Their times at 64 KiB are 0.94 s to 7.09 s; the largest at 64 KiB is `P27-sequential-catch`, 9.73 s, ratio 11.7. `dense-assign` takes 0.32 s at 64 KiB.
+
+| Shape | 16 KiB s | 64 KiB s | Ratio |
+|---|---:|---:|---:|
+| `dense-break` | 0.094 | 5.862 | 62.3 |
+| `dense-continue` | 0.068 | 3.353 | 49.1 |
+| `P24-string-iteration` | 0.248 | 7.091 | 28.6 |
+| `P25-tests` | 0.176 | 4.362 | 24.8 |
+| `dense-capture` | 0.181 | 4.438 | 24.5 |
+| `dense-while` | 0.064 | 1.036 | 16.2 |
+| `dense-while-empty` | 0.062 | 0.978 | 15.7 |
+| `S6-pending-loops` | 0.083 | 1.276 | 15.4 |
+| `P25-conditional-tests` | 0.067 | 1.019 | 15.2 |
+| `P25-joins` | 0.156 | 2.030 | 13.0 |
+| `P25-nullable-conditional-tests` | 0.073 | 0.935 | 12.8 |
+
+Contract (pipeline.md Rev 27): the source ceiling bounds the input, so the bound applies at the ceiling: each growth shape takes at most 50 times `dense-assign` (largest measured 30.3; the arrow defect 388). The gate keeps the 4 to 16 KiB ratio of 12. A raise of the ceiling measures every shape again; `dense-break` and `dense-continue` grow faster than quadratic.
+
 ### P2.7 Phase Review round 1
 
 Reviewer: fresh agent, diff `1ac5397..3fafd70`. 1 CRITICAL, 1 MAJOR, 3 MINOR. Stops are never caught: 130 stack, 2,759 memory, and 3,501 step sweeps report the stop code, run no catch or finally, and leave the instance usable. 965 random `finally` programs match `node`.

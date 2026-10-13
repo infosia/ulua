@@ -213,9 +213,7 @@ impl Emitter<'_> {
             E::Binary(op, a, b) => {
                 let a = self.expression(a, depth)?;
                 let b = self.expression(b, depth)?;
-                if *op == "%" {
-                    self.capture("__ulua_fmod");
-                }
+                self.capture_binary(op);
                 let value = self.binary(op, &self.temp(a), &self.temp(b));
                 self.write_slot(dest, value);
                 self.release(a);
@@ -243,6 +241,22 @@ impl Emitter<'_> {
                 self.line("end");
             }
             E::Conditional(test, a, b) => {
+                if let Some((id, tests)) = same_conditional_read(expr) {
+                    // The disjunction evaluates exactly the tests on the selected false-arm chain.
+                    let tests = tests
+                        .into_iter()
+                        .map(|test| self.pure(test, depth))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or_else(|| self.limit("internal", "Missing pure conditional test"))?;
+                    let test = self.slot(&Type::Boolean)?;
+                    self.write_slot(test, tests.join(" or "));
+                    self.release(test);
+                    let value = self.read_binding(id)?;
+                    self.write_slot(dest, value);
+                    return Ok(dest);
+                }
                 let t = self.expression(test, depth)?;
                 if let (Some(a), Some(b)) = (self.pure(a, depth)?, self.pure(b, depth)?) {
                     self.write_slot(dest, format!("if {} then {a} else {b}", self.temp(t)));
@@ -473,9 +487,7 @@ impl Emitter<'_> {
             },
             E::Binary(op, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
                 (Some(a), Some(b)) => {
-                    if *op == "%" {
-                        self.capture("__ulua_fmod");
-                    }
+                    self.capture_binary(op);
                     Some(self.binary(op, &a, &b))
                 }
                 _ => None,
@@ -484,10 +496,44 @@ impl Emitter<'_> {
         })
     }
     pub(super) fn binary(&self, op: &str, a: &str, b: &str) -> String {
-        if op == "%" {
-            format!("__ulua_fmod({a}, {b})")
-        } else {
-            format!("({a} {op} {b})")
+        match op {
+            "%" => format!("__ulua_fmod({a}, {b})"),
+            "==" => format!("__ulua_equal({a}, {b})"),
+            "~=" => format!("__ulua_unequal({a}, {b})"),
+            _ => format!("({a} {op} {b})"),
+        }
+    }
+    fn capture_binary(&mut self, op: &str) {
+        match op {
+            "%" => self.capture("__ulua_fmod"),
+            "==" => self.capture("__ulua_equal"),
+            "~=" => self.capture("__ulua_unequal"),
+            _ => {}
+        }
+    }
+}
+
+// Equal read arms share the final read, after all tests of the selected path.
+fn same_conditional_read(mut expr: &Expr) -> Option<(usize, Vec<&Expr>)> {
+    let mut id = None;
+    let mut tests = vec![];
+    loop {
+        match &expr.kind {
+            E::Read(last) => return (id == Some(*last)).then_some((*last, tests)),
+            E::Conditional(t, a, b)
+                if t.ty == Type::Boolean && matches!(t.kind, E::Read(_) | E::Boolean(_)) =>
+            {
+                let E::Read(read) = a.kind else {
+                    return None;
+                };
+                if id.is_some_and(|id| id != read) {
+                    return None;
+                }
+                id = Some(read);
+                tests.push(t.as_ref());
+                expr = b;
+            }
+            _ => return None,
         }
     }
 }

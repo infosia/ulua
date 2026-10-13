@@ -1,5 +1,10 @@
 //! Fixed library calls have constant work or work bounded by their output bytes.
 pub(crate) const LIBRARIES: &str = r#"local __ulua_trap: (number) -> () = (...) :: (number) -> ()
+local function __ulua_literal_set<T>(a: {T}, i: number, value: T): ()
+    a[i] = value
+end
+local function __ulua_equal(a: unknown, b: unknown): boolean return a == b end
+local function __ulua_unequal(a: unknown, b: unknown): boolean return a ~= b end
 local function __ulua_concat(parts: {string}, separator: string?): string
     local nonempty: {string} = {}
     for i = 1, #parts do

@@ -1,5 +1,7 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
+mod accessors;
 mod arrays;
+mod constants;
 mod exceptions;
 mod expressions;
 mod functions;
@@ -20,7 +22,7 @@ use std::{collections::HashMap, fmt::Write};
 const SPILL_FIELDS: usize = 128;
 
 pub(crate) use prelude::LIBRARIES;
-const LIBRARY_LOCALS: usize = 11;
+const LIBRARY_LOCALS: usize = 14;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -81,7 +83,7 @@ struct Emitter<'a> {
     overhead: usize,
     storage_offset: usize,
     loops: Vec<Loop>,
-    protected: Vec<usize>,
+    protected: Vec<Protection>,
     joins: joins::Joins,
     context: Option<&'a functions::Emission>,
     upvalues: std::collections::HashSet<String>,
@@ -89,6 +91,11 @@ struct Emitter<'a> {
 #[derive(Clone)]
 struct Loop {
     tail: Option<String>,
+}
+struct Protection {
+    loop_base: usize,
+    locals: std::collections::HashSet<String>,
+    upvalues: std::collections::HashSet<String>,
 }
 impl<'a> Emitter<'a> {
     fn new(
@@ -183,6 +190,19 @@ impl<'a> Emitter<'a> {
         self.write(&self.temp(slot), value, &ty);
     }
     fn read_binding(&mut self, id: usize) -> Result<String, Diagnostic> {
+        if self.uses_accessor(id) {
+            self.joins.clear(id);
+            let name = accessors::name(id);
+            self.capture(&name);
+            let ty = self.module.bindings[id]
+                .ty
+                .ok_or_else(|| self.limit("internal", "Missing accessor type"))?;
+            return Ok(format!(
+                "{name}(false, ({}) :: {})",
+                initial(&ty),
+                self.function_types.luau(&ty)
+            ));
+        }
         let location = self.location(id)?;
         self.capture(&location);
         // Delay the join until a read proves that the binding is live.
@@ -200,6 +220,12 @@ impl<'a> Emitter<'a> {
                 .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?,
         );
         self.joins.clear(id);
+        if self.uses_accessor(id) {
+            let name = accessors::name(id);
+            self.capture(&name);
+            self.line(format!("{name}(true, ({}) :: {ty})", value.as_ref()));
+            return Ok(());
+        }
         let location = self.location(id)?;
         self.capture(&location);
         self.write(&location, value, &ty);
@@ -211,6 +237,12 @@ impl<'a> Emitter<'a> {
             .ok_or_else(|| self.limit("internal", "Missing checked binding type"))?;
         if ty == self.slots[slot].ty {
             self.joins.clear(id);
+            if self.uses_accessor(id) {
+                let name = accessors::name(id);
+                self.capture(&name);
+                self.line(format!("{name}(true, {})", self.temp(slot)));
+                return Ok(());
+            }
             let location = self.location(id)?;
             self.capture(&location);
             // Both locals have this declared type. A redundant cast expands large alias graphs.
@@ -221,7 +253,17 @@ impl<'a> Emitter<'a> {
         }
     }
     fn capture(&mut self, location: &str) {
+        if self.context.is_none() {
+            return;
+        }
         let name = location.split('.').next().unwrap_or(location);
+        // A nested closure also requires each intermediate closure to capture the name.
+        for frame in self.protected.iter_mut().rev() {
+            if frame.locals.contains(name) {
+                return;
+            }
+            frame.upvalues.insert(name.to_owned());
+        }
         if name
             .strip_prefix("__ulua_caught")
             .and_then(|id| id.parse::<usize>().ok())
@@ -233,6 +275,7 @@ impl<'a> Emitter<'a> {
         if let Some(context) = self.context {
             if context.locals[self.owner].contains(name)
                 || name.starts_with(&format!("__ulua_g{}_", self.owner))
+                || name.starts_with(&format!("__ulua_t{}_", self.owner))
             {
                 return;
             }
@@ -245,6 +288,7 @@ impl<'a> Emitter<'a> {
         let ty = &self.module.types.identity(*ty);
         if let Some(i) = self.slots.iter().position(|s| !s.busy && s.ty == *ty) {
             self.slots[i].busy = true;
+            self.capture(&self.temp(i));
             Ok(i)
         } else {
             self.reserve_temporary()?;
@@ -254,6 +298,7 @@ impl<'a> Emitter<'a> {
                 ty: *ty,
                 busy: true,
             });
+            self.capture(&self.temp(i));
             Ok(i)
         }
     }
@@ -278,6 +323,9 @@ impl<'a> Emitter<'a> {
         self.generated_live += 1;
         self.generated_peak = self.generated_peak.max(self.generated_live);
         self.generated_count += 1;
+        if let Some(frame) = self.protected.last_mut() {
+            frame.locals.insert(name.clone());
+        }
         Ok(name)
     }
     fn headers(&self, declarations: &str) -> String {

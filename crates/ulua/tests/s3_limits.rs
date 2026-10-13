@@ -1,4 +1,4 @@
-//! S3 ABI boundary gate. Measured Debug cost: 0.37 seconds; budget: 20 seconds.
+//! S3 ABI boundary gate. Measured Debug cost: 0.53 seconds.
 //! Reproduce: cargo test --offline -p ulua --test s3_limits -- --nocapture.
 //! Large cases: 64 KiB sources, one million interrupts, and 24 string doublings.
 // This target uses peak counts; the live count serves the heap sampler only.
@@ -384,7 +384,7 @@ fn runtime() {
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
     // The loop emits exactly one interrupt per backedge, plus the call-entry interrupt.
     let at = s.call(index, &[number(DEFAULT_STEPS as usize - 1)]);
-    assert_eq!(at.0, ULUA_OK);
+    assert_eq!(at.0, ULUA_OK, "{}", at.1);
     let past = s.call(index, &[number(DEFAULT_STEPS as usize)]);
     assert_eq!((past.0, past.1), (ULUA_FAILED, "limit:steps".into()));
     assert_eq!(s.call(index, &[number(0)]).0, ULUA_OK);
@@ -394,8 +394,9 @@ fn runtime() {
     let mut s = Script::new(inputs::recursion());
     let index = s.index("recurse");
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
-    assert_eq!(s.call(index, &[number(19997)]).0, ULUA_OK);
-    let past = s.call(index, &[number(19998)]);
+    // The equality helper uses one additional frame at the deepest comparison.
+    assert_eq!(s.call(index, &[number(19996)]).0, ULUA_OK);
+    let past = s.call(index, &[number(19997)]);
     assert_eq!((past.0, past.1), (ULUA_FAILED, "limit:stack".into()));
     assert_eq!(s.call(index, &[number(0)]).0, ULUA_OK);
     let source = "export function f(n:number):void {let text=\"x\";let i=0;while(i<n){text=`${text}${text}`;i++;}} export function main():void {}";

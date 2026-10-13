@@ -117,7 +117,7 @@ pub const SPILL_SHAPES: &[&str] = &["spillA", "spillD"];
 
 /// Build one review shape at the source ceiling.
 pub fn spill_source(shape: &str, bytes: usize) -> String {
-    let mut source = (0..100)
+    let mut source = (0..if bytes < 8192 { 0 } else { 100 })
         .map(|n| format!("function f{n}():void{{}}"))
         .collect::<String>();
     source.push_str("export function main():void{");

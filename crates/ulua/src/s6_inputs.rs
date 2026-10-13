@@ -16,7 +16,7 @@ pub const SHAPES: &[&str] = &[
 pub fn source(shape: &str, bytes: usize) -> String {
     if let Some(terms) = shape.strip_prefix("spilled-mod-") {
         let terms: usize = terms.parse().unwrap();
-        let mut source = (0..120)
+        let mut source = (0..if bytes < 8192 { 0 } else { 120 })
             .map(|i| format!("function f{i}():void{{}}"))
             .collect::<String>();
         source.push_str("export function main():void{");

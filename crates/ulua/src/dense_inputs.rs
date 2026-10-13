@@ -82,7 +82,7 @@ pub const SHAPES: &[&str] = &[
 /// Repeat the smallest operation, with nesting or chaining where the form permits it.
 pub fn source(shape: &str, bytes: usize) -> String {
     if shape.starts_with("array-review-") {
-        let mut source = (0..100)
+        let mut source = (0..if bytes < 8192 { 0 } else { 100 })
             .map(|i| format!("function f{i}():void{{}}"))
             .collect::<String>();
         let levels = 40;
@@ -110,7 +110,7 @@ pub fn source(shape: &str, bytes: usize) -> String {
         source.push_str(&" ".repeat(bytes - source.len()));
         return source;
     }
-    let mut prefix = (0..100)
+    let mut prefix = (0..if bytes < 8192 { 0 } else { 100 })
         .map(|i| format!("function f{i}():void{{}}"))
         .collect::<String>();
     let levels = if shape == "array-read" { 39 } else { 40 };

@@ -71,11 +71,15 @@ impl Emitter<'_> {
                 let slot = self.expression(entry, depth)?;
                 (self.temp(slot), Some(slot))
             };
-            self.write(
-                &format!("{}[{}]", self.temp(dest), index + 1),
-                value,
-                &self.function_types.luau(&entry.ty),
-            );
+            // Each literal owns a fresh array; these integral keys are consecutive and non-nil.
+            // The helper keeps field writes out of the caller's flow graph.
+            self.capture("__ulua_literal_set");
+            self.line(format!(
+                "__ulua_literal_set({}, {}, ({value}) :: {})",
+                self.temp(dest),
+                index + 1,
+                self.function_types.luau(&entry.ty)
+            ));
             if let Some(slot) = slot {
                 self.release(slot);
             }

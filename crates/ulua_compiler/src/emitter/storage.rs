@@ -83,8 +83,10 @@ impl Emitter<'_> {
         }
         let available = capacity - table_count;
         let mut layout = Layout {
+            overhead,
             headers: String::new(),
             entries: HashMap::new(),
+            entry_locals: HashMap::new(),
             slots: self.slots.clone(),
         };
         let mut tables = SpillTables::new();
@@ -98,6 +100,11 @@ impl Emitter<'_> {
             let name = format!("__ulua_b{id}");
             let key = group(id);
             if i < available {
+                layout
+                    .entry_locals
+                    .entry(key)
+                    .or_default()
+                    .insert(name.clone());
                 let header = if key == 0 {
                     &mut layout.headers
                 } else {
@@ -126,6 +133,11 @@ impl Emitter<'_> {
             } else {
                 format!("__ulua_spill{}_{table}", self.owner)
             };
+            layout
+                .entry_locals
+                .entry(key)
+                .or_default()
+                .insert(name.clone());
             for (index, (field, _, _)) in fields.iter().enumerate() {
                 let page = if fields.len() > SPILL_FIELDS {
                     format!(".__ulua_page{}", index / SPILL_FIELDS)
