@@ -699,7 +699,7 @@ says `T`. The checker narrows only where nothing else can run a write:
    `break` of the loop is reachable. These are the `tsc` edges,
    measured.
 
-Accept: `a14`, `a42`, `a43`, `a46`, `a47`, `a48`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`, `r124`, `r125`.
+Accept: `a14`, `a42`, `a43`, `a46`, `a47`, `a48`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`, `r124`, `r125`, `r142`.
 
 ## C17. Exceptions
 
