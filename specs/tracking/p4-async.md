@@ -6,9 +6,39 @@ Status: open. Decisions: D24 to D26 (`plan.md` §8).
 
 | Slice | Family | Entries |
 |---|---|---|
-| P4.1 | Async functions, `await`, promise values, the job queue | see "Exit checklist (P4.1)" |
+| P4.1 | Async functions, `await`, promise values, the job queue | `a58` to `a61`; `r134` to `r141`; `t10` |
 | P4.2 | `Promise.all`, `then`, `catch`, `finally`, `Promise.resolve`, `Promise.reject` | later |
 | P4.3 | Host async requests, completion ABI, pump | later |
+
+## Exit checklist (P4.1)
+
+- [ ] collisions.md C19; surface.md Rev 24; pipeline.md §4.11;
+  abi.md Rev 7 §4.7; corpus.md Rev 10 implemented.
+- [ ] P4.1 entries pass in full; every earlier entry keeps passing.
+- [ ] Direct tests: each C19 rejection; job order against `node` for
+  the forms of Step 0 M4 that P4.1 accepts (await of a resolved and a
+  pending promise, async return of a value and of a promise, nested
+  async calls, interleaved tasks); await inside `try`, `catch`, and
+  `finally` at nesting depths to the ceiling; each stop (each trap,
+  `limit:memory`, `limit:steps`, `limit:stack`, each host stop)
+  inside a resumed activation: the code it has without `async`, no
+  `catch`, no `finally`, no later job, and the instance stays usable;
+  an unhandled rejection, also one handled later in the same drain;
+  async exports fulfilled, rejected, and pending; a drain that
+  retains no completed job (memory after 10,000 serial awaits).
+- [ ] Limits: nested immediate async starts at and past the resume
+  depth give `limit:stack`; a drain inside `max_steps` and
+  `max_memory_bytes`; growth shapes of await (sequential, nested, in
+  loops, with `try`) inside pipeline.md §3.10.
+- [ ] A random check of async programs against `node`, `tsc`, and
+  `luau-analyze -j1`.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+## Contract pin (P4.1)
+
+At `8e40e1f`, `tools/witness/luau.mjs` (`PHASE = "P4.1"`): `a58`,
+`a59`, `t10` rejected `unsupported`; `a60`, `a61` C11; `r134` to
+`r141` `unsupported`, want C19. Every earlier entry passes.
 
 ## P4 Step 0 measurement
 
