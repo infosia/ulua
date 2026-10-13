@@ -291,7 +291,10 @@ An async capability has a `start` function. A script call gives a
 1. **Start.** A script call creates a request with an id that is
    unique in the instance and never reused, and calls `start` once
    with the arguments and the id, on the thread of the run. A non-zero
-   return stops the run with `ULUA_HOST_ERROR` and `host:capability`;
+   return stops the run with `ULUA_HOST_ERROR` and `host:capability`
+   and discards the request: it is not open, it counts toward no limit,
+   and its id is invalid for `ulua_request_complete` and
+   `ulua_request_fail`;
    a revoked capability gives `host:revoked` before `start` (§6.2).
    More than `max_open_requests` open requests in the instance stop
    the run with `ULUA_FAILED` and `limit:requests`. A request is open

@@ -909,7 +909,8 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    a reaction to a settled promise enters the queue at once; a
    reaction to a pending promise enters it when the promise settles.
    The queue drains after each host-started run (`ulua_instance_new`,
-   `ulua_call`), before the run returns (D25).
+   `ulua_call`, `ulua_call_start`, and each settle of `ulua_pump`),
+   before the run returns (D25).
 7. **Unhandled rejection.** At the end of a drain, a rejected promise
    that has no reaction stops the run: `trap:uncaught-exception` with
    the message `name: message` of the first such promise in rejection

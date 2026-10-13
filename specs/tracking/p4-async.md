@@ -133,6 +133,15 @@ M6); call tasks for async exports.
 
 Implementation record (Codex), Debug, one machine: 15 ABI tests (0.02 s); 14 order programs against `node` with the settle loop (0.54 s); the P4 random target extended to 720 programs, 120 with async host requests, 0 differences (11.3 s); 6 growth shapes: compiler 16 to 64 KiB at most 4.03, `luau-analyze` ceiling at most 2.08 times `dense-assign`, largest output 1,177,800 bytes; all shapes ceiling at most 22.1; `measurements` 1,079 s; `cargo-test` 276 s in Codex's gate run. Decided gaps, now in abi.md §6.4: a settle that stops counts in `*settled`; a completion copy that `max_memory_bytes` refuses gives `limit:memory` and records nothing; a stopped `ulua_call_start` does not write `*task`.
 
+### P4.3 Phase Review round 1
+
+Reviewer: fresh agent, diff `b105752..86432d3`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Held: complete and fail validation in 13 forms; BUSY from `start` for 7 functions and from the output callback during a settle; pump order by record, `max_requests`; a stop inside a settle counts, keeps later completions, clears the queue, and runs no `catch` or `finally`; a failed request gives `host:request`; `max_steps` per settle; `limit:requests` at 256 and 257, freed by settles; call tasks for async and sync exports; revocation and frees keep open requests settleable; 0 leaks; ids unique per instance; declarations; 33 hand programs and 700 random programs equal `node` with the settle loop, `tsc` and `luau-analyze -j1` clean; 4 more shapes: analyzer at most 0.56 s at 64 KiB.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A `start` that returns non-zero leaves its request linked and open (`native/shim/requests.h:59-73`): 256 failed starts and every later async start gives `limit:requests`; with a large limit, 68,907 failed starts reach `limit:memory` and each later collection walks the leaked records | MAJOR | abi.md §6.4.1: a failed start discards its request (not open, no limit, invalid id); a test checks the counts |
+| C19.6 names two host-started runs; pipeline.md §6 and abi.md §6.4.3 name four | MINOR | C19.6 lists all four |
+
 ## Contract pin (P4.3)
 
 At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).
