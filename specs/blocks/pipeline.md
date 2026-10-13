@@ -26,6 +26,8 @@ Rev 22: §6 recursive alias groups count their size (P2.5 review 9).
 Rev 23: §6 a group counts every type link inside it (P2.5 review 10).
 Rev 24: §6 `limit:fields` counts the methods of a class (P2.6).
 Rev 25: §4.9 exceptions (P2.7).
+Rev 26: §3.10 witness time of every growth shape, §4.9 protected closure
+upvalues (P2.7 review 2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -134,6 +136,15 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     test include nested branches with many bindings and many writes.
     §7 records the compiler heap peak of the worst shape at the source
     ceiling.
+    The time of `luau-analyze -j1` over the output of each growth shape
+    grows at most 12 times for 4 times the input. The gate measures
+    each shape from 4 KiB to 16 KiB; each Phase Review runs the
+    `measurements` feature, which measures from 16 KiB to 64 KiB, and
+    records the ratios in the tracking note. If no lowering form keeps
+    a shape inside the bound, a C15 bound with a measured value and a
+    limit diagnostic takes its place. Measured at `57bd020`: N arrows
+    `const g = (): number => { ... }` in one function take 0.72 s at
+    16 KiB and 63.0 s at 64 KiB (ratio 88), with or without a `try`.
 
 ## 4. Shim and the Luau C API
 
@@ -184,12 +195,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    does not poison the context. Measured: `error(v, 0)` and
    `lua_error` request no allocation in the measured stops; nested
    protected calls reach "C stack overflow" at 198.
-   The lowering keeps the `luau-analyze -j1` time of `try` shapes
-   (sequential, nested, in loops, with `catch` and `finally`) within a
-   ratio of 12 for 4 times the input, measured from 16 KiB to 64 KiB
-   (the witness bound of P2.5). If no lowering form reaches it, a C15
-   bound on `try` statements per generated function takes its place,
-   with a measured value and a limit diagnostic. Measured at `3fafd70`:
+   A protected closure is a generated function for the upvalue budget
+   (§5.14): its upvalues are the locals and upvalues of its owner that
+   it reads or writes, and a `try` over the budget gives
+   `limit:upvalues`, as a source function does. The witness time of
+   `try` shapes follows §3.10. Measured at `3fafd70`:
    `try{a++;}finally{}` repeated in one function takes 0.13 s at 100,
    6.4 s at 400, and 65 s at 800 statements.
 

@@ -314,6 +314,17 @@ byte rule; no Luau pattern from script text; no `internal`.
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
 
+### P2.7 Phase Review round 2
+
+Reviewer: fresh agent, diff `1ac5397..57bd020`. 0 CRITICAL, 2 MAJOR, 2 MINOR. The round 1 resolution holds: hand-written jump cases and 1,434 random programs with jumps, try, and arrows match `node`; `try` analyzer ratios 5.0 to 8.0 for 8 more shapes.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A protected closure captures the locals and upvalues of its owner with no bound: 99 module `let` and 99 locals used in a `try` (6,093 B) give `internal` "Out of upvalue registers"; 98 and 98 run | MAJOR | pipeline.md §4.9: a protected closure is a generated function for the upvalue budget |
+| N arrows with a `try` in one function: `luau-analyze -j1` 1.24 s at 16 KiB, 123.4 s at 64 KiB (ratio 99.5); without the `try` 0.72 s to 63.0 s (ratio 88); the output is the same at `1ac5397`: an arrow cost from P2.1 | MAJOR | pipeline.md §3.10: the witness time of every growth shape |
+| The gate measures `try` shapes from 4 to 16 KiB; §4.9 stated 16 to 64 KiB | MINOR | §3.10 states both: the gate at 4 to 16 KiB, each Phase Review at 16 to 64 KiB |
+| `p25_witness_time.rs` lets TS2321 pass; its comment names only TS2563 | MINOR | TS2321 is a resource limit (invariant 3); the comment names both |
+
 ### P2.7 Phase Review round 1
 
 Reviewer: fresh agent, diff `1ac5397..3fafd70`. 1 CRITICAL, 1 MAJOR, 3 MINOR. Stops are never caught: 130 stack, 2,759 memory, and 3,501 step sweeps report the stop code, run no catch or finally, and leave the instance usable. 965 random `finally` programs match `node`.
