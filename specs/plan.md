@@ -139,6 +139,9 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D21 | The host binds its capabilities at compile time: `ulua_compile` takes the grant list, and each grant is a host function name of the script with the grant's signature. A grant can be revoked; a later call of it stops the run | 2026-10-13 | `abi.md` §6.2; owner decision at the P3 start |
 | D22 | A host function error stops the run with `ULUA_HOST_ERROR`. A script cannot catch it (C17.7) | 2026-10-13 | `abi.md` §6; owner decision at the P3 start |
 | D23 | The C ABI has no binary compatibility rule and no experimental status: the project has one user. An ABI change updates `abi.md`, `include/ulua.h`, the implementation, and the tests in one commit | 2026-10-13 | `abi.md` Rev 6; owner decision at the P3 close |
+| D24 | `Promise<T>` is a value: it can be stored, passed, returned, and awaited more than once. `async` functions, `await`, `Promise.all`, `then`, `catch`, and `finally` are in the surface. A promise is a prelude table whose state the script cannot read | 2026-10-13 | owner decision at the P4 start, after a comparison with the owner's prior projects (the one that holds promises as values) |
+| D25 | Promise jobs run in the order of `node`: each reaction is one job of a FIFO queue, and the queue drains after each run that the host starts. An entry that interleaves tasks is `js-comparable` | 2026-10-13 | owner decision at the P4 start |
+| D26 | An exception in an `async` body rejects its promise, and `await` throws it again: `try`/`catch` catches it (C17). A failed host request stops the run (D22) | 2026-10-13 | owner decision at the P4 start |
 
 ## 9. Corrections and revisions
 

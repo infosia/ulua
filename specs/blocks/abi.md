@@ -11,6 +11,7 @@ Rev 5: §1, §3, §4, §6, §7, §8 host capabilities, string values, link
 tests (P3; D20 to D22). §6.2 grants without script declarations, §6.3
 host declarations (D20 revised).
 Rev 6: status, no compatibility rule (D23).
+Rev 7: §3, §4.7 async exports (P4.1).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -83,7 +84,9 @@ The parameter can be null. Run codes: `trap:<kind>` (corpus.md §6),
 `limit:memory`, `limit:steps`, `limit:stack`. `ULUA_HOST_ERROR` has the
 code `host:output`, `host:capability`, `host:revoked`, or `host:result`
 (§6). The message of a `host:capability`, `host:revoked`, or
-`host:result` diagnostic is the name of the capability. `ULUA_INTERNAL` has the code `internal`. If the OS
+`host:result` diagnostic is the name of the capability. An async
+export whose promise is pending after the drain has the code
+`async:pending` (§4.7). `ULUA_INTERNAL` has the code `internal`. If the OS
 refuses the compiler thread, `ulua_compile` gives `ULUA_FAILED` with the
 code `host:resources` and does not poison the context. In P1 a run diagnostic
 has offset `UINT64_MAX`. A run diagnostic message holds no chunk name and
@@ -121,6 +124,13 @@ typedef struct ulua_value {
    valid UTF-8 (collisions.md C5).
 6. A `NUMBER` value is any binary64, NaN and -0 included. A `BOOLEAN`
    value is 0 or 1.
+7. **Async exports.** An export with the result type `Promise<T>` has
+   the result type tag of `T` in its signature. `ulua_call` runs the
+   call and the job drain (collisions.md C19.6). Then a fulfilled
+   promise gives `ULUA_OK` and its value; a rejected promise gives
+   `ULUA_FAILED` with `trap:uncaught-exception`; a pending promise
+   gives `ULUA_FAILED` with the code `async:pending`. The instance
+   stays usable in each case.
 
 ## 5. Limits
 

@@ -31,6 +31,7 @@ upvalues (P2.7 review 2).
 Rev 27: §3.10 witness time at the source ceiling (P2.7 review 2).
 Rev 28: §4.10 host functions, §8 grants (P3).
 Rev 29: §4.10 one grant table (P3 review).
+Rev 30: §4.11 async (P4.1).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -231,6 +232,23 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    than the budget spills them, and a function over the upvalue budget
    gives `limit:upvalues`. The witness time of host-call shapes follows
    §3.10.
+11. **Async.** The prelude holds the promise table, the job queue, and
+   the scheduler (collisions.md C19). Each `async` activation runs in a
+   dedicated coroutine; the scheduler resumes it with
+   `coroutine.resume`, never with `coroutine.wrap` or a direct yield
+   from a host-started run (P4 Step 0 M1, M2). After each resume that
+   returns `false`, the scheduler first reads the stop that the
+   instance recorded and the native error class, and raises a stop
+   again with `error(v, 0)` before any other code (C17.7); a value that
+   the private Error table holds rejects the promise. The queue keeps a
+   private head index and a tail index and clears each consumed entry,
+   so a drain retains no completed job. The queue drains after each
+   host-started run (`ulua_instance_new`, `ulua_call`) inside the same
+   protected call, under the same `max_steps` and `max_memory_bytes`.
+   The unhandled-rejection check (C19.7) runs at the end of the drain.
+   Each `await` lowers to a yield through the private channel; the
+   resumed value carries a type assertion to `T` at that one point
+   (M3). The witness time of await shapes follows §3.10.
 
 ## 5. Emission
 

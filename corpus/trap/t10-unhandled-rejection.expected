@@ -1,0 +1,3 @@
+before
+after
+trap: uncaught-exception

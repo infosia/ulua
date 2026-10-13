@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -844,6 +844,71 @@ Accept: `a55`, `a56`, `a57`. Reject: `r126`, `r128`, `r130`, `r131`,
 `r132`, `r133`. Retired by the D20 revision:
 `retired:r127-host-signature` (a grant gives the signature),
 `retired:r129-host-shadow` (rule 5 accepts it, `a57`).
+
+## C19. Async functions and promises
+
+JavaScript runs an `async` body until its first `await`, returns a
+promise, and runs each continuation as a job of one FIFO queue. Luau
+has coroutines and no promise. Ulua keeps the job model of ES2022 for
+native promises (D24, D25): a promise is a prelude table, each
+`async` activation is a coroutine, and the jobs run in the order that
+`node` runs them. Measured in `tracking/p4-async.md` (P4 Step 0): a
+Luau model of the jobs gives the `node` order on 2,040 programs.
+
+1. **Forms.** An `async` function declaration, method (not a
+   constructor), or arrow has the result type `Promise<T>`, written.
+   `T` is an accepted type, or `void`. Generators, `async`
+   generators, `for await`, and `await using` are rejected (C19).
+2. **The promise type.** `Promise<T>` is a type of values: a binding,
+   a parameter, a field, an array element, a result. `T` is not a
+   `Promise` type. A promise relates only to an identical promise type
+   (C1): `Promise<number>` does not flow to `Promise<number | null>`,
+   which `tsc` accepts. A promise value has no member and no operator
+   in P4.1: an equality, a template substitution, a truth test, and
+   `typeof` are rejected (C19). The `Promise` identifier as a value
+   (`new Promise`, `Promise.resolve`) is rejected (C19).
+3. **`await`.** `await e` is accepted only in an `async` body, not in
+   a nested non-`async` function, and not at module level (`tsc`
+   accepts top-level `await` in a module). `e` has a `Promise<T>`
+   type; `await` of another type is rejected (C19), where `tsc`
+   accepts it. The result has type `T`; an `await` of
+   `Promise<void>` is an `ExpressionStatement`.
+4. **No floating promise.** An `ExpressionStatement` whose value has
+   a `Promise<T>` type is rejected (C19): the script stores, passes,
+   returns, or awaits each promise. `tsc` accepts it.
+5. **Start and settle.** A call of an `async` function runs its body
+   at once, up to its first `await` or its end, and gives its
+   promise. `return v` fulfills the promise with `v`; `return p` with
+   a promise `p` adopts `p` with the jobs of ES2022 (a
+   PromiseResolveThenableJob). An exception that leaves the body
+   rejects the promise (D26). `await p` suspends the activation and
+   resumes it in a job after `p` settles: with the value, or by a
+   throw of the reason, which `try`/`catch` catches (C17). A stop is
+   never a rejection (C17.7): it leaves the run before any `catch`,
+   `finally`, or job.
+6. **Order.** The jobs run in one FIFO queue in the order of ES2022:
+   a reaction to a settled promise enters the queue at once; a
+   reaction to a pending promise enters it when the promise settles.
+   The queue drains after each host-started run (`ulua_instance_new`,
+   `ulua_call`), before the run returns (D25).
+7. **Unhandled rejection.** At the end of a drain, a rejected promise
+   that has no reaction stops the run: `trap:uncaught-exception` with
+   the message `name: message` of the first such promise in rejection
+   order (corpus.md §6). `node` reports it after the same drain
+   (`unhandledRejection`) and ends the process. A reaction added in the
+   same drain handles it. The instance stays usable (C17.8).
+8. **Array callbacks.** An `async` arrow as an argument of an array
+   method is rejected (C19) in P4.1: `forEach` drops the promise of its
+   callback.
+9. **Limits.** Each `async` activation is one coroutine. An `async`
+   call that runs before the first `await` nests one coroutine resume
+   in the caller; nested resumes past the Luau C-stack limit give
+   `limit:stack`. Coroutines, promises, and jobs count toward
+   `max_memory_bytes`, and their work toward `max_steps` (`pipeline.md`
+   §4.11).
+
+Accept: `a58`, `a59`, `a60`, `a61`. Reject: `r134`, `r135`, `r136`,
+`r137`, `r138`, `r139`, `r140`, `r141`. Trap: `t10`.
 
 ## Open items
 

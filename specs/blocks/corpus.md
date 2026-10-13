@@ -1,12 +1,13 @@
 # Corpus contract
 
-Status: Rev 9, 2026-10-13 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 10, 2026-10-13 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
 `phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
 codes to it; Rev 6 renames it to `exception`, P2.5 review; Rev 7: any code that names `never`,
 P2.5 review 11; Rev 8: `luau-analyze -j1`, P2.6 review 3; Rev 9: the
-`grants` header and the host fixtures, P3).
+`grants` header and the host fixtures, P3; Rev 10: `async` `main`, unhandled
+rejection, P4.1).
 
 ## 1. Layout
 
@@ -22,8 +23,10 @@ its record in the rule that named it, written `retired:<name>`.
 
 ## 2. Program form
 
-A corpus program is one module. It exports `function main(): void`. The
-harness calls `main` once. A program writes output only through
+A corpus program is one module. It exports `function main(): void` or
+`async function main(): Promise<void>`. The harness calls `main` once;
+the call includes the job drain (collisions.md C19.6). The `node`
+runner awaits the promise of an `async` `main`. A program writes output only through
 `print(text: string): void` from the prelude. Each call writes `text`
 and one line feed.
 
@@ -131,7 +134,7 @@ recorded defect of the golden, in the same commit.
 | `array-modified` | collisions.md C6.9 |
 | `string-boundary` | collisions.md C5 |
 | `invalid-argument` | collisions.md C5 |
-| `uncaught-exception` | collisions.md C17.8 |
+| `uncaught-exception` | collisions.md C17.8, C19.7 (an unhandled rejection) |
 
 Resource limit traps (depth, time, memory; `CLAUDE.md` invariant 2) join
 this table at P1 with their own entries. The `node` comparison does not

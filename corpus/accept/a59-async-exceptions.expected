@@ -1,0 +1,10 @@
+fail one
+guarded finally
+caught RangeError: one
+fail two
+cleanup finally -10
+-10
+fail three
+rethrow finally
+main caught three
+done

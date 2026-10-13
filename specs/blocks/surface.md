@@ -1,6 +1,6 @@
 # Accepted surface
 
-Status: Rev 23, 2026-10-13 (Rev 0 to Rev 4 the same day; P0 Phase Review
+Status: Rev 24, 2026-10-13 (Rev 0 to Rev 4 the same day; P0 Phase Review
 round 10 changed the form from prose to a table of syntax node kinds;
 round 12 N5 names a parameter callee; Rev 6: the end of a function
 with a result, P1 Phase Review round 4; Rev 7: `==` and `!=` follow
@@ -11,7 +11,7 @@ at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: infe
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
 reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
-optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18).
+optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -32,20 +32,20 @@ C16 only, not the `tsc` type.
 |---|---|
 | `Program` | A module. Its statements are the declarations of this table. It exports `function main(): void`. |
 | `ExportNamedDeclaration` | Only `export` before a module-level `FunctionDeclaration`. No specifiers, no `export default`. |
-| `FunctionDeclaration` | Not `async`, not a generator. A `BindingIdentifier` name. Each parameter is a `FormalParameter` of §4. A result type annotation is required. |
+| `FunctionDeclaration` | Not a generator. `async` with a result type `Promise<T>` (C19). A `BindingIdentifier` name. Each parameter is a `FormalParameter` of §4. A result type annotation is required. |
 | `VariableDeclaration` | `let` or `const`, one or more `VariableDeclarator`s. |
 | `VariableDeclarator` | The id is a `BindingIdentifier` (no binding pattern). An initializer is required. A type annotation is optional; without it the type is the checked type of the initializer, which must not be `null` alone or an empty array literal. A `let` without an annotation whose initializer has type `boolean` is accepted only if the initializer is a boolean literal or a comparison (`<`, `>`, `<=`, `>=`, an equality), in parentheses or not. `tsc` gives a narrowed boolean reference a literal type, and a later assignment then gives TS2322. |
 | `TSTypeAliasDeclaration` | Module level only. No type parameters. The type is a `TSTypeLiteral` of §5. |
 | `ClassDeclaration` | Module level only. No `extends`, `implements`, type parameters, or decorators. Members: `PropertyDefinition` and `MethodDefinition` of this table. |
 | `PropertyDefinition` | An identifier key, not computed, not `static`, not `declare`, not `readonly`, not `#private`. A type annotation is required. An initializer is optional (C13). Modifier: `private`: a read or a write of the member outside the class body gives C11 (`tsc` TS2341); inside the class body, also through another instance of the class, it is accepted. At run time the modifier has no effect. |
-| `MethodDefinition` | Kind `constructor` (at most one) or `method`. An identifier key, not computed, not `static`, not `get` or `set`, not `#private`. Parameters as for `FunctionDeclaration`. A method has a result type annotation. Modifier: `private`, as for `PropertyDefinition`; a constructor has no modifier. A `ReturnStatement` in a constructor has no argument: `return e` changes the value of `new` in JavaScript. |
+| `MethodDefinition` | Kind `constructor` (at most one) or `method`. An identifier key, not computed, not `static`, not `get` or `set`, not `#private`. Parameters as for `FunctionDeclaration`. A method has a result type annotation. A method can be `async` with a result type `Promise<T>` (C19); a constructor cannot. Modifier: `private`, as for `PropertyDefinition`; a constructor has no modifier. A `ReturnStatement` in a constructor has no argument: `return e` changes the value of `new` in JavaScript. |
 
 ## 2. Statements
 
 | Node kind | Accepted form |
 |---|---|
 | `VariableDeclaration`, `FunctionDeclaration` | In any block. |
-| `ExpressionStatement` | The expression is an `AssignmentExpression`, an `UpdateExpression`, a `CallExpression`, a `NewExpression`, or a `ChainExpression` whose last step is a call (§3). |
+| `ExpressionStatement` | The expression is an `AssignmentExpression`, an `UpdateExpression`, an `AwaitExpression`, a `CallExpression` whose type is not `Promise<T>` (C19), a `NewExpression`, or a `ChainExpression` whose last step is a call (§3). |
 | `BlockStatement` | A list of statements. |
 | `IfStatement` | A `boolean` test. An optional `else`. |
 | `WhileStatement` | A `boolean` test. |
@@ -84,13 +84,14 @@ rejected, also where `tsc` accepts it.
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
 | `CallExpression` | The callee is an `IdentifierReference` of a function declaration, or of a binding or a parameter of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
 | `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
-| `ArrowFunctionExpression` | Not `async`. Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type contains a function type at any depth (a function, or an array of functions) has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
+| `ArrowFunctionExpression` | `async` only with a result type annotation `Promise<T>` and not as an argument of an array method (C19). Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type contains a function type at any depth (a function, or an array of functions) has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
 | `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). `instanceof` with a class of the Error family on the right and a catch binding or a value of the family on the left (C17.2). |
 | `LogicalExpression` | `&&`, `\|\|` on two booleans. `a ?? b` with `a: T \| null` and `b` assignable to `T` or `T \| null`. |
 | `ConditionalExpression` | A `boolean` test. Both branches have one type `T`, or one branch is `null` and the result is `T \| null`. |
 | `AssignmentExpression` | Only as an `ExpressionStatement` or a `for` update; its value is never used. Operators `=`; `+=` on numbers or on two strings; `-=`, `*=`, `/=`, `%=` on numbers. The target is an `IdentifierReference` of a `let` binding or a parameter, a `StaticMemberExpression` of a field (not a method), or a `ComputedMemberExpression` of an array element. |
 | `UpdateExpression` | `++`, `--`, prefix or postfix, only as an `ExpressionStatement` or a `for` update. The target is a `number` binding, parameter, or field, as for `AssignmentExpression`. |
+| `AwaitExpression` | In the body of an `async` function, method, or arrow, not in a nested non-`async` function. The operand has type `Promise<T>`; the result has type `T` (C19). |
 | `ChainExpression` | Exactly one optional step and no step after it: `a?.f`, or `a?.m(args)`. `a` has type `T \| null`. Only as the left operand of `??` (`a?.f`), or as an `ExpressionStatement` (`a?.m(args)`). `a?.m(args)` is never an arrow expression body: `tsc` types it `R \| undefined` (D16). |
 
 Every value flow uses the assignability of collisions.md C1: an
@@ -115,7 +116,7 @@ its target.
 | `TSUnionType` | Exactly two members: `T` and `null` (C2). `T` is not `null` and not a union. |
 | `TSArrayType` | `T[]`. The element type does not include `null` (C6.5). |
 | `TSFunctionType` | Parameters as in §4, without defaults. A result type. |
-| `TSTypeReference` | The name of a type alias or a class declaration. No type arguments, no qualified name. |
+| `TSTypeReference` | The name of a type alias or a class declaration. No type arguments, no qualified name. Also `Promise<T>` with one type argument `T` that is not a `Promise` type (C19); `Promise<void>` only as the result type of an `async` function. |
 | `TSTypeLiteral` | Only as the body of a `TSTypeAliasDeclaration`. Members are `TSPropertySignature`s with an identifier key and a type annotation: not optional, not computed, no index signatures, no method signatures. |
 | `TSParenthesizedType` | Around a type. |
 

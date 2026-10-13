@@ -162,12 +162,22 @@ async function runNode(entry) {
   const grants = headers.get(entry.id).grants;
   install(output, grants === undefined ? [] : grants.split(", "));
   let thrown = null;
+  // collisions.md C19.7: node reports an unhandled rejection after the
+  // job drain; the runner records the first one as the throw.
+  const onRejection = (e) => {
+    if (thrown === null) thrown = e;
+  };
+  process.on("unhandledRejection", onRejection);
   try {
     const mod = await import(pathToFileURL(entry.path).href);
-    mod.main();
+    const result = mod.main();
+    if (result instanceof Promise) await result;
   } catch (e) {
-    thrown = e;
+    if (thrown === null) thrown = e;
   }
+  // One macrotask lets node finish the drain and report rejections.
+  await new Promise((resolve) => setImmediate(resolve));
+  process.off("unhandledRejection", onRejection);
   return { output, thrown };
 }
 

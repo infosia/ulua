@@ -1,0 +1,15 @@
+main start
+A start
+B start
+main sync end
+A step 0
+B step 0
+A step 1
+B step 1
+B end
+A step 2
+A end
+a=3
+b=1
+c=7
+main end
