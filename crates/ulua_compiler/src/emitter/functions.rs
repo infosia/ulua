@@ -29,7 +29,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         } else {
             0
         }
-        + if module.exceptions { 4 } else { 0 };
+        + if module.exceptions { 6 } else { 0 };
     let (method_prelude, method_locals) = methods::prelude(&module.methods)?;
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
@@ -173,6 +173,8 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         "__ulua_errors",
         "__ulua_error",
         "__ulua_instance",
+        "__ulua_protect",
+        "__ulua_try",
         "__ulua_concat",
         "__ulua_print",
         "__ulua_fmod",

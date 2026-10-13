@@ -28,6 +28,8 @@ mod strings;
 mod asynchronous;
 #[path = "p3_shapes.rs"]
 mod hosts;
+#[path = "protected_loops.rs"]
+mod protected_loops;
 
 pub struct Shape {
     pub label: String,
@@ -102,6 +104,19 @@ pub fn all() -> Vec<Shape> {
     add(&mut out, "P27", &exceptions::SHAPES, exceptions::source);
     add(&mut out, "P3", hosts::SHAPES, hosts::source);
     add(&mut out, "P41", asynchronous::SHAPES, asynchronous::source);
+    for (family, make) in [
+        (
+            "P27-loops-finally",
+            protected_loops::sync_finally as fn(&str, usize) -> String,
+        ),
+        ("P27-loops-catch", protected_loops::sync_catch),
+        ("P27-loops-nested", protected_loops::sync_nested),
+        ("P41-loops-finally", protected_loops::async_finally),
+        ("P41-loops-catch", protected_loops::async_catch),
+        ("P41-loops-nested", protected_loops::async_nested),
+    ] {
+        add(&mut out, family, protected_loops::SHAPES, make);
+    }
     out
 }
 

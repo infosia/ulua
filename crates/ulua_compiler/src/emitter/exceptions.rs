@@ -13,24 +13,21 @@ impl Emitter<'_> {
     fn protected_block(
         &mut self,
         block: &S,
-        binding: Option<(usize, &str)>,
-        names: &[String; 4],
+        binding: Option<usize>,
         depth: u32,
     ) -> Result<(), Diagnostic> {
-        let [ok, tag, value, target] = names;
         let parameter = binding
-            .map(|(id, _)| format!("__ulua_caught{id}: unknown"))
+            .map(|id| format!("__ulua_caught{id}: unknown"))
             .unwrap_or_default();
-        self.line(format!("local {ok}: boolean, {tag}: any, {value}: any, {target}: number = pcall(function({parameter}): (number, any, number)"));
-        let previous =
-            binding.map(|(id, _)| (id, self.copies.insert(id, format!("__ulua_caught{id}"))));
+        self.line(format!("    function({parameter}): (number, any, number)"));
+        let previous = binding.map(|id| (id, self.copies.insert(id, format!("__ulua_caught{id}"))));
         let offset = self.statement_offset;
         let index = self.protected_slots.len();
         self.protected_slots.push(vec![]);
         self.protected.push(Protection {
             loop_base: self.loops.len(),
             locals: binding
-                .map(|(id, _)| format!("__ulua_caught{id}"))
+                .map(|id| format!("__ulua_caught{id}"))
                 .into_iter()
                 .collect(),
             upvalues: Default::default(),
@@ -93,23 +90,8 @@ impl Emitter<'_> {
                 self.copies.remove(&id);
             }
         }
-        self.line(binding.map_or_else(|| "end)".into(), |(_, value)| format!("end, {value})")));
-        self.capture("__ulua_instance");
-        self.line(format!("if not {ok} then"));
-        self.line(format!(
-            "if not __ulua_instance({tag}, \"Error\") then error({tag}, 0) end"
-        ));
-        self.line(format!("{value} = {tag}; {tag} = 2; {target} = 0"));
         self.line("end");
         Ok(())
-    }
-    fn completion_names(&mut self) -> Result<[String; 4], Diagnostic> {
-        Ok([
-            self.generated()?,
-            self.generated()?,
-            self.generated()?,
-            self.generated()?,
-        ])
     }
     pub(super) fn try_statement(
         &mut self,
@@ -127,44 +109,53 @@ impl Emitter<'_> {
             || catch.is_some_and(|(_, c)| ir::loop_continue(c))
             || finalizer.is_some_and(ir::loop_continue);
         let before = self.generated_live;
+        let returns = ir::returns(body)
+            || catch.is_some_and(|(_, c)| ir::returns(c))
+            || finalizer.is_some_and(ir::returns);
+        let never = terminates && !returns;
+        let dispatch = !never && (returns || breaks || continues);
         self.line("do");
-        let names = self.completion_names()?;
-        self.protected_block(body, None, &names, depth)?;
-        let [_, tag, value, target] = &names;
+        let names = if dispatch {
+            [self.generated()?, self.generated()?, self.generated()?]
+        } else {
+            Default::default()
+        };
+        let [tag, value, target] = &names;
+        self.capture("__ulua_try");
+        // Only source exits need dispatch in the caller's flow graph.
+        if dispatch {
+            self.line(format!(
+                "local {tag}: number, {value}: any, {target}: number = __ulua_try("
+            ));
+        } else if never {
+            // The helper cannot complete this source form. Expose that fact to the analyzer.
+            self.line("error((__ulua_try(");
+        } else {
+            self.line("__ulua_try(");
+        }
+        self.protected_block(body, None, depth)?;
+        self.line(",");
         if let Some((id, catch)) = catch {
-            self.line(format!("if {tag} == 2 then"));
-            let caught = self.completion_names()?;
-            self.protected_block(catch, id.map(|id| (id, value.as_str())), &caught, depth)?;
-            self.line(format!(
-                "{tag}, {value}, {target} = {}, {}, {}",
-                caught[1], caught[2], caught[3]
-            ));
-            self.line("end");
-            self.generated_live -= 4;
+            self.protected_block(catch, *id, depth)?;
+        } else {
+            self.line("    nil");
         }
+        self.line(",");
         if let Some(finalizer) = finalizer {
-            self.line("do");
-            let final_names = self.completion_names()?;
-            self.protected_block(finalizer, None, &final_names, depth)?;
-            self.line(format!("if {} ~= 0 then", final_names[1]));
-            self.line(format!(
-                "{tag}, {value}, {target} = {}, {}, {}",
-                final_names[1], final_names[2], final_names[3]
-            ));
-            self.line("end");
-            self.line("end");
-            self.generated_live -= 4;
+            self.protected_block(finalizer, None, depth)?;
+        } else {
+            self.line("    nil");
         }
-        self.line(format!("if {tag} == 2 then error({value}, 0) end"));
-        if !self.protected.is_empty() {
+        self.line(if never { ")), 0)" } else { ")" });
+        if dispatch && !self.protected.is_empty() {
             if terminates || (ends_block && self.crosses_protection()) {
                 self.line(format!("do return {tag}, {value}, {target} end"));
-            } else {
+            } else if returns {
                 self.line(format!(
                     "if {tag} == 1 then return {tag}, {value}, {target} end"
                 ));
             }
-        } else if self.owner != 0 {
+        } else if returns && self.owner != 0 {
             let result = self.module.bindings[self.owner - 1]
                 .ty
                 .and_then(|ty| self.module.types.function(ty))

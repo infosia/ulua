@@ -60,4 +60,25 @@ local function __ulua_instance(value: unknown, kind: string): boolean
     local actual = __ulua_errors[value :: __ulua_Error]
     return actual ~= nil and (kind == "Error" or actual == kind)
 end
+type __ulua_completion_body = (unknown) -> (number, any, number)
+local function __ulua_protect(body: __ulua_completion_body, caught: unknown): (number, any, number)
+    local ok, tag, value, target = pcall(body, caught)
+    if not ok then
+        if not __ulua_instance(tag, "Error") then error(tag, 0) end
+        return 2, tag, 0
+    end
+    return tag, value, target
+end
+local function __ulua_try(body: __ulua_completion_body, handler: __ulua_completion_body?, finalizer: __ulua_completion_body?): (number, any, number)
+    local tag, value, target = __ulua_protect(body, nil)
+    if tag == 2 and handler ~= nil then
+        tag, value, target = __ulua_protect(handler, value)
+    end
+    if finalizer ~= nil then
+        local finalTag, finalValue, finalTarget = __ulua_protect(finalizer, nil)
+        if finalTag ~= 0 then tag, value, target = finalTag, finalValue, finalTarget end
+    end
+    if tag == 2 then error(value, 0) end
+    return tag, value, target
+end
 "#;

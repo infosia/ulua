@@ -130,7 +130,7 @@ impl<'a> Emitter<'a> {
             generated_live: 0,
             generated_peak: 0,
             overhead: if owner == 0 {
-                LIBRARY_LOCALS + if module.exceptions { 4 } else { 0 }
+                LIBRARY_LOCALS + if module.exceptions { 6 } else { 0 }
             } else {
                 0
             },

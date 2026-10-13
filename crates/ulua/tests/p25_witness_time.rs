@@ -1,10 +1,10 @@
 //! Analyzer growth covers every shape of s4_growth and p2x_growth.
 //! The default gate bounds 4/16 KiB ratios at twelve; the measurements feature reports 16/64 KiB ratios.
 //! At 64 KiB, each shape takes at most fifty times dense-assign.
-//! The largest measured ceiling ratio is 31.177 for P27-sequential-catch.
+//! The largest measured ceiling ratio is 22.366 for P24-string-iteration.
 //! Each size uses the minimum of two single-worker analyzer runs. Only ratios are asserted.
-//! Measured Debug default cost: 83.757 seconds for 194 measured shapes and one bounded shape.
-//! Measured Debug full cost: 600.741 seconds for the same shapes.
+//! Measured Release default cost: 124.098 seconds for 260 measured shapes and one bounded shape.
+//! Measured Release ceiling cost: 702.022 seconds for the same shapes.
 //! Stock tsc resource exceptions include TS2321 and TS2563 (CLAUDE.md invariant 3).
 #[path = "support/analyzer.rs"]
 mod analyzer;

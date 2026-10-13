@@ -139,6 +139,33 @@ pub(crate) fn loop_break(body: &Statement) -> bool {
 pub(crate) fn loop_continue(body: &Statement) -> bool {
     loop_jump(body, 2)
 }
+pub(crate) fn returns(body: &Statement) -> bool {
+    let mut pending = vec![body];
+    while let Some(s) = pending.pop() {
+        match s {
+            Statement::Located(_, s) => pending.push(s),
+            Statement::Return(_) => return true,
+            Statement::Block(b) => pending.extend(b),
+            Statement::If(_, a, b) => {
+                pending.push(a);
+                pending.extend(b.iter().map(|s| s.as_ref()));
+            }
+            Statement::While(_, b) | Statement::ForOf(_, _, b) => pending.push(b),
+            Statement::For(a, _, u, b, _) => {
+                pending.extend(a);
+                pending.extend(u.iter().map(|s| s.as_ref()));
+                pending.push(b);
+            }
+            Statement::Try(a, b, f) => {
+                pending.push(a);
+                pending.extend(b.iter().map(|(_, s)| s.as_ref()));
+                pending.extend(f.iter().map(|s| s.as_ref()));
+            }
+            _ => {}
+        }
+    }
+    false
+}
 fn loop_jump(body: &Statement, kinds: u8) -> bool {
     let mut pending = vec![body];
     while let Some(s) = pending.pop() {
