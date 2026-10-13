@@ -4,11 +4,12 @@
 // Cost: one tsc program per corpus group, and one in-process import per
 // accept or trap entry.
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { install, FIXTURE_NAMES } from "./node-prelude.mjs";
+import { install, FIXTURE_NAMES, declarations } from "./node-prelude.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(import.meta.url);
@@ -94,7 +95,7 @@ function expectedCodes(tscHeader) {
   return m ? m[1].split(", ").map((c) => Number(c.slice(2))) : null;
 }
 
-function tscCodes(files) {
+function tscCodes(files, hostFiles) {
   const config = ts.getParsedCommandLineOfConfigFile(path.join(root, "tsconfig.json"), {}, {
     ...ts.sys,
     onUnRecoverableConfigFileDiagnostic: (d) => {
@@ -103,7 +104,7 @@ function tscCodes(files) {
   });
   for (const d of config.errors) fail("tsconfig.json", ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   const prelude = config.fileNames.filter((f) => f.includes(`${path.sep}prelude${path.sep}`));
-  const program = ts.createProgram([...prelude, ...files], config.options);
+  const program = ts.createProgram([...prelude, ...hostFiles, ...files], config.options);
   const byFile = new Map(files.map((f) => [path.resolve(f), new Set()]));
   const atEquality = new Map(files.map((f) => [path.resolve(f), true]));
   const checker = program.getTypeChecker();
@@ -229,10 +230,26 @@ for (const e of [...accept, ...reject, ...trap]) {
   }
 }
 
-// tsc: accept and trap entries together, then reject entries together.
-for (const group of [[...accept, ...trap], reject]) {
-  if (group.length === 0) continue;
-  const { byFile, atEquality, other } = tscCodes(group.map((e) => e.path));
+// tsc: one group per grants value (corpus.md section 4); in each, accept
+// and trap entries together, then reject entries together. Each group
+// gets the host declarations of its grants (abi.md section 6.3).
+const hostDir = mkdtempSync(path.join(os.tmpdir(), "ulua-host-"));
+const tscGroups = new Map();
+for (const e of [...accept, ...trap, ...reject]) {
+  const grants = headers.get(e.id).grants ?? "";
+  const key = `${grants}|${e.dir === "reject" ? "reject" : "run"}`;
+  if (!tscGroups.has(key)) tscGroups.set(key, { grants, entries: [] });
+  tscGroups.get(key).entries.push(e);
+}
+for (const { grants, entries: group } of tscGroups.values()) {
+  const names = grants === "" ? [] : grants.split(", ");
+  const hostFiles = [];
+  if (names.length > 0 && names.every((n) => FIXTURE_NAMES.includes(n))) {
+    const file = path.join(hostDir, `host-${hostFiles.length}-${names.join("-")}.d.ts`);
+    writeFileSync(file, declarations(names));
+    hostFiles.push(file);
+  }
+  const { byFile, atEquality, other } = tscCodes(group.map((e) => e.path), hostFiles);
   for (const msg of other) fail("tsc", msg);
   for (const e of group) {
     const want = expectedCodes(headers.get(e.id).tsc);
@@ -283,6 +300,7 @@ for (const e of [...accept, ...trap]) {
   }
 }
 
+rmSync(hostDir, { recursive: true, force: true });
 const total = accept.length + reject.length + trap.length;
 if (failures.length) {
   for (const f of failures) console.log(`FAIL ${f}`);

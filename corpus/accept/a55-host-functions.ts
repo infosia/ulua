@@ -5,10 +5,6 @@
 // grants: hostAdd, hostConcat, hostNot, hostLog
 // tsc: accepts
 // js-comparable: yes
-declare function hostAdd(a: number, b: number): number;
-declare function hostConcat(left: string, right: string): string;
-declare function hostNot(b: boolean): boolean;
-declare function hostLog(text: string): void;
 export function main(): void {
   print(`${hostAdd(1.5, 2)}`);
   print(`${hostAdd(0.1, 0.2)}`);

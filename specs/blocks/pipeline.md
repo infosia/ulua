@@ -212,10 +212,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    `try` shapes follows §3.10. Measured at `3fafd70`:
    `try{a++;}finally{}` repeated in one function takes 0.13 s at 100,
    6.4 s at 400, and 65 s at 800 statements.
-10. **Host functions.** The shim makes one native closure per granted
-   declaration of the module (collisions.md C18, `abi.md` §6.2). It
+10. **Host functions.** The shim makes one native closure per grant
+   that the module calls (collisions.md C18, `abi.md` §6.2). It
    passes the closures as chunk arguments after the trap function, in
-   declaration order. The chunk reads each one from `...` into a
+   grant order. The chunk reads each one from `...` into a
    generated local with its Luau function type, as for the trap
    function (§4.8): no global and no `getfenv`. The closure holds the
    capability reference of the instance. A call checks the revocation
@@ -224,7 +224,7 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    The stop is recorded in the instance before the raise, as for a
    trap, so a protected closure raises it again (C17.7).
    Each closure local is a module binding for the local budget (§5.8)
-   and the upvalue budget (§5.14): a module with more declarations
+   and the upvalue budget (§5.14): a module that calls more grants
    than the budget spills them, and a function over the upvalue budget
    gives `limit:upvalues`. The witness time of host-call shapes follows
    §3.10.

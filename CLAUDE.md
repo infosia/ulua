@@ -49,7 +49,8 @@ slice. An agent never detaches a process (`nohup`, `setsid`, a trailing
    compiler adds fixed bounds that keep generated Luau inside the Luau
    limits.
 3. **The syntax is a valid-TypeScript subset.** Every accepted program
-   type-checks under stock `tsc` with the Ulua prelude. The Ulua
+   type-checks under stock `tsc` with the Ulua prelude and the host
+   declarations that the library writes for its grants. The Ulua
    compiler then narrows the accepted set. A `tsc` resource limit
    (TS2563, TS2321, a `tsc` stack overflow) is outside this rule: `tsc` has
    its own limits, as `node` has under invariant 5. At an equality

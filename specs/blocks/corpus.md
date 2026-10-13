@@ -55,7 +55,9 @@ Each entry starts with `//` header lines, in this order:
   compiler diagnostic code must equal that id (§4).
 - `trap` names one trap kind of §6.
 - `grants` names fixtures of §7. The harness grants exactly these to
-  the compilation. Without the header, it grants none.
+  the compilation, in header order. Without the header, it grants
+  none. The `tsc` witness checks the entry with the declarations of
+  these grants in the format of `abi.md` §6.3.
 - `js-comparable: no <id>` names a rule of the `rule` header. That
   rule of `collisions.md` names the divergence, with the measured
   outputs of both sides.
@@ -70,15 +72,19 @@ Each entry starts with `//` header lines, in this order:
   number reserved.
 - Citations: each id in a `rule` header is a rule of
   `collisions.md`. Each rule names exactly the entries that cite it.
-- `tsc`: `tsconfig.json` has no option errors. One program over the
-  prelude and every accept and trap entry reports zero errors, except
+- `tsc`: `tsconfig.json` has no option errors. The entries form one
+  group per `grants` value (none included). One program per group,
+  over the prelude, the host declarations of the group (`abi.md`
+  §6.3, written by the witness), and every accept and trap entry of
+  the group, reports zero errors, except
   the codes of an `exception` header: each such diagnostic lies on a
   `===`, `!==`, `==`, or `!=` expression whose two operands have one
   `number`, `string`, or `boolean` type (literal types widened; an
   operand narrowed to `never` counts as either) for TS2367 and TS2845;
   each other diagnostic names the type `never` in its message (`type 'never'`); and the codes equal the codes of the header. One
-  program over the prelude and every reject entry reports, per file,
-  the codes that its header states.
+  program per group over the prelude, the host declarations, and every
+  reject entry of the group reports, per file, the codes that its
+  header states.
 - `node`: the gate runs each entry with `js-comparable: yes`. Each such
   accept entry writes exactly its golden, byte for byte,
   and does not throw. For a trap entry, the `node` output starts with

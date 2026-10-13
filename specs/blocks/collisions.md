@@ -796,46 +796,49 @@ Accept: `a51`, `a52`, `a53`, `a54`. Reject: `r119`, `r120`, `r121`, `r122`,
 JavaScript has no host functions: an embedder installs native
 functions as global values, which a script can read, copy, compare,
 and replace. In Ulua a host function is a capability that the host
-grants for one compilation (`abi.md` §6.2, D20, D21). A capability
+grants for one compilation (`abi.md` §6.2, D20, D21). The grant list
+is the only record of it: the library writes its declarations for
+`tsc` (`abi.md` §6.3), and the script declares nothing. A capability
 is not a value: a script can only call it. A value use would let a
 reference leave the grant check, and Luau compares functions by
 identity where JavaScript compares the global binding.
 
-1. **Declaration.** A host function is a module-level `declare
-   function` with a `BindingIdentifier` name, parameters of §4 of
-   surface.md without defaults, and a result type annotation. The
-   parameter types are `number`, `boolean`, or `string`. The result
-   type is `void`, `number`, `boolean`, or `string`. No `export`, no
-   overloads, no type parameters, no `this` parameter, and no body.
-   Every other `declare` form (`declare const`, `declare let`,
-   `declare class`, `declare namespace`, `declare module`, `declare
-   global`) is rejected (C18).
-2. **Grant.** Each declaration needs a grant of `ulua_compile` with
-   the same name, the same parameter count, and the same type at each
-   position and for the result (`abi.md` §6.2). A declaration without
-   such a grant is rejected (C18). Parameter names are free.
-3. **Calls only.** A reference to a host function is the callee of a
+1. **Grants.** Each grant of `ulua_compile` is a host function of the
+   script: a name in the outermost scope, outside the module scope,
+   with the parameter types and the result type of the capability.
+   `tsc` sees the same name through the declarations of `abi.md` §6.3,
+   which are global.
+2. **No declarations.** Every `declare` form of the script
+   (`declare function`, `declare const`, `declare let`, `declare
+   class`, `declare namespace`, `declare module`, `declare global`)
+   is rejected (C18).
+3. **Unknown names.** A reference to a name that no binding of the
+   script, no prelude or library name, and no grant declares is
+   rejected (C18). `tsc` gives TS2304 for it.
+4. **Calls only.** A reference to a host function is the callee of a
    `CallExpression`, without `?.`, in any position where a call is
    accepted, also in an arrow, a method, a `try` block, and a
    default. Every other use is rejected (C18): a value read, an
    assignment, a comparison, an argument, an export, a field value,
    `typeof`.
-4. **Names.** A host function name is a module binding. It does not
-   shadow and is not shadowed: a binding of the same name in any scope
-   of the module is rejected (C18). C10 does not apply: a host
-   function has no temporal dead zone, and a call before the
-   declaration in source order is valid in JavaScript and in Luau.
-5. **Evaluation.** A call evaluates its arguments left to right
-   (C12), then calls the host once. The result has the declared type.
+5. **Scopes.** A script binding of the same name shadows a host
+   function in the scope of the binding, as a module binding shadows a
+   global in JavaScript. A grant that the script shadows everywhere is
+   unused.
+6. **Evaluation.** A call evaluates its arguments left to right
+   (C12), then calls the host once. The result has the grant's type.
    A host error or a revoked grant stops the run (`abi.md` §6.2,
-   D22): it is a stop under C17.7, never an exception.
-6. **Agreement.** The corpus grants a fixed set of fixture host
+   D22): it is a stop under C17.7, never an exception. A host function
+   has no temporal dead zone (C10 does not apply).
+7. **Agreement.** The corpus grants a fixed set of fixture host
    functions (corpus.md §7). The native harness and the `node` runner
    implement each fixture with the same result for the same
    arguments, so an entry that calls fixtures is `js-comparable`.
 
-Accept: `a55`, `a56`. Reject: `r126`, `r127`, `r128`, `r129`, `r130`,
-`r131`, `r132`.
+Accept: `a55`, `a56`, `a57`. Reject: `r126`, `r128`, `r130`, `r131`,
+`r132`, `r133`. Retired by the D20 revision:
+`retired:r127-host-signature` (a grant gives the signature),
+`retired:r129-host-shadow` (rule 5 accepts it, `a57`).
 
 ## Open items
 

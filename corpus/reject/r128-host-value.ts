@@ -5,7 +5,6 @@
 // grants: hostAdd
 // tsc: accepts
 // expected-error: C18: a host function is only called
-declare function hostAdd(a: number, b: number): number;
 export function main(): void {
   const f = hostAdd;
   print(`${f(1, 2)}`);

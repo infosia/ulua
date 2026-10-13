@@ -5,8 +5,6 @@
 // grants: hostAdd, hostLog
 // tsc: accepts
 // js-comparable: yes
-declare function hostAdd(a: number, b: number): number;
-declare function hostLog(text: string): void;
 let n: number = 0;
 function next(): number {
   n = n + 1;
