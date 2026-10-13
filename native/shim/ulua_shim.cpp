@@ -22,6 +22,8 @@ static void message(char* out, const char* text) { message_bytes(out, text, std:
 static void interrupt(lua_State* state, int gc) {
     if (gc >= 0) return;
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    // A protected unwind must preserve the first recorded native stop.
+    if (vm->flag || vm->trap_kind) luaL_error(state, "Run stopped");
     if (vm->steps >= vm->max_steps) {
         vm->flag = SHIM_STEPS;
         luaL_error(state, "Step limit exceeded");
@@ -42,6 +44,39 @@ static int output(lua_State* state) {
         luaL_error(state, "Output callback failed");
     }
     return 0;
+}
+static int host_call(lua_State* state) {
+    ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    const ulua_internal_capability* cap = static_cast<const ulua_internal_capability*>(lua_touserdata(state, lua_upvalueindex(1)));
+    int code = 0;
+    if (*cap->revoked) code = 12;
+    else if (vm->steps >= vm->max_steps) code = SHIM_STEPS;
+    else {
+        ++vm->steps;
+        ulua_value arguments[ULUA_MAX_HOST_PARAMETERS] = {};
+        for (size_t i = 0; i < cap->desc.parameter_count; ++i) {
+            ulua_value* a = &arguments[i];
+            a->type = cap->desc.parameter_types[i];
+            const int index = static_cast<int>(i + 1);
+            if (a->type == ULUA_TYPE_NUMBER) a->number = luaL_checknumber(state, index);
+            else if (a->type == ULUA_TYPE_BOOLEAN) a->boolean = lua_toboolean(state, index);
+            else a->data = luaL_checklstring(state, index, &a->length);
+        }
+        ulua_value result = {};
+        code = cap->desc.function(cap->desc.userdata, arguments, cap->desc.parameter_count, &result);
+        if (!code) {
+            if (result.type == ULUA_TYPE_VOID) return 0;
+            if (result.type == ULUA_TYPE_NUMBER) lua_pushnumber(state, result.number);
+            else if (result.type == ULUA_TYPE_BOOLEAN) lua_pushboolean(state, result.boolean);
+            else lua_pushlstring(state, result.data ? result.data : "", result.length);
+            return 1;
+        }
+    }
+    vm->flag = code;
+    std::memcpy(vm->capability_name, cap->desc.name, cap->desc.name_length);
+    vm->capability_name[cap->desc.name_length] = 0;
+    // Rust and host frames return before this stop. Protected closures cannot catch it.
+    luaL_error(state, "Host call stopped");
 }
 static int trap(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
@@ -127,6 +162,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         message(error, "Invalid argument");
     }
     if (code == SHIM_UNCAUGHT) message(error, vm->exception);
+    if (code >= 11 && code <= 13) message(error, vm->capability_name);
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);
@@ -141,13 +177,21 @@ struct Load {
     ulua_vm* vm;
     const char* bytecode;
     size_t length;
+    const ulua_internal_capability* grants;
+    size_t grant_count;
 };
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
+    if (!lua_checkstack(state, static_cast<int>(args->grant_count + 3))) luaL_error(state, "stack limit");
     lua_pushcfunction(state, trap, "__ulua_trap");
+    for (size_t i = 0; i < args->grant_count; ++i) {
+        void* storage = lua_newuserdata(state, sizeof(ulua_internal_capability));
+        std::memcpy(storage, &args->grants[i], sizeof(ulua_internal_capability));
+        lua_pushcclosure(state, host_call, "host", 1);
+    }
     lua_pushcfunction(state, register_errors, "register_errors");
-    if (lua_pcall(state, 2, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
+    if (lua_pcall(state, static_cast<int>(args->grant_count + 2), 1, 0) != LUA_OK) raise_call_error(state, args->vm);
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
     return 0;
@@ -162,13 +206,15 @@ struct Call {
 };
 static int call(lua_State* state) {
     Call* args = static_cast<Call*>(lua_tolightuserdata(state, 1));
+    if (args->vm->result_ref) { lua_unref(state, args->vm->result_ref); args->vm->result_ref = 0; }
     lua_getref(state, args->vm->exports);
     lua_getfield(state, -1, args->name);
     if (!lua_isfunction(state, -1)) luaL_error(state, "Generated export is not a function");
     for (size_t i = 0; i < args->count; ++i) {
         const ulua_value* value = &args->arguments[i];
         if (value->type == ULUA_TYPE_NUMBER) lua_pushnumber(state, value->number);
-        else lua_pushboolean(state, value->boolean);
+        else if (value->type == ULUA_TYPE_BOOLEAN) lua_pushboolean(state, value->boolean);
+        else lua_pushlstring(state, value->data ? value->data : "", value->length);
     }
     if (lua_pcall(state, static_cast<int>(args->count), args->result_type == ULUA_TYPE_VOID ? 0 : 1, 0) != LUA_OK)
         raise_call_error(state, args->vm);
@@ -180,6 +226,11 @@ static int call(lua_State* state) {
     } else if (value.type == ULUA_TYPE_BOOLEAN) {
         if (lua_type(state, -1) != LUA_TBOOLEAN) luaL_error(state, "Generated result has the wrong type");
         value.boolean = lua_toboolean(state, -1);
+    }
+    if (value.type == ULUA_TYPE_STRING) {
+        if (lua_type(state, -1) != LUA_TSTRING) luaL_error(state, "Generated result has the wrong type");
+        value.data = lua_tolstring(state, -1, &value.length);
+        args->vm->result_ref = lua_ref(state, -1);
     }
     *args->result = value;
     return 0;
@@ -215,6 +266,7 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     std::free(vm);
 }
 extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
+    const ulua_internal_capability* grants, size_t grant_count,
     const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
     ulua_vm* vm = nullptr;
     try {
@@ -241,7 +293,7 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
         }
         if (!code) {
             lua_callbacks(vm->state)->interrupt = interrupt;
-            Load args = {vm, bytecode, length};
+            Load args = {vm, bytecode, length, grants, grant_count};
             vm->charging = true;
             code = finish(vm, vm->thread, lua_cpcall(vm->thread, load, &args), error);
         }

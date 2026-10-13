@@ -17,7 +17,7 @@ unsafe fn diagnostic_valid(d: *mut Diagnostic) -> bool {
         d.is_null() || ((*d).struct_size == size_of::<Diagnostic>() as u32 && (*d).reserved == 0)
     }
 }
-unsafe fn bytes<'a>(p: *const c_char, n: usize) -> Option<&'a [u8]> {
+pub(crate) unsafe fn bytes<'a>(p: *const c_char, n: usize) -> Option<&'a [u8]> {
     if n > isize::MAX as usize || (p.is_null() && n != 0) {
         return None;
     }
@@ -102,6 +102,10 @@ pub unsafe extern "C" fn ulua_context_free(context: *mut Context) -> Status {
             for module in c.modules.get_mut().drain(..) {
                 drop(Box::from_raw(module));
             }
+            for capability in c.capabilities.get_mut().drain(..) {
+                let capability = Box::from_raw(capability);
+                capability.state.revoked.set(true);
+            }
         }));
         if result.is_ok() {
             ULUA_OK
@@ -118,6 +122,8 @@ pub unsafe extern "C" fn ulua_compile(
     context: *mut Context,
     source: *const c_char,
     length: usize,
+    grants: *const *mut Capability,
+    grant_count: usize,
     limits: *const CompileLimits,
     out: *mut *mut Module,
     diagnostic: *mut Diagnostic,
@@ -143,6 +149,10 @@ pub unsafe extern "C" fn ulua_compile(
         };
         guard(context, diagnostic, || {
             out.write(ptr::null_mut());
+            let Some(grants) = crate::capabilities::grants(context, grants, grant_count) else {
+                return ULUA_INVALID_ARGUMENT;
+            };
+            let signatures: Vec<_> = grants.iter().map(|g| g.signature.clone()).collect();
             #[cfg(test)]
             let output_factor = TEST_OUTPUT_FACTOR.with(|factor| factor.take());
             let joined = std::thread::scope(|scope| {
@@ -161,10 +171,18 @@ pub unsafe extern "C" fn ulua_compile(
                                 compiler_limits(limits),
                                 factor,
                             ),
-                            None => ulua_compiler::compile(source, compiler_limits(limits)),
+                            None => ulua_compiler::compile_with_grants(
+                                source,
+                                compiler_limits(limits),
+                                &signatures,
+                            ),
                         }?;
                         #[cfg(not(test))]
-                        let compiled = ulua_compiler::compile(source, compiler_limits(limits))?;
+                        let compiled = ulua_compiler::compile_with_grants(
+                            source,
+                            compiler_limits(limits),
+                            &signatures,
+                        )?;
                         let mut bytecode = ptr::null_mut();
                         let mut size = 0;
                         let mut error = [0; 256];
@@ -180,7 +198,7 @@ pub unsafe extern "C" fn ulua_compile(
                         }
                         let owner = Bytecode(bytecode);
                         let code = slice::from_raw_parts(owner.0.cast::<u8>(), size).to_vec();
-                        Ok(Ok((compiled.exports, code)))
+                        Ok(Ok((compiled.exports, code, compiled.hosts)))
                     });
                 match worker {
                     Ok(worker) => worker
@@ -190,9 +208,17 @@ pub unsafe extern "C" fn ulua_compile(
                 }
             });
             match joined {
-                Ok(Ok(Ok((exports, bytecode)))) => {
+                Ok(Ok(Ok((exports, bytecode, hosts)))) => {
+                    let by_name: std::collections::HashMap<_, _> = grants
+                        .iter()
+                        .map(|g| (g.signature.name.as_str(), g))
+                        .collect();
                     let module = Box::new(Module {
                         context,
+                        grants: hosts
+                            .iter()
+                            .filter_map(|n| by_name.get(n.as_str()).map(|g| (*g).clone()))
+                            .collect(),
                         bytecode,
                         exports,
                     });
@@ -447,6 +473,15 @@ pub unsafe extern "C" fn ulua_instance_new(
                 host: *host,
                 panicked: std::cell::Cell::new(false),
             });
+            let mut grants: Vec<_> = (*module)
+                .grants
+                .iter()
+                .map(|state| crate::capabilities::Binding {
+                    context,
+                    state: state.clone(),
+                })
+                .collect();
+            let native_grants: Vec<_> = grants.iter_mut().map(|b| b.native()).collect();
             let host = shim_host(&mut callback);
             let mut vm = ptr::null_mut();
             let mut error = [0; 256];
@@ -454,6 +489,8 @@ pub unsafe extern "C" fn ulua_instance_new(
                 (*module).bytecode.as_ptr().cast(),
                 (*module).bytecode.len(),
                 &host,
+                native_grants.as_ptr(),
+                native_grants.len(),
                 &limits,
                 &mut vm,
                 error.as_mut_ptr(),
@@ -472,6 +509,7 @@ pub unsafe extern "C" fn ulua_instance_new(
                 vm,
                 exports: (*module).exports.clone(),
                 callback,
+                _grants: grants,
             });
             let Ok(mut instances) = (*context).instances.try_borrow_mut() else {
                 write_run_diagnostic(diagnostic, "internal", "Context registry is borrowed");
@@ -585,13 +623,16 @@ pub unsafe extern "C" fn ulua_call(
         })
     }
 }
-fn value_valid(v: &Value) -> bool {
+pub(crate) fn value_valid(v: &Value) -> bool {
     match v.r#type {
         ULUA_TYPE_VOID => v.boolean == 0 && v.number == 0.0 && v.data.is_null() && v.length == 0,
         ULUA_TYPE_NUMBER => v.boolean == 0 && v.data.is_null() && v.length == 0,
         ULUA_TYPE_BOOLEAN => v.boolean <= 1 && v.number == 0.0 && v.data.is_null() && v.length == 0,
         ULUA_TYPE_STRING => {
-            v.boolean == 0 && v.number == 0.0 && (!v.data.is_null() || v.length == 0)
+            v.boolean == 0 && v.number == 0.0 && {
+                // SAFETY: The host guarantees readable value storage.
+                unsafe { bytes(v.data, v.length).is_some_and(|b| std::str::from_utf8(b).is_ok()) }
+            }
         }
         _ => false,
     }

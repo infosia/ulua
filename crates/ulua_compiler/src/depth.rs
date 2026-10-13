@@ -53,6 +53,39 @@ pub(crate) fn check<'a>(
         }
         let next = depth + 1;
         let children = pending.len();
+        let declared = match &node {
+            Node::Function(f) => f.declare,
+            Node::Class(c) => c.declare,
+            Node::Statement(s) => match s {
+                Statement::VariableDeclaration(d) => d.declare,
+                Statement::TSTypeAliasDeclaration(d) => d.declare,
+                Statement::TSInterfaceDeclaration(d) => d.declare,
+                Statement::TSEnumDeclaration(d) => d.declare,
+                Statement::TSNamespaceDeclaration(_)
+                | Statement::TSExternalModuleDeclaration(_)
+                | Statement::TSGlobalDeclaration(_) => true,
+                _ => false,
+            },
+            Node::Declaration(d) => match d {
+                Declaration::VariableDeclaration(d) => d.declare,
+                Declaration::TSTypeAliasDeclaration(d) => d.declare,
+                Declaration::TSInterfaceDeclaration(d) => d.declare,
+                Declaration::TSEnumDeclaration(d) => d.declare,
+                Declaration::TSNamespaceDeclaration(_)
+                | Declaration::TSExternalModuleDeclaration(_)
+                | Declaration::TSGlobalDeclaration(_) => true,
+                _ => false,
+            },
+            _ => false,
+        };
+        if declared {
+            return Err(Diagnostic::at(
+                source,
+                offset as usize,
+                "C18",
+                "Script declare forms are rejected",
+            ));
+        }
         match node {
             Node::Statement(s) => match s {
                 Statement::ExportDeclaration(n) => {
@@ -132,6 +165,7 @@ pub(crate) fn check<'a>(
                         }
                     }
                 }
+                Declaration::ClassDeclaration(n) => pending.push((Node::Class(n), next)),
                 _ => {}
             },
             Node::Class(class) => {
@@ -141,6 +175,14 @@ pub(crate) fn check<'a>(
                             pending.push((Node::Function(&m.value), next))
                         }
                         ClassElement::PropertyDefinition(p) => {
+                            if p.declare {
+                                return Err(Diagnostic::at(
+                                    source,
+                                    p.span.start as usize,
+                                    "C18",
+                                    "Script declare forms are rejected",
+                                ));
+                            }
                             if let Some(e) = &p.value {
                                 pending.push((Node::Expression(e), next));
                             }

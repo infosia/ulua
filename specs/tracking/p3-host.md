@@ -72,6 +72,25 @@ entry passes.
 
 ## Measurements
 
+Implementation record (Codex; three runs stopped with a model capacity
+error, so the primary agent read the logs and the tree):
+
+- `sh tools/gate.sh full` passes: `cargo-test` 201 s, `luau-witnesses`
+  51 s (175 entries in P3 or earlier, 66 generated modules, 14 stress
+  modules); hygiene passes.
+- New test targets (Debug): `p3_links` 7.2 s (C11 and C++17, static
+  and dynamic, exact dynamic symbol set); `p3_random` 7.5 s (192
+  fixed-seed programs against `node`, `tsc`, `luau-analyze -j1`);
+  `p3_growth` 10.7 s (compiler ratio at most 8 for 4 times the
+  source); `p3_host_names` (the name list against the ES2022 library
+  files and the prelude at test time); `p3_declarations` (the ABI text
+  against the `node` fixture format); `p3_limits` (spill at the local
+  budget, upvalues).
+- `measurements` feature: 187 growth shapes; 4 to 16 KiB largest
+  ratio 8.47 (bound 12); ceiling: `dense-assign` 0.326 s, largest
+  ceiling ratio 31.2 (bound 50); P3 shapes `P3-protected` 24.7,
+  `P3-arrows` 2.5, `P3-declarations` 1.1. Cost 649.9 s Debug.
+
 ## Failures before the fix
 
 ## Gaps

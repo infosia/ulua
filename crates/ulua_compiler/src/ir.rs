@@ -14,6 +14,7 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
+    pub(crate) hosts: Vec<(usize, String)>,
     pub(crate) exceptions: bool,
     pub(crate) methods: std::collections::BTreeSet<(Method, usize)>,
     pub(crate) types: Types,

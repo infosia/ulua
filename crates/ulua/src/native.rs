@@ -15,6 +15,8 @@ unsafe extern "C" {
         bytecode: *const c_char,
         length: usize,
         host: *const Host,
+        grants: *const crate::capabilities::NativeCapability,
+        grant_count: usize,
         limits: *const RunLimits,
         out: *mut *mut c_void,
         error: *mut c_char,

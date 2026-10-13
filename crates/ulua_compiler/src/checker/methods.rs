@@ -207,6 +207,10 @@ mod tests {
                     panic!("method call");
                 };
                 let mut c = Checker {
+                    host_names: HashMap::new(),
+                    host_grants: vec![],
+                    host_ids: HashMap::new(),
+                    hosts: vec![],
                     catch_use: false,
                     uses_exceptions: false,
                     source: source.as_bytes(),

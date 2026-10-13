@@ -15,6 +15,8 @@ enum { ULUA_TYPE_VOID=0, ULUA_TYPE_NUMBER=1, ULUA_TYPE_BOOLEAN=2, ULUA_TYPE_STRI
 typedef struct ulua_context ulua_context;
 typedef struct ulua_module ulua_module;
 typedef struct ulua_instance ulua_instance;
+typedef struct ulua_capability ulua_capability;
+#define ULUA_MAX_HOST_PARAMETERS 16u
 typedef struct ulua_diagnostic {
     uint32_t struct_size;
     uint32_t reserved;
@@ -51,6 +53,19 @@ typedef struct ulua_host {
     void* userdata;
     ulua_output_fn output;
 } ulua_host;
+typedef int32_t (*ulua_host_fn)(void*, const ulua_value*, size_t, ulua_value*);
+typedef struct ulua_capability_desc {
+    uint32_t struct_size;
+    uint32_t reserved;
+    const char* name;
+    size_t name_length;
+    const uint32_t* parameter_types;
+    size_t parameter_count;
+    uint32_t result_type;
+    uint32_t reserved2;
+    ulua_host_fn function;
+    void* userdata;
+} ulua_capability_desc;
 /* Set every descriptor struct_size to sizeof(descriptor), and reserved fields to zero.
    All pointers must refer to valid, aligned storage for the stated lifetime and length.
    Strings have UTF-8 bytes and no terminator. NULL is valid only with length zero.
@@ -65,7 +80,13 @@ ulua_status ulua_default_compile_limits(ulua_compile_limits* out);
 ulua_status ulua_default_run_limits(ulua_run_limits* out);
 ulua_status ulua_context_new(ulua_context** out);
 ulua_status ulua_context_free(ulua_context* context);
+ulua_status ulua_capability_new(ulua_context*, const ulua_capability_desc*, ulua_capability**);
+ulua_status ulua_capability_revoke(ulua_capability*);
+ulua_status ulua_capability_free(ulua_capability*);
+ulua_status ulua_declarations(ulua_capability* const* grants, size_t grant_count,
+    char* buffer, size_t capacity, size_t* length);
 ulua_status ulua_compile(ulua_context* context, const char* source, size_t length,
+    ulua_capability* const* grants, size_t grant_count,
     const ulua_compile_limits* limits, ulua_module** out, ulua_diagnostic* diagnostic);
 ulua_status ulua_module_free(ulua_module* module);
 ulua_status ulua_module_export_count(const ulua_module* module, uint32_t* out);

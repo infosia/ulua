@@ -183,6 +183,8 @@ fn every_index_trap_delivers_output_and_keeps_the_instance_and_context_usable() 
                         context,
                         source.as_ptr().cast(),
                         source.len(),
+                        std::ptr::null(),
+                        0,
                         &CompileLimits::default(),
                         &mut module,
                         &mut diagnostic
@@ -245,6 +247,8 @@ fn every_index_trap_delivers_output_and_keeps_the_instance_and_context_usable() 
                             context,
                             source.as_ptr().cast(),
                             source.len(),
+                            std::ptr::null(),
+                            0,
                             &CompileLimits::default(),
                             &mut second,
                             &mut diagnostic

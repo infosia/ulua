@@ -21,8 +21,10 @@ pub(super) struct Emission {
 pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
     let types = types::FunctionTypes::new(module)?;
     let numeric_arrows = constants::numeric_arrows(module, &types)?;
-    let library_locals =
-        LIBRARY_LOCALS + numeric_arrows.locals + if module.exceptions { 4 } else { 0 };
+    let library_locals = LIBRARY_LOCALS
+        + usize::from(!module.hosts.is_empty())
+        + numeric_arrows.locals
+        + if module.exceptions { 4 } else { 0 };
     let (method_prelude, method_locals) = methods::prelude(&module.methods)?;
     let size = module.bindings.len() + 1;
     let mut owners = vec![vec![]; size];
@@ -197,7 +199,10 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     let mut out = String::from("--!strict\n");
     out.push_str(LIBRARIES);
     if module.exceptions {
-        out.push_str(prelude::EXCEPTIONS);
+        out.push_str(&prelude::EXCEPTIONS.replace(
+            "select(2, ...)",
+            &format!("select({}, ...)", module.hosts.len() + 2),
+        ));
     }
     out.push_str(&method_prelude);
     out.push_str(&types.declarations);
@@ -217,7 +222,22 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     output.charge(out.len(), first_offset);
     output.check(module)?;
     chunk.output = Some(&output);
-    chunk.statements(&module.body, 0)?;
+    if let Some(entry) = module.body.first() {
+        chunk.statements(std::slice::from_ref(entry), 0)?;
+    }
+    if !module.hosts.is_empty() {
+        chunk.line("local __ulua_grants: {any} = {...}");
+    }
+    for (i, (id, _)) in module.hosts.iter().enumerate() {
+        let ty = module.bindings[*id]
+            .ty
+            .ok_or_else(|| chunk.limit("internal", "Missing host type"))?;
+        chunk.write_binding(
+            *id,
+            format!("__ulua_grants[{}] :: {}", i + 2, types.luau(&ty)),
+        )?;
+    }
+    chunk.statements(&module.body[1..], 0)?;
     out.push_str(&chunk.out);
     let trailer_start = out.len();
     out.push_str("return {\n");

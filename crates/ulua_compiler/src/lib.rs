@@ -13,6 +13,8 @@ mod p26_shapes;
 #[cfg(test)]
 mod p26_tests;
 #[cfg(test)]
+mod p3_tests;
+#[cfg(test)]
 mod round6_tests;
 #[cfg(test)]
 mod round7_tests;
@@ -137,6 +139,8 @@ pub struct Export {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Compiled {
+    /// Host declaration names in chunk argument order.
+    pub hosts: Vec<String>,
     /// Strict, generated Luau source.
     pub luau: String,
     /// Export signatures in source order.
@@ -145,7 +149,37 @@ pub struct Compiled {
 
 /// Parse, bound, check, and emit one module.
 pub fn compile(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, OUTPUT_FACTOR, |_, _| {})
+    compile_with_grants(source, limits, &[])
+}
+
+/// A host signature supplied by the compiler caller.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct HostSignature {
+    /// Capability name.
+    pub name: String,
+    /// ABI parameter tags.
+    pub parameters: Vec<u32>,
+    /// ABI result tag.
+    pub result: u32,
+}
+impl HostSignature {
+    /// Construct a grant signature.
+    pub fn new(name: impl Into<String>, parameters: Vec<u32>, result: u32) -> Self {
+        Self {
+            name: name.into(),
+            parameters,
+            result,
+        }
+    }
+}
+/// Compile with explicit host signatures, without ABI objects.
+pub fn compile_with_grants(
+    source: &[u8],
+    limits: Limits,
+    grants: &[HostSignature],
+) -> Result<Compiled, Diagnostic> {
+    compile_observed(source, limits, grants, OUTPUT_FACTOR, |_, _| {})
 }
 
 /// Compile with a lower output factor for ABI limit tests.
@@ -156,7 +190,7 @@ pub fn test_compile_with_output_factor(
     limits: Limits,
     factor: usize,
 ) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, factor.min(OUTPUT_FACTOR), |_, _| {})
+    compile_observed(source, limits, &[], factor.min(OUTPUT_FACTOR), |_, _| {})
 }
 
 /// Measure each stage with a callback before and after its work.
@@ -167,7 +201,7 @@ pub fn measure_compile(
     limits: Limits,
     observer: impl FnMut(&'static str, bool),
 ) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, OUTPUT_FACTOR, observer)
+    compile_observed(source, limits, &[], OUTPUT_FACTOR, observer)
 }
 
 /// Emit a typed template fixture beyond the checker bound, for native limit measurements only.
@@ -202,6 +236,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     let main_type = types.intern(vec![], Type::Void, 0);
     emitter::emit(
         &Module {
+            hosts: vec![],
             exceptions: false,
             types,
             methods: Default::default(),
@@ -253,6 +288,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
 fn compile_observed(
     source: &[u8],
     limits: Limits,
+    grants: &[HostSignature],
     output_factor: usize,
     mut observer: impl FnMut(&'static str, bool),
 ) -> Result<Compiled, Diagnostic> {
@@ -298,24 +334,24 @@ fn compile_observed(
     }
     depth::check(&parsed.program, max_depth, source)?;
     observer("check", true);
-    let module = checker::check(&parsed.program, source, max_depth);
+    let module = checker::check_with_grants(&parsed.program, source, max_depth, grants);
     observer("check", false);
     let module = module?;
     for f in module.functions.iter().filter(|f| f.exported) {
         if !matches!(
             f.result,
-            ir::Type::Void | ir::Type::Number | ir::Type::Boolean
+            ir::Type::Void | ir::Type::Number | ir::Type::Boolean | ir::Type::String
         ) || f.parameters.iter().any(|(id, _)| {
             !matches!(
                 module.bindings[*id].ty,
-                Some(ir::Type::Number | ir::Type::Boolean)
+                Some(ir::Type::Number | ir::Type::Boolean | ir::Type::String)
             )
         }) {
             return Err(Diagnostic::at(
                 source,
                 module.bindings[f.binding].start as usize,
                 "unsupported",
-                "Host exports require number or boolean values",
+                "Host exports require scalar values",
             ));
         }
     }
@@ -323,6 +359,7 @@ fn compile_observed(
     let luau = emitter::emit(&module, output_factor);
     observer("emit", false);
     Ok(Compiled {
+        hosts: module.hosts.iter().map(|(_, n)| n.clone()).collect(),
         luau: luau?,
         exports: module
             .functions

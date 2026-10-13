@@ -110,7 +110,8 @@ fn run() -> Result<(), String> {
         .cargo_metadata(false)
         .file(root.join("native/probes/allocator.cpp"))
         .file(root.join("native/probes/runtime_errors.cpp"))
-        .file(root.join("native/probes/stack_shrink.cpp"));
+        .file(root.join("native/probes/stack_shrink.cpp"))
+        .file(root.join("native/probes/host_steps.cpp"));
     if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
         probes
             .define("ULUA_MEASUREMENTS", None)

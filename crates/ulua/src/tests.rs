@@ -26,6 +26,8 @@ impl Fixture {
                     context,
                     source.as_ptr().cast(),
                     source.len(),
+                    std::ptr::null(),
+                    0,
                     ptr::null(),
                     &mut module,
                     ptr::null_mut()
@@ -138,6 +140,8 @@ fn compile_rejects_and_reports_locations() {
                 fixture.context,
                 invalid.as_ptr().cast(),
                 invalid.len(),
+                std::ptr::null(),
+                0,
                 ptr::null(),
                 &mut module,
                 &mut d
@@ -156,6 +160,8 @@ fn compile_rejects_and_reports_locations() {
                 fixture.context,
                 HELLO.as_ptr().cast(),
                 HELLO.len(),
+                std::ptr::null(),
+                0,
                 &limits,
                 &mut module,
                 &mut d
@@ -170,6 +176,8 @@ fn compile_rejects_and_reports_locations() {
                 fixture.context,
                 HELLO.as_ptr().cast(),
                 HELLO.len(),
+                std::ptr::null(),
+                0,
                 &limits,
                 &mut module,
                 &mut d
@@ -183,6 +191,8 @@ fn compile_rejects_and_reports_locations() {
                 fixture.context,
                 ptr::null(),
                 1,
+                std::ptr::null(),
+                0,
                 ptr::null(),
                 &mut module,
                 &mut d
@@ -196,6 +206,8 @@ fn compile_rejects_and_reports_locations() {
                 fixture.context,
                 HELLO.as_ptr().cast(),
                 HELLO.len(),
+                std::ptr::null(),
+                0,
                 &limits,
                 &mut module,
                 &mut d
@@ -530,6 +542,18 @@ fn header_layout() {
         ULUA_TYPE_STRING as usize,
         ULUA_MIN_RUN_STACK,
         ALLOCATION_STEP_BYTES as usize,
+        size_of::<CapabilityDesc>(),
+        offset_of!(CapabilityDesc, struct_size),
+        offset_of!(CapabilityDesc, reserved),
+        offset_of!(CapabilityDesc, name),
+        offset_of!(CapabilityDesc, name_length),
+        offset_of!(CapabilityDesc, parameter_types),
+        offset_of!(CapabilityDesc, parameter_count),
+        offset_of!(CapabilityDesc, result_type),
+        offset_of!(CapabilityDesc, reserved2),
+        offset_of!(CapabilityDesc, function),
+        offset_of!(CapabilityDesc, userdata),
+        ULUA_MAX_HOST_PARAMETERS,
     ];
     for (index, expected) in expected.into_iter().enumerate() {
         // SAFETY: The probe accepts every index, and the C compiler derives these values from the public header.
@@ -662,7 +686,7 @@ fn p1_spills_remain_typed_and_reachable_across_nested_scopes() {
 }
 
 #[test]
-fn string_exports_reject_before_host_calls() {
+fn string_exports_compile() {
     let f = Fixture::new();
     for source in [
         "export function g():string{return \"x\";} export function main():void {}",
@@ -677,15 +701,17 @@ fn string_exports_reject_before_host_calls() {
                     f.context,
                     source.as_ptr().cast(),
                     source.len(),
+                    std::ptr::null(),
+                    0,
                     ptr::null(),
                     &mut module,
                     &mut d
                 ),
-                ULUA_REJECTED
+                ULUA_OK
             );
         }
-        assert_eq!(code(&d), "unsupported");
-        assert!(module.is_null());
+        assert!(!module.is_null());
+        assert!(!module.is_null());
     }
 }
 
@@ -702,6 +728,8 @@ fn refused_compiler_thread_keeps_context_usable() {
                 f.context,
                 HELLO.as_ptr().cast(),
                 HELLO.len(),
+                std::ptr::null(),
+                0,
                 ptr::null(),
                 &mut module,
                 &mut d
@@ -715,6 +743,8 @@ fn refused_compiler_thread_keeps_context_usable() {
                 f.context,
                 HELLO.as_ptr().cast(),
                 HELLO.len(),
+                std::ptr::null(),
+                0,
                 ptr::null(),
                 &mut module,
                 &mut d
@@ -772,6 +802,8 @@ fn output_limit_reports_the_crossing_statement_through_the_abi() {
                     fixture.context,
                     source.as_ptr().cast(),
                     source.len(),
+                    std::ptr::null(),
+                    0,
                     ptr::null(),
                     &mut module,
                     &mut diagnostic
@@ -793,6 +825,8 @@ fn output_limit_reports_the_crossing_statement_through_the_abi() {
                     fixture.context,
                     source.as_ptr().cast(),
                     source.len(),
+                    std::ptr::null(),
+                    0,
                     ptr::null(),
                     &mut module,
                     &mut diagnostic

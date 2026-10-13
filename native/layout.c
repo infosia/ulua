@@ -45,7 +45,19 @@ size_t ulua_internal_layout_probe(size_t index) {
         ULUA_TYPE_BOOLEAN,
         ULUA_TYPE_STRING,
         ULUA_MIN_RUN_STACK,
-        ALLOCATION_STEP_BYTES
+        ALLOCATION_STEP_BYTES,
+        sizeof(ulua_capability_desc),
+        offsetof(ulua_capability_desc, struct_size),
+        offsetof(ulua_capability_desc, reserved),
+        offsetof(ulua_capability_desc, name),
+        offsetof(ulua_capability_desc, name_length),
+        offsetof(ulua_capability_desc, parameter_types),
+        offsetof(ulua_capability_desc, parameter_count),
+        offsetof(ulua_capability_desc, result_type),
+        offsetof(ulua_capability_desc, reserved2),
+        offsetof(ulua_capability_desc, function),
+        offsetof(ulua_capability_desc, userdata),
+        ULUA_MAX_HOST_PARAMETERS
     };
     return index < sizeof(layout) / sizeof(layout[0]) ? layout[index] : SIZE_MAX;
 }

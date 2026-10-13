@@ -191,3 +191,50 @@ fn copy_text<const N: usize>(out: &mut [c_char; N], text: &str) {
         *target = *byte as c_char;
     }
 }
+
+/// Maximum host parameters per capability.
+pub const ULUA_MAX_HOST_PARAMETERS: usize = 16;
+/// A host function must return without unwinding.
+pub type HostFn = unsafe extern "C" fn(*mut c_void, *const Value, usize, *mut Value) -> i32;
+/// Host capability descriptor. Creation copies its name and parameter types.
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[non_exhaustive]
+pub struct CapabilityDesc {
+    /// Must equal sizeof this descriptor.
+    pub struct_size: u32,
+    /// Must be zero.
+    pub reserved: u32,
+    /// ASCII identifier bytes.
+    pub name: *const c_char,
+    /// Identifier byte count.
+    pub name_length: usize,
+    /// Parameter type tags.
+    pub parameter_types: *const u32,
+    /// Parameter count, at most sixteen.
+    pub parameter_count: usize,
+    /// Result type tag.
+    pub result_type: u32,
+    /// Must be zero.
+    pub reserved2: u32,
+    /// Required host function.
+    pub function: Option<HostFn>,
+    /// Host callback data.
+    pub userdata: *mut c_void,
+}
+impl Default for CapabilityDesc {
+    fn default() -> Self {
+        Self {
+            struct_size: size_of::<Self>() as u32,
+            reserved: 0,
+            name: std::ptr::null(),
+            name_length: 0,
+            parameter_types: std::ptr::null(),
+            parameter_count: 0,
+            result_type: 0,
+            reserved2: 0,
+            function: None,
+            userdata: std::ptr::null_mut(),
+        }
+    }
+}

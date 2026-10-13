@@ -11,6 +11,7 @@ use std::{
 pub struct Context {
     pub(crate) poisoned: Cell<bool>,
     pub(crate) busy: Cell<bool>,
+    pub(crate) capabilities: RefCell<Vec<*mut crate::Capability>>,
     pub(crate) modules: RefCell<Vec<*mut Module>>,
     pub(crate) instances: RefCell<Vec<*mut Instance>>,
 }
@@ -19,6 +20,7 @@ impl Context {
         Self {
             poisoned: Cell::new(false),
             busy: Cell::new(false),
+            capabilities: RefCell::new(vec![]),
             modules: RefCell::new(vec![]),
             instances: RefCell::new(vec![]),
         }
@@ -28,6 +30,7 @@ impl Context {
 #[non_exhaustive]
 pub struct Module {
     pub(crate) context: *mut Context,
+    pub(crate) grants: Vec<std::rc::Rc<crate::capabilities::State>>,
     pub(crate) bytecode: Vec<u8>,
     pub(crate) exports: Vec<ulua_compiler::Export>,
 }
@@ -38,6 +41,7 @@ pub struct Instance {
     pub(crate) vm: *mut c_void,
     pub(crate) exports: Vec<ulua_compiler::Export>,
     pub(crate) callback: Box<Callback>,
+    pub(crate) _grants: Vec<crate::capabilities::Binding>,
 }
 impl Drop for Instance {
     fn drop(&mut self) {
@@ -146,6 +150,9 @@ pub(crate) unsafe fn finish(
         8 => (crate::ULUA_FAILED, "trap:string-boundary"),
         9 => (crate::ULUA_FAILED, "trap:invalid-argument"),
         10 => (crate::ULUA_FAILED, "trap:uncaught-exception"),
+        11 => (crate::ULUA_HOST_ERROR, "host:capability"),
+        12 => (crate::ULUA_HOST_ERROR, "host:revoked"),
+        13 => (crate::ULUA_HOST_ERROR, "host:result"),
         _ => (crate::ULUA_INTERNAL, "internal"),
     };
     let bytes: Vec<u8> = error

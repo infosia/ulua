@@ -7,6 +7,7 @@ mod equality;
 mod exceptions;
 mod expressions;
 mod functions;
+mod hosts;
 mod inference;
 mod methods;
 mod narrowing;
@@ -28,6 +29,10 @@ pub(crate) const UNREACHABLE_ARROW: &str = "an arrow function at a point that no
 
 pub(crate) struct Checker<'s> {
     source: &'s [u8],
+    host_names: HashMap<String, usize>,
+    host_grants: Vec<crate::HostSignature>,
+    host_ids: HashMap<String, usize>,
+    hosts: Vec<(usize, String)>,
     catch_use: bool,
     uses_exceptions: bool,
     aliases: HashMap<String, Type>,
@@ -202,7 +207,13 @@ impl Checker<'_> {
             .ok_or_else(|| {
                 self.error(
                     span,
-                    if name == "undefined" { "C2" } else { "C11" },
+                    if name == "undefined" {
+                        "C2"
+                    } else if hosts::known_global(name) {
+                        "C11"
+                    } else {
+                        "C18"
+                    },
                     "Unknown identifier",
                 )
             })?;
@@ -229,6 +240,9 @@ impl Checker<'_> {
         Ok(())
     }
     fn variable_names(&mut self, d: &VariableDeclaration<'_>) -> Result<(), Diagnostic> {
+        if d.declare {
+            return Err(self.error(d.span, "C18", "Script declare forms are rejected"));
+        }
         if d.kind == VariableDeclarationKind::Var {
             return Err(self.error(d.span, "C8", "Use let or const"));
         }
@@ -279,14 +293,32 @@ fn unparen<'a, 'b>(mut ty: &'a TSType<'b>) -> &'a TSType<'b> {
     ty
 }
 
+#[cfg(test)]
 pub(crate) fn check(
     program: &Program<'_>,
     source: &[u8],
     limit: u32,
 ) -> Result<ir::Module, Diagnostic> {
+    check_with_grants(program, source, limit, &[])
+}
+
+pub(crate) fn check_with_grants(
+    program: &Program<'_>,
+    source: &[u8],
+    limit: u32,
+    grants: &[crate::HostSignature],
+) -> Result<ir::Module, Diagnostic> {
     let writes = captures::resolve(program);
     let mut c = Checker {
         source,
+        host_names: grants
+            .iter()
+            .enumerate()
+            .map(|(i, g)| (g.name.clone(), i))
+            .collect(),
+        host_grants: grants.to_vec(),
+        host_ids: HashMap::new(),
+        hosts: vec![],
         catch_use: false,
         uses_exceptions: false,
         aliases: HashMap::new(),
@@ -329,12 +361,28 @@ pub(crate) fn check(
                 declarations.push((c.function_name(f, 0)?, f.as_ref(), false, s.span().start));
             }
             Statement::ExportDeclaration(e) => match &e.declaration {
+                Declaration::FunctionDeclaration(f) if f.declare => {
+                    return Err(c.error(f.span, "C18", "Script declare forms are rejected"));
+                }
                 Declaration::FunctionDeclaration(f) => {
                     declarations.push((c.function_name(f, 0)?, f.as_ref(), true, s.span().start));
                 }
                 _ => return Err(c.unsupported(e.span)),
             },
             Statement::VariableDeclaration(d) => c.variable_names(d)?,
+            Statement::ExportDefaultDeclaration(e) => {
+                if let Some(expression) = e.declaration.as_expression() {
+                    c.host_value_form(expression)?;
+                }
+                return Err(c.unsupported(e.span));
+            }
+            Statement::ExportNamedDeclaration(e)
+                if e.specifiers
+                    .iter()
+                    .any(|s| c.host_names.contains_key(s.local.name().as_str())) =>
+            {
+                return Err(c.error(e.span, "C18", "A host function is only called"));
+            }
             Statement::TSInterfaceDeclaration(_) => {
                 return Err(c.error(s.span(), "C8", "Interface declarations have no lowering"));
             }
@@ -407,12 +455,19 @@ pub(crate) fn check(
         ir::Statement::Declare(id, _) => (1, c.bindings[*id].start),
         _ => (1, 0),
     });
+    c.hosts.sort_by_key(|(_, name)| c.host_names[name]);
+    if let Some(ir::Statement::Located(_, entry)) = body.first_mut()
+        && let ir::Statement::Entry(ids) = entry.as_mut()
+    {
+        ids.extend(c.hosts.iter().map(|(id, _)| *id));
+    }
     c.tdz()?;
     let mut captured: Vec<_> = c.bindings.iter().map(|b| b.declaration).collect();
     for &(owner, id, _) in &c.references {
         captured[id] |= owner != c.bindings[id].owner;
     }
     Ok(ir::Module {
+        hosts: c.hosts,
         exceptions: c.uses_exceptions,
         methods: c.methods,
         types: c.types,

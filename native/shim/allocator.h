@@ -14,6 +14,8 @@ struct ulua_vm {
     int trap_kind;
     int exports;
     int errors;
+    int result_ref;
+    char capability_name[65];
     char exception[256];
     bool charging;
 #ifdef ULUA_MEASUREMENTS
@@ -41,7 +43,7 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
     if (vm->charging) {
         const uint64_t charge = new_size / ALLOCATION_STEP_BYTES + (new_size % ALLOCATION_STEP_BYTES != 0);
         if (vm->steps > vm->max_steps || charge > vm->max_steps - vm->steps) {
-            vm->flag = SHIM_STEPS;
+            if (!vm->flag) vm->flag = SHIM_STEPS;
             return nullptr;
         }
         vm->steps += charge;

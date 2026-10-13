@@ -91,7 +91,7 @@ static int runtime_error_cases(const ErrorCase* cases, size_t count) {
         size_t length = 0;
         int code = ulua_internal_shim_compile(test.source, std::strlen(test.source), &bytecode, &length, error);
         ulua_vm* vm = nullptr;
-        if (!code) code = ulua_internal_shim_new(bytecode, length, &host, &limits, &vm, error);
+        if (!code) code = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, &limits, &vm, error);
         ulua_internal_shim_bytecode_free(bytecode);
         if (code) { std::fprintf(stderr, "runtime fixture %d setup: %d %s\n", index, code, error); return index; }
         ulua_value result = {};

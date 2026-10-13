@@ -130,6 +130,9 @@ impl Checker<'_> {
         Ok(test)
     }
     fn target(&mut self, n: &IdentifierReference<'_>) -> Result<usize, Diagnostic> {
+        if self.is_host(n.name.as_str()) {
+            return Err(self.error(n.span, "C18", "A host function is only called"));
+        }
         let id = self.lookup(n.name.as_str(), n.span)?;
         if !self.bindings[id].mutable {
             return Err(self.error(n.span, "C11", "Target is not mutable"));

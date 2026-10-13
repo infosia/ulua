@@ -1,5 +1,6 @@
 //! Corpus runner: compile and execute through the product C ABI.
 #![warn(missing_docs)]
+mod fixtures;
 mod stress;
 use std::{
     ffi::{c_char, c_void},
@@ -112,12 +113,15 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
         code: None,
         message: None,
     };
+    let signatures = fixtures::Fixtures::signatures(&source)?;
+    let mut fixtures = fixtures::Fixtures::new();
     let mut context = ptr::null_mut();
     let mut diagnostic = Diagnostic::default();
     // SAFETY: Local descriptors, outputs, and source cover all stated lengths. The context owner serializes and frees all objects.
     unsafe {
         let status = ulua_context_new(&mut context);
         if status != ULUA_OK {
+            record.output = std::mem::take(&mut fixtures.output);
             record.fail(status, &diagnostic);
             return Ok(record);
         }
@@ -129,28 +133,36 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
         {
             return Err("Default limits failed".into());
         }
+        let grants = fixtures.grants(context, &signatures)?;
         let mut module = ptr::null_mut();
         let status = ulua_compile(
             owner.0,
             source.as_ptr().cast(),
             source.len(),
+            grants.as_ptr(),
+            grants.len(),
             &compile_limits,
             &mut module,
             &mut diagnostic,
         );
         if status != ULUA_OK {
+            record.output = std::mem::take(&mut fixtures.output);
             record.fail(status, &diagnostic);
             return Ok(record);
         }
         if let Some(directory) = emit {
             // Witness emission uses the same safe compiler. Product execution uses only the C ABI.
-            let compiled = ulua_compiler::compile(&source, ulua_compiler::Limits::default())
-                .map_err(|d| d.message)?;
+            let compiled = ulua_compiler::compile_with_grants(
+                &source,
+                ulua_compiler::Limits::default(),
+                &signatures,
+            )
+            .map_err(|d| d.message)?;
             std::fs::write(directory.join(format!("{name}.luau")), compiled.luau)
                 .map_err(|e| e.to_string())?;
         }
         let mut host = Host::default();
-        host.userdata = ptr::from_mut(&mut record.output).cast();
+        host.userdata = ptr::from_mut(&mut fixtures.output).cast();
         host.output = Some(collect);
         let mut instance = ptr::null_mut();
         let status = ulua_instance_new(
@@ -162,12 +174,14 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
             &mut diagnostic,
         );
         if status != ULUA_OK {
+            record.output = std::mem::take(&mut fixtures.output);
             record.fail(status, &diagnostic);
             return Ok(record);
         }
         let mut index = u32::MAX;
         let status = ulua_module_find_export(module, c"main".as_ptr(), 4, &mut index);
         if status != ULUA_OK {
+            record.output = std::mem::take(&mut fixtures.output);
             record.fail(status, &diagnostic);
             return Ok(record);
         }
@@ -180,6 +194,7 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
             return Err("Object free failed".into());
         }
     }
+    record.output = std::mem::take(&mut fixtures.output);
     Ok(record)
 }
 fn run() -> Result<(), String> {

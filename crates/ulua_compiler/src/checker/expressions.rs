@@ -33,6 +33,7 @@ impl Checker<'_> {
         statement: bool,
         expected: Option<Type>,
     ) -> Result<Expr, Diagnostic> {
+        self.host_value_form(e)?;
         let depth = self.descend(depth, e.span())?;
         let (ty, kind) = match e {
             Expression::NumericLiteral(n) => {
@@ -93,7 +94,13 @@ impl Checker<'_> {
                         _ => {
                             return Err(self.error(
                                 n.span,
-                                if n.name == "undefined" { "C2" } else { "C11" },
+                                if n.name == "undefined" {
+                                    "C2"
+                                } else if hosts::known_global(n.name.as_str()) {
+                                    "C11"
+                                } else {
+                                    "C18"
+                                },
                                 "Unknown value identifier",
                             ));
                         }
@@ -112,6 +119,9 @@ impl Checker<'_> {
                 return Ok(value);
             }
             Expression::UnaryExpression(u) => {
+                if u.operator.as_str() == "typeof" {
+                    self.expr(&u.argument, depth, false)?;
+                }
                 let op = u.operator.as_str();
                 let required = match op {
                     "-" => Type::Number,
@@ -509,6 +519,17 @@ impl Checker<'_> {
                             start: call.callee.span().start,
                             ty: self.types.intern(vec![p], r, 1),
                             kind: ExprKind::Builtin(name),
+                        }
+                    } else if self.is_host(n.name.as_str()) {
+                        let id = self.host_binding(n)?;
+                        Expr {
+                            flow: None,
+                            bare_true: false,
+                            start: n.span.start,
+                            ty: self.bindings[id].ty.ok_or_else(|| {
+                                self.error(n.span, "internal", "Missing host type")
+                            })?,
+                            kind: ExprKind::Read(id),
                         }
                     } else {
                         self.expr(&call.callee, depth, false)?

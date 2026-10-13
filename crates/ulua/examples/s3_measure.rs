@@ -211,6 +211,8 @@ fn run_stack() {
                 context,
                 source.as_ptr().cast(),
                 source.len(),
+                std::ptr::null(),
+                0,
                 ptr::null(),
                 &mut module,
                 &mut d

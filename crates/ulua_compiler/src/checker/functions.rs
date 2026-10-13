@@ -58,6 +58,9 @@ impl Checker<'_> {
         f: &Function<'_>,
         depth: u32,
     ) -> Result<usize, Diagnostic> {
+        if f.declare {
+            return Err(self.error(f.span, "C18", "Script declare forms are rejected"));
+        }
         if f.type_parameters.is_some() {
             return Err(self.error(f.span, "C8", "Generic declarations have no lowering"));
         }

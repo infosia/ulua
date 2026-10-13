@@ -52,6 +52,8 @@ impl Script {
                 s.context,
                 source.as_ptr().cast(),
                 source.len(),
+                std::ptr::null(),
+                0,
                 &limits,
                 &mut s.module,
                 &mut d,

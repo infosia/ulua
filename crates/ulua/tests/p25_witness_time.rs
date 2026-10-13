@@ -1,17 +1,19 @@
 //! Analyzer growth covers every shape of s4_growth and p2x_growth.
 //! The default gate bounds 4/16 KiB ratios at twelve; the measurements feature reports 16/64 KiB ratios.
 //! At 64 KiB, each shape takes at most fifty times dense-assign.
-//! The largest measured ceiling ratio is 30.662 for P27-sequential-catch.
+//! The largest measured ceiling ratio is 31.178 for P27-sequential-catch.
 //! Each size uses the minimum of two single-worker analyzer runs. Only ratios are asserted.
-//! Measured Debug default cost: 71.167 seconds for 178 measured shapes and one C11 fixture.
-//! Measured Debug full cost: 524.468 seconds for the same shapes and fixture.
+//! Measured Debug default cost: 78.830 seconds for 187 measured shapes and one bounded shape.
+//! Measured Debug full cost: 571.065 seconds for the same shapes.
 //! Stock tsc resource exceptions include TS2321 and TS2563 (CLAUDE.md invariant 3).
 #[path = "support/analyzer.rs"]
 mod analyzer;
+#[path = "support/p3_witness.rs"]
+mod hosts;
 #[path = "support/growth_shapes.rs"]
 mod shapes;
 use std::{path::PathBuf, process::Command, time::Instant};
-use ulua_compiler::{Limits, compile};
+use ulua_compiler::{Limits, compile_with_grants};
 
 #[test]
 fn all_growth_shapes_have_bounded_analyzer_time() {
@@ -34,6 +36,7 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
     ));
     std::fs::create_dir_all(&directory).unwrap();
     let mut paths = vec![];
+    let mut host_paths = vec![];
     let mut largest = 0.0f64;
     let mut measured = 0;
     let mut bounded = 0;
@@ -45,7 +48,11 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
         for bytes in sizes {
             let source = (shape.make)(shape.key, bytes);
             assert_eq!(source.len(), bytes, "{}", shape.label);
-            let compiled = match compile(source.as_bytes(), Limits::default()) {
+            let compiled = match compile_with_grants(
+                source.as_bytes(),
+                Limits::default(),
+                &shapes::grants(&source),
+            ) {
                 Ok(compiled) => {
                     assert!(shape.diagnostic.is_none(), "{}", shape.label);
                     compiled
@@ -53,7 +60,7 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 Err(diagnostic) => {
                     // Protected witnesses must compile. A new limit cannot hide their analyzer cost.
                     assert!(
-                        !shape.label.starts_with("P27-"),
+                        !shape.label.starts_with("P27-") && !shape.label.starts_with("P3-"),
                         "{} must compile for the analyzer witness: {diagnostic:?}",
                         shape.label
                     );
@@ -71,7 +78,7 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 }
             };
             let path = directory.join(format!("{}-{bytes}.ts", shape.label));
-            std::fs::write(&path, source).unwrap();
+            std::fs::write(&path, &source).unwrap();
             std::fs::write(path.with_extension("luau"), compiled.luau).unwrap();
             let mut minimum = f64::INFINITY;
             let mut valid = true;
@@ -106,7 +113,15 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 }
             }
             // Keep the existing tsc witnesses; the ABI growth gates cover the other generators.
-            if shape.label.starts_with("P27-")
+            if shape.label.starts_with("P3-") {
+                let declaration_path = path.with_extension("d.ts");
+                std::fs::write(
+                    &declaration_path,
+                    hosts::declarations(&shapes::grants(&source)),
+                )
+                .unwrap();
+                host_paths.push((path, declaration_path));
+            } else if shape.label.starts_with("P27-")
                 || matches!(shape.key, "compound-five" | "store-thirty")
             {
                 paths.push(path);
@@ -190,6 +205,36 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
             "{text}"
         );
         eprintln!("analyzer {label} tsc: {text}");
+    }
+    for (path, declarations) in host_paths {
+        let out = Command::new("node")
+            .current_dir(&root)
+            .args([
+                "node_modules/typescript/bin/tsc",
+                "--noEmit",
+                "--strict",
+                "--target",
+                "es2022",
+                "--module",
+                "esnext",
+                "--lib",
+                "es2022",
+                "prelude/ulua.d.ts",
+            ])
+            .arg(path)
+            .arg(declarations)
+            .output()
+            .unwrap();
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            out.status.success()
+                || (!text.is_empty() && text.lines().all(|l| l.contains("error TS2563:"))),
+            "{text}"
+        );
     }
     std::fs::remove_dir_all(directory).unwrap();
     eprintln!(
