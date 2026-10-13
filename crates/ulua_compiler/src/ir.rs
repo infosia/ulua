@@ -16,6 +16,7 @@ pub(crate) struct Binding {
 pub(crate) struct Module {
     pub(crate) hosts: Vec<(usize, String)>,
     pub(crate) exceptions: bool,
+    pub(crate) asynchronous: bool,
     pub(crate) methods: std::collections::BTreeSet<(Method, usize)>,
     pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,
@@ -26,6 +27,7 @@ pub(crate) struct Module {
     pub(crate) captured: Vec<bool>,
 }
 pub(crate) struct Function {
+    pub(crate) asynchronous: bool,
     pub(crate) binding: usize,
     pub(crate) name: String,
     pub(crate) exported: bool,
@@ -56,6 +58,7 @@ pub(crate) struct Expr {
     pub(crate) kind: ExprKind,
 }
 pub(crate) enum ExprKind {
+    Await(Box<Expr>),
     Null,
     Error(&'static str, Box<Expr>),
     InstanceOf(Box<Expr>, &'static str),
@@ -229,6 +232,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             | ExprKind::OptionalErrorField(a, _)
             | ExprKind::Field(a, _)
             | ExprKind::OptionalField(a, _)
+            | ExprKind::Await(a)
             | ExprKind::Unary(_, a)
             | ExprKind::Length(a) => expressions.push(a),
             ExprKind::OptionalPush(a, b)

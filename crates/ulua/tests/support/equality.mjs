@@ -58,7 +58,13 @@ for (const file of files) {
   const exports = {};
   new Function("exports", "print", js)(exports, s => output.push(s));
   let thrown = null;
-  try { exports.main(); } catch (error) { thrown = error; }
+  const unhandled = [];
+  const rejection = reason => unhandled.push(reason);
+  process.on("unhandledRejection", rejection);
+  try { await exports.main(); } catch (error) { thrown = error; }
+  await new Promise(resolve => setImmediate(resolve));
+  process.off("unhandledRejection", rejection);
+  if (thrown === null && unhandled.length) thrown = unhandled[0];
   const trapFile = file.replace(/\.ts$/, ".trap");
   const expectedTrap = fs.existsSync(trapFile) ? fs.readFileSync(trapFile, "utf8") : null;
   if ((thrown?.name ?? null) !== expectedTrap) throw Error(`${file}\n${source}\nNode trap: ${thrown}\nExpected trap: ${expectedTrap}`);

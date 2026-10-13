@@ -60,6 +60,27 @@ impl Types {
         self.array_views.insert(element, ty);
         ty
     }
+    pub(crate) fn promise(&mut self, value: Type) -> Type {
+        let value = self.count_identity(value);
+        if let Some(ty) = self.promise_views.get(&value) {
+            return *ty;
+        }
+        let canonical = self.identity(value);
+        let identity = if let Some(ty) = self.promises.get(&canonical) {
+            *ty
+        } else {
+            let ty = self.add_counted(Node::Promise(canonical), None);
+            self.promises.insert(canonical, ty);
+            ty
+        };
+        let ty = if self.promise_value(identity) == Some(value) {
+            identity
+        } else {
+            self.add_counted(Node::Promise(value), Some(identity))
+        };
+        self.promise_views.insert(value, ty);
+        ty
+    }
     pub(crate) fn nullable(&mut self, inner: Type) -> Type {
         let inner = self.count_identity(inner);
         if inner == Type::Null || self.inner(inner).is_some() {

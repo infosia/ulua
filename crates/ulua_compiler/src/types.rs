@@ -82,6 +82,7 @@ enum Node {
     Primitive(&'static str),
     Function(Rc<FunctionType>),
     Array(Type),
+    Promise(Type),
     Nullable(Type),
     Record(Rc<Vec<(usize, Type)>>),
     Class(Rc<ClassType>),
@@ -102,6 +103,8 @@ pub(crate) struct Types {
     array_views: HashMap<Type, Type>,
     nullable_views: HashMap<Type, Type>,
     arrays: HashMap<Type, Type>,
+    promises: HashMap<Type, Type>,
+    promise_views: HashMap<Type, Type>,
     nullable: HashMap<Type, Type>,
     records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
     anonymous_records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
@@ -133,6 +136,8 @@ impl Types {
             array_views: HashMap::new(),
             nullable_views: HashMap::new(),
             arrays: HashMap::new(),
+            promises: HashMap::new(),
+            promise_views: HashMap::new(),
             nullable: HashMap::new(),
             records: HashMap::new(),
             anonymous_records: HashMap::new(),
@@ -142,6 +147,13 @@ impl Types {
             depths_ready: false,
             canonical: (0..8).map(Type).collect(),
             function_content: Default::default(),
+        }
+    }
+
+    pub(crate) fn promise_value(&self, ty: Type) -> Option<Type> {
+        match self.nodes.get(ty.0) {
+            Some(Node::Promise(value)) => Some(*value),
+            _ => None,
         }
     }
 
@@ -239,6 +251,11 @@ impl Types {
     pub(crate) fn is_class(&self, ty: Type) -> bool {
         matches!(self.nodes.get(ty.0), Some(Node::Class(_)))
     }
+    pub(crate) fn has_member(&self, ty: Type, key: usize) -> bool {
+        self.field(ty, key).is_some()
+            || matches!(self.nodes.get(ty.0), Some(Node::Class(class))
+                if class.methods.iter().any(|(name, _)| *name == key))
+    }
     pub(crate) fn field(&self, ty: Type, key: usize) -> Option<Type> {
         let fields = self.fields(ty)?;
         fields
@@ -294,7 +311,11 @@ impl Types {
                 self.function_content.borrow_mut().insert(root, true);
                 return true;
             }
-            if let Some(t) = self.element(ty).or_else(|| self.inner(ty)) {
+            if let Some(t) = self
+                .element(ty)
+                .or_else(|| self.inner(ty))
+                .or_else(|| self.promise_value(ty))
+            {
                 pending.push(t);
             }
             if let Some(fields) = self.fields(ty) {

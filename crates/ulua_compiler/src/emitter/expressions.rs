@@ -12,6 +12,16 @@ impl Emitter<'_> {
         })?;
         let target = self.temp(dest);
         match &expr.kind {
+            E::Await(value) => {
+                self.capture("__ulua_await");
+                let slot = self.expression(value, depth)?;
+                if expr.ty == Type::Void {
+                    self.line(format!("__ulua_await({})", self.temp(slot)));
+                } else {
+                    self.write_slot(dest, format!("__ulua_await({})", self.temp(slot)));
+                }
+                self.release(slot);
+            }
             E::Error(kind, message) => {
                 self.capture("__ulua_error");
                 let value = self.expression(message, depth)?;

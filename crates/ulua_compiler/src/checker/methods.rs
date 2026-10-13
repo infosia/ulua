@@ -72,6 +72,7 @@ impl Checker<'_> {
             let arg = arg.as_expression().ok_or_else(|| {
                 self.error(call.span, "C6", "Variadic array methods are rejected")
             })?;
+            self.async_array_argument(arg)?;
             let expected = if callback && index == 0 {
                 None
             } else if callback {
@@ -94,6 +95,13 @@ impl Checker<'_> {
                 let signature = self.types.signature(value.ty).ok_or_else(|| {
                     self.error(arg.span(), "C6", "Array callback must be a function")
                 })?;
+                if name == "forEach" && self.types.promise_value(signature.result).is_some() {
+                    return Err(self.error(
+                        arg.span(),
+                        "C19",
+                        "forEach cannot discard a promise result",
+                    ));
+                }
                 arity = signature.params.len();
                 let reduce = matches!(name, "reduce" | "reduceRight");
                 if !method.arities().contains(&arity) {
@@ -231,6 +239,10 @@ mod tests {
                     scopes: vec![HashMap::new()],
                     owner: 0,
                     result: Type::Void,
+                    async_body: false,
+                    uses_async: false,
+                    promise_annotations: vec![],
+                    aliases_ready: false,
                     types: ir::Types::new(),
                     reachable: true,
                     loops: 0,

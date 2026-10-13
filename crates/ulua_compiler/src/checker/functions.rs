@@ -64,7 +64,10 @@ impl Checker<'_> {
         if f.type_parameters.is_some() {
             return Err(self.error(f.span, "C8", "Generic declarations have no lowering"));
         }
-        if f.r#async || f.generator || f.declare || f.this_param.is_some() {
+        if f.generator {
+            return Err(self.error(f.span, "C19", "generators are rejected"));
+        }
+        if f.this_param.is_some() {
             return Err(self.unsupported(f.span));
         }
         let name =
@@ -74,11 +77,18 @@ impl Checker<'_> {
         let result = self.ty(
             &f.return_type
                 .as_ref()
-                .ok_or_else(|| self.error(f.span, "C11", "Result annotation is required"))?
+                .ok_or_else(|| {
+                    self.error(
+                        f.span,
+                        if f.r#async { "C19" } else { "C11" },
+                        "Result annotation is required",
+                    )
+                })?
                 .type_annotation,
             true,
             depth,
         )?;
+        self.async_result(f.r#async, result, f.span)?;
         let ty = self.types.intern(params, result, required);
         self.checked_type_depth(ty, f.span)?;
         self.bind(
@@ -168,17 +178,20 @@ impl Checker<'_> {
             .map(|f| f.result)
             .ok_or_else(|| self.unsupported(f.span))?;
         let state = self.enter_function(id, result, false);
+        self.async_body = f.r#async;
+        self.result = self.body_result(result);
         let b = f.body.as_ref().ok_or_else(|| self.unsupported(f.span))?;
         let parameters = self.parameters(&f.params, &b.statements, depth)?;
         if !b.directives.is_empty() {
             return Err(self.error(b.span, "C11", "Function directives are rejected"));
         }
         let body = self.block_contents(&b.statements, self.descend(depth, b.span)?)?;
-        if result != Type::Void && !statements::returns(&body) {
+        if self.result != Type::Void && !statements::returns(&body) {
             return Err(self.error(f.span, "C11", "Function can finish without its result"));
         }
         self.leave_function(state);
         self.functions.push(ir::Function {
+            asynchronous: f.r#async,
             initializers: vec![],
             binding: id,
             name: f.id.as_ref().map_or(String::new(), |n| n.name.to_string()),
@@ -199,7 +212,7 @@ impl Checker<'_> {
         if !self.reachable {
             return Err(self.error(a.span, "C16", UNREACHABLE_ARROW));
         }
-        if a.r#async || a.type_parameters.is_some() {
+        if a.type_parameters.is_some() {
             return Err(self.unsupported(a.span));
         }
         let (params, required) = self.signature(&a.params, false, depth)?;
@@ -208,8 +221,14 @@ impl Checker<'_> {
             .as_ref()
             .map(|t| self.ty(&t.type_annotation, true, depth))
             .transpose()?;
+        if a.r#async && a.return_type.is_none() {
+            return Err(self.error(a.span, "C19", "async result annotation is required"));
+        }
         if a.body.as_expression().is_none() && result.is_none() {
             return Err(self.error(a.span, "C11", "Block arrow needs a result annotation"));
+        }
+        if let Some(result) = result {
+            self.async_result(a.r#async, result, a.span)?;
         }
         let result = result.or_else(|| {
             expected.and_then(|ty| self.types.function(ty).map(|signature| signature.result))
@@ -230,6 +249,8 @@ impl Checker<'_> {
         )?;
         self.scopes.pop();
         let state = self.enter_function(id, result.unwrap_or(Type::Void), true);
+        self.async_body = a.r#async;
+        self.result = self.body_result(result.unwrap_or(Type::Void));
         let parameters = self.parameters(&a.params, &[], depth)?;
         let body_depth = self.descend(depth, a.body.span())?;
         let (body, result) = if let Some(e) = a.body.as_expression() {
@@ -248,26 +269,30 @@ impl Checker<'_> {
             if result.is_none() {
                 self.inferred_this(e)?;
             }
-            let value = self.expr_as(e, body_depth, true, result)?;
+            self.async_return_literal(e)?;
+            let value = self.expr_as(e, body_depth, true, result.map(|r| self.body_result(r)))?;
             if result.is_none() {
                 self.inferred_reference(e, value.ty)?;
             }
             if value.ty == Type::Void
                 && !matches!(
                     value.kind,
-                    ExprKind::Call(..) | ExprKind::Method(..) | ExprKind::ClassCall(..)
+                    ExprKind::Call(..)
+                        | ExprKind::Method(..)
+                        | ExprKind::ClassCall(..)
+                        | ExprKind::Await(..)
                 )
             {
                 return Err(self.error(e.span(), "C11", "Void arrow body must be a call"));
             }
             if let Some(result) = &result {
-                self.flow(&value.ty, Some(result), a.span)?;
+                self.return_flow(value.ty, *result, a.span)?;
             }
             if a.return_type.is_none() && self.types.contains_function(value.ty) {
                 return Err(self.error(a.span, "C11", "Function result needs an annotation"));
             }
             let result = result.unwrap_or(value.ty);
-            let body = if result == Type::Void {
+            let body = if value.ty == Type::Void {
                 vec![S::Eval(value)]
             } else {
                 vec![S::Return(Some(value))]
@@ -282,16 +307,18 @@ impl Checker<'_> {
             }
             let body = self.block_contents(&b.statements, body_depth)?;
             let result = result.unwrap_or(Type::Void);
-            if result != Type::Void && !statements::returns(&body) {
+            if self.result != Type::Void && !statements::returns(&body) {
                 return Err(self.error(a.span, "C11", "Arrow can finish without its result"));
             }
             (body, result)
         };
+        self.async_result(a.r#async, result, a.span)?;
         self.leave_function(state);
         let ty = self.types.intern(params, result, required);
         self.checked_type_depth(ty, a.span)?;
         self.bindings[id].ty = Some(ty);
         self.functions.push(ir::Function {
+            asynchronous: a.r#async,
             initializers: vec![],
             binding: id,
             name: String::new(),
@@ -317,6 +344,7 @@ impl Checker<'_> {
             loop_facts: std::mem::take(&mut self.loop_facts),
             owner: self.owner,
             result: std::mem::replace(&mut self.result, result),
+            async_body: std::mem::replace(&mut self.async_body, false),
             loops: std::mem::replace(&mut self.loops, 0),
             this_binding: self.this_binding,
             in_constructor: std::mem::replace(&mut self.in_constructor, false),
@@ -342,6 +370,7 @@ impl Checker<'_> {
         self.scopes.pop();
         self.owner = state.owner;
         self.result = state.result;
+        self.async_body = state.async_body;
         self.loops = state.loops;
         self.this_binding = state.this_binding;
         self.in_constructor = state.in_constructor;
@@ -355,6 +384,7 @@ pub(super) struct FunctionState {
     loop_facts: Vec<narrowing::LoopFacts>,
     owner: usize,
     result: Type,
+    async_body: bool,
     loops: usize,
     this_binding: Option<usize>,
     in_constructor: bool,

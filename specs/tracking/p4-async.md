@@ -40,6 +40,20 @@ At `8e40e1f`, `tools/witness/luau.mjs` (`PHASE = "P4.1"`): `a58`,
 `a59`, `t10` rejected `unsupported`; `a60`, `a61` C11; `r134` to
 `r141` `unsupported`, want C19. Every earlier entry passes.
 
+## Measurements (P4.1)
+
+Implementation record (Codex), Debug, one machine:
+
+- Corpus: 188 entries pass; 71 generated and 14 stress modules pass `luau-analyze -j1`.
+- Direct tests: 104 rejections (50 C19 forms, 54 `then` member forms); 74 programs against `node`, `tsc`, and `luau-analyze` (15 direct, 55 await nesting, 4 nested `then`). Await nesting ceilings: `try` 20, `catch` 16, `finally` 16.
+- Stops in a resumed activation: 16 fixtures (traps, memory, steps, stack) and 3 host stops (`host:capability`, `host:revoked`, `host:result`): no `catch`, `finally`, or later job; the instance stays usable; the re-raise requests 0 allocations in 12 observed cases.
+- Immediate async starts: depth 196 runs, 197 gives `limit:stack`.
+- Drain: 0 jobs retained after 1,000 and 10,000 serial awaits (565,440 retained bytes in both).
+- Random check: 240 programs (seed `0x41c1240026`), each through `node`, `tsc`, `luau-analyze -j1`, and the ABI; 0 differences; 10 unhandled rejections.
+- Growth (`luau-analyze -j1`, minimum of 2 runs): 7 await shapes; 4 to 16 KiB largest ratio 4.86 (`try`); ceiling ratio largest 9.0 (`try`). All 194 shapes: 4 to 16 KiB largest 8.49, ceiling largest 31.2. `measurements` 600.7 s.
+- `sh tools/gate.sh full` by the primary agent: `cargo-test` 584 s (P3 close: 473 s), `luau-witnesses` 53 s; hygiene passes.
+- Decided gaps: a function value with a `Promise` result as an array method argument is rejected (C19.8 text widened to match); self-adoption rejects with `TypeError`, as in `node`.
+
 ## Gaps
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.

@@ -10,6 +10,8 @@ mod objects;
 #[cfg(test)]
 mod p3_tests;
 #[cfg(test)]
+mod p41_tests;
+#[cfg(test)]
 mod tests;
 mod types;
 

@@ -250,6 +250,7 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                 Expression::ParenthesizedExpression(p) => {
                     pending.push(Work::Expr(&p.expression, scope))
                 }
+                Expression::AwaitExpression(a) => pending.push(Work::Expr(&a.argument, scope)),
                 Expression::UnaryExpression(u) => pending.push(Work::Expr(&u.argument, scope)),
                 Expression::StaticMemberExpression(m) => pending.push(Work::Expr(&m.object, scope)),
                 Expression::ComputedMemberExpression(m) => {

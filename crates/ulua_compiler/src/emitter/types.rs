@@ -99,6 +99,7 @@ impl FunctionTypes {
                 | E::OptionalErrorField(a, _)
                 | E::Field(a, _)
                 | E::OptionalField(a, _)
+                | E::Await(a)
                 | E::Unary(_, a)
                 | E::Length(a) => expressions.push(a),
                 E::OptionalPush(a, b)
@@ -158,7 +159,12 @@ impl FunctionTypes {
                 self.names.insert(ty, name);
                 active.insert(ty);
                 pending.push((ty, true));
-                if let Some(inner) = module.types.inner(ty).or_else(|| module.types.element(ty)) {
+                if let Some(inner) = module
+                    .types
+                    .inner(ty)
+                    .or_else(|| module.types.element(ty))
+                    .or_else(|| module.types.promise_value(ty))
+                {
                     pending.push((inner, false));
                 }
                 if let Some(fields) = module.types.fields(ty) {
@@ -171,7 +177,16 @@ impl FunctionTypes {
                 continue;
             }
             let name = self.luau(&ty);
-            let definition = if let Some(inner) = module.types.inner(ty) {
+            let definition = if let Some(value) = module.types.promise_value(ty) {
+                format!(
+                    "__ulua_Promise<{}>",
+                    if value == Type::Void {
+                        "nil".to_owned()
+                    } else {
+                        self.luau(&value)
+                    }
+                )
+            } else if let Some(inner) = module.types.inner(ty) {
                 let inner_name = self.luau(&inner);
                 if module.types.function(inner).is_some() {
                     format!("({inner_name})?")

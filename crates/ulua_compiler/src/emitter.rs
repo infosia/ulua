@@ -1,6 +1,7 @@
 //! Strict Luau emission with ordered values and a per-function local budget.
 mod accessors;
 mod arrays;
+mod asynchronous;
 mod constants;
 mod exceptions;
 mod expressions;
@@ -88,6 +89,9 @@ struct Emitter<'a> {
     joins: joins::Joins,
     context: Option<&'a functions::Emission>,
     upvalues: std::collections::HashSet<String>,
+    async_void: bool,
+    activation_parameters: std::collections::HashSet<String>,
+    activation_upvalues: std::collections::HashSet<String>,
 }
 #[derive(Clone)]
 struct Loop {
@@ -137,6 +141,9 @@ impl<'a> Emitter<'a> {
             joins: joins::Joins::default(),
             context: None,
             upvalues: std::collections::HashSet::new(),
+            async_void: false,
+            activation_parameters: Default::default(),
+            activation_upvalues: Default::default(),
         }
     }
     fn guard(&self, depth: u32) -> Result<u32, Diagnostic> {
@@ -260,6 +267,9 @@ impl<'a> Emitter<'a> {
             return;
         }
         let name = location.split('.').next().unwrap_or(location);
+        if self.activation_parameters.contains(name) {
+            self.activation_upvalues.insert(name.to_owned());
+        }
         // A nested closure also requires each intermediate closure to capture the name.
         for frame in self.protected.iter_mut().rev() {
             if frame.locals.contains(name) {
@@ -347,6 +357,16 @@ impl<'a> Emitter<'a> {
 
 pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
+        .saturating_add(if module.exceptions {
+            prelude::EXCEPTIONS.len()
+        } else {
+            0
+        })
+        .saturating_add(if module.asynchronous {
+            asynchronous::PRELUDE.len()
+        } else {
+            0
+        })
         .saturating_add(methods::prelude(&module.methods)?.0.len())
         .saturating_add(factor.saturating_mul(module.source.len()));
     functions::emit(module, bound)
@@ -360,6 +380,8 @@ mod output_tests {
     fn the_budget_counts_nested_output_exactly_once() {
         for source in [
             "\nexport function main():void{print('a');}",
+            "\nexport async function main():Promise<void>{}",
+            "\nexport async function main():Promise<void>{const f=async():Promise<number>=>{return 1;};print(`${await f()}`);}",
             "\nexport function main():void{function f(x:number=1):number{return x;}let g=():number=>f();print(`${g()}`);}",
             "\nexport function main():void{for(let i=0;i<2;i++){let g=():number=>i;print(`${g()}`);}}",
         ] {

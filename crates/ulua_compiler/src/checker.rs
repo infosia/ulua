@@ -1,5 +1,7 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod arrays;
+mod asynchronous;
+mod calls;
 mod captures;
 mod classes;
 mod construction;
@@ -52,6 +54,10 @@ pub(crate) struct Checker<'s> {
     scopes: Vec<HashMap<String, usize>>,
     owner: usize,
     result: Type,
+    async_body: bool,
+    uses_async: bool,
+    promise_annotations: Vec<(Type, Span)>,
+    aliases_ready: bool,
     types: ir::Types,
     reachable: bool,
     loops: usize,
@@ -152,6 +158,9 @@ impl Checker<'_> {
                 let TSTypeName::IdentifierReference(n) = &r.type_name else {
                     return Err(self.error(r.span, "C11", "Qualified type name is rejected"));
                 };
+                if n.name == "Promise" {
+                    return self.promise_type(r, result, depth);
+                }
                 if r.type_arguments.is_some() {
                     return Err(self.error(r.span, "C11", "Type arguments are rejected"));
                 }
@@ -242,6 +251,9 @@ impl Checker<'_> {
     fn variable_names(&mut self, d: &VariableDeclaration<'_>) -> Result<(), Diagnostic> {
         if d.declare {
             return Err(self.error(d.span, "C18", "Script declare forms are rejected"));
+        }
+        if d.kind == VariableDeclarationKind::AwaitUsing {
+            return Err(self.error(d.span, "C19", "await using is rejected"));
         }
         if d.kind == VariableDeclarationKind::Var {
             return Err(self.error(d.span, "C8", "Use let or const"));
@@ -338,6 +350,10 @@ pub(crate) fn check_with_grants(
         scopes: vec![HashMap::new()],
         owner: 0,
         result: Type::Void,
+        async_body: false,
+        uses_async: false,
+        promise_annotations: vec![],
+        aliases_ready: false,
         types: ir::Types::new(),
         reachable: true,
         loops: 0,
@@ -397,7 +413,11 @@ pub(crate) fn check_with_grants(
             && c.bindings[*id]
                 .ty
                 .and_then(|ty| c.types.function(ty))
-                .is_some_and(|f| f.params.is_empty() && f.result == Type::Void)
+                .is_some_and(|f| {
+                    f.params.is_empty()
+                        && (f.result == Type::Void
+                            || c.types.promise_value(f.result) == Some(Type::Void))
+                })
     }) {
         return Err(c.unsupported(program.span));
     }
@@ -468,7 +488,8 @@ pub(crate) fn check_with_grants(
     }
     Ok(ir::Module {
         hosts: c.hosts,
-        exceptions: c.uses_exceptions,
+        exceptions: c.uses_exceptions || c.uses_async,
+        asynchronous: c.uses_async,
         methods: c.methods,
         types: c.types,
         captured,

@@ -24,6 +24,11 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     let library_locals = LIBRARY_LOCALS
         + usize::from(!module.hosts.is_empty())
         + numeric_arrows.locals
+        + if module.asynchronous {
+            asynchronous::LOCALS
+        } else {
+            0
+        }
         + if module.exceptions { 4 } else { 0 };
     let (method_prelude, method_locals) = methods::prelude(&module.methods)?;
     let size = module.bindings.len() + 1;
@@ -161,6 +166,9 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         }
     }
     for name in [
+        "__ulua_start",
+        "__ulua_promises",
+        "__ulua_await",
         "__ulua_register",
         "__ulua_errors",
         "__ulua_error",
@@ -200,6 +208,9 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     out.push_str(LIBRARIES);
     if module.exceptions {
         out.push_str(prelude::EXCEPTIONS);
+    }
+    if module.asynchronous {
+        out.push_str(asynchronous::PRELUDE);
     }
     out.push_str(&method_prelude);
     out.push_str(&types.declarations);
@@ -284,6 +295,22 @@ impl Emitter<'_> {
             self.function_types,
         );
         child.context = Some(context);
+        child.async_void =
+            f.asynchronous && self.module.types.promise_value(f.result) == Some(Type::Void);
+        if f.asynchronous {
+            child.activation_parameters = f
+                .parameters
+                .iter()
+                .filter(|(_, d)| d.is_none())
+                .map(|(id, _)| format!("__ulua_b{id}"))
+                .collect();
+            child.activation_upvalues.extend(
+                f.parameters
+                    .iter()
+                    .filter(|(_, d)| d.is_some())
+                    .map(|(id, _)| format!("__ulua_arg{id}")),
+            );
+        }
         child.overhead = layout.overhead;
         child.copies = self.copies.clone();
         child.slots = layout.slots.clone();
@@ -314,10 +341,26 @@ impl Emitter<'_> {
                 parameters.push(format!("__ulua_b{id}: {ty}"));
             }
         }
+        let value_type = if f.asynchronous {
+            self.module.types.promise_value(f.result)
+        } else {
+            None
+        };
+        let body_type = value_type.map(|ty| {
+            if ty == Type::Void {
+                "nil".to_owned()
+            } else {
+                self.function_types.luau(&ty)
+            }
+        });
+        let async_prefix = body_type.as_ref().map_or(String::new(), |ty| {
+            format!("    local __ulua_p: __ulua_Promise<{ty}> = {{state = 0, value = nil :: any, handled = false, fulfilled = {{}}, rejected = {{}}}}\n    __ulua_promises[__ulua_p] = true\n    return __ulua_start(__ulua_p, function(): ({ty} | __ulua_Promise<{ty}>)\n")
+        });
         let prefix = format!(
-            "function({}): {}\n{}{}",
+            "function({}): {}\n{}{}{}",
             parameters.join(", "),
             self.function_types.luau(&f.result),
+            async_prefix,
             parameter_locals,
             child.headers(&layout.headers)
         );
@@ -330,7 +373,14 @@ impl Emitter<'_> {
         child.statements(&f.initializers, depth)?;
         child.defaults(f)?;
         child.statements(&f.body, depth)?;
-        if child.upvalues.len() > crate::UPVALUE_BUDGET {
+        let activation_captures = child.upvalues.len() + child.activation_upvalues.len();
+        if f.asynchronous {
+            child.capture("__ulua_start");
+            child.capture("__ulua_promises");
+        }
+        if activation_captures > crate::UPVALUE_BUDGET
+            || child.upvalues.len() > crate::UPVALUE_BUDGET
+        {
             return Err(Diagnostic::at(
                 &self.module.source,
                 self.module.bindings[id].start as usize,
@@ -345,7 +395,21 @@ impl Emitter<'_> {
             output.charge(3, self.statement_offset);
             output.check(self.module)?;
         }
-        let value = format!("{prefix}{}end", child.out);
+        let suffix = if f.asynchronous {
+            let tail =
+                if value_type == Some(Type::Void) && !f.body.iter().any(|s| ir::abrupt(s, false)) {
+                    "    return nil\n"
+                } else {
+                    ""
+                };
+            format!("{tail}    end)\nend")
+        } else {
+            "end".to_owned()
+        };
+        if let Some(output) = self.output {
+            output.charge(suffix.len().saturating_sub(3), self.statement_offset);
+        }
+        let value = format!("{prefix}{}{suffix}", child.out);
         // Child writes already use the module budget. The enclosing line counts only its own bytes.
         self.credited += value.len();
         Ok(value)

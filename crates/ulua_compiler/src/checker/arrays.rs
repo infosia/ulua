@@ -6,11 +6,10 @@ impl Checker<'_> {
         let ForStatementLeft::VariableDeclaration(d) = &f.left else {
             return Err(self.error(f.span, "C11", "For-of requires a const declaration"));
         };
-        if f.r#await
-            || d.kind != VariableDeclarationKind::Const
-            || d.declare
-            || d.declarations.len() != 1
-        {
+        if f.r#await {
+            return Err(self.error(f.span, "C19", "for await is rejected"));
+        }
+        if d.kind != VariableDeclarationKind::Const || d.declare || d.declarations.len() != 1 {
             return Err(self.error(f.span, "C11", "Invalid for-of declaration"));
         }
         let v = &d.declarations[0];

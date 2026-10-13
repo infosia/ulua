@@ -48,7 +48,7 @@ impl Script {
                 assert!(!s.module.is_null());
             } else {
                 assert_eq!(status, ULUA_REJECTED, "{}: {}", code(&d), message(&d));
-                assert_eq!(code(&d), expected);
+                assert_eq!(code(&d), expected, "{source}");
                 assert!(s.module.is_null());
             }
         }

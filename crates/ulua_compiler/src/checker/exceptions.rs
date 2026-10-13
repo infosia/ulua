@@ -82,6 +82,7 @@ impl Checker<'_> {
             .filter(|_| !self.scopes.iter().any(|s| s.contains_key(id.name.as_str())))
             .ok_or_else(|| self.error(b.span, "C11", "Instanceof needs an Error class"))?;
         let value = self.catch_value(&b.left, depth)?;
+        self.promise_operator(value.ty, b.span)?;
         if !matches!(value.ty, Type::Error | Type::Unknown) {
             return Err(self.error(b.span, "C11", "Instanceof needs an Error or catch binding"));
         }

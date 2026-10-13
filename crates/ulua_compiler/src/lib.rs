@@ -241,6 +241,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         &Module {
             hosts: vec![],
             exceptions: false,
+            asynchronous: false,
             types,
             methods: Default::default(),
             captured: vec![true, false],
@@ -263,6 +264,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 },
             ],
             functions: vec![Function {
+                asynchronous: false,
                 initializers: vec![],
                 binding: 0,
                 name: "main".into(),
@@ -330,6 +332,10 @@ fn compile_observed(
         // The parser reports module-reserved await with its async-context diagnostic.
         let code = if message == "Cannot use `await` as an identifier in an async context" {
             "C11"
+        } else if message
+            == "`await` is only allowed within async functions and at the top levels of modules"
+        {
+            "C19"
         } else {
             "syntax"
         };
@@ -342,7 +348,7 @@ fn compile_observed(
     let module = module?;
     for f in module.functions.iter().filter(|f| f.exported) {
         if !matches!(
-            f.result,
+            module.types.promise_value(f.result).unwrap_or(f.result),
             ir::Type::Void | ir::Type::Number | ir::Type::Boolean | ir::Type::String
         ) || f.parameters.iter().any(|(id, _)| {
             !matches!(
@@ -375,7 +381,11 @@ fn compile_observed(
                     .iter()
                     .filter_map(|(id, _)| module.bindings[*id].ty.as_ref().map(ir::Type::tag))
                     .collect(),
-                result: f.result.tag(),
+                result: module
+                    .types
+                    .promise_value(f.result)
+                    .unwrap_or(f.result)
+                    .tag(),
             })
             .collect(),
     })
@@ -419,15 +429,19 @@ mod tests {
             .code,
             "C8"
         );
-        for source in [
-            b"".as_slice(),
-            b"export async function main(): void { print('x'); }",
-        ] {
-            assert_eq!(
-                compile(source, Limits::default()).unwrap_err().code,
-                "unsupported"
-            );
-        }
+        assert_eq!(
+            compile(b"", Limits::default()).unwrap_err().code,
+            "unsupported"
+        );
+        assert_eq!(
+            compile(
+                b"export async function main(): void { print('x'); }",
+                Limits::default()
+            )
+            .unwrap_err()
+            .code,
+            "C19"
+        );
     }
     #[test]
     fn limits_and_locations() {

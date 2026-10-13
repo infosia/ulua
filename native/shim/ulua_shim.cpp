@@ -88,6 +88,36 @@ static int register_errors(lua_State* state) {
     vm->errors = lua_ref(state, 1);
     return 0;
 }
+static int check_resume(lua_State* state) {
+    ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    // Classify the recorded stop and native class before the Error identity check.
+    if (!vm->flag && !vm->trap_kind && lua_type(state, 1) == LUA_TSTRING)
+        vm->flag = run_error_code(LUA_ERRRUN, run_message(lua_tostring(state, 1)));
+    // Preserve the original error. This path creates no error object or location string.
+    if (!vm->flag && !vm->trap_kind && lua_istable(state, 1) && vm->errors) {
+        lua_getref(state, vm->errors);
+        lua_pushvalue(state, 1);
+        lua_rawget(state, -2);
+        if (!lua_isnil(state, -1)) return 0;
+    }
+    lua_settop(state, 1);
+#ifdef ULUA_MEASUREMENTS
+    ++vm->resume_checks;
+    if (!vm->resume_unwind) {
+        vm->resume_snapshot = vm->allocation_calls;
+        vm->resume_unwind = true;
+    }
+#endif
+    lua_error(state);
+}
+static int register_async(lua_State* state) {
+    ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
+    vm->drain = lua_ref(state, 1);
+    vm->reset = lua_ref(state, 2);
+    vm->promises = lua_ref(state, 3);
+    vm->jobs = lua_ref(state, 4);
+    return 0;
+}
 static void raise_call_error(lua_State* state, ulua_vm* vm) {
     // This function runs inside load or call, below the native protection boundary.
     const int error_index = lua_gettop(state);
@@ -138,7 +168,14 @@ static int collect(lua_State* state) {
     return 0;
 }
 static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
+#ifdef ULUA_MEASUREMENTS
+    if (vm->resume_unwind) {
+        vm->resume_allocations += vm->allocation_calls - vm->resume_snapshot;
+        vm->resume_unwind = false;
+    }
+#endif
     vm->charging = false;
+    vm->async_failed = status != LUA_OK;
     if (status == LUA_OK) return SHIM_OK;
     const char* text = run_message(lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error");
     message(error, text);
@@ -162,6 +199,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         message(error, "Invalid argument");
     }
     if (code == SHIM_UNCAUGHT) message(error, vm->exception);
+
     if (code >= 11 && code <= 13) message(error, vm->capability_name);
     vm->trap_kind = 0;
     vm->flag = 0;
@@ -183,7 +221,7 @@ struct Load {
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
-    if (!lua_checkstack(state, 5)) luaL_error(state, "stack limit");
+    if (!lua_checkstack(state, 7)) luaL_error(state, "stack limit");
     lua_pushcfunction(state, trap, "__ulua_trap");
     lua_createtable(state, static_cast<int>(args->grant_count), 0);
     for (size_t i = 0; i < args->grant_count; ++i) {
@@ -193,7 +231,13 @@ static int load(lua_State* state) {
         lua_rawseti(state, -2, static_cast<int>(i + 1));
     }
     lua_pushcfunction(state, register_errors, "register_errors");
-    if (lua_pcall(state, 3, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
+    lua_pushcfunction(state, check_resume, "check_resume");
+    lua_pushcfunction(state, register_async, "register_async");
+    if (lua_pcall(state, 5, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
+    if (args->vm->drain) {
+        lua_getref(state, args->vm->drain);
+        if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, args->vm);
+    }
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
     return 0;
@@ -208,6 +252,11 @@ struct Call {
 };
 static int call(lua_State* state) {
     Call* args = static_cast<Call*>(lua_tolightuserdata(state, 1));
+    if (args->vm->async_failed && args->vm->reset) {
+        lua_getref(state, args->vm->reset);
+        if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, args->vm);
+        args->vm->async_failed = false;
+    }
     if (args->vm->result_ref) { lua_unref(state, args->vm->result_ref); args->vm->result_ref = 0; }
     lua_getref(state, args->vm->exports);
     lua_getfield(state, -1, args->name);
@@ -218,8 +267,37 @@ static int call(lua_State* state) {
         else if (value->type == ULUA_TYPE_BOOLEAN) lua_pushboolean(state, value->boolean);
         else lua_pushlstring(state, value->data ? value->data : "", value->length);
     }
-    if (lua_pcall(state, static_cast<int>(args->count), args->result_type == ULUA_TYPE_VOID ? 0 : 1, 0) != LUA_OK)
+    if (lua_pcall(state, static_cast<int>(args->count), 1, 0) != LUA_OK)
         raise_call_error(state, args->vm);
+    const int result_index = lua_gettop(state);
+    bool promise = false;
+    if (args->vm->promises && lua_istable(state, result_index)) {
+        lua_getref(state, args->vm->promises);
+        lua_pushvalue(state, result_index);
+        lua_rawget(state, -2);
+        promise = !lua_isnil(state, -1);
+        lua_settop(state, result_index);
+        if (promise) {
+            // The host observes the returned promise, as an await of async main does.
+            lua_pushboolean(state, true);
+            lua_rawsetfield(state, result_index, "handled");
+        }
+    }
+    if (args->vm->drain) {
+        lua_getref(state, args->vm->drain);
+        if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, args->vm);
+    }
+    if (promise) {
+        lua_rawgetfield(state, result_index, "state");
+        const int settled = lua_tointeger(state, -1);
+        lua_pop(state, 1);
+        if (settled == 0) { args->vm->flag = SHIM_PENDING; luaL_error(state, "Async export is pending"); }
+        if (settled == 2) {
+            lua_rawgetfield(state, result_index, "reason");
+            raise_call_error(state, args->vm);
+        }
+        lua_rawgetfield(state, result_index, "value");
+    }
     ulua_value value = {};
     value.type = args->result_type;
     if (value.type == ULUA_TYPE_NUMBER) {

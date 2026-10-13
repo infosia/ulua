@@ -8,6 +8,7 @@ use std::{
 enum Shape {
     Primitive(&'static str),
     Array,
+    Promise,
     Nullable,
     Function(usize, usize),
     Record(Vec<usize>),
@@ -25,6 +26,7 @@ impl Types {
             let (shape, children) = match node {
                 Node::Primitive(s) => (Shape::Primitive(s), vec![]),
                 Node::Array(t) => (Shape::Array, vec![*t]),
+                Node::Promise(t) => (Shape::Promise, vec![*t]),
                 Node::Nullable(t) => (Shape::Nullable, vec![*t]),
                 Node::Function(f) => {
                     let mut children = f.params.clone();
@@ -112,6 +114,7 @@ impl Types {
         // Keep source links for cached budgets. Rebuild every identity index with canonical child keys.
         self.records.clear();
         self.arrays.clear();
+        self.promises.clear();
         self.nullable.clear();
         self.functions.clear();
         for (id, node) in self.nodes.iter().enumerate() {
@@ -119,6 +122,9 @@ impl Types {
             match node {
                 Node::Array(t) => {
                     self.arrays.insert(self.canonical[t.0], identity);
+                }
+                Node::Promise(t) => {
+                    self.promises.insert(self.canonical[t.0], identity);
                 }
                 Node::Nullable(t) => {
                     self.nullable.insert(self.canonical[t.0], identity);

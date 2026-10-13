@@ -14,6 +14,11 @@ struct ulua_vm {
     int trap_kind;
     int exports;
     int errors;
+    int drain;
+    int reset;
+    int promises;
+    int jobs;
+    bool async_failed;
     int result_ref;
     char capability_name[65];
     char exception[256];
@@ -22,12 +27,20 @@ struct ulua_vm {
     uint64_t allocation_bytes;
     uint64_t allocation_steps;
     uint64_t interrupts;
+    uint64_t allocation_calls;
+    uint64_t resume_checks;
+    uint64_t resume_allocations;
+    uint64_t resume_snapshot;
+    bool resume_unwind;
 #endif
     ulua_host host;
 };
 static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new_size) {
     ulua_vm* vm = static_cast<ulua_vm*>(userdata);
     size_t old = pointer ? old_size : 0;
+#ifdef ULUA_MEASUREMENTS
+    if (new_size) ++vm->allocation_calls;
+#endif
     if (!new_size) {
         std::free(pointer);
         vm->used -= old;

@@ -150,6 +150,7 @@ pub(crate) unsafe fn finish(
         8 => (crate::ULUA_FAILED, "trap:string-boundary"),
         9 => (crate::ULUA_FAILED, "trap:invalid-argument"),
         10 => (crate::ULUA_FAILED, "trap:uncaught-exception"),
+        14 => (crate::ULUA_FAILED, "async:pending"),
         11 => (crate::ULUA_HOST_ERROR, "host:capability"),
         12 => (crate::ULUA_HOST_ERROR, "host:revoked"),
         13 => (crate::ULUA_HOST_ERROR, "host:result"),

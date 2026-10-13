@@ -343,7 +343,11 @@ impl Emitter<'_> {
                     self.release(v);
                 } else {
                     if self.protected.is_empty() {
-                        self.line("do return end");
+                        self.line(if self.async_void {
+                            "do return nil end"
+                        } else {
+                            "do return end"
+                        });
                     } else {
                         self.line("do return 1, nil, 0 end");
                     }

@@ -24,6 +24,8 @@ mod review;
 #[path = "../../src/p24_inputs.rs"]
 mod strings;
 
+#[path = "p41_shapes.rs"]
+mod asynchronous;
 #[path = "p3_shapes.rs"]
 mod hosts;
 
@@ -99,6 +101,7 @@ pub fn all() -> Vec<Shape> {
     add(&mut out, "P26", classes::SHAPES, classes::source);
     add(&mut out, "P27", &exceptions::SHAPES, exceptions::source);
     add(&mut out, "P3", hosts::SHAPES, hosts::source);
+    add(&mut out, "P41", asynchronous::SHAPES, asynchronous::source);
     out
 }
 

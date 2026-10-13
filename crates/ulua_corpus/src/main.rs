@@ -185,6 +185,7 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
             record.fail(status, &diagnostic);
             return Ok(record);
         }
+        // Async main has the VOID signature. The ABI drains and observes its promise.
         let mut value = Value::default();
         let status = ulua_call(instance, index, ptr::null(), 0, &mut value, &mut diagnostic);
         if status != ULUA_OK {

@@ -129,6 +129,10 @@ impl Checker<'_> {
             }
         }
         self.types.seal_aliases();
+        self.aliases_ready = true;
+        for (value, span) in std::mem::take(&mut self.promise_annotations) {
+            self.promise_member(value, span)?;
+        }
         for s in &program.body {
             if let Statement::TSTypeAliasDeclaration(a) = s {
                 self.checked_type_depth(self.aliases[a.id.name.as_str()], a.span)?;
@@ -240,6 +244,7 @@ impl Checker<'_> {
         }
         let mut receiver = self.expr(&m.object, depth, false)?;
         receiver.ty = self.original_type(&receiver);
+        self.promise_operator(receiver.ty, m.span)?;
         let inner = self
             .types
             .inner(receiver.ty)
@@ -301,10 +306,18 @@ impl Checker<'_> {
         }
         let mut receiver = self.expr(&m.object, depth, false)?;
         receiver.ty = self.original_type(&receiver);
+        self.promise_operator(receiver.ty, m.span)?;
         let inner = self
             .types
             .inner(receiver.ty)
             .ok_or_else(|| self.error(chain.span, "C2", "Optional receiver must include null"))?;
+        if self.types.element(inner).is_some() {
+            for arg in &c.arguments {
+                if let Some(e) = arg.as_expression() {
+                    self.async_array_argument(e)?;
+                }
+            }
+        }
         if inner == Type::String || self.types.element(inner).is_some() {
             if let Some(element) = self.types.element(inner)
                 && m.property.name == "push"
@@ -365,6 +378,13 @@ impl Checker<'_> {
             .types
             .signature(field)
             .ok_or_else(|| self.error(c.span, "C1", "Field must be a function"))?;
+        if self.types.promise_value(signature.result).is_some() {
+            return Err(self.error(
+                c.span,
+                "C19",
+                "a promise value is stored, passed, returned, or awaited",
+            ));
+        }
         if c.arguments.len() < signature.required || c.arguments.len() > signature.params.len() {
             return Err(self.error(c.span, "C1", "Argument count does not agree"));
         }

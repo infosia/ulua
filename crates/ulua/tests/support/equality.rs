@@ -36,6 +36,10 @@ impl Suite {
     pub fn source_trap(&mut self, source: &str, golden: &str, kind: &str, node_kind: &str) {
         self.run(source, Some(golden), Some((kind, node_kind)));
     }
+    #[allow(dead_code)]
+    pub fn source_async_trap(&mut self, source: &str, node_kind: &str) {
+        self.run(source, None, Some(("trap:uncaught-exception", node_kind)));
+    }
     fn run(&mut self, source: &str, golden: Option<&str>, trap: Option<(&str, &str)>) {
         let compiled = ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
             .unwrap_or_else(|d| panic!("{source}: {d:?}"));

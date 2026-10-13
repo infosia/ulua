@@ -900,9 +900,11 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    order (corpus.md §6). `node` reports it after the same drain
    (`unhandledRejection`) and ends the process. A reaction added in the
    same drain handles it. The instance stays usable (C17.8).
-8. **Array callbacks.** An `async` arrow as an argument of an array
-   method is rejected (C19) in P4.1: `forEach` drops the promise of its
-   callback.
+8. **Array callbacks.** An argument of an array method whose result
+   type is a `Promise` type (an `async` arrow, or a function value) is
+   rejected (C19) in P4.1: `forEach` drops the promise of its callback.
+   A promise that an `async` body returns to itself rejects it with a
+   `TypeError`, as ES2022 does.
 9. **Limits.** Each `async` activation is one coroutine. An `async`
    call that runs before the first `await` nests one coroutine resume
    in the caller; nested resumes past the Luau C-stack limit give

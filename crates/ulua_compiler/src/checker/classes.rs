@@ -130,6 +130,13 @@ impl Checker<'_> {
                         private.insert(key);
                     }
                     let f = &m.value;
+                    if f.generator || (f.r#async && m.kind == MethodDefinitionKind::Constructor) {
+                        return Err(self.error(
+                            m.span,
+                            "C19",
+                            "async constructors and generators are rejected",
+                        ));
+                    }
                     if m.computed
                         || m.r#static
                         || m.optional
@@ -138,7 +145,6 @@ impl Checker<'_> {
                         || m.r#type != MethodDefinitionType::MethodDefinition
                         || m.accessibility
                             .is_some_and(|a| a != TSAccessibility::Private)
-                        || f.r#async
                         || f.generator
                         || f.declare
                         || f.this_param.is_some()
@@ -163,9 +169,14 @@ impl Checker<'_> {
                         continue;
                     }
                     let annotation = f.return_type.as_ref().ok_or_else(|| {
-                        self.error(m.span, "C11", "Method result annotation is required")
+                        self.error(
+                            m.span,
+                            if f.r#async { "C19" } else { "C11" },
+                            "Method result annotation is required",
+                        )
                     })?;
                     let result = self.ty(&annotation.type_annotation, true, 0)?;
+                    self.async_result(f.r#async, result, m.span)?;
                     methods.push((key, self.types.intern(params.clone(), result, required)));
                     let full = self.types.intern(
                         std::iter::once(ty).chain(params).collect(),
@@ -271,6 +282,7 @@ impl Checker<'_> {
         ];
         self.leave_function(state);
         self.functions.push(ir::Function {
+            asynchronous: false,
             binding: ctor,
             name: format!("class{ctor}"),
             exported: false,
@@ -301,6 +313,8 @@ impl Checker<'_> {
                     .ok_or_else(|| self.unsupported(m.span))?
                     .result;
                 let state = self.enter_function(id, result, false);
+                self.async_body = m.value.r#async;
+                self.result = self.body_result(result);
                 let receiver = self.internal_binding(ty, m.span, false)?;
                 self.this_binding = Some(receiver);
                 let b = m
@@ -314,11 +328,12 @@ impl Checker<'_> {
                 let mut parameters = vec![(receiver, None)];
                 parameters.extend(self.parameters(&m.value.params, &b.statements, 0)?);
                 let body = self.block_contents(&b.statements, 1)?;
-                if result != Type::Void && !super::statements::returns(&body) {
+                if self.result != Type::Void && !super::statements::returns(&body) {
                     return Err(self.error(m.span, "C11", "Method can finish without its result"));
                 }
                 self.leave_function(state);
                 self.functions.push(ir::Function {
+                    asynchronous: m.value.r#async,
                     binding: id,
                     name: format!("method{id}"),
                     exported: false,
@@ -365,6 +380,7 @@ impl Checker<'_> {
         Ok(())
     }
     pub(super) fn member_access(&self, ty: Type, key: usize, span: Span) -> Result<(), Diagnostic> {
+        self.promise_operator(ty, span)?;
         if self
             .classes
             .get(&ty)
@@ -422,6 +438,13 @@ impl Checker<'_> {
             .ok_or_else(|| self.unsupported(span))?
             .result;
         let args = self.class_arguments(id, args, depth, span, true)?;
+        if optional && self.types.promise_value(result).is_some() {
+            return Err(self.error(
+                span,
+                "C19",
+                "a promise value is stored, passed, returned, or awaited",
+            ));
+        }
         Ok((
             if optional { Type::Void } else { result },
             E::ClassCall(

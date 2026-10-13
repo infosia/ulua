@@ -124,6 +124,7 @@ impl Checker<'_> {
     }
     fn test(&mut self, e: &Expression<'_>, depth: u32) -> Result<Expr, Diagnostic> {
         let test = self.expr(e, depth, false)?;
+        self.promise_operator(test.ty, e.span())?;
         if test.ty != Type::Boolean {
             return Err(self.error(e.span(), "C3", "Condition must be boolean"));
         }
@@ -311,6 +312,12 @@ impl Checker<'_> {
                     value = string_value(value);
                     op = Some("..");
                 }
+                if op.is_some() {
+                    self.promise_operator(value.ty, a.span)?;
+                    if let Some(ty) = self.bindings[id].ty {
+                        self.promise_operator(ty, a.span)?;
+                    }
+                }
                 if op.is_some()
                     && op != Some("..")
                     && (value.ty != Type::Number || self.bindings[id].ty != Some(Type::Number))
@@ -368,17 +375,29 @@ impl Checker<'_> {
                     return Err(self.error(u.argument.span(), "C11", "Invalid update target"));
                 };
                 let id = self.target(n)?;
+                if let Some(ty) = self.bindings[id].ty {
+                    self.promise_operator(ty, u.span)?;
+                }
                 if self.bindings[id].ty != Some(Type::Number) {
                     return Err(self.error(u.span, "C4", "Update requires number"));
                 }
                 Ok(S::Assign(id, op, value))
             }
-            Expression::CallExpression(_)
+            Expression::AwaitExpression(_)
+            | Expression::CallExpression(_)
             | Expression::ChainExpression(_)
             | Expression::NewExpression(_)
                 if !update =>
             {
-                Ok(S::Eval(self.expr(e, depth, true)?))
+                let value = self.expr(e, depth, true)?;
+                if self.types.promise_value(value.ty).is_some() {
+                    return Err(self.error(
+                        e.span(),
+                        "C19",
+                        "a promise value is stored, passed, returned, or awaited",
+                    ));
+                }
+                Ok(S::Eval(value))
             }
             Expression::TaggedTemplateExpression(_) | Expression::SequenceExpression(_) => {
                 Err(self.error(e.span(), "C8", "Expression has no lowering"))
@@ -520,10 +539,13 @@ impl Checker<'_> {
                 let value = r
                     .argument
                     .as_ref()
-                    .map(|e| self.expr_as(e, depth, false, Some(self.result)))
+                    .map(|e| {
+                        self.async_return_literal(e)?;
+                        self.expr_as(e, depth, false, Some(self.result))
+                    })
                     .transpose()?;
                 let ty = value.as_ref().map_or(&Type::Void, |v| &v.ty);
-                self.flow(ty, Some(&self.result), r.span)?;
+                self.return_flow(*ty, self.result, r.span)?;
                 self.reachable = false;
                 S::Return(value)
             }
