@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { install } from "./node-prelude.mjs";
+import { install, FIXTURE_NAMES } from "./node-prelude.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(import.meta.url);
@@ -31,6 +31,13 @@ const TRAP_KINDS = new Set(
   [...corpusSpec.slice(corpusSpec.indexOf("## 6. Trap kinds")).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]),
 );
 
+// Host fixtures: the table of specs/blocks/corpus.md section 7 equals the node implementations.
+{
+  const names = [...corpusSpec.slice(corpusSpec.indexOf("## 7. Host fixtures")).matchAll(/^\| `([A-Za-z]+)` \|/gm)].map((m) => m[1]);
+  if (names.join(",") !== FIXTURE_NAMES.join(","))
+    failures.push(`corpus.md section 7 fixtures [${names}] differ from node-prelude.mjs [${FIXTURE_NAMES}]`);
+}
+
 function readEntries(dir) {
   const full = path.join(root, "corpus", dir);
   return readdirSync(full)
@@ -49,6 +56,7 @@ function parseHeader(entry) {
     keys.push(m[1]);
   }
   const want = [...ORDER];
+  if (keys.includes("grants")) want.splice(4, 0, "grants");
   if (entry.dir !== "reject") want.push("js-comparable");
   if (entry.dir === "reject") want.push("expected-error");
   if (entry.dir === "trap") want.push("trap");
@@ -58,6 +66,11 @@ function parseHeader(entry) {
   if (header.corpus !== entry.id) fail(entry.id, `corpus header is ${header.corpus}`);
   if (entry.dir !== "reject" && header.tsc !== "accepts" && !/^exception TS\d+(, TS\d+)*$/.test(header.tsc || ""))
     fail(entry.id, "accept and trap entries state tsc: accepts or tsc: exception <codes of invariant 3>");
+  if (header.grants !== undefined) {
+    const names = header.grants.split(", ");
+    if (names.some((n) => !FIXTURE_NAMES.includes(n)) || new Set(names).size !== names.length)
+      fail(entry.id, `grants '${header.grants}' must name distinct fixtures of corpus.md section 7`);
+  }
   if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
@@ -145,7 +158,8 @@ function isAcceptedEquality(d, checker) {
 
 async function runNode(entry) {
   const output = [];
-  install(output);
+  const grants = headers.get(entry.id).grants;
+  install(output, grants === undefined ? [] : grants.split(", "));
   let thrown = null;
   try {
     const mod = await import(pathToFileURL(entry.path).href);

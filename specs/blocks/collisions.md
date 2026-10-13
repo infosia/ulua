@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -790,6 +790,52 @@ are in `tracking/p2-values.md` (P2.7 Step 0).
 
 Accept: `a51`, `a52`, `a53`, `a54`. Reject: `r119`, `r120`, `r121`, `r122`,
 `r123`. Trap: `t08`, `t09`.
+
+## C18. Host functions
+
+JavaScript has no host functions: an embedder installs native
+functions as global values, which a script can read, copy, compare,
+and replace. In Ulua a host function is a capability that the host
+grants for one compilation (`abi.md` §6.2, D20, D21). A capability
+is not a value: a script can only call it. A value use would let a
+reference leave the grant check, and Luau compares functions by
+identity where JavaScript compares the global binding.
+
+1. **Declaration.** A host function is a module-level `declare
+   function` with a `BindingIdentifier` name, parameters of §4 of
+   surface.md without defaults, and a result type annotation. The
+   parameter types are `number`, `boolean`, or `string`. The result
+   type is `void`, `number`, `boolean`, or `string`. No `export`, no
+   overloads, no type parameters, no `this` parameter, and no body.
+   Every other `declare` form (`declare const`, `declare let`,
+   `declare class`, `declare namespace`, `declare module`, `declare
+   global`) is rejected (C18).
+2. **Grant.** Each declaration needs a grant of `ulua_compile` with
+   the same name, the same parameter count, and the same type at each
+   position and for the result (`abi.md` §6.2). A declaration without
+   such a grant is rejected (C18). Parameter names are free.
+3. **Calls only.** A reference to a host function is the callee of a
+   `CallExpression`, without `?.`, in any position where a call is
+   accepted, also in an arrow, a method, a `try` block, and a
+   default. Every other use is rejected (C18): a value read, an
+   assignment, a comparison, an argument, an export, a field value,
+   `typeof`.
+4. **Names.** A host function name is a module binding. It does not
+   shadow and is not shadowed: a binding of the same name in any scope
+   of the module is rejected (C18). C10 does not apply: a host
+   function has no temporal dead zone, and a call before the
+   declaration in source order is valid in JavaScript and in Luau.
+5. **Evaluation.** A call evaluates its arguments left to right
+   (C12), then calls the host once. The result has the declared type.
+   A host error or a revoked grant stops the run (`abi.md` §6.2,
+   D22): it is a stop under C17.7, never an exception.
+6. **Agreement.** The corpus grants a fixed set of fixture host
+   functions (corpus.md §7). The native harness and the `node` runner
+   implement each fixture with the same result for the same
+   arguments, so an entry that calls fixtures is `js-comparable`.
+
+Accept: `a55`, `a56`. Reject: `r126`, `r127`, `r128`, `r129`, `r130`,
+`r131`, `r132`.
 
 ## Open items
 

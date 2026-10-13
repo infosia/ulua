@@ -135,6 +135,9 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D17 | Equality acceptance is type-based (C7): one primitive type, or arrays with identical element types; no literal-type or narrowing rule. TS2367 and TS2845 at an accepted equality are outside invariant 3. D15 no longer covers equality | 2026-10-12 | `collisions.md` C7 Rev 25; `tracking/equality-measurements.md` |
 | D18 | At the three positions where `tsc` infers a type (an unannotated `let` initializer, an array literal element without a contextual type, an arrow expression body without a result annotation), a boolean reference form (access paths included) needs a type annotation; a `never` narrowing after an accepted equality is inside invariant 3's exception (revised after the P2.3 round 3 review) | 2026-10-12 | surface.md Rev 13; owner decision after the P2.3 round 2 review |
 | D19 | Records are structural object types (`type` aliases of object type literals, object literals); relation by identical field sets and types; classes are nominal and never relate to object types | 2026-10-12 | collisions.md C1.5 Rev 27; owner decision at the P2.5 start |
+| D20 | A script names a host function with a module-level `declare function` in its own source. No ambient host declaration exists in the prelude | 2026-10-13 | `collisions.md` C18; owner decision at the P3 start |
+| D21 | The host binds its capabilities at compile time: `ulua_compile` takes the grant list, and a declaration with no grant of the same name and signature is rejected. A grant can be revoked; a later call of it stops the run | 2026-10-13 | `abi.md` §6; owner decision at the P3 start |
+| D22 | A host function error stops the run with `ULUA_HOST_ERROR`. A script cannot catch it (C17.7) | 2026-10-13 | `abi.md` §6; owner decision at the P3 start |
 
 ## 9. Corrections and revisions
 

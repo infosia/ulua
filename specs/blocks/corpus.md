@@ -1,11 +1,12 @@
 # Corpus contract
 
-Status: Rev 8, 2026-10-12 (Rev 0 the same day; Rev 1 adds the `phase`
+Status: Rev 9, 2026-10-13 (Rev 0 the same day; Rev 1 adds the `phase`
 header and the Luau witness rules for P1; Rev 2 adds the
 `js-comparable` header, CLAUDE.md invariant 5; Rev 3 adds slices to
 `phase`; Rev 4 adds the `equality` `tsc` header, D17; Rev 5 adds the `never`
 codes to it; Rev 6 renames it to `exception`, P2.5 review; Rev 7: any code that names `never`,
-P2.5 review 11; Rev 8: `luau-analyze -j1`, P2.6 review 3).
+P2.5 review 11; Rev 8: `luau-analyze -j1`, P2.6 review 3; Rev 9: the
+`grants` header and the host fixtures, P3).
 
 ## 1. Layout
 
@@ -35,6 +36,7 @@ Each entry starts with `//` header lines, in this order:
 // purpose: <one sentence>
 // rule: <collision ids, comma-separated>
 // phase: P1 | P2 | ... | P6, with an optional slice: P2.1
+// grants: <fixture names, comma-separated>   (optional)
 // tsc: accepts | errors <TSnnnn>[, <TSnnnn>...]
 // js-comparable: yes | no <collision id>    (accept and trap only)
 // expected-error: <rule id>: <text>        (reject only)
@@ -52,6 +54,8 @@ Each entry starts with `//` header lines, in this order:
 - `expected-error` starts with one id of the `rule` header. The
   compiler diagnostic code must equal that id (§4).
 - `trap` names one trap kind of §6.
+- `grants` names fixtures of §7. The harness grants exactly these to
+  the compilation. Without the header, it grants none.
 - `js-comparable: no <id>` names a rule of the `rule` header. That
   rule of `collisions.md` names the divergence, with the measured
   outputs of both sides.
@@ -126,3 +130,17 @@ recorded defect of the golden, in the same commit.
 Resource limit traps (depth, time, memory; `CLAUDE.md` invariant 2) join
 this table at P1 with their own entries. The `node` comparison does not
 apply to them.
+
+## 7. Host fixtures
+
+The native harness (`pipeline.md` §8) and the `node` runner implement
+each fixture below with the same result. The `node` runner passes each
+granted fixture to the program as a function value, as it passes
+`print`.
+
+| Name | Signature | Result |
+|---|---|---|
+| `hostAdd` | `(a: number, b: number): number` | `a + b` |
+| `hostConcat` | `(a: string, b: string): string` | `a + b` |
+| `hostNot` | `(b: boolean): boolean` | `!b` |
+| `hostLog` | `(text: string): void` | writes one output line, `log:` then `text` |

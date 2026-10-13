@@ -29,6 +29,7 @@ Rev 25: §4.9 exceptions (P2.7).
 Rev 26: §3.10 witness time of every growth shape, §4.9 protected closure
 upvalues (P2.7 review 2).
 Rev 27: §3.10 witness time at the source ceiling (P2.7 review 2).
+Rev 28: §4.10 host functions, §8 grants (P3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -211,6 +212,22 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    `try` shapes follows §3.10. Measured at `3fafd70`:
    `try{a++;}finally{}` repeated in one function takes 0.13 s at 100,
    6.4 s at 400, and 65 s at 800 statements.
+10. **Host functions.** The shim makes one native closure per granted
+   declaration of the module (collisions.md C18, `abi.md` §6.2). It
+   passes the closures as chunk arguments after the trap function, in
+   declaration order. The chunk reads each one from `...` into a
+   generated local with its Luau function type, as for the trap
+   function (§4.8): no global and no `getfenv`. The closure holds the
+   capability reference of the instance. A call checks the revocation
+   first, then converts the arguments, calls the C++ trampoline of
+   §4.5, checks and copies the result, and raises a stop on an error.
+   The stop is recorded in the instance before the raise, as for a
+   trap, so a protected closure raises it again (C17.7).
+   Each closure local is a module binding for the local budget (§5.8)
+   and the upvalue budget (§5.14): a module with more declarations
+   than the budget spills them, and a function over the upvalue budget
+   gives `limit:upvalues`. The witness time of host-call shapes follows
+   §3.10.
 
 ## 5. Emission
 
@@ -519,3 +536,6 @@ ABI and prints one JSON line per entry:
   compile and the run use the C ABI.
 - It runs `ulua_instance_new`, then the export `main` with no
   arguments. It uses the default limits.
+- It reads the `grants` header of each entry (corpus.md §3) and passes
+  one capability per named fixture of corpus.md §7 to `ulua_compile`.
+  The fixtures write to the same output lines as `print`.
