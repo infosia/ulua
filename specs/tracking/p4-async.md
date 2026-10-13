@@ -1,6 +1,6 @@
 # P4 async
 
-Status: open. Decisions: D24 to D26 (`plan.md` §8).
+Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 
 ## Slices
 
@@ -12,10 +12,10 @@ Status: open. Decisions: D24 to D26 (`plan.md` §8).
 
 ## Exit checklist (P4.1)
 
-- [ ] collisions.md C19; surface.md Rev 24; pipeline.md §4.11;
+- [x] collisions.md C19; surface.md Rev 24; pipeline.md §4.11;
   abi.md Rev 7 §4.7; corpus.md Rev 10 implemented.
-- [ ] P4.1 entries pass in full; every earlier entry keeps passing.
-- [ ] Direct tests: each C19 rejection; job order against `node` for
+- [x] P4.1 entries pass in full; every earlier entry keeps passing.
+- [x] Direct tests: each C19 rejection; job order against `node` for
   the forms of Step 0 M4 that P4.1 accepts (await of a resolved and a
   pending promise, async return of a value and of a promise, nested
   async calls, interleaved tasks); await inside `try`, `catch`, and
@@ -26,13 +26,13 @@ Status: open. Decisions: D24 to D26 (`plan.md` §8).
   an unhandled rejection, also one handled later in the same drain;
   async exports fulfilled, rejected, and pending; a drain that
   retains no completed job (memory after 10,000 serial awaits).
-- [ ] Limits: nested immediate async starts at and past the resume
+- [x] Limits: nested immediate async starts at and past the resume
   depth give `limit:stack`; a drain inside `max_steps` and
   `max_memory_bytes`; growth shapes of await (sequential, nested, in
   loops, with `try`) inside pipeline.md §3.10.
-- [ ] A random check of async programs against `node`, `tsc`, and
+- [x] A random check of async programs against `node`, `tsc`, and
   `luau-analyze -j1`.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Contract pin (P4.1)
 
@@ -53,6 +53,10 @@ Implementation record (Codex), Debug, one machine:
 - Growth (`luau-analyze -j1`, minimum of 2 runs): 7 await shapes; 4 to 16 KiB largest ratio 4.86 (`try`); ceiling ratio largest 9.0 (`try`). All 194 shapes: 4 to 16 KiB largest 8.49, ceiling largest 31.2. `measurements` 600.7 s.
 - `sh tools/gate.sh full` by the primary agent: `cargo-test` 584 s (P3 close: 473 s), `luau-witnesses` 53 s; hygiene passes.
 - Decided gaps: a function value with a `Promise` result as an array method argument is rejected (C19.8 text widened to match); self-adoption rejects with `TypeError`, as in `node`.
+
+### P4.1 close
+
+Round 4 (fresh agent, diff `40f3806..31a661b`, priority `31a661b`): 0 CRITICAL, 0 MAJOR, 0 MINOR. Held: the 25 pending-by-final completion cases, sync and async, equal `node`; 500 random completion programs and 700 random async ordering programs equal `node` (73 unhandled-rejection messages exact); stops cross every protected form; recursion through `try` stops at depth 197 with `limit:stack`; upvalue boundaries with the helper (94+96 accepted, 95+96 rejected) and locals 120 to 300 equal `node`; nesting ceilings; at most 21 output bytes per source byte; 7 more protected shapes: 4 to 16 KiB at most 3.4, ceiling 4.7 times `dense-assign`. Review rounds: 4. `sh tools/gate.sh full` passes at `31a661b`: `cargo-test` 811 s, `luau-witnesses` 53 s (189 entries in P4.1 or earlier, 71 generated modules, 14 stress modules); hygiene passes. The close commit changes text only. Running tasks at the close: none.
 
 ### P4.1 Phase Review round 1
 

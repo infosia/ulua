@@ -33,6 +33,7 @@ Rev 28: §4.10 host functions, §8 grants (P3).
 Rev 29: §4.10 one grant table (P3 review).
 Rev 30: §4.11 async (P4.1).
 Rev 31: §4.11 a stop clears the queue before the collection (P4.1 review).
+Rev 32: §4.9 one completion helper (P4.1 review 3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -208,6 +209,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    does not poison the context. Measured: `error(v, 0)` and
    `lua_error` request no allocation in the measured stops; nested
    protected calls reach "C stack overflow" at 198.
+   One fixed prelude helper runs each protected call and its
+   completion handling; the caller tests the completion tag only when
+   the source block has a `return`, `break`, or `continue` that leaves
+   it. Branch-local writes of completion locals at each call site made
+   `luau-analyze` time grow with the loop depth (P4.1 review 3).
    A protected closure is a generated function for the upvalue budget
    (§5.14): its upvalues are the locals and upvalues of its owner that
    it reads or writes, and a `try` over the budget gives
