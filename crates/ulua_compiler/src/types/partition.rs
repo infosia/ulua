@@ -149,33 +149,43 @@ impl Types {
                 Node::Primitive(_) | Node::Class(_) => {}
             }
         }
-        // Function containment is reverse reachability, including recursive records.
-        let mut contains = vec![false; self.nodes.len()];
-        let mut pending = VecDeque::new();
-        for (id, node) in self.nodes.iter().enumerate() {
-            if matches!(node, Node::Function(_)) {
-                contains[id] = true;
-                pending.push_back(id);
-            }
-        }
-        while let Some(id) = pending.pop_front() {
-            for (source, label) in &incoming[id] {
-                if matches!(&self.nodes[*source], Node::Class(class) if *label >= class.fields.len())
+        // Each containment cache uses reverse reachability through recursive records.
+        for promises in [false, true] {
+            let mut contains = vec![false; self.nodes.len()];
+            let mut pending = VecDeque::new();
+            for (id, node) in self.nodes.iter().enumerate() {
+                if (promises && matches!(node, Node::Promise(_)))
+                    || (!promises && matches!(node, Node::Function(_)))
                 {
-                    continue;
-                }
-                if !contains[*source] {
-                    contains[*source] = true;
-                    pending.push_back(*source);
+                    contains[id] = true;
+                    pending.push_back(id);
                 }
             }
+            while let Some(id) = pending.pop_front() {
+                for (source, label) in &incoming[id] {
+                    if !promises
+                        && matches!(&self.nodes[*source], Node::Class(class) if *label >= class.fields.len())
+                    {
+                        continue;
+                    }
+                    if !contains[*source] {
+                        contains[*source] = true;
+                        pending.push_back(*source);
+                    }
+                }
+            }
+            let cache = if promises {
+                &mut self.promise_content
+            } else {
+                &mut self.function_content
+            };
+            cache.get_mut().extend(
+                contains
+                    .into_iter()
+                    .enumerate()
+                    .map(|(id, value)| (Type(id), value)),
+            );
         }
-        self.function_content.get_mut().extend(
-            contains
-                .into_iter()
-                .enumerate()
-                .map(|(id, value)| (Type(id), value)),
-        );
     }
 }
 #[cfg(test)]

@@ -45,7 +45,8 @@ local function __ulua_await<T>(p: __ulua_Promise<T>): T
     -- The scheduler pairs this request with a fulfillment of the same promise.
     return value :: T
 end
-local function __ulua_new<T>(witness: T?): __ulua_Promise<T>
+-- The outer promise keeps a nullable T intact during generic inference.
+local function __ulua_new<T>(witness: __ulua_Promise<T>?): __ulua_Promise<T>
     local p: __ulua_Promise<T> = {state = 0, value = nil :: any, handled = false, fulfilled = {}, rejected = {}}
     __ulua_promises[p] = true
     return p
@@ -101,10 +102,10 @@ local function __ulua_on_finally<T>(p: __ulua_Promise<T>, f: () -> unknown, resu
             local waited: __ulua_Promise<unknown>
             if __ulua_promises[returned] then waited = returned :: any
             else
-                waited = __ulua_new(nil :: unknown)
+                waited = __ulua_new(nil :: __ulua_Promise<unknown>?)
                 __ulua_fulfill(waited, returned)
             end
-            local bridge = __ulua_new(nil :: T?)
+            local bridge = __ulua_new(nil :: __ulua_Promise<T>?)
             -- ThenFinally returns PromiseResolve(callback()).then(valueThunk).
             __ulua_then(waited,
                 function(_: unknown): ()
@@ -136,7 +137,7 @@ local function __ulua_on_finallyv<T>(p: __ulua_Promise<T>, f: () -> (), result: 
     return __ulua_on_finally(p, function(): unknown f(); return nil end, result)
 end
 local function __ulua_all<T>(values: {__ulua_Promise<T>}): __ulua_Promise<{T}>
-    local result = __ulua_new(nil :: {T}?)
+    local result = __ulua_new(nil :: __ulua_Promise<{T}>?)
     local out: {T} = {}
     local remaining = #values
     if remaining == 0 then __ulua_fulfill(result, out) end
@@ -230,7 +231,7 @@ impl super::Emitter<'_> {
                 args.push("__ulua_new_void()".to_owned());
             } else {
                 self.capture("__ulua_new");
-                args.push(format!("__ulua_new(nil :: ({ty})?)"));
+                args.push(format!("__ulua_new(nil :: __ulua_Promise<{ty}>?)"));
             }
         }
         self.write_slot(dest, format!("{name}({})", args.join(", ")));

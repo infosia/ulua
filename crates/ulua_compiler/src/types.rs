@@ -35,6 +35,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn promise_containment_covers_recursive_and_callable_types() {
+        let mut types = Types::new();
+        let number_promise = types.promise(Type::Number);
+        let plain = types.reserve_record();
+        types.define_record(plain, vec![(0, plain), (1, Type::Number)]);
+        let first = types.reserve_record();
+        let second = types.reserve_record();
+        types.define_record(first, vec![(0, second)]);
+        types.define_record(second, vec![(0, first), (1, number_promise)]);
+        let callback = types.intern(vec![plain], number_promise, 1);
+        let parameter = types.intern(vec![number_promise], Type::Void, 1);
+        let class = types.reserve_class();
+        types.define_class(class, vec![], vec![(0, callback)]);
+        types.seal_aliases();
+        for _ in 0..100 {
+            assert!(!types.contains_promise(plain));
+            for ty in [first, second, callback, parameter, class, number_promise] {
+                assert!(types.contains_promise(ty));
+            }
+        }
+        let array = types.array(first);
+        let nullable = types.nullable(array);
+        let record = types.record(vec![(0, nullable)]);
+        assert!(types.contains_promise(record));
+        let plain_array = types.array(plain);
+        assert!(!types.contains_promise(plain_array));
+    }
+
+    #[test]
     fn repeated_wide_signatures_share_one_node() {
         let mut types = Types::new();
         let inner = types.intern(vec![Type::Number; 31], Type::Boolean, 31);
@@ -113,6 +142,7 @@ pub(crate) struct Types {
     depths: Vec<usize>,
     depths_ready: bool,
     function_content: std::cell::RefCell<HashMap<Type, bool>>,
+    promise_content: std::cell::RefCell<HashMap<Type, bool>>,
 }
 
 impl Types {
@@ -147,6 +177,7 @@ impl Types {
             depths_ready: false,
             canonical: (0..8).map(Type).collect(),
             function_content: Default::default(),
+            promise_content: Default::default(),
         }
     }
 
@@ -155,6 +186,46 @@ impl Types {
             Some(Node::Promise(value)) => Some(*value),
             _ => None,
         }
+    }
+
+    // Cached graph traversal also covers recursive records and callable members.
+    pub(crate) fn contains_promise(&self, ty: Type) -> bool {
+        if let Some(answer) = self.promise_content.borrow().get(&ty) {
+            return *answer;
+        }
+        let root = ty;
+        let mut pending = vec![ty];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(ty) = pending.pop() {
+            if !seen.insert(ty) {
+                continue;
+            }
+            let cached = self.promise_content.borrow().get(&ty).copied();
+            if cached == Some(true) || self.promise_value(ty).is_some() {
+                self.promise_content.borrow_mut().insert(root, true);
+                return true;
+            }
+            if cached == Some(false) {
+                continue;
+            }
+            match self.nodes.get(ty.0) {
+                Some(Node::Array(t) | Node::Nullable(t)) => pending.push(*t),
+                Some(Node::Record(fields)) => pending.extend(fields.iter().map(|f| f.1)),
+                Some(Node::Class(class)) => {
+                    pending.extend(class.fields.iter().chain(&class.methods).map(|f| f.1));
+                }
+                Some(Node::Function(f)) => {
+                    pending.extend(&f.params);
+                    pending.push(f.result);
+                }
+                _ => {}
+            }
+        }
+        let mut cache = self.promise_content.borrow_mut();
+        for ty in seen {
+            cache.insert(ty, false);
+        }
+        false
     }
 
     pub(crate) fn element(&self, ty: Type) -> Option<Type> {

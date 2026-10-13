@@ -390,7 +390,7 @@ impl Checker<'_> {
                 if !update =>
             {
                 let value = self.expr(e, depth, true)?;
-                if self.types.promise_value(value.ty).is_some() {
+                if self.types.contains_promise(value.ty) {
                     return Err(self.error(
                         e.span(),
                         "C19",

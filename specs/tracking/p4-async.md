@@ -80,6 +80,10 @@ Reviewer: fresh agent, diff `bbdcb7c..aed0365`. 0 CRITICAL, 2 MAJOR, 2 MINOR. He
 | `xs.map(async ...)` as an `ExpressionStatement` drops a `Promise<T>[]` | MINOR | C19.4: a statement whose type contains a promise type is rejected |
 | The P4.2 pin cites `b17d7f2`, which the amend replaced | MINOR | Cite `3ea2b96` |
 
+Fix measurements (Codex): the promise helpers keep the nullable type argument; 361 direct tests and 600 random programs (120 with nullable sources) pass `luau-analyze -j1` and equal `node`; `t11` gives no output and `trap:uncaught-exception`. A statement whose type contains a promise type gives C19.
+
+Gate cost: the integration tests moved from 55 binaries to 6 (no name, input, assertion, or cost statement changed; the S3 allocator measurement keeps its own binary). After `cargo clean -p ulua`, `cargo test --quiet --workspace`: 415.1 s before, 241.5 s after (test run time 280.1 s to 208.7 s; build and link 135.1 s to 32.8 s). `cargo-test` in Codex's gate run: 226 s. `measurements` 887 s.
+
 ## Contract pin (P4.2)
 
 At `3ea2b96` (P4.1 compiler, as at `bbdcb7c`), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.
@@ -147,7 +151,7 @@ Fix measurements (Codex): the cause was the branch-local writes of each protecte
 
 ## Gaps
 
-- Gate cost: `cargo-test` grew from 473 s (P3 close) to 922 s (P4.2, `aed0365`). The 60 test targets run 296 s in sum (one target 138 s: the default witness-time test over 269 shapes); the other 626 s build and link 55 integration test binaries, each with the library and Luau. Plan: merge the integration tests into a few binaries; no test assertion changes. Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
+- Gate cost: `cargo-test` grew from 473 s (P3 close) to 922 s (P4.2, `aed0365`). The 60 test targets run 296 s in sum (one target 138 s: the default witness-time test over 269 shapes); the other 626 s build and link 55 integration test binaries, each with the library and Luau. Resolved in P4.2 round 1: 6 binaries, `cargo-test` 226 s. Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
 
