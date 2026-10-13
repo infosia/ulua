@@ -355,6 +355,9 @@ impl<'a> Emitter<'a> {
     }
 }
 
+pub(crate) const ASYNC_PRELUDE_BYTES: usize =
+    asynchronous::PRELUDE.len() + prelude::EXCEPTIONS.len();
+
 pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
         .saturating_add(if module.exceptions {
@@ -392,6 +395,13 @@ mod output_tests {
                 crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
                     .unwrap();
             let generated = emit(&module, crate::OUTPUT_FACTOR).unwrap();
+            if module.asynchronous {
+                // Measure the emitted sections independently of the public byte metadata.
+                let start = generated.find("local __ulua_register:").unwrap();
+                let marker = "__ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs, __ulua_rejections)\n";
+                let end = generated.find(marker).unwrap() + marker.len();
+                assert_eq!(end - start, crate::OUTPUT_ASYNC_PRELUDE_BYTES);
+            }
             assert_eq!(
                 functions::emit(&module, generated.len()).unwrap(),
                 generated

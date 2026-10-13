@@ -1,6 +1,6 @@
 //! Await shapes compile and run at 4 KiB, 16 KiB, and the source ceiling.
 //! Compiler ratios stay at most eight for four times the source. Each size uses the minimum of three runs.
-//! Measured Debug compiler cost: 1.627 seconds at 4/16 KiB for thirteen shapes.
+//! Costs are reported for twenty-two shapes, including nine P4.2 shapes.
 //! The witness-time target asserts analyzer ratios. This target also reports ABI costs and output growth.
 #[path = "support/p41_shapes.rs"]
 mod shapes;
@@ -39,6 +39,7 @@ fn compiler_growth(sizes: [usize; 2]) {
                 assert!(
                     compiled.luau.len()
                         <= ulua_compiler::OUTPUT_PRELUDE_BYTES
+                            + ulua_compiler::OUTPUT_ASYNC_PRELUDE_BYTES
                             + bytes * ulua_compiler::OUTPUT_FACTOR
                 );
             }
@@ -77,8 +78,14 @@ fn await_pipeline_growth_and_drain_limits() {
                 ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
                     .unwrap();
             let mut script = support::Script::new(&source);
-            assert_eq!(script.instance(RunLimits::default()).0, ULUA_OK);
-            assert_eq!(script.call(script.index("main"), &[]).0, ULUA_OK);
+            let mut limits = RunLimits::default();
+            if shapes::SHAPES[..9].contains(shape) {
+                limits.max_memory_bytes = 128 * 1024 * 1024;
+                limits.max_steps = 10_000_000;
+            }
+            assert_eq!(script.instance(limits).0, ULUA_OK);
+            let run = script.call(script.index("main"), &[]);
+            assert_eq!(run.0, ULUA_OK, "{shape} bytes={bytes}: {run:?}");
             numbers.push((compiled.luau.len(), now.elapsed().as_secs_f64()));
         }
         eprintln!(
@@ -102,6 +109,39 @@ fn await_pipeline_growth_and_drain_limits() {
     eprintln!(
         "P4.1 growth shapes={} drain_step_limit=10000 cost={:.3}s",
         shapes::SHAPES.len(),
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn derived_drains_obey_steps_and_memory_limits() {
+    let start = Instant::now();
+    let source = "async function v():Promise<number>{return 1;}function plus(n:number):number{return n+1;}export async function chain(n:number):Promise<number>{let p=v();for(let i=0;i<n;i++){p=p.then(plus);}return p;}export async function all(n:number):Promise<number>{const ps:Promise<number>[]=[];for(let i=0;i<n;i++){ps.push(v());}return (await Promise.all(ps)).length;}export function good():number{return 42;}export function main():void{}";
+    let mut script = support::Script::new(source);
+    for kind in ["chain", "all"] {
+        let mut limits = RunLimits::default();
+        limits.max_memory_bytes = 16 * 1024 * 1024;
+        limits.max_steps = 10_000_000;
+        assert_eq!(script.instance(limits).0, ULUA_OK);
+        let success = script.call(script.index(kind), &[support::number(5000)]);
+        assert_eq!(success.0, ULUA_OK, "{kind}: {success:?}");
+        assert_eq!(
+            success.2.number,
+            if kind == "chain" { 5001.0 } else { 5000.0 }
+        );
+        let stopped = script.call(script.index(kind), &[support::number(100000)]);
+        assert_eq!(stopped.1, "limit:memory", "{kind}: {stopped:?}");
+        assert_eq!(script.call(script.index("good"), &[]).2.number, 42.0);
+        limits.max_steps = 20_000;
+        assert_eq!(script.instance(limits).0, ULUA_OK);
+        assert_eq!(
+            script.call(script.index(kind), &[support::number(5000)]).1,
+            "limit:steps"
+        );
+        assert_eq!(script.call(script.index("good"), &[]).2.number, 42.0);
+    }
+    eprintln!(
+        "P4.2 drain limits forms=2 success_n=5000 memory_n=100000 memory_bytes=16777216 steps=20000 cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
 }

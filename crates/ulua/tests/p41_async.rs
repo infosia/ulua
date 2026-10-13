@@ -42,7 +42,6 @@ fn closed_async_surface() {
         "const p:Promise=f();",
         "const p:Promise<number,string>=f();",
         "const xs:number[]=[1];xs.forEach(async(x:number):Promise<void>=>{});",
-        "const xs:number[]=[1];const ys=xs.map((async(x:number):Promise<number>=>x));",
     ];
     for body in bodies {
         support::Script::compile(

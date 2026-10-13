@@ -40,7 +40,7 @@ impl Checker<'_> {
             {
                 return Err(self.error(p.span, "C2", "A default parameter must exclude null"));
             }
-            types.push(self.ty(&annotation.type_annotation, false, depth)?);
+            types.push(self.parameter_type(&annotation.type_annotation, depth)?);
             if p.initializer.is_none() {
                 if default_seen {
                     return Err(self.error(p.span, "C11", "Parameter defaults must be trailing"));
@@ -120,7 +120,7 @@ impl Checker<'_> {
                 .type_annotation
                 .as_ref()
                 .ok_or_else(|| self.error(p.span, "C11", "Missing parameter type"))?;
-            let ty = self.ty(&annotation.type_annotation, false, depth)?;
+            let ty = self.parameter_type(&annotation.type_annotation, depth)?;
             let id = self.bind(
                 n.name.as_str(),
                 ir::Binding {
@@ -128,7 +128,7 @@ impl Checker<'_> {
                     owner: self.owner,
                     start: p.span.start,
                     end: p.span.end,
-                    mutable: true,
+                    mutable: ty != Type::Unknown,
                     declaration: false,
                 },
                 p.span,

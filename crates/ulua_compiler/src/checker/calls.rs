@@ -9,9 +9,24 @@ impl Checker<'_> {
         depth: u32,
         statement: bool,
     ) -> Result<Expr, Diagnostic> {
-        if matches!(&call.callee, Expression::Identifier(n) if exceptions::family(n.name.as_str()).is_some() && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        if matches!(call.callee, Expression::StaticMemberExpression(_)) {
+            self.member_call(e, call, depth, statement)
+        } else {
+            self.plain_call(e, call, None, depth, statement)
+        }
+    }
+    fn member_call(
+        &mut self,
+        e: &Expression<'_>,
+        call: &CallExpression<'_>,
+        depth: u32,
+        statement: bool,
+    ) -> Result<Expr, Diagnostic> {
+        if let Expression::StaticMemberExpression(m) = &call.callee
+            && matches!(&m.object, Expression::Identifier(n) if n.name == "Promise" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
         {
-            return Err(self.error(call.span, "C17", "Error construction needs new"));
+            let value = self.promise_all(call, m, depth)?;
+            return self.finish_expr(e, statement, value.ty, value.kind);
         }
         let mut field_callee = None;
         if let Expression::StaticMemberExpression(m) = &call.callee
@@ -23,6 +38,10 @@ impl Checker<'_> {
             if !matches!(&m.object, Expression::Identifier(n) if matches!(n.name.as_str(), "Math" | "Utf8" | "String") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
             {
                 let receiver = self.expr(&m.object, depth, false)?;
+                if self.types.promise_value(receiver.ty).is_some() {
+                    let value = self.promise_method(call, m, receiver, depth)?;
+                    return self.finish_expr(e, statement, value.ty, value.kind);
+                }
                 self.promise_operator(receiver.ty, m.span)?;
                 if receiver.ty == Type::String {
                     let method =
@@ -31,7 +50,9 @@ impl Checker<'_> {
                 }
                 if let Some(element) = self.types.element(receiver.ty) {
                     for arg in &call.arguments {
-                        if let Some(e) = arg.as_expression() {
+                        if let Some(e) = arg.as_expression()
+                            && m.property.name != "map"
+                        {
                             self.async_array_argument(e)?;
                         }
                     }
@@ -55,6 +76,7 @@ impl Checker<'_> {
                         self.error(call.span, "C11", "Spread arguments are rejected")
                     })?;
                     let value = self.expr_as(arg, depth, false, Some(element))?;
+                    self.promise_array_argument(value.ty, arg.span())?;
                     self.flow(&value.ty, Some(&element), arg.span())?;
                     return Ok(Expr {
                         flow: None,
@@ -102,6 +124,20 @@ impl Checker<'_> {
                 Type::Number,
                 ExprKind::Length(Box::new(value)),
             );
+        }
+        self.plain_call(e, call, field_callee, depth, statement)
+    }
+    fn plain_call(
+        &mut self,
+        e: &Expression<'_>,
+        call: &CallExpression<'_>,
+        field_callee: Option<Expr>,
+        depth: u32,
+        statement: bool,
+    ) -> Result<Expr, Diagnostic> {
+        if matches!(&call.callee, Expression::Identifier(n) if exceptions::family(n.name.as_str()).is_some() && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        {
+            return Err(self.error(call.span, "C17", "Error construction needs new"));
         }
         if call.arguments.len() > crate::ARGUMENT_BOUND {
             return Err(self.error(call.span, "limit:arguments", "Argument limit exceeded"));

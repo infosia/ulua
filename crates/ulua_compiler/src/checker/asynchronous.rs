@@ -74,9 +74,8 @@ impl Checker<'_> {
                 self.promise_member(value, span)?;
             }
             self.uses_async = true;
-        } else if self.types.promise_value(result) == Some(Type::Void) {
-            return Err(self.error(span, "C19", "Promise<void> is an async result only"));
         }
+        // A synchronous finally callback can return Promise<void>.
         Ok(())
     }
     pub(super) fn body_result(&self, result: Type) -> Type {
@@ -155,6 +154,20 @@ impl Checker<'_> {
                 e.span(),
                 "C19",
                 "an async arrow is not an array method argument",
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn promise_array_argument(&self, ty: Type, span: Span) -> Result<(), Diagnostic> {
+        if self
+            .types
+            .signature(ty)
+            .is_some_and(|f| self.types.promise_value(f.result).is_some())
+        {
+            return Err(self.error(
+                span,
+                "C19",
+                "Only map accepts a function with a promise result",
             ));
         }
         Ok(())

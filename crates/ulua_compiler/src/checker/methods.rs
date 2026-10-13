@@ -80,7 +80,9 @@ impl Checker<'_> {
             let arg = arg.as_expression().ok_or_else(|| {
                 self.error(call.span, "C6", "Variadic array methods are rejected")
             })?;
-            self.async_array_argument(arg)?;
+            if name != "map" {
+                self.async_array_argument(arg)?;
+            }
             let expected = if callback && index == 0 {
                 None
             } else if callback {
@@ -96,6 +98,9 @@ impl Checker<'_> {
                 })
             };
             let value = self.expr_as(arg, depth, false, expected)?;
+            if name != "map" {
+                self.promise_array_argument(value.ty, arg.span())?;
+            }
             if let Some(ty) = expected {
                 self.flow(&value.ty, Some(&ty), arg.span())?;
             }
@@ -103,13 +108,6 @@ impl Checker<'_> {
                 let signature = self.types.signature(value.ty).ok_or_else(|| {
                     self.error(arg.span(), "C6", "Array callback must be a function")
                 })?;
-                if name == "forEach" && self.types.promise_value(signature.result).is_some() {
-                    return Err(self.error(
-                        arg.span(),
-                        "C19",
-                        "forEach cannot discard a promise result",
-                    ));
-                }
                 arity = signature.params.len();
                 let reduce = matches!(name, "reduce" | "reduceRight");
                 if !method.arities().contains(&arity) {

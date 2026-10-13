@@ -30,6 +30,11 @@ fn protected_loops_reach_each_nesting_ceiling() {
                     assert!(
                         compiled.luau.len()
                             <= ulua_compiler::OUTPUT_PRELUDE_BYTES
+                                + if asynchronous {
+                                    ulua_compiler::OUTPUT_ASYNC_PRELUDE_BYTES
+                                } else {
+                                    0
+                                }
                                 + source.len() * ulua_compiler::OUTPUT_FACTOR
                     );
                     count += 1;

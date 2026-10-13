@@ -289,6 +289,12 @@ impl Emitter<'_> {
                 self.release(t);
             }
             E::Call(callee, arguments) => {
+                if let E::Builtin(name) = callee.kind
+                    && (name.starts_with("__ulua_on_") || name == "__ulua_all")
+                {
+                    self.promise_expression(expr, name, arguments, dest, depth)?;
+                    return Ok(dest);
+                }
                 let c = self.expression(callee, depth)?;
                 let mut args = vec![];
                 for arg in arguments {

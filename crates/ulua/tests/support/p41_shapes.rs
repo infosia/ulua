@@ -1,5 +1,14 @@
 //! Dense await shapes cover serial requests, nesting, loops, and protected blocks.
 pub const SHAPES: &[&str] = &[
+    "then-chain",
+    "then-adopt",
+    "then-arrows",
+    "catch-chain",
+    "finally-chain",
+    "all-literal",
+    "all-map",
+    "then-wide",
+    "all-wide",
     "sequential",
     "nested",
     "loop",
@@ -15,6 +24,9 @@ pub const SHAPES: &[&str] = &[
     "capture-finally-continue-deep",
 ];
 pub fn source(shape: &str, bytes: usize) -> String {
+    if SHAPES[..9].contains(&shape) {
+        return callbacks(shape, bytes);
+    }
     if shape.contains("finally-") {
         return finalizer(shape, bytes);
     }
@@ -89,6 +101,54 @@ fn finalizer(shape: &str, bytes: usize) -> String {
         out.push_str(unit);
     }
     out.push_str(&tail);
+    out.extend(std::iter::repeat_n(' ', bytes - out.len()));
+    out
+}
+
+// Repeated calls share one signature. Wide values exercise the product of fields and calls.
+fn callbacks(shape: &str, bytes: usize) -> String {
+    let mut out = String::new();
+    let wide = shape.ends_with("wide");
+    if wide {
+        let fields = bytes / 128;
+        out.push_str("type R={");
+        for i in 0..fields {
+            out.push_str(&format!("field{i}:number;"));
+        }
+        out.push_str("};const shared:R={");
+        for i in 0..fields {
+            out.push_str(&format!("field{i}:1,"));
+        }
+        out.push_str("};async function v():Promise<R>{return shared;}function f(r:R):R{return r;}");
+    } else {
+        out.push_str("async function v():Promise<number>{return 1;}function f(n:number):number{return n;}function adopt(n:number):Promise<number>{return v();}function recover(e:unknown):number{return 0;}function final():void{}");
+    }
+    out.push_str("export async function main():Promise<void>{");
+    let (unit, tail) = if shape.starts_with("all-") && shape != "all-map" {
+        out.push_str("const ps=[");
+        ("v(),".to_owned(), "];const xs=await Promise.all(ps);}")
+    } else if shape == "all-map" {
+        out.push_str("const ns:number[]=[");
+        (
+            "1,".to_owned(),
+            "];const xs=await Promise.all(ns.map(async(n:number):Promise<number>=>{await v();return n;}));}",
+        )
+    } else {
+        out.push_str("let p=v();");
+        let unit = match shape {
+            "then-chain" => format!("p=p{};", ".then(f)".repeat(16)),
+            "then-adopt" => "p=p.then(adopt);".to_owned(),
+            "then-arrows" => "p=p.then((n:number):number=>n);".to_owned(),
+            "catch-chain" => "p=p.catch(recover);".to_owned(),
+            "finally-chain" => "p=p.finally(final);".to_owned(),
+            _ => "p=p.then(f);".to_owned(),
+        };
+        (unit, "await p;}")
+    };
+    while out.len() + unit.len() + tail.len() <= bytes {
+        out.push_str(&unit);
+    }
+    out.push_str(tail);
     out.extend(std::iter::repeat_n(' ', bytes - out.len()));
     out
 }

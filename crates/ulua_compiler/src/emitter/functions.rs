@@ -166,6 +166,19 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         }
     }
     for name in [
+        "__ulua_new",
+        "__ulua_new_void",
+        "__ulua_on_then0",
+        "__ulua_on_then1",
+        "__ulua_on_catch0",
+        "__ulua_on_catch1",
+        "__ulua_on_finally",
+        "__ulua_on_then0v",
+        "__ulua_on_then1v",
+        "__ulua_on_catch0v",
+        "__ulua_on_catch1v",
+        "__ulua_on_finallyv",
+        "__ulua_all",
         "__ulua_start",
         "__ulua_promises",
         "__ulua_await",

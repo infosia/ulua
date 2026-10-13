@@ -40,6 +40,9 @@ pub const SOURCE_CEILING: u64 = 64 * 1024;
 pub const OUTPUT_FACTOR: usize = 80;
 /// Bytes of the base strict-mode and library prelude, before selected method helpers.
 pub const OUTPUT_PRELUDE_BYTES: usize = "--!strict\n".len() + emitter::LIBRARIES.len();
+/// Bytes of the fixed promise and exception helpers for an async module.
+/// Add these bytes to the base prelude for an async output bound.
+pub const OUTPUT_ASYNC_PRELUDE_BYTES: usize = emitter::ASYNC_PRELUDE_BYTES;
 /// AST and parser depth ceiling.
 pub const DEPTH_CEILING: u32 = 48;
 /// Stack size for the complete compiler pipeline.

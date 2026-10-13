@@ -114,9 +114,61 @@ fn random_async_programs_match_three_witnesses() {
         assert_eq!(d.code, "C16", "{unsafe_source}: {d:?}");
         suite.source(&build("(x??0)+1"), None);
     }
+    // Mix derived callbacks, all, and async map with pending P4.1 activations.
+    for i in 0..120 {
+        let mut body = String::new();
+        for task in 0..3 {
+            let delay = r.next() % 5;
+            body.push_str(&format!(
+                "let p{task}=delay({task},{delay},{});",
+                r.next().is_multiple_of(4)
+            ));
+            for step in 0..1 + r.next() % 5 {
+                let callback = match r.next() % 8 {
+                    0 => format!(
+                        ".then((n:number):number=>{{print('then{task}-{step}');return n+1;}})"
+                    ),
+                    1 => {
+                        format!(
+                            ".then((n:number):Promise<number>=>{{print('adopt{task}-{step}');return delay(n,{},false);}}",
+                            r.next() % 3
+                        ) + ")"
+                    }
+                    2 => format!(
+                        ".then(async(n:number):Promise<number>=>{{await value(n);print('async{task}-{step}');return n+2;}})"
+                    ),
+                    3 => format!(
+                        ".catch((e:unknown):number=>{{if(e instanceof Error)print(e.name);print('catch{task}-{step}');return 9;}})"
+                    ),
+                    4 => ".catch(async(e:unknown):Promise<number>=>{await value(0);throw e;})"
+                        .to_owned(),
+                    5 => format!(".finally(():void=>{{print('finally{task}-{step}');}})"),
+                    6 => format!(
+                        ".finally(async():Promise<void>=>{{await value(0);print('final await{task}-{step}');}})"
+                    ),
+                    _ => ".finally(():void=>{throw new URIError('final');})".to_owned(),
+                };
+                body.push_str(&format!("p{task}=p{task}{callback};"));
+            }
+        }
+        body.push_str("const mapped=[1,2,3].map(async(n:number):Promise<number>=>{await value(n);print(`map${n}`);return n*2;});const all=Promise.all([p0,p1,p2]);const shared=Promise.all([p2,p0,p2]);print('sync');for(const p of [all,shared,Promise.all(mapped)]){try{print((await p).join(','));}catch(e){if(e instanceof Error)print(e.name);}}await value(0);print('end');");
+        if i % 12 == 0 {
+            body.push_str(
+                "const lost=value(0).then(():number=>{throw new RangeError('lost derived');});",
+            );
+        }
+        let source = format!(
+            "async function value(n:number):Promise<number>{{return n;}}async function delay(n:number,steps:number,fail:boolean):Promise<number>{{print(`start${{n}}`);for(let i=0;i<steps;i++){{await value(i);}}if(fail)throw new TypeError('task');return n;}}export async function main():Promise<void>{{{body}}}"
+        );
+        if i % 12 == 0 {
+            suite.source_async_trap(&source, "RangeError");
+        } else {
+            suite.source(&source, None);
+        }
+    }
     suite.finish();
     eprintln!(
-        "P4.1 random seed=0x41c1240026 programs={} suspended_capture_programs=120 unsafe_rejects=120 unhandled=10 cost={:.3}s",
+        "P4.1 random seed=0x41c1240026 programs={} p42_mixed=120 suspended_capture_programs=120 unsafe_rejects=120 unhandled=20 cost={:.3}s",
         suite.count,
         start.elapsed().as_secs_f64()
     );

@@ -898,44 +898,60 @@ fn resumed_host_stops_skip_handlers_finalizers_and_jobs() {
         (0, true, "host:revoked"),
         (4, false, "host:result"),
     ] {
-        let mut r = Run::new();
-        r.capability(&[], ULUA_TYPE_NUMBER);
-        r.mode = mode;
-        let source = "let cleanup:number=0;async function tick():Promise<number>{return 1;}async function task():Promise<number>{await tick();try{return host();}catch{cleanup++;return 0;}finally{cleanup++;}}async function later():Promise<number>{await tick();cleanup++;return 0;}export async function f():Promise<void>{const p=task();const q=later();await p;await q;}export function read():number{return cleanup;}export function ok():number{return 42;}export function main():void{}";
-        assert_eq!(r.compile(source, &[r.cap]).0, ULUA_OK);
-        assert_eq!(r.instance(RunLimits::default()).0, ULUA_OK);
-        if revoked {
-            // SAFETY: The fixture owns this live capability and serializes its revocation.
-            unsafe {
-                assert_eq!(ulua_capability_revoke(r.cap), ULUA_OK);
+        for form in ["control", "await", "then", "catch", "finally", "map"] {
+            let mut r = Run::new();
+            r.capability(&[], ULUA_TYPE_NUMBER);
+            r.mode = mode;
+            let action = "try{return host();}catch{cleanup++;return 0;}finally{cleanup++;}";
+            let callback = match form {
+            "control" => "const n=host();".to_owned(),
+            "then" => format!("const p=tick().then(():number=>{{{action}}});const q=later();await p;await q;"),
+            "catch" => format!("const p=fail().catch((e:unknown):number=>{{{action}}});const q=later();await p;await q;"),
+            "finally" => "const p=tick().finally(():void=>{try{host();}catch{cleanup++;}finally{cleanup++;}});const q=later();await p;await q;".to_owned(),
+            "map" => format!("const q=later();const ps=[1].map(async(n:number):Promise<number>=>{{{action}}});await Promise.all(ps);await q;"),
+            _ => "const p=task();const q=later();await p;await q;".to_owned(),
+        };
+            let callback = callback.replace(";const q=later();", ".catch(():number=>{cleanup++;return 0;}).finally(():void=>{cleanup++;});const q=later();");
+            let source = format!(
+                "let cleanup:number=0;async function tick():Promise<number>{{return 1;}}async function fail():Promise<number>{{throw new Error();}}async function task():Promise<number>{{await tick();{action}}}function later():Promise<number>{{return tick().then(():number=>{{cleanup++;return 0;}});}}export async function f():Promise<void>{{{callback}}}export function read():number{{return cleanup;}}export function ok():number{{return 42;}}export function main():void{{}}"
+            );
+            assert_eq!(r.compile(&source, &[r.cap]).0, ULUA_OK);
+            assert_eq!(r.instance(RunLimits::default()).0, ULUA_OK);
+            if revoked {
+                // SAFETY: The fixture owns this live capability and serializes its revocation.
+                unsafe {
+                    assert_eq!(ulua_capability_revoke(r.cap), ULUA_OK);
+                }
             }
-        }
-        #[cfg(feature = "measurements")]
-        // SAFETY: Disable interrupts to expose the scheduler's recorded-stop check directly.
-        unsafe {
-            ulua_internal_test_no_interrupt((*r.i).vm);
-        }
-        let (status, d, _) = r.call("f", &[]);
-        #[cfg(feature = "measurements")]
-        {
-            let mut checks = 0;
-            let mut allocations = 0;
-            // SAFETY: The fixture owns the VM and writable counter storage.
+            #[cfg(feature = "measurements")]
+            // SAFETY: Disable interrupts to expose the scheduler's recorded-stop check directly.
             unsafe {
-                ulua_internal_test_resume_stats((*r.i).vm, &mut checks, &mut allocations);
+                ulua_internal_test_no_interrupt((*r.i).vm);
             }
-            assert!(checks > 0);
-            assert_eq!(allocations, 0);
-            eprintln!("P4.1 host stop {expected} checks={checks} allocations={allocations}");
+            let (status, d, _) = r.call("f", &[]);
+            #[cfg(feature = "measurements")]
+            {
+                let mut checks = 0;
+                let mut allocations = 0;
+                // SAFETY: The fixture owns the VM and writable counter storage.
+                unsafe {
+                    ulua_internal_test_resume_stats((*r.i).vm, &mut checks, &mut allocations);
+                }
+                assert!(checks > 0);
+                assert_eq!(allocations, 0);
+                eprintln!(
+                    "P4.1/P4.2 host stop {expected} form={form} checks={checks} allocations={allocations}"
+                );
+            }
+            assert_eq!(status, ULUA_HOST_ERROR);
+            assert_eq!(code(&d), expected);
+            assert_eq!(r.calls, usize::from(!revoked));
+            assert_eq!(r.call("read", &[]).2.number, 0.0);
+            assert_eq!(r.call("ok", &[]).2.number, 42.0);
         }
-        assert_eq!(status, ULUA_HOST_ERROR);
-        assert_eq!(code(&d), expected);
-        assert_eq!(r.calls, usize::from(!revoked));
-        assert_eq!(r.call("read", &[]).2.number, 0.0);
-        assert_eq!(r.call("ok", &[]).2.number, 42.0);
     }
     eprintln!(
-        "P4.1 resumed host stops cases=3 cost={:.3}s",
+        "P4.1/P4.2 host stops controls=3 protected=15 cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
 }

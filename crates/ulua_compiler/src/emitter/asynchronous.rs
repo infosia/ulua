@@ -1,5 +1,5 @@
 //! Native promise jobs. Only the private channel can suspend an activation.
-pub(super) const LOCALS: usize = 15;
+pub(super) const LOCALS: usize = 30;
 pub(super) const PRELUDE: &str = r#"type __ulua_Promise<T> = {
     state: number, value: T, reason: __ulua_Error?, handled: boolean,
     fulfilled: {(T) -> ()}, rejected: {(__ulua_Error) -> ()}
@@ -45,6 +45,112 @@ local function __ulua_await<T>(p: __ulua_Promise<T>): T
     -- The scheduler pairs this request with a fulfillment of the same promise.
     return value :: T
 end
+local function __ulua_new<T>(witness: T?): __ulua_Promise<T>
+    local p: __ulua_Promise<T> = {state = 0, value = nil :: any, handled = false, fulfilled = {}, rejected = {}}
+    __ulua_promises[p] = true
+    return p
+end
+local function __ulua_new_void(): __ulua_Promise<nil>
+    local p: __ulua_Promise<nil> = {state = 0, value = nil, handled = false, fulfilled = {}, rejected = {}}
+    __ulua_promises[p] = true
+    return p
+end
+local function __ulua_resolve<T>(result: __ulua_Promise<T>, value: any): ()
+    if value == result then
+        __ulua_reject(result, __ulua_error("TypeError", "Chaining cycle detected for promise #<Promise>"))
+    elseif __ulua_promises[value] then
+        local adopted: __ulua_Promise<T> = value
+        -- PromiseResolveThenableJob precedes the adoption reaction job.
+        __ulua_enqueue(function(): ()
+            __ulua_then(adopted,
+                function(v: T): () __ulua_fulfill(result, v) end,
+                function(e: __ulua_Error): () __ulua_reject(result, e) end)
+        end)
+    else __ulua_fulfill(result, value) end
+end
+local function __ulua_reaction<T>(result: __ulua_Promise<T>, body: () -> unknown): ()
+    local ok, value = pcall(body)
+    if ok then __ulua_resolve(result, value)
+    else
+        __ulua_stop(value)
+        __ulua_reject(result, value :: __ulua_Error)
+    end
+end
+local function __ulua_on_then1<T, U>(p: __ulua_Promise<T>, f: (T) -> unknown, result: __ulua_Promise<U>): __ulua_Promise<U>
+    __ulua_then(p,
+        function(v: T): () __ulua_reaction(result, function(): unknown return f(v) end) end,
+        function(e: __ulua_Error): () __ulua_reject(result, e) end)
+    return result
+end
+local function __ulua_on_then0<T, U>(p: __ulua_Promise<T>, f: () -> unknown, result: __ulua_Promise<U>): __ulua_Promise<U>
+    return __ulua_on_then1(p, function(_: T): unknown return f() end, result)
+end
+local function __ulua_on_catch1<T>(p: __ulua_Promise<T>, f: (unknown) -> unknown, result: __ulua_Promise<T>): __ulua_Promise<T>
+    __ulua_then(p,
+        function(v: T): () __ulua_fulfill(result, v) end,
+        function(e: __ulua_Error): () __ulua_reaction(result, function(): unknown return f(e) end) end)
+    return result
+end
+local function __ulua_on_catch0<T>(p: __ulua_Promise<T>, f: () -> unknown, result: __ulua_Promise<T>): __ulua_Promise<T>
+    return __ulua_on_catch1(p, function(_: unknown): unknown return f() end, result)
+end
+local function __ulua_on_finally<T>(p: __ulua_Promise<T>, f: () -> unknown, result: __ulua_Promise<T>): __ulua_Promise<T>
+    local function complete(value: T, reason: __ulua_Error?): ()
+        __ulua_reaction(result, function(): unknown
+            local returned = f()
+            local waited: __ulua_Promise<unknown>
+            if __ulua_promises[returned] then waited = returned :: any
+            else
+                waited = __ulua_new(nil :: unknown)
+                __ulua_fulfill(waited, returned)
+            end
+            local bridge = __ulua_new(nil :: T?)
+            -- ThenFinally returns PromiseResolve(callback()).then(valueThunk).
+            __ulua_then(waited,
+                function(_: unknown): ()
+                    if reason ~= nil then __ulua_reject(bridge, reason)
+                    else __ulua_fulfill(bridge, value) end
+                end,
+                function(e: __ulua_Error): () __ulua_reject(bridge, e) end)
+            return bridge
+        end)
+    end
+    __ulua_then(p,
+        function(v: T): () complete(v, nil) end,
+        function(e: __ulua_Error): () complete(nil :: any, e) end)
+    return result
+end
+local function __ulua_on_then1v<T>(p: __ulua_Promise<T>, f: (T) -> (), result: __ulua_Promise<nil>): __ulua_Promise<nil>
+    return __ulua_on_then1(p, function(v: T): unknown f(v); return nil end, result)
+end
+local function __ulua_on_then0v<T>(p: __ulua_Promise<T>, f: () -> (), result: __ulua_Promise<nil>): __ulua_Promise<nil>
+    return __ulua_on_then0(p, function(): unknown f(); return nil end, result)
+end
+local function __ulua_on_catch1v(p: __ulua_Promise<nil>, f: (unknown) -> (), result: __ulua_Promise<nil>): __ulua_Promise<nil>
+    return __ulua_on_catch1(p, function(e: unknown): unknown f(e); return nil end, result)
+end
+local function __ulua_on_catch0v(p: __ulua_Promise<nil>, f: () -> (), result: __ulua_Promise<nil>): __ulua_Promise<nil>
+    return __ulua_on_catch0(p, function(): unknown f(); return nil end, result)
+end
+local function __ulua_on_finallyv<T>(p: __ulua_Promise<T>, f: () -> (), result: __ulua_Promise<T>): __ulua_Promise<T>
+    return __ulua_on_finally(p, function(): unknown f(); return nil end, result)
+end
+local function __ulua_all<T>(values: {__ulua_Promise<T>}): __ulua_Promise<{T}>
+    local result = __ulua_new(nil :: {T}?)
+    local out: {T} = {}
+    local remaining = #values
+    if remaining == 0 then __ulua_fulfill(result, out) end
+    for i, p in values do
+        __ulua_then(p,
+            function(v: T): ()
+                out[i] = v
+                remaining -= 1
+                if remaining == 0 then __ulua_fulfill(result, out) end
+            end,
+            function(e: __ulua_Error): () __ulua_reject(result, e) end)
+    end
+    return result
+end
 local function __ulua_start<T>(result: __ulua_Promise<T>, body: () -> unknown): __ulua_Promise<T>
     local co: thread = coroutine.create(body)
     local resume: (boolean, unknown) -> ()
@@ -55,17 +161,7 @@ local function __ulua_start<T>(result: __ulua_Promise<T>, body: () -> unknown): 
             __ulua_stop(request)
             __ulua_reject(result, request)
         elseif coroutine.status(co) == "dead" then
-            if request == result then
-                __ulua_reject(result, __ulua_error("TypeError", "Chaining cycle detected for promise #<Promise>"))
-            elseif __ulua_promises[request] then
-                local adopted: __ulua_Promise<T> = request
-                -- PromiseResolveThenableJob precedes the adoption reaction job.
-                __ulua_enqueue(function(): ()
-                    __ulua_then(adopted,
-                        function(v: T): () __ulua_fulfill(result, v) end,
-                        function(e: __ulua_Error): () __ulua_reject(result, e) end)
-                end)
-            else __ulua_fulfill(result, request) end
+            __ulua_resolve(result, request)
         else
             local awaited: __ulua_Promise<unknown> = request
             __ulua_then(awaited,
@@ -100,3 +196,47 @@ local function __ulua_drain(): ()
 end
 __ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs, __ulua_rejections)
 "#;
+
+// Keep helper temporaries outside the recursive expression frame in Debug builds.
+impl super::Emitter<'_> {
+    pub(super) fn promise_expression(
+        &mut self,
+        expr: &crate::ir::Expr,
+        name: &str,
+        arguments: &[crate::ir::Expr],
+        dest: usize,
+        depth: u32,
+    ) -> Result<(), crate::Diagnostic> {
+        use crate::ir::Type;
+        self.capture(name);
+        let mut slots = vec![];
+        for arg in arguments {
+            slots.push(self.expression(arg, depth)?);
+        }
+        let mut args: Vec<_> = slots.iter().map(|i| self.temp(*i)).collect();
+        if name != "__ulua_all" {
+            let value = self
+                .module
+                .types
+                .promise_value(expr.ty)
+                .ok_or_else(|| self.limit("internal", "Missing derived promise type"))?;
+            let ty = if value == Type::Void {
+                "nil".to_owned()
+            } else {
+                self.function_types.luau(&value)
+            };
+            if matches!(value, Type::Void | Type::Null) {
+                self.capture("__ulua_new_void");
+                args.push("__ulua_new_void()".to_owned());
+            } else {
+                self.capture("__ulua_new");
+                args.push(format!("__ulua_new(nil :: ({ty})?)"));
+            }
+        }
+        self.write_slot(dest, format!("{name}({})", args.join(", ")));
+        for slot in slots {
+            self.release(slot);
+        }
+        Ok(())
+    }
+}

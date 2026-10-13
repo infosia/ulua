@@ -59,6 +59,16 @@ Changes: one-argument `then`; an `unknown` annotation on the `catch`
 parameter; `Promise.all` without nullable or void elements (P4 Step 0
 M4).
 
+## Measurements (P4.2)
+
+Implementation record (Codex), Debug, one machine:
+
+- Direct tests: 81 rejections (0.033 s); 29 programs against `node`, `tsc`, `luau-analyze -j1`, and the ABI (0.682 s); 32 stops inside `then`, `catch`, `finally`, and `map` callbacks plus 8 controls (0.098 s): no `catch`, no `finally`, no later job, the instance stays usable.
+- Random check (the P4.1 target, extended): 480 programs, 120 with P4.2 forms, 20 unhandled rejections, 0 differences (8.47 s).
+- Growth, 9 shapes (`then` chains, adoption, arrows, `catch` and `finally` chains, `all` over literals, `map`, wide `then` and `all`): compiler 16 to 64 KiB at most 4.04; `luau-analyze` 4 to 16 KiB at most 5.16, ceiling at most 9.15 times `dense-assign`. Largest output 2,679,261 bytes at 64 KiB. 5,000 chained `then` and `all` over 5,000 elements run within 16 MiB. All 269 shapes: `measurements` 768 s.
+- Decided gaps: an `unknown` parameter of a function value follows C17.4; a sync callback with a `Promise<void>` result is a C19.12 `finally` callback; an empty array follows the element type rule; rejected `all` inputs register in the order of C19.6.
+- `cargo-test` 905 s in Codex's gate run.
+
 ## Contract pin (P4.2)
 
 At `b17d7f2` (P4.1 compiler), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.

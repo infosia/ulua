@@ -15,6 +15,7 @@ mod methods;
 mod narrowing;
 mod order;
 mod paths;
+mod promises;
 mod records;
 mod statements;
 mod strict;
