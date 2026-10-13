@@ -1,8 +1,8 @@
 # P2 value representations
 
-Status: open; P2.1 to P2.4 COMPLETE 2026-10-12; P2.5 and P2.6 COMPLETE 2026-10-13.
-Contracts: `pipeline.md` Rev 24, `abi.md` Rev 4, `corpus.md` Rev 8, `surface.md`
-Rev 21, `collisions.md` Rev 38. Decisions: D15 to D19 (`plan.md` §8).
+Status: P2.1 to P2.4 COMPLETE 2026-10-12; P2.5 to P2.7 COMPLETE 2026-10-13.
+Contracts: `pipeline.md` Rev 27, `abi.md` Rev 4, `corpus.md` Rev 8, `surface.md`
+Rev 22, `collisions.md` Rev 40. Decisions: D15 to D19 (`plan.md` §8).
 
 ## Slices
 
@@ -35,11 +35,11 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
 
 ## Exit checklist (P2.7)
 
-- [ ] collisions.md C17.1 to C17.10, C16.9 `throw`; surface.md Rev 22
+- [x] collisions.md C17.1 to C17.10, C16.9 `throw`; surface.md Rev 22
   (`ThrowStatement`, `TryStatement`, Error classes, `instanceof`);
   pipeline.md §4.9; corpus.md §6 `uncaught-exception` implemented.
-- [ ] P2.7 entries pass in full; every earlier entry keeps passing.
-- [ ] Direct tests: each Error class and `instanceof` result; `throw`
+- [x] P2.7 entries pass in full; every earlier entry keeps passing.
+- [x] Direct tests: each Error class and `instanceof` result; `throw`
   through every call form (direct, method, arrow, function value, array
   callbacks, `sort` comparator); nested `try`; the 20 `finally`
   completion cases; each stop kind (each trap, `limit:memory`,
@@ -48,10 +48,10 @@ slice; `tools/witness/luau.mjs` `PHASE` names the current slice.
   uncaught exception at the ABI, and a later call on the same instance;
   narrowing at `catch` and `finally` entry (C17.10); each against
   `node` where comparable.
-- [ ] Limits: `try` nesting at the depth ceiling passes `luau-analyze
+- [x] Limits: `try` nesting at the depth ceiling passes `luau-analyze
   -j1` and Luau; growth shapes for `try` (sequential, nested, in loops)
   at n and 4n.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 Source: the owner's prior project, §115 (Error family, `throw`,
 `catch` binding uses, `instanceof`) and §180 (`finally` on each exit,
@@ -313,6 +313,18 @@ byte rule; no Luau pattern from script text; no `internal`.
 | `t06` states `js-comparable: yes`; `node` gives `""`, inside the static type | MINOR | `no C5` |
 | C5.2 says `charCodeAt` gives 0 to 255; the code traps at continuation bytes | MINOR | C5.2 text |
 | `p24_strings.rs` states no cost (6.9 s Debug) | MINOR | Cost statement |
+
+### P2.7 close
+
+The round 4 MINOR is fixed: a C16 error that a nested body produces no longer hides the C9 of an enclosing `for` head arrow; 37 direct cases. `sh tools/gate.sh full` passes: `cargo-test` 380 s, `luau-witnesses` 52 s (166 entries in P2.7 or earlier, 63 generated modules, 14 stress modules); hygiene passes. The `measurements` feature (round 3 fix): largest ceiling ratio 30.7. Review rounds: 4. Running tasks at the close: none.
+
+### P2.7 Phase Review round 4
+
+Reviewer: fresh agent, diff `1ac5397..2365fa3`. 0 CRITICAL, 0 MAJOR, 1 MINOR. The round 3 resolutions hold: 3,200 random programs over protected-closure temporaries (nested `try`, loops, jumps, arrows in protected blocks) equal `node`, 0 analyzer errors, 0 `internal`; 357 C16.8 programs (21 unreachable kinds by 17 arrow positions) and 9 more are rejected; 40 reachable counterparts are accepted; 0 accepted programs that `tsc` rejects; 11 more `try` shapes: 4 to 16 KiB ratio at most 4.4, largest ceiling ratio 12.3; 6 stop probes run no catch and no finally.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A `for` head arrow whose body holds an unreachable arrow gives C16 at the inner arrow; the outer arrow gives C9 first in source order (pipeline.md §3.6): `for (let i = ((): number => { return 1; const h = (): number => 2; })(); ...)` | MINOR | Fix: the head check skips only an error at the head itself |
 
 ### P2.7 Phase Review round 3
 

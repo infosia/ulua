@@ -5,13 +5,19 @@ impl Checker<'_> {
     fn for_head_check(
         &self,
         e: &Expression<'_>,
+        reachable: bool,
         diagnostic: Option<&Diagnostic>,
     ) -> Result<(), Diagnostic> {
-        // C16.8 takes precedence once flow proves that an arrow has no incoming edge.
-        if diagnostic.is_some_and(|d| d.code == "C16" && d.message == UNREACHABLE_ARROW) {
-            return Ok(());
+        if let Err(head) = crate::depth::check_head(e, self.source, !reachable) {
+            // C16.8 wins at the first head arrow, but not inside a later nested body.
+            if diagnostic.is_some_and(|d| {
+                d.code == "C16" && d.message == UNREACHABLE_ARROW && d.offset <= head.offset
+            }) {
+                return Ok(());
+            }
+            return Err(head);
         }
-        crate::depth::check_head(e, self.source, !self.reachable)
+        Ok(())
     }
 
     pub(super) fn variables(
@@ -431,9 +437,10 @@ impl Checker<'_> {
                         return Err(self.error(d.span, "C11", "For initializer requires let"));
                     }
                     self.variable_names(d)?;
+                    let reachable = self.reachable;
                     let result = self.variables(d, depth);
                     for e in d.declarations.iter().filter_map(|d| d.init.as_ref()) {
-                        self.for_head_check(e, result.as_ref().err())?;
+                        self.for_head_check(e, reachable, result.as_ref().err())?;
                     }
                     result?
                 } else if f.init.is_none() {
@@ -456,8 +463,9 @@ impl Checker<'_> {
                     .test
                     .as_ref()
                     .map(|e| {
+                        let reachable = self.reachable;
                         let result = self.test(e, depth);
-                        self.for_head_check(e, result.as_ref().err())?;
+                        self.for_head_check(e, reachable, result.as_ref().err())?;
                         result
                     })
                     .transpose()?;
@@ -473,8 +481,9 @@ impl Checker<'_> {
                     .update
                     .as_ref()
                     .map(|e| {
+                        let reachable = self.reachable;
                         let result = self.effect(e, depth, true).map(Box::new);
-                        self.for_head_check(e, result.as_ref().err())?;
+                        self.for_head_check(e, reachable, result.as_ref().err())?;
                         result
                     })
                     .transpose()?;

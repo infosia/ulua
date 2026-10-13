@@ -278,6 +278,7 @@ pub(crate) fn check_head(
 ) -> Result<(), Diagnostic> {
     let mut pending = vec![e];
     while let Some(e) = pending.pop() {
+        let children = pending.len();
         match e {
             Expression::ArrowFunctionExpression(_) if unreachable => {
                 return Err(Diagnostic::at(
@@ -371,6 +372,8 @@ pub(crate) fn check_head(
             Expression::ComputedMemberExpression(m) => pending.extend([&m.object, &m.expression]),
             _ => {}
         }
+        // Visit each child in source order before a later sibling.
+        pending[children..].sort_by_key(|e| std::cmp::Reverse(e.span().start));
     }
     Ok(())
 }
