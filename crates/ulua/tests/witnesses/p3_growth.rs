@@ -15,6 +15,7 @@ unsafe extern "C" fn host(data: *mut c_void, _: *const Value, _: usize, result: 
 }
 #[test]
 fn host_pipeline_growth_and_ceiling() {
+    let _measurement = crate::measurement_lock();
     let start = Instant::now();
     for shape in shapes::SHAPES {
         let mut times = vec![];

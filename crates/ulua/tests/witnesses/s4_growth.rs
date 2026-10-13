@@ -32,6 +32,7 @@ use ulua_compiler::{COMPILER_STACK_BYTES, Limits, OUTPUT_FACTOR, OUTPUT_PRELUDE_
 
 #[test]
 fn full_pipeline_growth_stays_below_eight() {
+    let _measurement = crate::measurement_lock();
     let start = Instant::now();
     let n = 2 * 1024;
     let mut max_growth: f64 = 0.0;

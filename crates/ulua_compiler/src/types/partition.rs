@@ -163,8 +163,9 @@ impl Types {
             }
             while let Some(id) = pending.pop_front() {
                 for (source, label) in &incoming[id] {
-                    if !promises
-                        && matches!(&self.nodes[*source], Node::Class(class) if *label >= class.fields.len())
+                    // Containment follows fields; promises also stop at function signatures.
+                    if matches!(&self.nodes[*source], Node::Class(class) if *label >= class.fields.len())
+                        || (promises && matches!(&self.nodes[*source], Node::Function(_)))
                     {
                         continue;
                     }

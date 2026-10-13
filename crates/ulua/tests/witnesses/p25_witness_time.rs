@@ -17,6 +17,7 @@ use ulua_compiler::{Limits, compile_with_grants};
 
 #[test]
 fn all_growth_shapes_have_bounded_analyzer_time() {
+    let _measurement = crate::measurement_lock();
     let largest = measure("default", [4096, 16384]);
     assert!(largest <= 12.0, "Analyzer ratio: {largest:.3}");
 }
@@ -24,6 +25,7 @@ fn all_growth_shapes_have_bounded_analyzer_time() {
 #[cfg(feature = "measurements")]
 #[test]
 fn all_growth_shapes_have_bounded_ceiling_analyzer_time() {
+    let _measurement = crate::measurement_lock();
     measure("full", [16384, 65536]);
 }
 

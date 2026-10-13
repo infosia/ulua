@@ -137,20 +137,24 @@ fn floating_promise_containers_are_rejected() {
         "record();",
         "nested();",
         "optional();",
-        "callable();",
         "new Box();",
+        "new RecordBox();",
         "await container();",
     ] {
         let source = format!(
-            "async function v():Promise<number>{{return 1;}}function list():Promise<number>[]{{return [v()];}}type R={{p:Promise<number>}};function record():R{{return {{p:v()}};}}type N={{items:R[]}};function nested():N{{return {{items:[record()]}};}}function optional():R|null{{return null;}}function callable():()=>Promise<number>{{return v;}}class Box{{p:Promise<number>=v();}}async function container():Promise<R>{{return record();}}export async function main():Promise<void>{{{body}}}"
+            "async function v():Promise<number>{{return 1;}}function list():Promise<number>[]{{return [v()];}}type R={{p:Promise<number>}};function record():R{{return {{p:v()}};}}type N={{items:R[]}};function nested():N{{return {{items:[record()]}};}}function optional():R|null{{return null;}}class Box{{p:Promise<number>=v();}}class RecordBox{{r:R=record();}}async function container():Promise<R>{{return record();}}export async function main():Promise<void>{{{body}}}"
         );
         support::Script::compile(&source, ulua::CompileLimits::default(), "C19");
     }
     let mut suite = witnesses::Suite::named("P4.2 floating controls");
+    suite.source("async function v():Promise<number>{return 1;}function callable():()=>Promise<number>{print('callable');return v;}export function main():void{callable();}",Some("callable\n"));
+    suite.source("class Game{score:number=0;constructor(){print('start');}async load():Promise<number>{return 1;}}export function main():void{new Game();}",Some("start\n"));
+    suite.source("function factory():()=>Promise<number>{print('factory');return async():Promise<number>=>1;}export function main():void{factory();}",Some("factory\n"));
     suite.source("async function v():Promise<number>{return 1;}function list():Promise<number>[]{return [v()];}type R={p:Promise<number>};function record():R{return {p:v()};}function numbers():number[]{return [1];}async function done():Promise<void>{}export async function main():Promise<void>{numbers();const xs=[1].map(async(n:number):Promise<number>=>n);const ys=list();const r=record();print(`${await xs[0]} ${await ys[0]} ${await r.p}`);await done();}",Some("1 1 1\n"));
     suite.finish();
     eprintln!(
-        "P4.2 floating containers rejections=10 controls=1 cost={:.3}s",
+        "P4.2 floating containers rejections=10 controls={} cost={:.3}s",
+        suite.count,
         start.elapsed().as_secs_f64()
     );
 }

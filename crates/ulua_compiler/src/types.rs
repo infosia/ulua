@@ -35,7 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn promise_containment_covers_recursive_and_callable_types() {
+    fn promise_containment_follows_value_fields_only() {
         let mut types = Types::new();
         let number_promise = types.promise(Type::Number);
         let plain = types.reserve_record();
@@ -48,10 +48,34 @@ mod tests {
         let parameter = types.intern(vec![number_promise], Type::Void, 1);
         let class = types.reserve_class();
         types.define_class(class, vec![], vec![(0, callback)]);
-        types.seal_aliases();
-        for _ in 0..100 {
-            assert!(!types.contains_promise(plain));
-            for ty in [first, second, callback, parameter, class, number_promise] {
+        let field_class = types.reserve_class();
+        types.define_class(field_class, vec![(0, second)], vec![(1, callback)]);
+        let callable_class = types.reserve_class();
+        types.define_class(callable_class, vec![(0, parameter)], vec![(1, callback)]);
+        let callable_array = types.array(callback);
+        let callable_nullable = types.nullable(callable_array);
+        let callable_record = types.record(vec![(0, callable_nullable), (1, class)]);
+        let field_array = types.array(field_class);
+        let field_nullable = types.nullable(field_array);
+        let field_record = types.record(vec![(0, field_nullable)]);
+        // Check traversal before the seal, then the reverse-reachability cache after it.
+        for sealed in [false, true] {
+            if sealed {
+                types.seal_aliases();
+            }
+            for ty in [
+                plain,
+                callback,
+                parameter,
+                class,
+                callable_class,
+                callable_array,
+                callable_nullable,
+                callable_record,
+            ] {
+                assert!(!types.contains_promise(ty), "sealed={sealed}, type={ty:?}");
+            }
+            for ty in [first, second, field_class, field_record, number_promise] {
                 assert!(types.contains_promise(ty));
             }
         }
@@ -188,7 +212,7 @@ impl Types {
         }
     }
 
-    // Cached graph traversal also covers recursive records and callable members.
+    // Follow stored values through containers. Function signatures and methods hold no promise value.
     pub(crate) fn contains_promise(&self, ty: Type) -> bool {
         if let Some(answer) = self.promise_content.borrow().get(&ty) {
             return *answer;
@@ -212,11 +236,7 @@ impl Types {
                 Some(Node::Array(t) | Node::Nullable(t)) => pending.push(*t),
                 Some(Node::Record(fields)) => pending.extend(fields.iter().map(|f| f.1)),
                 Some(Node::Class(class)) => {
-                    pending.extend(class.fields.iter().chain(&class.methods).map(|f| f.1));
-                }
-                Some(Node::Function(f)) => {
-                    pending.extend(&f.params);
-                    pending.push(f.result);
+                    pending.extend(class.fields.iter().map(|f| f.1));
                 }
                 _ => {}
             }

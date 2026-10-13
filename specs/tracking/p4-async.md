@@ -1,6 +1,6 @@
 # P4 async
 
-Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
+Status: open; P4.1 and P4.2 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 
 ## Slices
 
@@ -36,22 +36,22 @@ Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 
 ## Exit checklist (P4.2)
 
-- [ ] collisions.md C19.10 to C19.15 (C19.2 and C19.8 as revised);
+- [x] collisions.md C19.10 to C19.15 (C19.2 and C19.8 as revised);
   surface.md Rev 25 implemented.
-- [ ] P4.2 entries pass in full; every earlier entry keeps passing.
-- [ ] Direct tests: each C19.10 to C19.15 rejection; job order against
+- [x] P4.2 entries pass in full; every earlier entry keeps passing.
+- [x] Direct tests: each C19.10 to C19.15 rejection; job order against
   `node` for `then` (value and promise results), `catch` (with and
   without a rejection), `finally` (with a fulfilled and a rejected
   source, and a callback that throws), `Promise.all` (settle order,
   first rejection, an empty array, later rejections handled), `map`
   with an async callback; an unhandled rejection of a derived promise;
   each stop inside a callback.
-- [ ] Limits and growth: chains of `then` and `Promise.all` over large
+- [x] Limits and growth: chains of `then` and `Promise.all` over large
   arrays inside `max_steps` and `max_memory_bytes`; growth shapes
   inside pipeline.md §3.10.
-- [ ] A random check of P4.2 forms against `node`, `tsc`, and
+- [x] A random check of P4.2 forms against `node`, `tsc`, and
   `luau-analyze -j1`.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 Source: the owner's prior project that holds promises as values
 (`then`, `catch`, `finally`, `Promise.all`; other statics rejected).
@@ -68,6 +68,10 @@ Implementation record (Codex), Debug, one machine:
 - Growth, 9 shapes (`then` chains, adoption, arrows, `catch` and `finally` chains, `all` over literals, `map`, wide `then` and `all`): compiler 16 to 64 KiB at most 4.04; `luau-analyze` 4 to 16 KiB at most 5.16, ceiling at most 9.15 times `dense-assign`. Largest output 2,679,261 bytes at 64 KiB. 5,000 chained `then` and `all` over 5,000 elements run within 16 MiB. All 269 shapes: `measurements` 768 s.
 - Decided gaps: an `unknown` parameter of a function value follows C17.4; a sync callback with a `Promise<void>` result is a C19.12 `finally` callback; an empty array follows the element type rule; rejected `all` inputs register in the order of C19.6.
 - `cargo-test` 905 s in Codex's gate run.
+
+### P4.2 close
+
+Review rounds: 2 (round 2: 0 CRITICAL, 0 MAJOR, 1 MINOR, fixed). The round 1 test move had a timing regression, fixed with the `witnesses` lock (above). `sh tools/gate.sh full` by the primary agent: `cargo-test` 246 s, `luau-witnesses` 51 s (197 entries in P4.2 or earlier, 74 generated modules, 14 stress modules); hygiene passes. Running tasks at the close: none.
 
 ### P4.2 Phase Review round 1
 
@@ -91,6 +95,10 @@ Reviewer: fresh agent, diff `bbdcb7c..f6230dd`, priority `f6230dd`. 0 CRITICAL, 
 | Finding | Severity | Resolution |
 |---|---|---|
 | C19.4 counts method and function types as promise containment: `new Game();` with an `async` method and `factory();` returning `() => Promise<number>` give C19; `tsc` accepts and `node` prints `start`; `aed0365` accepted it | MINOR | C19.4: a function type and a method hold no promise value |
+
+Fix (Codex): promise containment follows fields only; 10 rejections and 4 accepted controls; the random check unchanged (600 programs). A regression of the round 1 test move: the first gate run failed a compiler growth ratio (8.72, bound 8) that passes alone (3.99) and with `RUST_TEST_THREADS=1`. The merged binaries run the timing-ratio tests (`p25_growth`, `p3_growth`, `s4_growth`, and the others that assert a ratio) in parallel with other tests of the same binary, so the load changes the ratio (principle 15). Resolution: every test that asserts a time ratio moves into one binary whose tests take one process-wide lock; cargo runs test binaries one at a time.
+
+Timing fix (Codex): 7 tests that assert a time ratio moved into the `witnesses` binary; each holds one process-wide mutex for its whole body; 133 test names, inputs, assertions, feature gates, and cost statements kept; the allocator measurement keeps its own binary. Three `gate.sh full` runs with the default thread count pass: `cargo-test` 242, 246, 244 s; largest ratios S4 6.40, 6.38, 6.32; P2.5 4.01, 3.99, 3.99; P3 3.93, 3.95, 3.92; P4 4.10, 4.54, 4.12; analyzer 8.50, 8.51, 8.54. `measurements`: 7 passed, 970.5 s, largest ceiling ratio 22.4.
 
 ## Contract pin (P4.2)
 
