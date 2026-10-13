@@ -40,6 +40,10 @@ At `8e40e1f`, `tools/witness/luau.mjs` (`PHASE = "P4.1"`): `a58`,
 `a59`, `t10` rejected `unsupported`; `a60`, `a61` C11; `r134` to
 `r141` `unsupported`, want C19. Every earlier entry passes.
 
+## Gaps
+
+- Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
+
 ## P4 Step 0 measurement
 
 Measured at `40f3806` with prototypes; every production change reverted

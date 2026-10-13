@@ -861,7 +861,10 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    generators, `for await`, and `await using` are rejected (C19).
 2. **The promise type.** `Promise<T>` is a type of values: a binding,
    a parameter, a field, an array element, a result. `T` is not a
-   `Promise` type. A promise relates only to an identical promise type
+   `Promise` type. `T` has no member named `then` (a field of a record
+   type, or a field or a method of a class): JavaScript adopts such a
+   value as a thenable and calls its `then`, and `tsc` types the
+   `await` as `Awaited<T>`. The job model holds native promises only. A promise relates only to an identical promise type
    (C1): `Promise<number>` does not flow to `Promise<number | null>`,
    which `tsc` accepts. A promise value has no member and no operator
    in P4.1: an equality, a template substitution, a truth test, and
