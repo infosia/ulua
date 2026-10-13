@@ -117,7 +117,7 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 }
             }
             // Keep the existing tsc witnesses; the ABI growth gates cover the other generators.
-            if shape.label.starts_with("P3-") {
+            if shape.label.starts_with("P3-") || shape.label.starts_with("P41-host-") {
                 let declaration_path = path.with_extension("d.ts");
                 std::fs::write(
                     &declaration_path,

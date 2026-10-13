@@ -121,5 +121,7 @@ pub fn all() -> Vec<Shape> {
 }
 
 pub fn grants(source: &str) -> Vec<ulua_compiler::HostSignature> {
-    hosts::grants(source)
+    let mut grants = hosts::grants(source);
+    grants.extend(asynchronous::grants(source));
+    grants
 }

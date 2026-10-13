@@ -2,18 +2,69 @@
 // External ABI descriptors are non-exhaustive and require field assignments.
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{ffi::c_void, ptr, slice};
+use std::{collections::VecDeque, ffi::c_void, ptr, slice};
 use ulua::*;
 
 pub struct Fixtures {
     pub output: Vec<String>,
     buffer: String,
+    requests: VecDeque<(u64, f64)>,
 }
 impl Fixtures {
     pub fn new() -> Self {
         Self {
             output: vec![],
             buffer: String::new(),
+            requests: VecDeque::new(),
+        }
+    }
+    pub unsafe fn settle(
+        &mut self,
+        instance: *mut Instance,
+        task: &mut Option<u64>,
+        diagnostic: &mut Diagnostic,
+    ) -> Status {
+        // SAFETY: The harness serializes its live instance and keeps fixture values live.
+        unsafe {
+            while let Some((request, n)) = self.requests.pop_front() {
+                let mut value = Value::default();
+                value.r#type = ULUA_TYPE_NUMBER;
+                value.number = n;
+                let status = ulua_request_complete(instance, request, &value);
+                if status != ULUA_OK {
+                    return status;
+                }
+                let mut count = 0;
+                let status = ulua_pump(instance, 1, &mut count, diagnostic);
+                if status != ULUA_OK {
+                    // C19.7 gives the main rejection precedence over an unhandled rejection.
+                    if status == ULUA_FAILED
+                        && std::ffi::CStr::from_ptr(diagnostic.code.as_ptr()).to_bytes()
+                            == b"trap:uncaught-exception"
+                        && let Some(id) = *task
+                    {
+                        let original = *diagnostic;
+                        let observed = ulua_task_result(instance, id, &mut value, diagnostic);
+                        if observed == ULUA_FAILED
+                            && std::ffi::CStr::from_ptr(diagnostic.code.as_ptr()).to_bytes()
+                                == b"trap:uncaught-exception"
+                        {
+                            return observed;
+                        }
+                        *diagnostic = original;
+                    }
+                    return status;
+                }
+                if let Some(id) = *task {
+                    let status = ulua_task_result(instance, id, &mut value, diagnostic);
+                    if status == ULUA_OK {
+                        *task = None;
+                    } else if status != ULUA_PENDING {
+                        return status;
+                    }
+                }
+            }
+            ULUA_OK
         }
     }
     pub fn signatures(source: &[u8]) -> Result<Vec<ulua_compiler::HostSignature>, String> {
@@ -41,13 +92,17 @@ impl Fixtures {
             d.parameter_types = s.parameters.as_ptr();
             d.parameter_count = s.parameters.len();
             d.result_type = s.result;
-            d.function = Some(match s.name.as_str() {
-                "hostAdd" => add,
-                "hostConcat" => concat,
-                "hostNot" => not,
-                "hostLog" => log,
-                _ => return Err("Unknown fixture".into()),
-            });
+            if s.asynchronous {
+                d.start = Some(later);
+            } else {
+                d.function = Some(match s.name.as_str() {
+                    "hostAdd" => add,
+                    "hostConcat" => concat,
+                    "hostNot" => not,
+                    "hostLog" => log,
+                    _ => return Err("Unknown fixture".into()),
+                });
+            }
             d.userdata = ptr::from_mut(self).cast();
             let mut cap = ptr::null_mut();
             // SAFETY: Descriptors and signatures cover their lengths; the fixture outlives all runs.
@@ -65,9 +120,12 @@ fn signature(name: &str) -> Result<ulua_compiler::HostSignature, String> {
         "hostConcat" => (vec![3, 3], 3),
         "hostNot" => (vec![2], 2),
         "hostLog" => (vec![3], 0),
+        "hostLater" => (vec![1], 1),
         _ => return Err(format!("Unknown grant fixture: {name}")),
     };
-    Ok(ulua_compiler::HostSignature::new(name, p, r))
+    let mut signature = ulua_compiler::HostSignature::new(name, p, r);
+    signature.asynchronous = name == "hostLater";
+    Ok(signature)
 }
 unsafe fn text<'a>(v: &Value) -> Option<&'a str> {
     // SAFETY: The runtime guarantees readable UTF-8 argument bytes through this host call.
@@ -119,6 +177,16 @@ unsafe extern "C" fn log(data: *mut c_void, a: *const Value, _: usize, _: *mut V
         (*data.cast::<Fixtures>())
             .output
             .push(format!("log:{text}"));
+    }
+    0
+}
+
+unsafe extern "C" fn later(data: *mut c_void, a: *const Value, _: usize, request: u64) -> i32 {
+    // SAFETY: The registered signature supplies a number; the harness owns the live fixture.
+    unsafe {
+        (*data.cast::<Fixtures>())
+            .requests
+            .push_back((request, (*a).number));
     }
     0
 }

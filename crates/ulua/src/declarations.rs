@@ -67,7 +67,12 @@ pub unsafe extern "C" fn ulua_declarations(
                     }
                     let _ = write!(text, "p{i}: {}", type_name(*t));
                 }
-                let _ = writeln!(text, "): {};", type_name(signature.result));
+                let result = type_name(signature.result);
+                if signature.asynchronous {
+                    let _ = writeln!(text, "): Promise<{result}>;");
+                } else {
+                    let _ = writeln!(text, "): {result};");
+                }
             }
             length.write(text.len());
             if capacity < text.len() {

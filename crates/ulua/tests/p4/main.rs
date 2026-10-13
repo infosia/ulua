@@ -9,3 +9,5 @@ mod p41_stops;
 mod p41_then;
 mod p42_nullable;
 mod p42_promises;
+
+mod p43_order;

@@ -1,4 +1,13 @@
 //! Dense await shapes cover serial requests, nesting, loops, and protected blocks.
+#[path = "p43_shapes.rs"]
+mod requests;
+pub fn grants(source: &str) -> Vec<ulua_compiler::HostSignature> {
+    if source.starts_with("// grants: hostLater") {
+        requests::grants()
+    } else {
+        vec![]
+    }
+}
 pub const SHAPES: &[&str] = &[
     "then-chain",
     "then-adopt",
@@ -22,8 +31,17 @@ pub const SHAPES: &[&str] = &[
     "capture-finally-continue",
     "capture-finally-break-deep",
     "capture-finally-continue-deep",
+    "host-sequential",
+    "host-nested",
+    "host-then",
+    "host-finally",
+    "host-all",
+    "host-try",
 ];
 pub fn source(shape: &str, bytes: usize) -> String {
+    if requests::SHAPES.contains(&shape) {
+        return requests::source(shape, bytes);
+    }
     if SHAPES[..9].contains(&shape) {
         return callbacks(shape, bytes);
     }

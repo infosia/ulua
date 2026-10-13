@@ -3,6 +3,8 @@
 #include "ulua_shim.h"
 #include <cstdlib>
 struct lua_State;
+struct ulua_request;
+struct ulua_task;
 struct ulua_vm {
     lua_State* state;
     lua_State* thread;
@@ -15,6 +17,17 @@ struct ulua_vm {
     int exports;
     int errors;
     int drain;
+    int new_promise;
+    int fulfill;
+    uint64_t next_request;
+    uint64_t next_task;
+    uint32_t max_open_requests;
+    uint32_t open_requests;
+    uint32_t recorded_requests;
+    ulua_request* requests;
+    ulua_request* recorded_head;
+    ulua_request* recorded_tail;
+    ulua_task* tasks;
     int reset;
     int promises;
     int jobs;

@@ -212,10 +212,49 @@ fn random_async_programs_match_three_witnesses() {
         body.push_str("try{print(`${(await p)===null}`);}catch(e){if(e instanceof Error)print(e.name);}print('end');");
         suite.source(&format!("{declaration}async function tick():Promise<void>{{}}async function source(mode:number):Promise<{nullable}>{{await tick();if(mode===0)return null;if(mode===1)return {value};throw new RangeError('source');}}export async function main():Promise<void>{{{body}}}"),None);
     }
+    for i in 0..120 {
+        let n = 1 + r.next() % 5;
+        let value = 1 + r.next() % 20;
+        let then = if r.next().is_multiple_of(2) {
+            "return hostLater(n+1);"
+        } else {
+            "return n+1;"
+        };
+        let finalizer = if r.next().is_multiple_of(2) {
+            "await hostLater(0);"
+        } else {
+            ""
+        };
+        let body = match r.next() % 4 {
+            0 => {
+                "const ps=[task(0),task(1),task(2)];const ns=await Promise.all(ps);print(`${ns[0]},${ns[1]},${ns[2]}`);"
+            }
+            1 => "const a=task(0);const b=task(1);print(`${await b},${await a}`);",
+            2 => {
+                "const a=task(0).then(next).finally(done);const b=task(1).finally(done).then(next);print(`${await a},${await b}`);"
+            }
+            _ => {
+                "const xs=[0,1,2];const ns=await Promise.all(xs.map(task));print(`${ns[0]},${ns[1]},${ns[2]}`);"
+            }
+        };
+        let source = format!(
+            "// grants: hostLater\nfunction next(n:number):number|Promise<number>{{{then}}}async function done():Promise<void>{{{finalizer}print('done');}}async function task(id:number):Promise<number>{{let sum=0;print(`start ${{id}}`);for(let k=0;k<{n};k++){{sum+=await hostLater(id*{value}+k);print(`value ${{id}} ${{sum}}`);}}return sum;}}export async function main():Promise<void>{{{body}print('end{i}');}}"
+        );
+        // Ulua callbacks use one result type. Separate value and promise signatures keep that rule.
+        let source = source.replace(
+            "number|Promise<number>",
+            if then.contains("hostLater") {
+                "Promise<number>"
+            } else {
+                "number"
+            },
+        );
+        suite.source(&source, None);
+    }
     suite.finish();
     eprintln!("P4.2 nullable random programs=120");
     eprintln!(
-        "P4.1 random seed=0x41c1240026 programs={} p42_mixed=120 suspended_capture_programs=120 unsafe_rejects=120 unhandled=20 cost={:.3}s",
+        "P4.1 random seed=0x41c1240026 programs={} p42_mixed=120 host_requests=120 suspended_capture_programs=120 unsafe_rejects=120 unhandled=20 cost={:.3}s",
         suite.count,
         start.elapsed().as_secs_f64()
     );

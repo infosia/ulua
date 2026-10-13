@@ -168,6 +168,8 @@ pub struct HostSignature {
     pub parameters: Vec<u32>,
     /// ABI result tag.
     pub result: u32,
+    /// The host starts a request with a Promise result.
+    pub asynchronous: bool,
 }
 impl HostSignature {
     /// Construct a grant signature.
@@ -176,6 +178,7 @@ impl HostSignature {
             name: name.into(),
             parameters,
             result,
+            asynchronous: false,
         }
     }
 }

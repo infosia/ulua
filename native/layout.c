@@ -27,6 +27,8 @@ size_t ulua_internal_layout_probe(size_t index) {
         offsetof(ulua_run_limits, reserved),
         offsetof(ulua_run_limits, max_memory_bytes),
         offsetof(ulua_run_limits, max_steps),
+        offsetof(ulua_run_limits, max_open_requests),
+        offsetof(ulua_run_limits, reserved2),
         sizeof(ulua_host),
         offsetof(ulua_host, struct_size),
         offsetof(ulua_host, reserved),
@@ -40,6 +42,7 @@ size_t ulua_internal_layout_probe(size_t index) {
         ULUA_BUSY,
         ULUA_INTERNAL,
         ULUA_POISONED,
+        ULUA_PENDING,
         ULUA_TYPE_VOID,
         ULUA_TYPE_NUMBER,
         ULUA_TYPE_BOOLEAN,
@@ -56,6 +59,7 @@ size_t ulua_internal_layout_probe(size_t index) {
         offsetof(ulua_capability_desc, result_type),
         offsetof(ulua_capability_desc, reserved2),
         offsetof(ulua_capability_desc, function),
+        offsetof(ulua_capability_desc, start),
         offsetof(ulua_capability_desc, userdata),
         ULUA_MAX_HOST_PARAMETERS
     };

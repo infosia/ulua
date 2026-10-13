@@ -265,3 +265,44 @@ fn p3_review2_global_blocks_use_c18_only_with_declare() {
         start.elapsed().as_secs_f64()
     );
 }
+
+#[test]
+fn async_host_signatures_follow_c18_and_c19() {
+    let mut g = grant();
+    assert!(!g.asynchronous);
+    g.asynchronous = true;
+    for body in [
+        "const p=host(1,true,'x');",
+        "await host(1,true,'x');",
+        "const p=host(1,true,'x').then((n:number):number=>n);",
+        "const ps=await Promise.all([host(1,true,'x')]);",
+    ] {
+        let source = format!("export async function main():Promise<void>{{{body}}}");
+        let c = compile_with_grants(source.as_bytes(), Limits::default(), &[g.clone()]).unwrap();
+        assert_eq!(c.hosts, ["host"]);
+        assert!(c.luau.contains("__ulua_Promise<number>"));
+    }
+    for body in [
+        "host(1,true,'x');",
+        "host(1,true,'x').then((n:number):number=>n);",
+        "const equal=host(1,true,'x')===host(1,true,'x');",
+        "print(`${host(1,true,'x')}`);",
+    ] {
+        let source = format!("export function main():void{{{body}}}");
+        assert_eq!(
+            compile_with_grants(source.as_bytes(), Limits::default(), &[g.clone()])
+                .unwrap_err()
+                .code,
+            "C19"
+        );
+    }
+    for body in [
+        "const f=host;",
+        "host?.(1,true,'x');",
+        "const p=host(1);",
+        "const p=host('x',true,'x');",
+    ] {
+        let source = format!("export function main():void{{{body}}}");
+        assert!(compile_with_grants(source.as_bytes(), Limits::default(), &[g.clone()]).is_err());
+    }
+}

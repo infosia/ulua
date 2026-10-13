@@ -12,6 +12,9 @@ mod p3_tests;
 #[cfg(test)]
 mod p41_tests;
 #[cfg(test)]
+mod p43_tests;
+mod requests;
+#[cfg(test)]
 mod tests;
 mod types;
 
@@ -21,4 +24,5 @@ pub use capabilities::{
 };
 pub use declarations::ulua_declarations;
 pub use objects::{Context, Instance, Module};
+pub use requests::*;
 pub use types::*;

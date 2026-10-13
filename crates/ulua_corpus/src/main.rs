@@ -187,7 +187,30 @@ fn run_entry(path: &Path, emit: Option<&Path>) -> Result<Record, String> {
         }
         // Async main has the VOID signature. The ABI drains and observes its promise.
         let mut value = Value::default();
-        let status = ulua_call(instance, index, ptr::null(), 0, &mut value, &mut diagnostic);
+        let mut task = 0;
+        let mut status =
+            ulua_call_start(instance, index, ptr::null(), 0, &mut task, &mut diagnostic);
+        let mut pending = None;
+        if status == ULUA_OK {
+            status = ulua_task_result(instance, task, &mut value, &mut diagnostic);
+            pending = (status == ULUA_PENDING).then_some(task);
+            if pending.is_some() {
+                status = ULUA_OK;
+            }
+        }
+        if status == ULUA_OK {
+            status = fixtures.settle(instance, &mut pending, &mut diagnostic);
+        }
+        if status == ULUA_OK && pending.is_some() {
+            status = ulua_task_result(instance, task, &mut value, &mut diagnostic);
+            if status == ULUA_PENDING {
+                diagnostic.code.fill(0);
+                for (out, byte) in diagnostic.code.iter_mut().zip(b"async:pending") {
+                    *out = *byte as c_char;
+                }
+                status = ULUA_FAILED;
+            }
+        }
         if status != ULUA_OK {
             record.fail(status, &diagnostic);
         }
@@ -241,6 +264,36 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn p43_pending_main_after_last_host_settle_fails() {
+        let now = std::time::Instant::now();
+        let path =
+            std::env::temp_dir().join(format!("ulua-corpus-p43-pending-{}.ts", std::process::id()));
+        std::fs::write(&path, "// grants: hostLater\nasync function tick():Promise<number>{return 1;}class C{p:Promise<number>=tick();async wait():Promise<number>{await hostLater(1);return await this.p;}}export async function main():Promise<void>{const c=new C();c.p=c.wait();await c.p;}").unwrap();
+        let record = run_entry(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(record.status, "failed");
+        assert_eq!(record.code.as_deref(), Some("async:pending"));
+        assert!(record.output.is_empty());
+        eprintln!(
+            "P4.3 corpus pending programs=1 cost={:.3}s",
+            now.elapsed().as_secs_f64()
+        );
+    }
+    #[test]
+    fn p43_main_rejection_precedes_unhandled_rejection_in_settle_drain() {
+        let path = std::env::temp_dir().join(format!(
+            "ulua-corpus-p43-rejection-{}.ts",
+            std::process::id()
+        ));
+        std::fs::write(&path, "// grants: hostLater\nexport async function main():Promise<void>{const p=hostLater(1);const lost=p.then((n:number):number=>{throw new TypeError('lost');});await p;const later=hostLater(2).then((n:number):void=>print('late'));throw new RangeError('main');}").unwrap();
+        let record = run_entry(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(record.status, "failed");
+        assert_eq!(record.code.as_deref(), Some("trap:uncaught-exception"));
+        assert_eq!(record.message.as_deref(), Some("RangeError: main"));
+        assert!(record.output.is_empty());
+    }
     #[test]
     fn json_escapes_output() {
         assert_eq!(quote("a\n\"\0é"), "\"a\\n\\\"\\u0000é\"");

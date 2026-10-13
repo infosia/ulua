@@ -1,5 +1,7 @@
 //! Await shapes compile and run at 4 KiB, 16 KiB, and the source ceiling.
-//! Costs are reported for twenty-two shapes, including nine P4.2 shapes.
+//! Costs are reported for twenty-eight shapes, including nine P4.2 and six P4.3 shapes.
+#[path = "../support/requests.rs"]
+mod requests;
 #[path = "../support/p41_shapes.rs"]
 mod shapes;
 #[allow(dead_code)]
@@ -17,9 +19,22 @@ fn await_pipeline_growth_and_drain_limits() {
             let source = shapes::source(shape, bytes);
             assert_eq!(source.len(), bytes);
             let now = Instant::now();
-            let compiled =
-                ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
-                    .unwrap();
+            let compiled = ulua_compiler::compile_with_grants(
+                source.as_bytes(),
+                ulua_compiler::Limits::default(),
+                &shapes::grants(&source),
+            )
+            .unwrap();
+            if shape.starts_with("host-") {
+                let mut limits = RunLimits::default();
+                limits.max_open_requests = 65536;
+                limits.max_memory_bytes = 128 * 1024 * 1024;
+                limits.max_steps = 10_000_000;
+                let run = requests::run(&source, limits);
+                assert_eq!(run.0, ULUA_OK, "{shape} bytes={bytes}: {}", run.1);
+                numbers.push((compiled.luau.len(), now.elapsed().as_secs_f64()));
+                continue;
+            }
             let mut script = support::Script::new(&source);
             let mut limits = RunLimits::default();
             if shapes::SHAPES[..9].contains(shape) {

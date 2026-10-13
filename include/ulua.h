@@ -8,7 +8,7 @@ extern "C" {
 /* ABI version 1. */
 typedef int32_t ulua_status;
 enum { ULUA_OK=0, ULUA_INVALID_ARGUMENT=1, ULUA_REJECTED=2, ULUA_FAILED=3,
-       ULUA_HOST_ERROR=4, ULUA_BUSY=5, ULUA_INTERNAL=6, ULUA_POISONED=7 };
+       ULUA_HOST_ERROR=4, ULUA_BUSY=5, ULUA_INTERNAL=6, ULUA_POISONED=7, ULUA_PENDING=8 };
 enum { ULUA_TYPE_VOID=0, ULUA_TYPE_NUMBER=1, ULUA_TYPE_BOOLEAN=2, ULUA_TYPE_STRING=3 };
 /* S3 measured 130,544 bytes with protected calls at the pinned C-call limit. */
 #define ULUA_MIN_RUN_STACK (512u * 1024u)
@@ -45,6 +45,8 @@ typedef struct ulua_run_limits {
     uint32_t reserved;
     uint64_t max_memory_bytes;
     uint64_t max_steps;
+    uint32_t max_open_requests;
+    uint32_t reserved2;
 } ulua_run_limits;
 typedef int32_t (*ulua_output_fn)(void* userdata, const char* text, size_t length);
 typedef struct ulua_host {
@@ -54,6 +56,7 @@ typedef struct ulua_host {
     ulua_output_fn output;
 } ulua_host;
 typedef int32_t (*ulua_host_fn)(void*, const ulua_value*, size_t, ulua_value*);
+typedef int32_t (*ulua_host_start_fn)(void*, const ulua_value*, size_t, uint64_t);
 typedef struct ulua_capability_desc {
     uint32_t struct_size;
     uint32_t reserved;
@@ -64,6 +67,7 @@ typedef struct ulua_capability_desc {
     uint32_t result_type;
     uint32_t reserved2;
     ulua_host_fn function;
+    ulua_host_start_fn start;
     void* userdata;
 } ulua_capability_desc;
 /* Set every descriptor struct_size to sizeof(descriptor), and reserved fields to zero.
@@ -106,6 +110,16 @@ ulua_status ulua_instance_free(ulua_instance* instance);
    Fulfillment returns T; rejection gives trap:uncaught-exception; pending gives async:pending. */
 ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,
     const ulua_value* arguments, size_t argument_count, ulua_value* result, ulua_diagnostic* diagnostic);
+/* Call tasks retain one result. A pending query does not consume the task. */
+ulua_status ulua_call_start(ulua_instance*, uint32_t, const ulua_value*, size_t,
+    uint64_t*, ulua_diagnostic*);
+ulua_status ulua_task_result(ulua_instance*, uint64_t, ulua_value*, ulua_diagnostic*);
+/* Completion records copy values and run no script. Pump settles in record order.
+   Each settle has its own run limits. Zero max_requests means no limit. */
+ulua_status ulua_request_complete(ulua_instance*, uint64_t, const ulua_value*);
+ulua_status ulua_request_fail(ulua_instance*, uint64_t);
+ulua_status ulua_pump(ulua_instance*, uint32_t, uint32_t*, ulua_diagnostic*);
+ulua_status ulua_instance_requests(const ulua_instance*, uint32_t*, uint32_t*);
 #ifdef __cplusplus
 }
 #endif

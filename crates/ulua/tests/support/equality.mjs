@@ -11,7 +11,8 @@ const config = ts.getParsedCommandLineOfConfigFile(path.join(root, "tsconfig.jso
 if (config.errors.length) throw Error("tsconfig errors");
 const files = fs.readdirSync(directory).filter(f => /^case-\d+\.ts$/.test(f)).map(f => path.join(directory, f));
 const prelude = config.fileNames.filter(f => f.includes(`${path.sep}prelude${path.sep}`));
-const program = ts.createProgram([...prelude, ...files], config.options);
+const hostFiles = fs.readdirSync(directory).filter(f => f.endsWith(".d.ts")).map(f => path.join(directory, f));
+const program = ts.createProgram([...prelude, ...files, ...hostFiles.slice(0,1)], config.options);
 const checker = program.getTypeChecker();
 // Parse the witness source without executing its corpus runner.
 const witnessSource = fs.readFileSync(path.join(root, "tools/witness/corpus.mjs"), "utf8");
@@ -56,13 +57,26 @@ for (const file of files) {
   const js = ts.transpileModule(source, {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
   const output = [];
   const exports = {};
-  new Function("exports", "print", js)(exports, s => output.push(s));
+  const requests = [];
+  // This queue matches hostLater in tools/witness/node-prelude.mjs.
+  const hostLater = n => new Promise(resolve => requests.push(() => resolve(n)));
+  new Function("exports", "print", "hostLater", js)(exports, s => output.push(s), hostLater);
   let thrown = null;
   const unhandled = [];
   const rejection = reason => unhandled.push(reason);
   process.on("unhandledRejection", rejection);
-  try { await exports.main(); } catch (error) { thrown = error; }
-  await new Promise(resolve => setImmediate(resolve));
+  let settled = false;
+  try {
+    const result = exports.main();
+    settled = !(result instanceof Promise);
+    if (!settled) result.then(() => settled = true, error => {settled = true; thrown = error;});
+    await new Promise(resolve => setImmediate(resolve));
+    while (requests.length && thrown === null && unhandled.length === 0) {
+      requests.shift()();
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    if (!settled && thrown === null) thrown = new Error("async:pending");
+  } catch (error) { thrown = error; }
   process.off("unhandledRejection", rejection);
   if (thrown === null && unhandled.length) thrown = unhandled[0];
   const trapFile = file.replace(/\.ts$/, ".trap");

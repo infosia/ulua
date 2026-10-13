@@ -18,6 +18,52 @@ static int32_t host(void* data, const ulua_value* arguments, size_t count, ulua_
     if (type == ULUA_TYPE_STRING) { result->data = "ok"; result->length = 2; }
     return 0;
 }
+static uint64_t request_id;
+static int32_t later(void* data, const ulua_value* arguments, size_t count, uint64_t request) {
+    (void)data;
+    assert(count == 1 && arguments[0].number == 7.5);
+    request_id = request;
+    return 0;
+}
+static void async_links(ulua_context* context, const ulua_run_limits* limits) {
+    ulua_capability_desc desc;
+    ulua_capability* cap = NULL;
+    ulua_module* module = NULL;
+    ulua_instance* instance = NULL;
+    ulua_host outputs;
+    ulua_diagnostic diagnostic;
+    ulua_value value;
+    uint32_t parameter = ULUA_TYPE_NUMBER, open = 0, recorded = 0, settled = 0;
+    uint64_t task = 0;
+    const char* source = "export async function wait():Promise<number>{return await hostLater(7.5);}export function main():void{}";
+    memset(&desc, 0, sizeof(desc));
+    memset(&outputs, 0, sizeof(outputs));
+    memset(&diagnostic, 0, sizeof(diagnostic));
+    memset(&value, 0, sizeof(value));
+    desc.struct_size = sizeof(desc); desc.name = "hostLater"; desc.name_length = 9;
+    desc.parameter_types = &parameter; desc.parameter_count = 1;
+    desc.result_type = parameter; desc.start = later;
+    outputs.struct_size = sizeof(outputs); diagnostic.struct_size = sizeof(diagnostic);
+    assert(limits->max_open_requests == 256 && limits->reserved2 == 0);
+    assert(ulua_capability_new(context, &desc, &cap) == ULUA_OK);
+    assert(ulua_compile(context, source, strlen(source), &cap, 1, NULL, &module, &diagnostic) == ULUA_OK);
+    assert(ulua_instance_new(context, module, &outputs, limits, &instance, &diagnostic) == ULUA_OK);
+    assert(ulua_call_start(instance, 0, NULL, 0, &task, &diagnostic) == ULUA_OK);
+    assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_PENDING);
+    assert(ulua_instance_requests(instance, &open, &recorded) == ULUA_OK && open == 1 && recorded == 0);
+    value.type = ULUA_TYPE_NUMBER; value.number = 7.5;
+    assert(ulua_request_complete(instance, request_id, &value) == ULUA_OK);
+    assert(ulua_pump(instance, 1, &settled, &diagnostic) == ULUA_OK && settled == 1);
+    assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_OK && value.number == 7.5);
+    assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_INVALID_ARGUMENT);
+    assert(ulua_call_start(instance, 0, NULL, 0, &task, &diagnostic) == ULUA_OK);
+    assert(ulua_request_fail(instance, request_id) == ULUA_OK);
+    assert(ulua_pump(instance, 0, &settled, &diagnostic) == ULUA_HOST_ERROR && settled == 1);
+    assert(strcmp(diagnostic.code, "host:request") == 0);
+    assert(ulua_instance_free(instance) == ULUA_OK);
+    assert(ulua_module_free(module) == ULUA_OK);
+    assert(ulua_capability_free(cap) == ULUA_OK);
+}
 int main(void) {
     ulua_context* context = NULL;
     ulua_module* module = NULL;
@@ -84,6 +130,7 @@ int main(void) {
     assert(strcmp(diagnostic.code,"host:revoked") == 0 && strcmp(diagnostic.message,"hostVoid") == 0);
     assert(ulua_module_free(module) == ULUA_OK);
     assert(ulua_instance_free(instance) == ULUA_OK);
+    async_links(context, &run_limits);
     assert(ulua_context_free(context) == ULUA_OK);
     return 0;
 }

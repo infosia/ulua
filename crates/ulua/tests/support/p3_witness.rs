@@ -12,6 +12,14 @@ pub fn declarations(signatures: &[ulua_compiler::HostSignature]) -> String {
     ) -> i32 {
         1
     }
+    unsafe extern "C" fn unused_start(
+        _: *mut std::ffi::c_void,
+        _: *const Value,
+        _: usize,
+        _: u64,
+    ) -> i32 {
+        1
+    }
     let mut c = ptr::null_mut();
     // SAFETY: This helper serializes a temporary context and owns all descriptor and output storage.
     unsafe {
@@ -24,7 +32,11 @@ pub fn declarations(signatures: &[ulua_compiler::HostSignature]) -> String {
             d.parameter_types = s.parameters.as_ptr();
             d.parameter_count = s.parameters.len();
             d.result_type = s.result;
-            d.function = Some(unused);
+            if s.asynchronous {
+                d.start = Some(unused_start);
+            } else {
+                d.function = Some(unused);
+            }
             let mut cap = ptr::null_mut();
             assert_eq!(ulua_capability_new(c, &d, &mut cap), ULUA_OK);
             grants.push(cap);

@@ -8,3 +8,9 @@ extern "C" void ulua_internal_test_no_interrupt(ulua_vm* vm) { lua_callbacks(vm-
 // Place the budget boundary after the host starts, then restore it for recovery checks.
 extern "C" void ulua_internal_test_exhaust_steps(ulua_vm* vm) { vm->max_steps = vm->steps; }
 extern "C" void ulua_internal_test_restore_steps(ulua_vm* vm, uint64_t steps) { vm->max_steps = steps; }
+#ifdef ULUA_MEASUREMENTS
+// Independent allocator and interrupt totals separate explicit charges from other work.
+extern "C" uint64_t ulua_internal_test_explicit_steps(const ulua_vm* vm) {
+    return vm->steps - vm->allocation_steps - vm->interrupts;
+}
+#endif

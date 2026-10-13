@@ -33,8 +33,13 @@ impl Checker<'_> {
             if parameters.len() > 16 {
                 return Err(self.error(name.span, "C18", "Invalid grant parameter count"));
             }
-            let result = scalar(grant.result)
+            let mut result = scalar(grant.result)
                 .ok_or_else(|| self.error(name.span, "C18", "Invalid grant result"))?;
+            if grant.asynchronous {
+                result = self.types.promise(result);
+                self.uses_async = true;
+                self.uses_exceptions = true;
+            }
             let count = parameters.len();
             let ty = self.types.intern(parameters, result, count);
             let id = self.bindings.len();

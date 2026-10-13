@@ -129,6 +129,10 @@ as values; the request cap and the stop of a failed request follow the
 other. Changes: one pump run per settle (`node` macrotask order, Step 0
 M6); call tasks for async exports.
 
+## Measurements (P4.3)
+
+Implementation record (Codex), Debug, one machine: 15 ABI tests (0.02 s); 14 order programs against `node` with the settle loop (0.54 s); the P4 random target extended to 720 programs, 120 with async host requests, 0 differences (11.3 s); 6 growth shapes: compiler 16 to 64 KiB at most 4.03, `luau-analyze` ceiling at most 2.08 times `dense-assign`, largest output 1,177,800 bytes; all shapes ceiling at most 22.1; `measurements` 1,079 s; `cargo-test` 276 s in Codex's gate run. Decided gaps, now in abi.md §6.4: a settle that stops counts in `*settled`; a completion copy that `max_memory_bytes` refuses gives `limit:memory` and records nothing; a stopped `ulua_call_start` does not write `*task`.
+
 ## Contract pin (P4.3)
 
 At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).

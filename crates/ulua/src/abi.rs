@@ -11,7 +11,7 @@ thread_local! {
     pub(crate) static REFUSE_COMPILER_THREAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-unsafe fn diagnostic_valid(d: *mut Diagnostic) -> bool {
+pub(crate) unsafe fn diagnostic_valid(d: *mut Diagnostic) -> bool {
     // SAFETY: Non-null descriptors must refer to aligned storage of their declared size.
     unsafe {
         d.is_null() || ((*d).struct_size == size_of::<Diagnostic>() as u32 && (*d).reserved == 0)
@@ -461,7 +461,10 @@ pub unsafe extern "C" fn ulua_instance_new(
         let limits = if limits.is_null() {
             default_run()
         } else {
-            if (*limits).struct_size != size_of::<RunLimits>() as u32 || (*limits).reserved != 0 {
+            if (*limits).struct_size != size_of::<RunLimits>() as u32
+                || (*limits).reserved != 0
+                || (*limits).reserved2 != 0
+            {
                 return ULUA_INVALID_ARGUMENT;
             }
             *limits
@@ -563,10 +566,32 @@ pub unsafe extern "C" fn ulua_call(
     result: *mut Value,
     diagnostic: *mut Diagnostic,
 ) -> Status {
+    // SAFETY: The caller provides live instance, arguments, and output storage.
+    unsafe {
+        call_entry(
+            instance,
+            export_index,
+            arguments,
+            argument_count,
+            result,
+            ptr::null_mut(),
+            diagnostic,
+        )
+    }
+}
+pub(crate) unsafe fn call_entry(
+    instance: *mut Instance,
+    export_index: u32,
+    arguments: *const Value,
+    argument_count: usize,
+    result: *mut Value,
+    task: *mut u64,
+    diagnostic: *mut Diagnostic,
+) -> Status {
     // SAFETY: The host supplies a live instance and valid argument and output storage.
     unsafe {
         if instance.is_null()
-            || result.is_null()
+            || (result.is_null() && task.is_null())
             || !diagnostic_valid(diagnostic)
             || (arguments.is_null() && argument_count != 0)
             || argument_count > isize::MAX as usize / size_of::<Value>()
@@ -602,21 +627,33 @@ pub unsafe extern "C" fn ulua_call(
             };
             let mut error = [0; 256];
             let mut value = Value::default();
-            let code = native::ulua_internal_shim_call(
-                (*instance).vm,
-                name.as_ptr(),
-                arguments,
-                argument_count,
-                export.result,
-                &mut value,
-                error.as_mut_ptr(),
-            );
+            let code = if task.is_null() {
+                native::ulua_internal_shim_call(
+                    (*instance).vm,
+                    name.as_ptr(),
+                    arguments,
+                    argument_count,
+                    export.result,
+                    &mut value,
+                    error.as_mut_ptr(),
+                )
+            } else {
+                native::ulua_internal_shim_call_start(
+                    (*instance).vm,
+                    name.as_ptr(),
+                    arguments,
+                    argument_count,
+                    export.result,
+                    task,
+                    error.as_mut_ptr(),
+                )
+            };
             if (*instance).callback.panicked.get() {
                 write_run_diagnostic(diagnostic, "internal", "Output callback panicked");
                 return ULUA_INTERNAL;
             }
             let status = finish(code, &error, diagnostic);
-            if status == ULUA_OK {
+            if status == ULUA_OK && task.is_null() {
                 result.write(value);
             }
             status

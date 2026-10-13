@@ -45,6 +45,7 @@ static int output(lua_State* state) {
     }
     return 0;
 }
+static int start_request(lua_State*, ulua_vm*, const ulua_internal_capability*, const ulua_value*);
 static int host_call(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
     const ulua_internal_capability* cap = static_cast<const ulua_internal_capability*>(lua_touserdata(state, lua_upvalueindex(1)));
@@ -62,6 +63,7 @@ static int host_call(lua_State* state) {
             else if (a->type == ULUA_TYPE_BOOLEAN) a->boolean = lua_toboolean(state, index);
             else a->data = luaL_checklstring(state, index, &a->length);
         }
+        if (cap->desc.start) return start_request(state, vm, cap, arguments);
         ulua_value result = {};
         code = cap->desc.function(cap->desc.userdata, arguments, cap->desc.parameter_count, &result);
         if (!code) {
@@ -117,6 +119,8 @@ static int register_async(lua_State* state) {
     vm->promises = lua_ref(state, 3);
     vm->jobs = lua_ref(state, 4);
     vm->rejections = lua_ref(state, 5);
+    vm->new_promise = lua_ref(state, 6);
+    vm->fulfill = lua_ref(state, 7);
     return 0;
 }
 static void raise_call_error(lua_State* state, ulua_vm* vm) {
@@ -229,6 +233,7 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     }
     return code;
 }
+#include "requests.h"
 struct Load {
     ulua_vm* vm;
     const char* bytecode;
@@ -267,6 +272,7 @@ struct Call {
     size_t count;
     uint32_t result_type;
     ulua_value* result;
+    ulua_task* task;
 };
 static int call(lua_State* state) {
     Call* args = static_cast<Call*>(lua_tolightuserdata(state, 1));
@@ -327,6 +333,11 @@ static int call(lua_State* state) {
             raise_call_error(state, args->vm);
         }
     }
+    if (args->task) {
+        args->task->promise = promise;
+        args->task->reference = lua_ref(state, result_index);
+        return 0;
+    }
     if (promise) {
         lua_rawgetfield(state, result_index, "state");
         const int settled = lua_tointeger(state, -1);
@@ -382,6 +393,7 @@ extern "C" int ulua_internal_shim_compile(const char* source, size_t length, cha
 extern "C" void ulua_internal_shim_bytecode_free(char* bytecode) noexcept { std::free(bytecode); }
 extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     if (!vm) return;
+    discard_records(vm);
     try { if (vm->state) lua_close(vm->state); } catch (...) { }
     std::free(vm);
 }
@@ -394,6 +406,7 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
         if (!vm) { message(error, "Instance allocation failed"); return SHIM_MEMORY; }
         vm->budget = limits->max_memory_bytes > SIZE_MAX ? SIZE_MAX : static_cast<size_t>(limits->max_memory_bytes);
         vm->max_steps = limits->max_steps;
+        vm->max_open_requests = limits->max_open_requests;
         vm->host = *host;
         vm->charging = true;
         vm->state = lua_newstate(allocate, vm);
@@ -439,7 +452,7 @@ extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua
         vm->allocation_steps = 0;
         vm->interrupts = 0;
 #endif
-        Call args = {vm, name, arguments, count, result_type, result};
+        Call args = {vm, name, arguments, count, result_type, result, nullptr};
         int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call, &args), error);
         lua_settop(vm->thread, 0);
         return code;
@@ -447,4 +460,36 @@ extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua
         message(error, "VM call raised a C++ exception");
         return SHIM_INTERNAL;
     }
+}
+
+static int call_start(lua_State* state) {
+    Call* args = static_cast<Call*>(lua_tolightuserdata(state, 1));
+    ulua_vm* vm = args->vm;
+    if (vm->next_task == UINT64_MAX) luaL_error(state, "Task ids exhausted");
+    args->task = static_cast<ulua_task*>(allocate(vm, nullptr, 0, sizeof(ulua_task)));
+    if (!args->task) luaL_error(state, "not enough memory");
+    std::memset(args->task, 0, sizeof(ulua_task));
+    args->task->id = ++vm->next_task;
+    args->task->type = args->result_type;
+    return call(state);
+}
+extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, const char* name, const ulua_value* arguments,
+    size_t count, uint32_t result_type, uint64_t* task, char* error) noexcept {
+    try {
+        begin_run(vm);
+        Call args = {vm, name, arguments, count, result_type, nullptr, nullptr};
+        int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call_start, &args), error);
+        if (code) {
+            if (args.task) {
+                if (args.task->reference) lua_unref(vm->thread, args.task->reference);
+                allocate(vm, args.task, sizeof(ulua_task), 0);
+            }
+        } else {
+            args.task->next = vm->tasks;
+            vm->tasks = args.task;
+            *task = args.task->id;
+        }
+        lua_settop(vm->thread, 0);
+        return code;
+    } catch (...) { message(error, "Task start raised a C++ exception"); return SHIM_INTERNAL; }
 }

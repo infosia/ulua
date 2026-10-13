@@ -398,7 +398,7 @@ mod output_tests {
             if module.asynchronous {
                 // Measure the emitted sections independently of the public byte metadata.
                 let start = generated.find("local __ulua_register:").unwrap();
-                let marker = "__ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs, __ulua_rejections)\n";
+                let marker = "__ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs, __ulua_rejections, __ulua_new, __ulua_fulfill)\n";
                 let end = generated.find(marker).unwrap() + marker.len();
                 assert_eq!(end - start, crate::OUTPUT_ASYNC_PRELUDE_BYTES);
             }

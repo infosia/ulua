@@ -19,6 +19,8 @@ pub const ULUA_BUSY: Status = 5;
 pub const ULUA_INTERNAL: Status = 6;
 /// Poisoned context.
 pub const ULUA_POISONED: Status = 7;
+/// A call task still has a pending promise.
+pub const ULUA_PENDING: Status = 8;
 /// Void type tag.
 pub const ULUA_TYPE_VOID: u32 = 0;
 /// Number type tag.
@@ -76,8 +78,12 @@ pub struct RunLimits {
     pub reserved: u32,
     /// Per-instance allocator budget.
     pub max_memory_bytes: u64,
-    /// Interrupt budget for each operation.
+    /// Step budget for each host-started run.
     pub max_steps: u64,
+    /// Maximum requests open at once. The default is 256.
+    pub max_open_requests: u32,
+    /// Must be zero.
+    pub reserved2: u32,
 }
 impl Default for RunLimits {
     fn default() -> Self {
@@ -86,6 +92,8 @@ impl Default for RunLimits {
             reserved: 0,
             max_memory_bytes: DEFAULT_MEMORY_BYTES,
             max_steps: DEFAULT_STEPS,
+            max_open_requests: 256,
+            reserved2: 0,
         }
     }
 }
@@ -196,6 +204,8 @@ fn copy_text<const N: usize>(out: &mut [c_char; N], text: &str) {
 pub const ULUA_MAX_HOST_PARAMETERS: usize = 16;
 /// A host function must return without unwinding.
 pub type HostFn = unsafe extern "C" fn(*mut c_void, *const Value, usize, *mut Value) -> i32;
+/// An async host start must return without unwinding.
+pub type HostStartFn = unsafe extern "C" fn(*mut c_void, *const Value, usize, u64) -> i32;
 /// Host capability descriptor. Creation copies its name and parameter types.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -217,8 +227,10 @@ pub struct CapabilityDesc {
     pub result_type: u32,
     /// Must be zero.
     pub reserved2: u32,
-    /// Required host function.
+    /// Sync host function. Exactly one of function and start is present.
     pub function: Option<HostFn>,
+    /// Async host start.
+    pub start: Option<HostStartFn>,
     /// Host callback data.
     pub userdata: *mut c_void,
 }
@@ -234,6 +246,7 @@ impl Default for CapabilityDesc {
             result_type: 0,
             reserved2: 0,
             function: None,
+            start: None,
             userdata: std::ptr::null_mut(),
         }
     }

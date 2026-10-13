@@ -22,7 +22,8 @@ pub struct Capability {
 pub(crate) struct State {
     pub(crate) signature: ulua_compiler::HostSignature,
     pub(crate) revoked: Cell<bool>,
-    function: HostFn,
+    function: Option<HostFn>,
+    start: Option<HostStartFn>,
     userdata: *mut c_void,
 }
 pub(crate) struct Binding {
@@ -44,7 +45,8 @@ impl Binding {
             parameter_types: s.signature.parameters.as_ptr(),
             parameter_count: s.signature.parameters.len(),
             result_type: s.signature.result,
-            function: Some(invoke),
+            function: s.function.map(|_| invoke as HostFn),
+            start: s.start.map(|_| invoke_start as HostStartFn),
             userdata,
             ..CapabilityDesc::default()
         };
@@ -148,9 +150,9 @@ pub unsafe extern "C" fn ulua_capability_new(
             {
                 return ULUA_INVALID_ARGUMENT;
             }
-            let Some(function) = d.function else {
+            if d.function.is_some() == d.start.is_some() {
                 return ULUA_INVALID_ARGUMENT;
-            };
+            }
             let Some(name) = bytes(d.name, d.name_length)
                 .and_then(|b| std::str::from_utf8(b).ok())
                 .filter(|n| name_valid(n))
@@ -168,14 +170,14 @@ pub unsafe extern "C" fn ulua_capability_new(
             {
                 return ULUA_INVALID_ARGUMENT;
             }
+            let mut signature =
+                ulua_compiler::HostSignature::new(name, parameters.to_vec(), d.result_type);
+            signature.asynchronous = d.start.is_some();
             let state = Rc::new(State {
-                signature: ulua_compiler::HostSignature::new(
-                    name,
-                    parameters.to_vec(),
-                    d.result_type,
-                ),
+                signature,
                 revoked: Cell::new(false),
-                function,
+                function: d.function,
+                start: d.start,
                 userdata: d.userdata,
             });
             let Ok(mut registry) = (*context).capabilities.try_borrow_mut() else {
@@ -288,7 +290,10 @@ unsafe extern "C" fn invoke(
                 panic!("test panic around host call");
             }
             let s = &binding.state;
-            if (s.function)(s.userdata, arguments, count, result) != 0 {
+            let Some(function) = s.function else {
+                return 5;
+            };
+            if function(s.userdata, arguments, count, result) != 0 {
                 return 11;
             }
             if (*result).r#type != s.signature.result || !value_valid(&*result) {
@@ -297,6 +302,35 @@ unsafe extern "C" fn invoke(
             0
         }));
         match answer {
+            Ok(code) => code,
+            Err(_) => {
+                (*binding.context).poisoned.set(true);
+                5
+            }
+        }
+    }
+}
+
+unsafe extern "C" fn invoke_start(
+    userdata: *mut c_void,
+    arguments: *const Value,
+    count: usize,
+    request: u64,
+) -> i32 {
+    // SAFETY: The instance owns this stable binding; native arguments cover the signature.
+    unsafe {
+        let binding = &*userdata.cast::<Binding>();
+        match catch_unwind(AssertUnwindSafe(|| {
+            let s = &binding.state;
+            let Some(start) = s.start else {
+                return 5;
+            };
+            if start(s.userdata, arguments, count, request) == 0 {
+                0
+            } else {
+                11
+            }
+        })) {
             Ok(code) => code,
             Err(_) => {
                 (*binding.context).poisoned.set(true);

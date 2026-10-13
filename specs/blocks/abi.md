@@ -302,12 +302,13 @@ An async capability has a `start` function. A script call gives a
    follows §4 and the result type; a `STRING` value is valid UTF-8 and
    is copied at the call. A wrong type, an unknown id, or a request
    that has a recorded completion gives `ULUA_INVALID_ARGUMENT` and
-   records nothing. From a host callback of the context, each gives
+   records nothing. A copy that `max_memory_bytes` refuses gives
+   `ULUA_FAILED` with `limit:memory` and records nothing. From a host callback of the context, each gives
    `ULUA_BUSY` (§1.7).
 3. **Pump.** `ulua_pump(instance, max_requests, settled, diagnostic)`
    settles recorded completions in the order of their record, at most
    `max_requests` (0 means no limit), and writes their count to
-   `*settled`. Each settle is one host-started run (collisions.md
+   `*settled`; a settle that stops counts. Each settle is one host-started run (collisions.md
    C19.6): it fulfills the promise of the request with the value, then
    drains the job queue and checks for unhandled rejections (C19.7).
    `max_steps` applies to each settle. A recorded failure stops that
@@ -316,7 +317,8 @@ An async capability has a `start` function. A script call gives a
    returns at once; completions not yet settled stay recorded.
 4. **Call tasks.** `ulua_call_start(instance, export_index, arguments,
    argument_count, task, diagnostic)` runs an export as `ulua_call`
-   does and writes a task id. `ulua_task_result(instance, task, result,
+   does and writes a task id. If the run stops, the call gives the stop
+   and does not write `*task`. `ulua_task_result(instance, task, result,
    diagnostic)` gives `ULUA_PENDING` while the export's promise is
    pending; then the result of §4.7, once. A sync export gives its
    result at the first query. An unknown or consumed task id gives

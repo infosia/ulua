@@ -30,5 +30,33 @@ unsafe extern "C" {
         result: *mut Value,
         error: *mut c_char,
     ) -> i32;
+    pub(crate) fn ulua_internal_shim_call_start(
+        vm: *mut c_void,
+        name: *const c_char,
+        arguments: *const Value,
+        count: usize,
+        result_type: u32,
+        task: *mut u64,
+        error: *mut c_char,
+    ) -> i32;
+    pub(crate) fn ulua_internal_shim_task_result(
+        vm: *mut c_void,
+        task: u64,
+        result: *mut Value,
+        error: *mut c_char,
+    ) -> i32;
+    pub(crate) fn ulua_internal_shim_complete(
+        vm: *mut c_void,
+        request: u64,
+        value: *const Value,
+        error: *mut c_char,
+    ) -> i32;
+    pub(crate) fn ulua_internal_shim_pump(
+        vm: *mut c_void,
+        maximum: u32,
+        settled: *mut u32,
+        error: *mut c_char,
+    ) -> i32;
+    pub(crate) fn ulua_internal_shim_counts(vm: *mut c_void, open: *mut u32, recorded: *mut u32);
     pub(crate) fn ulua_internal_shim_free(vm: *mut c_void);
 }

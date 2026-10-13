@@ -1,6 +1,6 @@
 //! Await shapes compile and run at 4 KiB, 16 KiB, and the source ceiling.
 //! Compiler ratios stay at most eight for four times the source. Each size uses the minimum of three runs.
-//! Costs are reported for twenty-two shapes, including nine P4.2 shapes.
+//! Costs are reported for twenty-eight shapes, including nine P4.2 and six P4.3 shapes.
 //! The witness-time target asserts analyzer ratios. This target also reports ABI costs and output growth.
 #[path = "../support/p41_shapes.rs"]
 mod shapes;
@@ -30,9 +30,12 @@ fn compiler_growth(sizes: [usize; 2]) {
             let mut minimum = f64::INFINITY;
             for _ in 0..3 {
                 let now = Instant::now();
-                let compiled =
-                    ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
-                        .unwrap();
+                let compiled = ulua_compiler::compile_with_grants(
+                    source.as_bytes(),
+                    ulua_compiler::Limits::default(),
+                    &shapes::grants(&source),
+                )
+                .unwrap();
                 minimum = minimum.min(now.elapsed().as_secs_f64());
                 assert!(
                     compiled.luau.len()

@@ -88,6 +88,12 @@ fn c11_cpp17_static_dynamic_and_exports() {
         "ulua_instance_new",
         "ulua_instance_free",
         "ulua_call",
+        "ulua_call_start",
+        "ulua_task_result",
+        "ulua_request_complete",
+        "ulua_request_fail",
+        "ulua_pump",
+        "ulua_instance_requests",
     ]
     .into_iter()
     .map(str::to_owned)

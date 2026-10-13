@@ -2,6 +2,8 @@
 //! Measured single-worker Debug cost: 0.46 seconds for p26_classes.
 #[path = "analyzer.rs"]
 mod analyzer;
+#[path = "requests.rs"]
+mod requests;
 use super::support::Script;
 use std::{
     ffi::{c_char, c_void},
@@ -41,21 +43,40 @@ impl Suite {
         self.run(source, None, Some(("trap:uncaught-exception", node_kind)));
     }
     fn run(&mut self, source: &str, golden: Option<&str>, trap: Option<(&str, &str)>) {
-        let compiled = ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
-            .unwrap_or_else(|d| panic!("{source}: {d:?}"));
-        let mut script = Script::new(source);
-        let mut lines = Vec::<String>::new();
-        let mut host = Host::default();
-        host.userdata = std::ptr::from_mut(&mut lines).cast();
-        host.output = Some(collect);
-        assert_eq!(
-            script.instance_with_host(RunLimits::default(), &host).0,
-            ULUA_OK
-        );
-        let (status, code, _) = script.call(script.index("main"), &[]);
+        let host_requests = source.contains("// grants: hostLater");
+        let grants = if host_requests {
+            requests::signatures(source)
+        } else {
+            vec![]
+        };
+        let compiled = ulua_compiler::compile_with_grants(
+            source.as_bytes(),
+            ulua_compiler::Limits::default(),
+            &grants,
+        )
+        .unwrap_or_else(|d| panic!("{source}: {d:?}"));
+        let (status, code, output, declarations) = if host_requests {
+            requests::run(source, RunLimits::default())
+        } else {
+            let mut script = Script::new(source);
+            let mut lines = Vec::<String>::new();
+            let mut host = Host::default();
+            host.userdata = std::ptr::from_mut(&mut lines).cast();
+            host.output = Some(collect);
+            assert_eq!(
+                script.instance_with_host(RunLimits::default(), &host).0,
+                ULUA_OK
+            );
+            let (status, code, _) = script.call(script.index("main"), &[]);
+            (
+                status,
+                code,
+                lines.iter().map(|s| format!("{s}\n")).collect(),
+                String::new(),
+            )
+        };
         let expected = trap.map_or((ULUA_OK, ""), |(kind, _)| (ULUA_FAILED, kind));
         assert_eq!((status, code.as_str()), expected, "{source}");
-        let output: String = lines.iter().map(|s| format!("{s}\n")).collect();
         if let Some(golden) = golden {
             assert_eq!(output, golden, "{source}");
         }
@@ -63,6 +84,9 @@ impl Suite {
         std::fs::write(path.with_extension("ts"), source).unwrap();
         std::fs::write(path.with_extension("luau"), compiled.luau).unwrap();
         std::fs::write(path.with_extension("expected"), output).unwrap();
+        if host_requests {
+            std::fs::write(path.with_extension("d.ts"), declarations).unwrap();
+        }
         if let Some((_, node_kind)) = trap {
             std::fs::write(path.with_extension("trap"), node_kind).unwrap();
         }

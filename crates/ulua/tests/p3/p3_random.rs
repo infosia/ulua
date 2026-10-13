@@ -6,6 +6,7 @@
 mod analyzer;
 #[path = "../support/p3_declaration_text.rs"]
 mod declarations;
+#[allow(dead_code)]
 #[path = "../../../ulua_corpus/src/fixtures.rs"]
 mod fixtures;
 
