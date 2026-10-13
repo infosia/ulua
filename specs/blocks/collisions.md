@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -663,7 +663,10 @@ says `T`. The checker narrows only where nothing else can run a write:
    a `return`, `break`, or `continue`, after an `if` whose branches all
    exit, after a loop that never ends normally, and a `for` update that
    no edge reaches. `tsc` gives a read there the declared type
-   (TS18047).
+   (TS18047). An arrow function at such a point is rejected (C16).
+   `tsc` checks the body of an arrow that is called where it appears
+   as a part of the enclosing flow, so it narrows nothing in that body
+   (TS18046 for a catch binding, TS18047 for a nullable value).
 9. Only these end an edge: `return`, `throw`, `break`, `continue`, a loop
    that never ends normally, and a literal leaf of a test. A test is
    *logical* when, without its parentheses and `!` operators, it is an
@@ -692,7 +695,7 @@ says `T`. The checker narrows only where nothing else can run a write:
    `break` of the loop is reachable. These are the `tsc` edges,
    measured.
 
-Accept: `a14`, `a42`, `a43`, `a46`, `a47`, `a48`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`.
+Accept: `a14`, `a42`, `a43`, `a46`, `a47`, `a48`. Reject: `r67`, `r68`, `r69`, `r101`, `r103`, `r108`, `r109`, `r110`, `r111`, `r115`, `r124`, `r125`.
 
 ## C17. Exceptions
 
