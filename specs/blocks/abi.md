@@ -185,9 +185,11 @@ typedef struct ulua_capability_desc {
    bytes and matches `[A-Za-z_$][A-Za-z0-9_$]*`. It is not a reserved
    word of ES2022, not `eval` or `arguments` (strict-mode binding
    names: inside a function, `arguments` names the implicit arguments
-   object, and `tsc` gives TS2349 for `arguments()`), and not a prelude
-   name (`print`, `Utf8`, and the
-   global names of the ES2022 library that collisions.md accepts).
+   object, and `tsc` gives TS2349 for `arguments()`), and not a global
+   value name of the ES2022 library files of `tsc` or of the prelude
+   (`print`, `Utf8`). A declaration of such a name in the text of §6.3
+   gives `tsc` TS2300 with the library declaration (`Number`, `Math`),
+   also for a name that collisions.md does not accept.
    There are at most `ULUA_MAX_HOST_PARAMETERS` (16) parameters. Each
    parameter type is `NUMBER`, `BOOLEAN`, or `STRING`. The result type
    is `VOID`, `NUMBER`, `BOOLEAN`, or `STRING`. `function` is not null.

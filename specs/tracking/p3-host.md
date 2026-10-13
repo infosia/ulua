@@ -77,3 +77,4 @@ entry passes.
 ## Gaps
 
 - Contract gap found in implementation: ES2022 does not reserve `eval` and `arguments`. A grant `arguments` called inside a function gives `tsc` TS2349 and a `node` TypeError. abi.md §6.2.1 now rejects both names.
+- Contract gap found in implementation: §6.2.1 allowed ES2022 global value names that collisions.md does not accept (`Number`, `Math`). Their `ulua_declarations` text gives `tsc` TS2300 with the library. §6.2.1 now rejects every global value name of the ES2022 library files and the prelude.
