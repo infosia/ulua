@@ -69,6 +69,15 @@ Reviewer: fresh agent, diff `40f3806..9d0179e`. 1 CRITICAL, 3 MAJOR, 2 MINOR. He
 
 Fix measurements (Codex, Debug): 139 direct C16 rejections and 16 C19 rejections; 5 continuing and 3 ended narrowing cases; 360 accepted random programs (120 assign an enclosing binding while a nested async body is suspended) and 120 unsafe variants rejected, 0 differences against `node`, `tsc`, the ABI, and `luau-analyze -j1`; after a drain memory stop, 50 fresh instances run a sync export and a 1e6-push export. Await in `loop`, `catch`, and `finally` paths ends the narrowings through the existing write and join rules. Witness time: 4 to 16 KiB largest 8.41, ceiling largest 31.5; await shapes 4.94 and 9.13. `cargo-test` 685 s in Codex's gate run.
 
+### P4.1 Phase Review round 2
+
+Reviewer: fresh agent, diff `40f3806..3d8a747`, priority `9d0179e..3d8a747`. 0 CRITICAL, 1 MAJOR, 1 MINOR. The round 1 resolutions hold: 17 unsafe shapes of a narrowing read after a suspension and 26 join and path shapes are rejected with C16 (`node` reads `null` in each); 14 valid shapes are accepted and equal `node`; 700 random nested-async programs: 278 accepted with 0 differences, 422 rejected with C16; 6 stop kinds in a drain clear the queue, a later await of a promise that a stopped run left pending gives `async:pending`, and later calls succeed; memory recovers after a drain memory stop; the other round 1 fixes hold.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The await check of round 1 in `finalizer_jumps` walks the path from the current head to each recorded `break` head, once per enclosing loop and per `finally` with an `await`: `if(x==null)return 0;try{}finally{await t()}` repeated 1,440 times inside 16 loops with a `break` (64 KiB) compiles in 7.61 s Release, 52.3 s Debug at 8 loops; 4 times per doubling of the input; 0.06 s without the `break` | MAJOR | C16.7 holds (O(1) amortized per edge into a join); fix the check; growth shapes with `finally`, `await`, and loop jumps |
+| Every binding named `Promise` gives C19 (`catch (Promise)`, a parameter `Promise`); C19.2 names a class and a type alias, and `tsc` and `node` accept the others | MINOR | Reject only a class or a type alias named `Promise` |
+
 ## Gaps
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
