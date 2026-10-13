@@ -106,7 +106,8 @@ impl Checker<'_> {
         let first_reachable = self.reachable;
         let mut join = narrowing::Join::default();
         if first_reachable {
-            join.include(&self.facts, self.facts.head());
+            let head = self.facts.head();
+            join.include(&mut self.facts, head);
         }
         self.facts.travel(entry);
         let handler = if let Some(catch) = &t.handler {
@@ -142,7 +143,8 @@ impl Checker<'_> {
             let catch_body = S::Block(self.block(&catch.body.body, catch_depth)?);
             self.scopes.pop();
             if self.reachable {
-                join.include(&self.facts, self.facts.head());
+                let head = self.facts.head();
+                join.include(&mut self.facts, head);
             }
             Some((id, Box::new(catch_body)))
         } else {

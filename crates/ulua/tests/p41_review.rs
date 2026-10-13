@@ -120,8 +120,6 @@ fn async_defaults_and_promise_declarations_are_rejected() {
         "type Promise={n:number};",
         "type Promise=number;",
         "type Promise<T>={n:T};",
-        "const Promise=1;",
-        "function Promise():number{return 1;}",
     ];
     for form in forms {
         support::Script::compile(
@@ -142,7 +140,102 @@ fn async_defaults_and_promise_declarations_are_rejected() {
         }
     }
     eprintln!(
-        "P4.1 surface review rejects=16 cost={:.3}s",
+        "P4.1 surface review rejects=14 cost={:.3}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn promise_value_bindings_follow_normal_scopes() {
+    let start = Instant::now();
+    let mut suite = witnesses::Suite::named("P4.1 Promise bindings");
+    for (form, body, expected) in [
+        (
+            "",
+            "try{throw new Error();}catch(Promise){print('c');}",
+            "c\n",
+        ),
+        (
+            "",
+            "const f=(Promise:number):number=>Promise+1;print(`${f(2)}`);",
+            "3\n",
+        ),
+        (
+            "function f(Promise:number):number{return Promise+1;}",
+            "print(`${f(3)}`);",
+            "4\n",
+        ),
+        (
+            "",
+            "let Promise:number=4;Promise+=1;print(`${Promise}`);",
+            "5\n",
+        ),
+        ("const Promise:number=6;", "print(`${Promise}`);", "6\n"),
+        (
+            "function Promise():number{return 7;}",
+            "print(`${Promise()}`);",
+            "7\n",
+        ),
+        (
+            "async function v():Promise<number>{return 8;}",
+            "const Promise=9;const p:Promise<number>=v();print(`${Promise} ${await p}`);",
+            "9 8\n",
+        ),
+        (
+            "const Promise:number=10;",
+            "{const Promise:number=11;print(`${Promise}`);}print(`${Promise}`);",
+            "11\n10\n",
+        ),
+    ] {
+        suite.source(
+            &format!("{form}export async function main():Promise<void>{{{body}}}"),
+            Some(expected),
+        );
+    }
+    suite.finish();
+    eprintln!(
+        "P4.1 Promise bindings accepts={} cost={:.3}s",
+        suite.count,
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn deferred_finalizer_suspensions_preserve_jump_facts() {
+    let start = Instant::now();
+    let mut suite = witnesses::Suite::named("P4.1 deferred joins");
+    let prelude = "async function v():Promise<number>{return 0;}";
+    for jump in ["break", "continue"] {
+        // The jump owns a fact absent from the finalizer's current path.
+        let (unsafe_body, control_output) = if jump == "break" {
+            (
+                "while(true){try{if(x!==null)break;return 0;}finally{await v();}}return x+1;",
+                "2\n",
+            )
+        } else {
+            (
+                "for(let i=0;i<1;i+=x+1){try{if(x!==null)continue;return 0;}finally{await v();}}return 0;",
+                "0\n",
+            )
+        };
+        let source = format!(
+            "{prelude}export function main():void{{let x:number|null=1;const f=async():Promise<number>=>{{{unsafe_body}}};const p=f();x=null;}}"
+        );
+        support::Script::compile(&source, CompileLimits::default(), "C16");
+        let control = unsafe_body.replace("await v();", "");
+        suite.source(&format!("{prelude}export async function main():Promise<void>{{let x:number|null=1;const f=async():Promise<number>=>{{{control}}};const p=f();x=null;print(`${{await p}}`);}}"), Some(control_output));
+        // A later jump must consume the suspension before it contributes a fresh fact.
+        let body = format!(
+            "for(let i=0;i<1;i++){{if(x!==null){{try{{if(c){jump};}}finally{{await v();}}if(x!==null){jump};}}}}return x??0;"
+        );
+        suite.source(&format!("{prelude}async function parent(c:boolean):Promise<number>{{let x:number|null=1;const f=async():Promise<number>=>{{{body}}};const p=f();x=null;return p;}}export async function main():Promise<void>{{print(`${{await parent(true)}} ${{await parent(false)}}`);}}"), Some("0 0\n"));
+    }
+    // A suspension with no pending jump must preserve a later fresh fact at the first jump.
+    suite.source(&format!("{prelude}export async function main():Promise<void>{{let x:number|null=1;const f=async(c:boolean):Promise<number>=>{{while(true){{try{{if(c)return 0;}}finally{{await v();}}if(x==null)return 0;break;}}return x+1;}};print(`${{await f(false)}}`);}}"), Some("2\n"));
+    suite.finish();
+    eprintln!(
+        "P4.1 deferred joins rejects=2 accepts={} cost={:.3}s",
+        suite.count,
         start.elapsed().as_secs_f64()
     );
 }

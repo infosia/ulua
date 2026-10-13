@@ -78,7 +78,11 @@ Reviewer: fresh agent, diff `40f3806..3d8a747`, priority `9d0179e..3d8a747`. 0 C
 | The await check of round 1 in `finalizer_jumps` walks the path from the current head to each recorded `break` head, once per enclosing loop and per `finally` with an `await`: `if(x==null)return 0;try{}finally{await t()}` repeated 1,440 times inside 16 loops with a `break` (64 KiB) compiles in 7.61 s Release, 52.3 s Debug at 8 loops; 4 times per doubling of the input; 0.06 s without the `break` | MAJOR | C16.7 holds (O(1) amortized per edge into a join); fix the check; growth shapes with `finally`, `await`, and loop jumps |
 | Every binding named `Promise` gives C19 (`catch (Promise)`, a parameter `Promise`); C19.2 names a class and a type alias, and `tsc` and `node` accept the others | MINOR | Reject only a class or a type alias named `Promise` |
 
+Fix measurements (Codex): the await check records the suspension as a write on the current edge, so the join rules carry it. Release D16/K1440 (64 KiB) 8.692 s before, 0.072 s after; compiler 16 to 64 KiB ratio at most 4.08 after. The 700 round 1 programs keep their results (278 accepted, 422 C16). Witness time: 200 shapes, 4 to 16 KiB largest 9.86, ceiling largest 38.2. `cargo-test` 710 s in Codex's gate run.
+
 ## Gaps
+
+- Gate cost: `cargo-test` grew from 473 s (P3 close) to 710 s (P4.1 round 2). Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.
 

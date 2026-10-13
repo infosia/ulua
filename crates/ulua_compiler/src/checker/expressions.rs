@@ -43,7 +43,9 @@ impl Checker<'_> {
         expected: Option<Type>,
     ) -> Result<Expr, Diagnostic> {
         self.host_value_form(e)?;
-        if matches!(e, Expression::Identifier(n) if n.name == "Promise") {
+        if matches!(e, Expression::Identifier(n) if n.name == "Promise"
+            && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        {
             return Err(self.error(e.span(), "C19", "the Promise identifier is not a value"));
         }
         let depth = self.descend(depth, e.span())?;
@@ -314,14 +316,16 @@ impl Checker<'_> {
                 let a = self.expr_as(&c.consequent, depth, false, expected)?;
                 let mut join = narrowing::Join::default();
                 if self.reachable {
-                    join.include(&self.facts, self.facts.head());
+                    let head = self.facts.head();
+                    join.include(&mut self.facts, head);
                 }
                 self.facts.restore(mark);
                 let false_edge = self.edge(&test, false);
                 self.reachable = incoming && false_edge;
                 let b = self.expr_as(&c.alternate, depth, false, expected)?;
                 if self.reachable {
-                    join.include(&self.facts, self.facts.head());
+                    let head = self.facts.head();
+                    join.include(&mut self.facts, head);
                 }
                 if join.finish(&mut self.facts).is_none() {
                     self.facts.restore(mark);
@@ -486,7 +490,9 @@ impl Checker<'_> {
                 return Err(self.error(e.span(), "C2", "Optional field only precedes coalescing"));
             }
             Expression::NewExpression(new) => {
-                if matches!(&new.callee, Expression::Identifier(n) if n.name == "Promise") {
+                if matches!(&new.callee, Expression::Identifier(n) if n.name == "Promise"
+                    && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
                     return Err(self.error(
                         new.span,
                         "C19",

@@ -58,9 +58,20 @@ type MutableFacts = HashMap<u64, HashMap<usize, std::collections::HashSet<usize>
 pub(super) struct Join {
     previous: Option<usize>,
     merged: HashMap<usize, Option<Narrowing>>,
+    // A join belongs to one body, so all deferred suspensions use the same owner.
+    suspended_owner: Option<usize>,
 }
 impl Join {
-    pub(super) fn include(&mut self, facts: &Facts, head: usize) {
+    pub(super) fn include(&mut self, facts: &mut Facts, head: usize) {
+        if self.suspended_owner.is_some()
+            && let Some(previous) = self.previous
+        {
+            // This move shares the cost of the divergent tails between consecutive inputs.
+            let saved = facts.head();
+            facts.travel(previous);
+            self.apply_suspension(facts);
+            facts.travel(saved);
+        }
         if let Some(previous) = self.previous {
             for (id, a, b) in facts.differences(previous, head) {
                 let value = self.merged.entry(id).or_insert(a);
@@ -74,19 +85,23 @@ impl Join {
             self.merged.insert(id, None);
         }
     }
-    pub(super) fn end_enclosing(&mut self, facts: &mut Facts, owner: usize) {
-        if let Some(head) = self.previous {
-            let saved = facts.head();
-            facts.travel(head);
+    // Repeated finalizers update one marker without a move to an old jump head.
+    pub(super) fn end_enclosing(&mut self, owner: usize) {
+        if self.previous.is_some() {
+            self.suspended_owner = Some(owner);
+        }
+    }
+    fn apply_suspension(&mut self, facts: &Facts) {
+        if let Some(owner) = self.suspended_owner.take() {
             for id in facts.enclosing(owner) {
                 self.invalidate(id);
             }
-            facts.travel(saved);
         }
     }
-    pub(super) fn finish(&self, facts: &mut Facts) -> Option<usize> {
+    pub(super) fn finish(&mut self, facts: &mut Facts) -> Option<usize> {
         let head = self.previous?;
         facts.travel(head);
+        self.apply_suspension(facts);
         for (id, value) in &self.merged {
             facts.set(*id, *value);
         }

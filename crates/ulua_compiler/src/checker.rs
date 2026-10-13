@@ -189,7 +189,6 @@ impl Checker<'_> {
         self.checked_type_depth(ty, t.span())
     }
     fn bind(&mut self, name: &str, binding: ir::Binding, span: Span) -> Result<usize, Diagnostic> {
-        self.promise_declaration(name, span)?;
         if strict::binding(name) {
             return Err(self.error(span, "C11", "Binding name is forbidden in a strict module"));
         }

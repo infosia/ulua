@@ -421,7 +421,8 @@ impl Checker<'_> {
                 let first_reachable = self.reachable && !narrowing::exits(&a);
                 let mut join = narrowing::Join::default();
                 if first_reachable {
-                    join.include(&self.facts, self.facts.head());
+                    let head = self.facts.head();
+                    join.include(&mut self.facts, head);
                 }
                 self.facts.restore(mark);
                 let false_edge = self.edge(&test, false);
@@ -433,7 +434,8 @@ impl Checker<'_> {
                     .transpose()?;
                 let second_reachable = self.reachable && !b.as_ref().is_some_and(narrowing::exits);
                 if second_reachable {
-                    join.include(&self.facts, self.facts.head());
+                    let head = self.facts.head();
+                    join.include(&mut self.facts, head);
                 }
                 if join.finish(&mut self.facts).is_none() {
                     self.facts.restore(mark);

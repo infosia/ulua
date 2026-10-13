@@ -198,7 +198,8 @@ impl Checker<'_> {
         } else {
             &mut context.exit
         };
-        join.include(&self.facts, self.facts.head());
+        let head = self.facts.head();
+        join.include(&mut self.facts, head);
     }
     pub(super) fn break_edge(&mut self) {
         self.loop_edge(false);
@@ -210,7 +211,7 @@ impl Checker<'_> {
         self.continue_edge();
         self.reachable = self
             .loop_facts
-            .last()
+            .last_mut()
             .and_then(|c| c.next.finish(&mut self.facts))
             .is_some();
     }
@@ -222,7 +223,8 @@ impl Checker<'_> {
         if let Some(test) = test {
             let possible = self.edge(test, false);
             if context.reachable && possible {
-                context.exit.include(&self.facts, self.facts.head());
+                let head = self.facts.head();
+                context.exit.include(&mut self.facts, head);
             }
         }
         let exit = context.exit.finish(&mut self.facts);
@@ -251,8 +253,8 @@ impl Checker<'_> {
         if self.suspends(span) {
             // A jump can retain a fact that the finalizer's await already removed.
             for context in &mut self.loop_facts {
-                context.exit.end_enclosing(&mut self.facts, self.owner);
-                context.next.end_enclosing(&mut self.facts, self.owner);
+                context.exit.end_enclosing(self.owner);
+                context.next.end_enclosing(self.owner);
             }
         }
         let begin = self.assignments.partition_point(|a| a.1 < span.start);

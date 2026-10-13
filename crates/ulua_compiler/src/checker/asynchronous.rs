@@ -8,7 +8,7 @@ impl Checker<'_> {
             return Err(self.error(
                 span,
                 "C19",
-                "A script declaration named Promise is rejected",
+                "A class or type alias named Promise is rejected",
             ));
         }
         Ok(())
