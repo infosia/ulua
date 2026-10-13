@@ -80,6 +80,15 @@ Reviewer: fresh agent, diff `40f3806..3d8a747`, priority `9d0179e..3d8a747`. 0 C
 
 Fix measurements (Codex): the await check records the suspension as a write on the current edge, so the join rules carry it. Release D16/K1440 (64 KiB) 8.692 s before, 0.072 s after; compiler 16 to 64 KiB ratio at most 4.08 after. The 700 round 1 programs keep their results (278 accepted, 422 C16). Witness time: 200 shapes, 4 to 16 KiB largest 9.86, ceiling largest 38.2. `cargo-test` 710 s in Codex's gate run.
 
+### P4.1 Phase Review round 3
+
+Reviewer: fresh agent, diff `40f3806..b7ff68a`, priority `b7ff68a`. 0 CRITICAL, 1 MAJOR, 1 MINOR. Held: the round 2 check gives the verdicts and positions of round 1 on 22 hand shapes and 3,500 random programs (1,237 accepted, each equal to `node`, `luau-analyze` clean; 2,263 C16); 14 unsafe and 4 valid hand shapes; compiler time 16 to 64 KiB ratio 3.9 to 4.1 for 13 await, loop, and finalizer shapes (Release, 0.0315 s at 64 KiB); the round 2 regression shape 0.026 s (8.35 s at `3d8a747`); output at most 64.0 bytes per source byte; 13 `Promise` value bindings equal `node`; 16 await positions.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `luau-analyze -j1` time of `try` inside nested loops is past the §3.10 ceiling bound: 17 loops with `if(c)break;` around `try{}finally{await t()}` repeated to 64 KiB take 21.89 s, 70.6 times `dense-assign` (0.31 s); `try{r+=await t();}catch{}` 67.5 times; the sync `try{}finally{r=t()}` 131 times and 4 to 16 KiB ratio 14.9; time grows with the loop depth (5.67 s at 0 loops, 21.89 s at 17); output does not (3.85 MB); the product runs each in 0.1 s. The class dates from P2.7 | MAJOR | §3.10: change the lowering, or add a C15 bound; growth shapes with `try` under nested loops |
+| An `await` in a `finally` also ends narrowings on loop jumps that do not pass it (4 programs that `tsc` and `node` accept give C16); the same at `3d8a747` | MINOR | C16.4 states the conservative rule |
+
 ## Gaps
 
 - Gate cost: `cargo-test` grew from 473 s (P3 close) to 710 s (P4.1 round 2). Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.

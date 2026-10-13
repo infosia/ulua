@@ -644,7 +644,9 @@ says `T`. The checker narrows only where nothing else can run a write:
    suspends it, and the enclosing activation can run and assign the
    binding: each `await` of the nested body ends the narrowings of the
    `let` bindings and the parameters of the enclosing functions on its
-   path (C19). The narrowing of a `let` binding or
+   path (C19). The check is conservative: an `await` in a `finally`
+   block also ends them on each jump into the join of an enclosing
+   loop, also a jump that does not pass the `await`. The narrowing of a `let` binding or
    a parameter does not continue
    into a nested function or arrow body. The body can run after a later
    assignment. The narrowing of a `const` binding continues into an
