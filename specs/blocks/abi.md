@@ -228,7 +228,8 @@ typedef struct ulua_capability_desc {
    releases the host reference. The pointer is then invalid. A module
    or instance that holds the capability keeps its own reference and
    sees it as revoked.
-8. **Costs.** Each host function call charges one step. The time and
+8. **Costs.** Each host function call charges one step, in addition to
+   the step of the Luau call instruction. The time and
    the memory inside `function` are outside the run limits: the host
    is trusted (`CLAUDE.md` invariant 2).
 9. `function` does not unwind: a C++ exception or a Rust panic that

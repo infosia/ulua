@@ -91,6 +91,19 @@ error, so the primary agent read the logs and the tree):
   ceiling ratio 31.2 (bound 50); P3 shapes `P3-protected` 24.7,
   `P3-arrows` 2.5, `P3-declarations` 1.1. Cost 649.9 s Debug.
 
+### P3 Phase Review round 1
+
+Reviewer: fresh agent, diff `1fba8ff..282d71f`. 0 CRITICAL, 0 MAJOR, 6 MINOR. Held: 120 hand probes and 150 random programs against `node`, `tsc` with the generated declarations, and `luau-analyze -j1` (0 differences outside C5); 40 value-escape forms rejected; about 30 shadowing forms; 18 stop probes (host error, malformed result, revocation, memory) run no catch and no finally; about 60 ABI probes (results, string sizes, BUSY from all 14 context functions in a callback, free and revoke, 25 invalid descriptors, compile grants, `ulua_declarations` text and edge cases); the name list equals `tsc` `getSymbolsInScope` over ES2022 and the prelude (62 names); the dynamic library exports exactly the 18 functions of §7.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| 8,100 called grants (63,722 B) compile, and `ulua_instance_new` gives `limit:stack` each time: one chunk argument per grant reaches `LUAI_MAXCSTACK` (8,000); 7,990 run | MINOR | pipeline.md Rev 29 §4.10: one grant table as one chunk argument |
+| Library names outside the surface (`Number("1")`, `JSON.stringify`, `parseInt`, `Date.now()`, `globalThis`) give C18; C18.3 names only unknown names | MINOR | C18.3: these give C11; the checker reads the library name list |
+| `namespace N {}` and `module M {}` without `declare` give C18 | MINOR | C18.3: C11 |
+| A host call costs 2 steps (the Luau call instruction and the host charge); abi.md §6.2.8 said one | MINOR | abi.md §6.2.8 states both; a test measures with the interrupt on |
+| The unused-field check accepts `number = -0.0` (§4.1: zero) | MINOR | Fix: compare the bits |
+| `string_exports_compile` repeats one assertion; `new hostAdd(1, 2)` says "Unknown identifier" | MINOR | Fix |
+
 ## Failures before the fix
 
 ## Gaps

@@ -814,7 +814,10 @@ identity where JavaScript compares the global binding.
    is rejected (C18).
 3. **Unknown names.** A reference to a name that no binding of the
    script, no prelude or library name, and no grant declares is
-   rejected (C18). `tsc` gives TS2304 for it.
+   rejected (C18). `tsc` gives TS2304 for it. A library name that the
+   surface does not accept (`Number`, `JSON`, `parseInt`) gives C11,
+   as before P3. A `namespace` or `module` declaration without
+   `declare` gives C11.
 4. **Calls only.** A reference to a host function is the callee of a
    `CallExpression`, without `?.`, in any position where a call is
    accepted, also in an arrow, a method, a `try` block, and a

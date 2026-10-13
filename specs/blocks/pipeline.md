@@ -30,6 +30,7 @@ Rev 26: §3.10 witness time of every growth shape, §4.9 protected closure
 upvalues (P2.7 review 2).
 Rev 27: §3.10 witness time at the source ceiling (P2.7 review 2).
 Rev 28: §4.10 host functions, §8 grants (P3).
+Rev 29: §4.10 one grant table (P3 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -214,10 +215,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    6.4 s at 400, and 65 s at 800 statements.
 10. **Host functions.** The shim makes one native closure per grant
    that the module calls (collisions.md C18, `abi.md` §6.2). It
-   passes the closures as chunk arguments after the trap function, in
-   grant order. The chunk reads each one from `...` into a
-   generated local with its Luau function type, as for the trap
-   function (§4.8): no global and no `getfenv`. The closure holds the
+   passes them in one table, in grant order, as one chunk argument
+   after the trap function: a chunk argument per grant reaches the
+   Luau C-stack limit (`LUAI_MAXCSTACK`, 8,000) at 8,100 grants inside
+   the source ceiling. The chunk reads each closure from the table
+   into a generated local with its Luau function type, as for the
+   trap function (§4.8): no global and no `getfenv`. The closure holds the
    capability reference of the instance. A call checks the revocation
    first, then converts the arguments, calls the C++ trampoline of
    §4.5, checks and copies the result, and raises a stop on an error.
