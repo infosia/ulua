@@ -1,7 +1,8 @@
 # C ABI
 
-Status: Rev 5, 2026-10-13. ABI version 1, experimental: no binary
-compatibility promise until P3 closes.
+Status: Rev 6, 2026-10-13. ABI version 1. No binary compatibility
+rule applies (D23): a change of this file changes `include/ulua.h`, the
+implementation, and the tests in one commit.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 Rev 2: §1.10, §8 (P1 Phase Review round 2).
 Rev 3: §1.10 names the dynamic library (round 3).
@@ -9,6 +10,7 @@ Rev 4: §3 run messages (round 8).
 Rev 5: §1, §3, §4, §6, §7, §8 host capabilities, string values, link
 tests (P3; D20 to D22). §6.2 grants without script declarations, §6.3
 host declarations (D20 revised).
+Rev 6: status, no compatibility rule (D23).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family

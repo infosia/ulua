@@ -63,7 +63,7 @@ pub(crate) fn check<'a>(
                 Statement::TSEnumDeclaration(d) => d.declare,
                 Statement::TSNamespaceDeclaration(d) => d.declare,
                 Statement::TSExternalModuleDeclaration(d) => d.declare,
-                Statement::TSGlobalDeclaration(_) => true,
+                Statement::TSGlobalDeclaration(d) => d.declare,
                 _ => false,
             },
             Node::Declaration(d) => match d {
@@ -73,7 +73,7 @@ pub(crate) fn check<'a>(
                 Declaration::TSEnumDeclaration(d) => d.declare,
                 Declaration::TSNamespaceDeclaration(d) => d.declare,
                 Declaration::TSExternalModuleDeclaration(d) => d.declare,
-                Declaration::TSGlobalDeclaration(_) => true,
+                Declaration::TSGlobalDeclaration(d) => d.declare,
                 _ => false,
             },
             _ => false,
@@ -89,17 +89,20 @@ pub(crate) fn check<'a>(
         if matches!(
             &node,
             Node::Statement(
-                Statement::TSNamespaceDeclaration(_) | Statement::TSExternalModuleDeclaration(_)
+                Statement::TSNamespaceDeclaration(_)
+                    | Statement::TSExternalModuleDeclaration(_)
+                    | Statement::TSGlobalDeclaration(_)
             ) | Node::Declaration(
                 Declaration::TSNamespaceDeclaration(_)
                     | Declaration::TSExternalModuleDeclaration(_)
+                    | Declaration::TSGlobalDeclaration(_)
             )
         ) {
             return Err(Diagnostic::at(
                 source,
                 offset as usize,
                 "C11",
-                "Namespace and module forms are outside the surface",
+                "Namespace, module, and global forms are outside the surface",
             ));
         }
         match node {

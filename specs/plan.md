@@ -138,6 +138,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D20 | The grant list is the only record of a host function. The library writes a `.d.ts` of `declare function` lines from a grant list; the host gives it to script authors and to `tsc`. A script declares no host function: every `declare` form is rejected (revised the same day; first form: a `declare function` in the script source) | 2026-10-13 | `collisions.md` C18, `abi.md` §6.3; owner decision at the P3 start, after a comparison with the owner's prior project |
 | D21 | The host binds its capabilities at compile time: `ulua_compile` takes the grant list, and each grant is a host function name of the script with the grant's signature. A grant can be revoked; a later call of it stops the run | 2026-10-13 | `abi.md` §6.2; owner decision at the P3 start |
 | D22 | A host function error stops the run with `ULUA_HOST_ERROR`. A script cannot catch it (C17.7) | 2026-10-13 | `abi.md` §6; owner decision at the P3 start |
+| D23 | The C ABI has no binary compatibility rule and no experimental status: the project has one user. An ABI change updates `abi.md`, `include/ulua.h`, the implementation, and the tests in one commit | 2026-10-13 | `abi.md` Rev 6; owner decision at the P3 close |
 
 ## 9. Corrections and revisions
 

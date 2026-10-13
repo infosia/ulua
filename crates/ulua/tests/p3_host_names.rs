@@ -1,7 +1,7 @@
-//! Compare the fixed ABI name list with the ES2022 library and prelude at test time.
+//! Compare the fixed name lists with the ES2022 library and prelude at test time.
 // External ABI descriptors are non-exhaustive and require field assignments.
 #![allow(clippy::field_reassign_with_default)]
-#[path = "../src/host_names.rs"]
+#[path = "../../ulua_compiler/src/host_names.rs"]
 mod names;
 use std::{ffi::c_void, path::PathBuf, process::Command, ptr, time::Instant};
 use ulua::*;
@@ -27,7 +27,9 @@ fn global_names_match_tsc_and_have_direct_abi_rejections() {
         String::from_utf8_lossy(&node.stderr)
     );
     let measured = String::from_utf8(node.stdout).unwrap();
-    assert_eq!(names::GLOBAL_NAMES, measured.lines().collect::<Vec<_>>());
+    let (values, types) = measured.split_once("\n\n").unwrap();
+    assert_eq!(names::GLOBAL_NAMES, values.lines().collect::<Vec<_>>());
+    assert_eq!(names::GLOBAL_TYPE_NAMES, types.lines().collect::<Vec<_>>());
     let mut c = ptr::null_mut();
     // SAFETY: This fixture owns the context, descriptors, and outputs and serializes every call.
     unsafe {
@@ -65,8 +67,9 @@ fn global_names_match_tsc_and_have_direct_abi_rejections() {
         assert_eq!(ulua_context_free(c), ULUA_OK);
     }
     eprintln!(
-        "P3 global value names={} direct_invalid={} valid_near_misses=7 cost={:.3}s",
+        "P3 global value names={} type_only={} direct_invalid={} valid_near_misses=7 cost={:.3}s",
         names::GLOBAL_NAMES.len(),
+        names::GLOBAL_TYPE_NAMES.len(),
         names::GLOBAL_NAMES.len() + 1,
         now.elapsed().as_secs_f64()
     );

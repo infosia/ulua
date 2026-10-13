@@ -180,3 +180,88 @@ fn host_construction_states_the_call_only_rule() {
     assert_eq!(diagnostic.code, "C18");
     assert_eq!(diagnostic.message, "A host function is only called");
 }
+
+#[test]
+fn p3_review2_implicit_arguments_are_c11_and_unknown_objects_are_c18() {
+    let start = std::time::Instant::now();
+    for (body, code) in [
+        ("const n:number=arguments.length;", "C11"),
+        ("const n:number=missingArguments.length;", "C18"),
+    ] {
+        let source = format!("export function main():void{{{body}}}");
+        assert_eq!(
+            compile(source.as_bytes(), Limits::default())
+                .unwrap_err()
+                .code,
+            code,
+            "{body}"
+        );
+    }
+    eprintln!(
+        "P3 review2 arguments compiles=2 cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn p3_review2_type_only_library_values_are_c11_and_unknown_names_are_c18() {
+    let start = std::time::Instant::now();
+    for name in ["Iterator", "Record", "PropertyKey"] {
+        for (body, code) in [
+            (format!("const x={name};"), "C11"),
+            (format!("{name}();"), "C11"),
+            (format!("{name}=1;"), "C11"),
+            (format!("const x=missing{name};"), "C18"),
+        ] {
+            let source = format!("export function main():void{{{body}}}");
+            assert_eq!(
+                compile(source.as_bytes(), Limits::default())
+                    .unwrap_err()
+                    .code,
+                code,
+                "{body}"
+            );
+        }
+        let source = format!("export function main():void{{const {name}=1;print(`${{{name}}}`);}}");
+        assert!(
+            compile(source.as_bytes(), Limits::default()).is_ok(),
+            "{name}"
+        );
+        let source = format!("export function main():void{{{name}();}}");
+        let compiled = compile_with_grants(
+            source.as_bytes(),
+            Limits::default(),
+            &[HostSignature::new(name, vec![], 0)],
+        )
+        .unwrap();
+        assert_eq!(compiled.hosts, [name]);
+    }
+    eprintln!(
+        "P3 review2 type-only compiles=18 cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn p3_review2_global_blocks_use_c18_only_with_declare() {
+    let start = std::time::Instant::now();
+    for (form, code) in [("global{}", "C11"), ("declare global{}", "C18")] {
+        for source in [
+            format!("{form}export function main():void{{}}"),
+            format!("export {form}export function main():void{{}}"),
+            format!("export function main():void{{{form}}}"),
+        ] {
+            assert_eq!(
+                compile(source.as_bytes(), Limits::default())
+                    .unwrap_err()
+                    .code,
+                code,
+                "{source}"
+            );
+        }
+    }
+    eprintln!(
+        "P3 review2 global compiles=6 cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}

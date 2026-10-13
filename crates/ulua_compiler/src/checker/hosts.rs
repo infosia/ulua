@@ -105,5 +105,7 @@ impl Checker<'_> {
 }
 
 pub(super) fn known_global(name: &str) -> bool {
-    crate::GLOBAL_NAMES.contains(&name)
+    name == "arguments"
+        || crate::GLOBAL_NAMES.contains(&name)
+        || crate::host_names::GLOBAL_TYPE_NAMES.contains(&name)
 }
