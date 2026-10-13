@@ -84,6 +84,14 @@ Fix measurements (Codex): the promise helpers keep the nullable type argument; 3
 
 Gate cost: the integration tests moved from 55 binaries to 6 (no name, input, assertion, or cost statement changed; the S3 allocator measurement keeps its own binary). After `cargo clean -p ulua`, `cargo test --quiet --workspace`: 415.1 s before, 241.5 s after (test run time 280.1 s to 208.7 s; build and link 135.1 s to 32.8 s). `cargo-test` in Codex's gate run: 226 s. `measurements` 887 s.
 
+### P4.2 Phase Review round 2
+
+Reviewer: fresh agent, diff `bbdcb7c..f6230dd`, priority `f6230dd`. 0 CRITICAL, 0 MAJOR, 1 MINOR. Held: the test move maps 55 old targets one to one to 6 binaries; 131 `#[test]` functions before, 133 after (2 new), no name lost; 8 feature gates before and after; the allocator measurement and the witness-time test keep their own binaries; scratch names stay unique within each binary; all 172 tests pass with `--features measurements` (858 s). Nullable helpers: 8 programs over 11 type forms and 5 edge forms equal `node` and pass `luau-analyze -j1`. C19.4: 41 statement forms. Unhandled rejection order through derived promises equals `node`. Nullable chains: 4 to 16 KiB ratio at most 3.0.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C19.4 counts method and function types as promise containment: `new Game();` with an `async` method and `factory();` returning `() => Promise<number>` give C19; `tsc` accepts and `node` prints `start`; `aed0365` accepted it | MINOR | C19.4: a function type and a method hold no promise value |
+
 ## Contract pin (P4.2)
 
 At `3ea2b96` (P4.1 compiler, as at `bbdcb7c`), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.

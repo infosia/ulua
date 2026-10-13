@@ -888,8 +888,12 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    accepts it. The result has type `T`; an `await` of
    `Promise<void>` is an `ExpressionStatement`.
 4. **No floating promise.** An `ExpressionStatement` whose value has
-   a type that contains a `Promise` type (`Promise<T>`, `Promise<T>[]`,
-   a record with a promise field) is rejected (C19): the script stores, passes,
+   a type that holds a promise value (`Promise<T>`, `Promise<T>[]`, a
+   record or a class with a promise field, at any depth) is rejected
+   (C19). A function type and a method hold no promise value: a
+   statement `new Game();` whose class has an `async` method, and a
+   statement whose value is a function that gives a promise, are
+   accepted: the script stores, passes,
    returns, or awaits each promise. `tsc` accepts it.
 5. **Start and settle.** A call of an `async` function runs its body
    at once, up to its first `await` or its end, and gives its
