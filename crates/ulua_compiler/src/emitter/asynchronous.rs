@@ -6,7 +6,7 @@ pub(super) const PRELUDE: &str = r#"type __ulua_Promise<T> = {
 }
 type __ulua_Rejection = {reason: __ulua_Error?, handled: boolean}
 local __ulua_stop: (unknown) -> () = select(4, ...)
-local __ulua_async_register: (any, any, any, any) -> () = select(5, ...)
+local __ulua_async_register: (any, any, any, any, any) -> () = select(5, ...)
 local __ulua_promises: {[any]: boolean} = setmetatable({}, {__mode = "k"})
 local __ulua_jobs: {() -> ()} = {}
 local __ulua_head: number = 1
@@ -98,5 +98,5 @@ local function __ulua_drain(): ()
     table.clear(__ulua_rejections)
     if first ~= nil then error(first, 0) end
 end
-__ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs)
+__ulua_async_register(__ulua_drain, __ulua_reset, __ulua_promises, __ulua_jobs, __ulua_rejections)
 "#;

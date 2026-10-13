@@ -45,6 +45,14 @@ impl Checker<'_> {
             return Err(self.error(call.span, "C6", "Array method argument count is rejected"));
         }
         if matches!(name, "indexOf" | "lastIndexOf" | "includes")
+            && self
+                .types
+                .promise_value(self.types.inner(element).unwrap_or(element))
+                .is_some()
+        {
+            return Err(self.error(call.span, "C19", "Search of promise elements is rejected"));
+        }
+        if matches!(name, "indexOf" | "lastIndexOf" | "includes")
             && self.types.function(element).is_some()
         {
             return Err(self.error(call.span, "C6", "Search of function elements is rejected"));
@@ -232,6 +240,8 @@ mod tests {
                     fields: Default::default(),
                     facts: Default::default(),
                     assignments: vec![],
+                    suspensions: HashMap::new(),
+                    source_owner: u32::MAX,
                     captured_writes: Default::default(),
                     binding_starts: Default::default(),
                     methods: Default::default(),

@@ -47,6 +47,7 @@ impl Checker<'_> {
                 declaration: true,
             });
             self.facts.mutable.push(false);
+            self.facts.owners.push(0);
             self.host_ids.insert(name.name.to_string(), id);
             self.hosts.push((id, name.name.to_string()));
             id

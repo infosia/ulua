@@ -154,6 +154,7 @@ impl Checker<'_> {
             }
         }
         self.default_scopes.push((self.scopes.len(), names));
+        let async_body = std::mem::replace(&mut self.async_body, false);
         for (p, (id, default)) in params.items.iter().zip(&mut out) {
             if let Some(e) = &p.initializer {
                 let value = self.expr_as(e, depth, false, self.bindings[*id].ty)?;
@@ -162,6 +163,7 @@ impl Checker<'_> {
             }
         }
         self.default_scopes.pop();
+        self.async_body = async_body;
         Ok(out)
     }
 
@@ -177,7 +179,7 @@ impl Checker<'_> {
             .and_then(|ty| self.types.function(ty))
             .map(|f| f.result)
             .ok_or_else(|| self.unsupported(f.span))?;
-        let state = self.enter_function(id, result, false);
+        let state = self.enter_function(id, result, false, f.span.start);
         self.async_body = f.r#async;
         self.result = self.body_result(result);
         let b = f.body.as_ref().ok_or_else(|| self.unsupported(f.span))?;
@@ -248,7 +250,7 @@ impl Checker<'_> {
             a.span,
         )?;
         self.scopes.pop();
-        let state = self.enter_function(id, result.unwrap_or(Type::Void), true);
+        let state = self.enter_function(id, result.unwrap_or(Type::Void), true, a.span.start);
         self.async_body = a.r#async;
         self.result = self.body_result(result.unwrap_or(Type::Void));
         let parameters = self.parameters(&a.params, &[], depth)?;
@@ -335,6 +337,7 @@ impl Checker<'_> {
         id: usize,
         result: Type,
         inherit: bool,
+        source_owner: u32,
     ) -> FunctionState {
         let state = FunctionState {
             reachable: std::mem::replace(&mut self.reachable, true),
@@ -343,6 +346,7 @@ impl Checker<'_> {
             mutable_fact_floor: self.facts.mutable_floor,
             loop_facts: std::mem::take(&mut self.loop_facts),
             owner: self.owner,
+            source_owner: std::mem::replace(&mut self.source_owner, source_owner),
             result: std::mem::replace(&mut self.result, result),
             async_body: std::mem::replace(&mut self.async_body, false),
             loops: std::mem::replace(&mut self.loops, 0),
@@ -369,6 +373,7 @@ impl Checker<'_> {
         self.loop_facts = state.loop_facts;
         self.scopes.pop();
         self.owner = state.owner;
+        self.source_owner = state.source_owner;
         self.result = state.result;
         self.async_body = state.async_body;
         self.loops = state.loops;
@@ -383,6 +388,7 @@ pub(super) struct FunctionState {
     mutable_fact_floor: u64,
     loop_facts: Vec<narrowing::LoopFacts>,
     owner: usize,
+    source_owner: u32,
     result: Type,
     async_body: bool,
     loops: usize,

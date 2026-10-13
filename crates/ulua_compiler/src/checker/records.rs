@@ -32,6 +32,7 @@ impl Checker<'_> {
                 self.reserve_class(class)?;
             }
             if let Statement::TSTypeAliasDeclaration(a) = s {
+                self.promise_declaration(a.id.name.as_str(), a.span)?;
                 if strict::binding(a.id.name.as_str())
                     && !matches!(a.id.name.as_str(), "eval" | "arguments")
                 {

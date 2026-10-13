@@ -67,6 +67,8 @@ Reviewer: fresh agent, diff `40f3806..9d0179e`. 1 CRITICAL, 3 MAJOR, 2 MINOR. He
 | An async export that rejects with `A` while another promise rejects unhandled with `B`: Ulua reports `B`, the `node` runner `A` | MINOR | C19.7: the export's own rejection gives the message |
 | `indexOf`, `includes`, `lastIndexOf` over `Promise<number>[]` compare promise identity; C19.2 rejects promise equality | MINOR | C19.2: array search over promise elements is rejected |
 
+Fix measurements (Codex, Debug): 139 direct C16 rejections and 16 C19 rejections; 5 continuing and 3 ended narrowing cases; 360 accepted random programs (120 assign an enclosing binding while a nested async body is suspended) and 120 unsafe variants rejected, 0 differences against `node`, `tsc`, the ABI, and `luau-analyze -j1`; after a drain memory stop, 50 fresh instances run a sync export and a 1e6-push export. Await in `loop`, `catch`, and `finally` paths ends the narrowings through the existing write and join rules. Witness time: 4 to 16 KiB largest 8.41, ceiling largest 31.5; await shapes 4.94 and 9.13. `cargo-test` 685 s in Codex's gate run.
+
 ## Gaps
 
 - Contract gap found in implementation: C19 allowed a `T` with a callable `then` member. Measured: Ulua returned the value, `node` and `tsc` resolved to the result of its `then`. C19.2 now rejects a `T` with a member named `then`.

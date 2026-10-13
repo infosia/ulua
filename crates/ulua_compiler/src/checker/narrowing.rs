@@ -165,6 +165,10 @@ impl Checker<'_> {
             _ => unknown,
         }
     }
+    pub(super) fn expression_join(&mut self, flow: Flow) {
+        let joined = self.meet(flow.yes, flow.no);
+        self.facts.travel(joined.head);
+    }
     pub(super) fn edge(&mut self, e: &Expr, truth: bool) -> bool {
         if let Some(flow) = e.flow {
             let path = if truth { flow.yes } else { flow.no };
@@ -229,6 +233,9 @@ impl Checker<'_> {
     }
     // Initial entry joins every back edge. Any loop writer removes its entry fact.
     pub(super) fn loop_writes(&mut self, span: Span) {
+        if self.suspends(span) {
+            self.facts.end_enclosing(self.owner);
+        }
         let begin = self.assignments.partition_point(|a| a.1 < span.start);
         let end = self.assignments.partition_point(|a| a.1 < span.end);
         for (start, _) in &self.assignments[begin..end] {
@@ -241,6 +248,13 @@ impl Checker<'_> {
     }
     // A finalizer writes after a pending break or continue has recorded its incoming facts.
     pub(super) fn finalizer_jumps(&mut self, span: Span) {
+        if self.suspends(span) {
+            // A jump can retain a fact that the finalizer's await already removed.
+            for context in &mut self.loop_facts {
+                context.exit.end_enclosing(&mut self.facts, self.owner);
+                context.next.end_enclosing(&mut self.facts, self.owner);
+            }
+        }
         let begin = self.assignments.partition_point(|a| a.1 < span.start);
         let end = self.assignments.partition_point(|a| a.1 < span.end);
         for (start, _) in &self.assignments[begin..end] {

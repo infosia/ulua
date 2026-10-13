@@ -24,6 +24,7 @@ struct Write {
 pub(super) struct Writes {
     pub(super) captured: std::collections::HashSet<u32>,
     pub(super) assignments: Vec<(u32, u32)>,
+    pub(super) suspensions: HashMap<u32, Vec<u32>>,
 }
 pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
     let module = Scope {
@@ -37,6 +38,7 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
         .collect();
     let mut names = vec![];
     let mut writes = vec![];
+    let mut suspensions = HashMap::<u32, Vec<u32>>::new();
     while let Some(work) = pending.pop() {
         match work {
             Work::Statement(s, scope) => match s {
@@ -250,7 +252,13 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                 Expression::ParenthesizedExpression(p) => {
                     pending.push(Work::Expr(&p.expression, scope))
                 }
-                Expression::AwaitExpression(a) => pending.push(Work::Expr(&a.argument, scope)),
+                Expression::AwaitExpression(a) => {
+                    suspensions
+                        .entry(scope.owner)
+                        .or_default()
+                        .push(a.span.start);
+                    pending.push(Work::Expr(&a.argument, scope));
+                }
                 Expression::UnaryExpression(u) => pending.push(Work::Expr(&u.argument, scope)),
                 Expression::StaticMemberExpression(m) => pending.push(Work::Expr(&m.object, scope)),
                 Expression::ComputedMemberExpression(m) => {
@@ -296,6 +304,7 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
     let mut result = Writes {
         captured: Default::default(),
         assignments: vec![],
+        suspensions,
     };
     for (_, kind, _, id) in events {
         match kind {
@@ -320,6 +329,9 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
         }
     }
     result.assignments.sort_unstable_by_key(|a| a.1);
+    for offsets in result.suspensions.values_mut() {
+        offsets.sort_unstable();
+    }
     result
 }
 fn variables<'a>(

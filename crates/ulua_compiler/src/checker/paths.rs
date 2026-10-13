@@ -14,6 +14,7 @@ mod tests {
     fn body_floor_hides_mutable_prefixes_but_keeps_fresh_tests_and_const_facts() {
         let mut facts = Facts::default();
         facts.mutable.extend([true, false]);
+        facts.owners.extend([1, 1]);
         facts.set(0, Some(Narrowing::Known(true)));
         facts.set(1, Some(Narrowing::Known(true)));
         let mark = facts.mark();
@@ -50,7 +51,8 @@ impl Narrowing {
         }
     }
 }
-type Fact = (Narrowing, u64);
+type Fact = (Narrowing, u64, u64);
+type MutableFacts = HashMap<u64, HashMap<usize, std::collections::HashSet<usize>>>;
 // A join compares consecutive input paths and merges only the changed references.
 #[derive(Default)]
 pub(super) struct Join {
@@ -70,6 +72,16 @@ impl Join {
     pub(super) fn invalidate(&mut self, id: usize) {
         if self.previous.is_some() {
             self.merged.insert(id, None);
+        }
+    }
+    pub(super) fn end_enclosing(&mut self, facts: &mut Facts, owner: usize) {
+        if let Some(head) = self.previous {
+            let saved = facts.head();
+            facts.travel(head);
+            for id in facts.enclosing(owner) {
+                self.invalidate(id);
+            }
+            facts.travel(saved);
         }
     }
     pub(super) fn finish(&self, facts: &mut Facts) -> Option<usize> {
@@ -98,6 +110,9 @@ pub(super) struct Facts {
     pub(super) floor: u64,
     pub(super) mutable_floor: u64,
     pub(super) mutable: Vec<bool>,
+    pub(super) owners: Vec<usize>,
+    // Entry floors index separate generations, so an await visits no hidden prefix.
+    mutable_facts: MutableFacts,
     pub(super) serial: u64,
 }
 impl Facts {
@@ -131,10 +146,48 @@ impl Facts {
         self.visible(id, self.values.get(&id).copied())
     }
     fn put(&mut self, id: usize, value: Option<Fact>) {
+        if self.mutable.get(id).copied().unwrap_or(false) {
+            let owner = self.owners.get(id).copied().unwrap_or(0);
+            if let Some(old) = self.values.get(&id)
+                && let Some(generation) = self.mutable_facts.get_mut(&old.2)
+            {
+                if let Some(facts) = generation.get_mut(&owner) {
+                    facts.remove(&id);
+                    if facts.is_empty() {
+                        generation.remove(&owner);
+                    }
+                }
+                if generation.is_empty() {
+                    self.mutable_facts.remove(&old.2);
+                }
+            }
+            if let Some(value) = value {
+                self.mutable_facts
+                    .entry(value.2)
+                    .or_default()
+                    .entry(owner)
+                    .or_default()
+                    .insert(id);
+            }
+        }
         if let Some(value) = value {
             self.values.insert(id, value);
         } else {
             self.values.remove(&id);
+        }
+    }
+    pub(super) fn enclosing(&self, owner: usize) -> Vec<usize> {
+        self.mutable_facts
+            .get(&self.floor.max(self.mutable_floor))
+            .into_iter()
+            .flat_map(|generation| generation.iter())
+            .filter(|(key, _)| **key != owner)
+            .flat_map(|(_, facts)| facts.iter().copied())
+            .collect()
+    }
+    pub(super) fn end_enclosing(&mut self, owner: usize) {
+        for id in self.enclosing(owner) {
+            self.set(id, None);
         }
     }
     pub(super) fn set(&mut self, id: usize, value: Option<Narrowing>) {
@@ -147,13 +200,16 @@ impl Facts {
         self.nodes.push(Change {
             id,
             old: self.values.get(&id).copied(),
-            value: value.map(|v| (v, self.serial)),
+            value: value.map(|v| (v, self.serial, self.floor.max(self.mutable_floor))),
             parent,
             depth: self.log.len() + 1,
             kills: self.kills(parent) + usize::from(old.is_some()),
         });
         self.log.push(self.nodes.len());
-        self.put(id, value.map(|v| (v, self.serial)));
+        self.put(
+            id,
+            value.map(|v| (v, self.serial, self.floor.max(self.mutable_floor))),
+        );
     }
     fn undo(&mut self) {
         if let Some(head) = self.log.pop()

@@ -116,6 +116,7 @@ static int register_async(lua_State* state) {
     vm->reset = lua_ref(state, 2);
     vm->promises = lua_ref(state, 3);
     vm->jobs = lua_ref(state, 4);
+    vm->rejections = lua_ref(state, 5);
     return 0;
 }
 static void raise_call_error(lua_State* state, ulua_vm* vm) {
@@ -149,11 +150,16 @@ static void raise_call_error(lua_State* state, ulua_vm* vm) {
     }
     lua_error(state);
 }
+static int collect(lua_State* state);
 static int setup(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, 1));
     luaL_openlibs(state);
     lua_pushcfunction(state, output, "print");
     lua_setglobal(state, "print");
+    // Reserve the collector closure before any run can exhaust the memory budget.
+    lua_pushcfunction(state, collect, "collect");
+    vm->collection = lua_ref(state, -1);
+    lua_pop(state, 1);
     luaL_sandbox(state);
     vm->thread = lua_newthread(state);
     lua_ref(state, -1);
@@ -204,9 +210,21 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);
+    // These operations do not allocate. Release queue roots before the collection.
+    if (vm->jobs) {
+        lua_getref(state, vm->jobs);
+        lua_cleartable(state, -1);
+        lua_pop(state, 1);
+    }
+    if (vm->rejections) {
+        lua_getref(state, vm->rejections);
+        lua_cleartable(state, -1);
+        lua_pop(state, 1);
+    }
     // Collection also has a native protection boundary.
     if (code == SHIM_MEMORY || code == SHIM_STEPS) {
-        lua_cpcall(state, collect, nullptr);
+        lua_getref(state, vm->collection);
+        lua_pcall(state, 0, 0, 0);
         lua_settop(state, 0);
     }
     return code;
@@ -285,7 +303,29 @@ static int call(lua_State* state) {
     }
     if (args->vm->drain) {
         lua_getref(state, args->vm->drain);
-        if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, args->vm);
+        const int drained = lua_pcall(state, 0, 0, 0);
+        if (drained != LUA_OK) {
+            // An export rejection takes precedence only over an unhandled rejection, never a stop.
+            const int error_index = lua_gettop(state);
+            if (promise && drained == LUA_ERRRUN && !args->vm->flag && !args->vm->trap_kind
+                && lua_istable(state, error_index) && args->vm->errors) {
+                lua_getref(state, args->vm->errors);
+                lua_pushvalue(state, error_index);
+                lua_rawget(state, -2);
+                const bool exception = !lua_isnil(state, -1);
+                lua_settop(state, error_index);
+                if (exception) {
+                    lua_rawgetfield(state, result_index, "state");
+                    const bool rejected = lua_tointeger(state, -1) == 2;
+                    lua_pop(state, 1);
+                    if (rejected) {
+                        lua_rawgetfield(state, result_index, "reason");
+                        lua_replace(state, error_index);
+                    }
+                }
+            }
+            raise_call_error(state, args->vm);
+        }
     }
     if (promise) {
         lua_rawgetfield(state, result_index, "state");

@@ -72,9 +72,51 @@ fn random_async_programs_match_three_witnesses() {
             );
         }
     }
+    for i in 0..120 {
+        let seed = 1 + r.next() % 9;
+        let assigned = if r.next().is_multiple_of(2) {
+            "null".to_owned()
+        } else {
+            (10 + r.next() % 9).to_string()
+        };
+        let suspend = match r.next() % 8 {
+            0 => "await value(0);",
+            1 => "for(let k=0;k<2;k++){await value(k);}",
+            2 => "try{await value(0);}finally{await value(1);}",
+            3 => "try{throw new Error();}catch{await value(0);}",
+            4 => "const n=(await flag())?await value(0):await value(1);",
+            5 => "const n=(await flag())&&await flag();",
+            6 => "const n=(await flag())||await flag();",
+            _ => "const g=async():Promise<number>=>{await value(0);return 1;};await g();",
+        };
+        let (parameter, declaration) = if r.next().is_multiple_of(2) {
+            ("x:number|null", String::new())
+        } else {
+            ("seed:number", "let x:number|null=seed;".to_owned())
+        };
+        let arrow = r.next().is_multiple_of(2);
+        let build = |read: &str| {
+            let body = format!(
+                "if(x!==null){{const before=x;{suspend}print(`capture{i} ${{before}} ${{x??0}}`);return {read};}}return 0;"
+            );
+            let nested = if arrow {
+                format!("const f=async():Promise<number>=>{{{body}}};")
+            } else {
+                format!("async function f():Promise<number>{{{body}}}")
+            };
+            format!(
+                "async function value(n:number):Promise<number>{{return n;}}async function flag():Promise<boolean>{{return true;}}async function parent({parameter}):Promise<number>{{{declaration}{nested}const p=f();x={assigned};return p;}}export async function main():Promise<void>{{print(`${{await parent({seed})}}`);}}"
+            )
+        };
+        let unsafe_source = build("x+1");
+        let d = ulua_compiler::compile(unsafe_source.as_bytes(), ulua_compiler::Limits::default())
+            .unwrap_err();
+        assert_eq!(d.code, "C16", "{unsafe_source}: {d:?}");
+        suite.source(&build("(x??0)+1"), None);
+    }
     suite.finish();
     eprintln!(
-        "P4.1 random seed=0x41c1240026 programs={} unhandled=10 cost={:.3}s",
+        "P4.1 random seed=0x41c1240026 programs={} suspended_capture_programs=120 unsafe_rejects=120 unhandled=10 cost={:.3}s",
         suite.count,
         start.elapsed().as_secs_f64()
     );

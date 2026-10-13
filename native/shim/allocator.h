@@ -18,6 +18,8 @@ struct ulua_vm {
     int reset;
     int promises;
     int jobs;
+    int rejections;
+    int collection;
     bool async_failed;
     int result_ref;
     char capability_name[65];

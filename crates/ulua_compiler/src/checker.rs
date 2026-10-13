@@ -47,6 +47,8 @@ pub(crate) struct Checker<'s> {
     fields: HashMap<String, usize>,
     facts: narrowing::Facts,
     assignments: Vec<(u32, u32)>,
+    suspensions: HashMap<u32, Vec<u32>>,
+    source_owner: u32,
     captured_writes: std::collections::HashSet<u32>,
     binding_starts: HashMap<u32, usize>,
     methods: std::collections::BTreeSet<(ir::Method, usize)>,
@@ -187,6 +189,7 @@ impl Checker<'_> {
         self.checked_type_depth(ty, t.span())
     }
     fn bind(&mut self, name: &str, binding: ir::Binding, span: Span) -> Result<usize, Diagnostic> {
+        self.promise_declaration(name, span)?;
         if strict::binding(name) {
             return Err(self.error(span, "C11", "Binding name is forbidden in a strict module"));
         }
@@ -202,6 +205,7 @@ impl Checker<'_> {
         }
         self.binding_starts.insert(binding.start, id);
         self.facts.mutable.push(binding.mutable);
+        self.facts.owners.push(binding.owner);
         self.bindings.push(binding);
         Ok(id)
     }
@@ -343,6 +347,8 @@ pub(crate) fn check_with_grants(
         fields: HashMap::new(),
         facts: Default::default(),
         assignments: writes.assignments,
+        suspensions: writes.suspensions,
+        source_owner: u32::MAX,
         captured_writes: writes.captured,
         binding_starts: HashMap::new(),
         methods: Default::default(),

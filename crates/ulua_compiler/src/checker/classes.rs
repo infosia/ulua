@@ -23,6 +23,7 @@ impl Checker<'_> {
             .id
             .as_ref()
             .ok_or_else(|| self.unsupported(class.span))?;
+        self.promise_declaration(name.name.as_str(), class.span)?;
         let ty = self.types.reserve_class();
         if self.aliases.insert(name.name.to_string(), ty).is_some() {
             return Err(self.error(class.span, "C11", "Duplicate type declaration"));
@@ -222,7 +223,7 @@ impl Checker<'_> {
             .get(&ty)
             .ok_or_else(|| self.error(class.span, "internal", "Missing class declaration"))?
             .constructor;
-        let state = self.enter_function(ctor, Type::Void, false);
+        let state = self.enter_function(ctor, Type::Void, false, class.span.start);
         // Field initializers see module names, never constructor parameters or locals.
         self.field_initializer = true;
         let mut fields = vec![];
@@ -312,7 +313,7 @@ impl Checker<'_> {
                     )
                     .ok_or_else(|| self.unsupported(m.span))?
                     .result;
-                let state = self.enter_function(id, result, false);
+                let state = self.enter_function(id, result, false, m.value.span.start);
                 self.async_body = m.value.r#async;
                 self.result = self.body_result(result);
                 let receiver = self.internal_binding(ty, m.span, false)?;

@@ -271,18 +271,21 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 exported: true,
                 parameters: vec![],
                 result: Type::Void,
-                body: vec![Statement::Block(vec![Statement::Declare(
-                    1,
-                    Expr {
-                        flow: None,
-                        bare_true: false,
-                        start: 0,
-                        ty: Type::String,
-                        kind: ExprKind::Template(parts),
-                    },
-                )])],
+                body: vec![Statement::Block(vec![
+                    Statement::Entry(vec![1]),
+                    Statement::Declare(
+                        1,
+                        Expr {
+                            flow: None,
+                            bare_true: false,
+                            start: 0,
+                            ty: Type::String,
+                            kind: ExprKind::Template(parts),
+                        },
+                    ),
+                ])],
             }],
-            body: vec![],
+            body: vec![Statement::Entry(vec![0]), Statement::Function(0)],
             depth: DEPTH_CEILING,
             source: source.into_bytes(),
         },

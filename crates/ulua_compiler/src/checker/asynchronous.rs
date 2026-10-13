@@ -3,6 +3,24 @@ use super::*;
 use crate::ir::{ExprKind, Type};
 
 impl Checker<'_> {
+    pub(super) fn promise_declaration(&self, name: &str, span: Span) -> Result<(), Diagnostic> {
+        if name == "Promise" {
+            return Err(self.error(
+                span,
+                "C19",
+                "A script declaration named Promise is rejected",
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn suspends(&self, span: Span) -> bool {
+        self.suspensions
+            .get(&self.source_owner)
+            .is_some_and(|offsets| {
+                let index = offsets.partition_point(|offset| *offset < span.start);
+                offsets.get(index).is_some_and(|offset| *offset < span.end)
+            })
+    }
     pub(super) fn promise_type(
         &mut self,
         r: &TSTypeReference<'_>,
@@ -161,6 +179,7 @@ impl Checker<'_> {
             .types
             .promise_value(value.ty)
             .ok_or_else(|| self.error(a.span, "C19", "the operand of await has a Promise type"))?;
+        self.facts.end_enclosing(self.owner);
         Ok((ty, ExprKind::Await(Box::new(value))))
     }
 }

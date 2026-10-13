@@ -312,11 +312,20 @@ impl Checker<'_> {
                 let true_edge = self.edge(&test, true);
                 self.reachable = incoming && true_edge;
                 let a = self.expr_as(&c.consequent, depth, false, expected)?;
+                let mut join = narrowing::Join::default();
+                if self.reachable {
+                    join.include(&self.facts, self.facts.head());
+                }
                 self.facts.restore(mark);
                 let false_edge = self.edge(&test, false);
                 self.reachable = incoming && false_edge;
                 let b = self.expr_as(&c.alternate, depth, false, expected)?;
-                self.facts.restore(mark);
+                if self.reachable {
+                    join.include(&self.facts, self.facts.head());
+                }
+                if join.finish(&mut self.facts).is_none() {
+                    self.facts.restore(mark);
+                }
                 self.reachable = incoming;
                 let ty = self
                     .types
@@ -517,6 +526,11 @@ impl Checker<'_> {
         } else {
             None
         };
+        if matches!(kind, ExprKind::Logical(..))
+            && let Some(flow) = flow
+        {
+            self.expression_join(flow);
+        }
         let value = Expr {
             flow,
             bare_true: matches!(e, Expression::BooleanLiteral(b) if b.value),
