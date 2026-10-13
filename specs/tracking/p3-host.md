@@ -111,6 +111,15 @@ Fix measurements (Debug, one machine):
 - One name list (`ulua_compiler::host_names`) serves the checker and the ABI. `-0.0` in an unused number field gives `host:result`.
 - Witness time, 187 shapes: 4 to 16 KiB largest ratio 8.45 (79.4 s); largest ceiling ratio 30.9 (`P27-sequential-catch`); P3 shapes: protected 24.5, arrows 2.5, declarations 1.0. `measurements` 645.3 s.
 
+### P3 Phase Review round 2
+
+Reviewer: fresh agent, diff `1fba8ff..ff6353c`, priority `29802d4..ff6353c`. 0 CRITICAL, 0 MAJOR, 2 MINOR. The round 1 resolutions hold: grant order to table index in 7 programs (reversed lists of 200 and 340, unused and shadowed grants) equals `node`; 27 value-use forms rejected; the grant table is not reachable from a script; 136 spill compiles and 13 upvalue combinations run; 69 name positions classified; 25 invalid grant names rejected, 47 contextual or type-only names run; 2 steps per host call in a second shape; 264 memory boundary points give `ok` or `limit:memory`; 18 malformed result combinations give `host:result`; host-call growth 16 to 64 KiB analyzer ratio 4.75.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `arguments.length` gives C18 (C11 at `1fba8ff`; `tsc` and `node` accept); `Iterator`, `Record`, `PropertyKey` as values give C18 (`tsc` TS2693) | MINOR | C18.3: C11 |
+| `global {}` without `declare` gives C18 "Script declare forms are rejected" (`tsc` TS2670) | MINOR | C18.3: C11 |
+
 ## Failures before the fix
 
 ## Gaps
