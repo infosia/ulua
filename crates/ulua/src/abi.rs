@@ -28,7 +28,7 @@ pub(crate) unsafe fn bytes<'a>(p: *const c_char, n: usize) -> Option<&'a [u8]> {
     Some(unsafe { slice::from_raw_parts(p.cast(), n) })
 }
 
-/// Return the experimental ABI version.
+/// Return the ABI version.
 #[unsafe(no_mangle)]
 pub extern "C" fn ulua_abi_version() -> u32 {
     1

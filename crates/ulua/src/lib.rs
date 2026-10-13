@@ -1,4 +1,4 @@
-//! Embedded Ulua runtime and the experimental version 1 C ABI.
+//! Embedded Ulua runtime and the version 1 C ABI.
 #![warn(missing_docs)]
 
 mod abi;

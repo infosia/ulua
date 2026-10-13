@@ -5,7 +5,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* ABI version 1 is experimental until P3 closes. */
+/* ABI version 1. */
 typedef int32_t ulua_status;
 enum { ULUA_OK=0, ULUA_INVALID_ARGUMENT=1, ULUA_REJECTED=2, ULUA_FAILED=3,
        ULUA_HOST_ERROR=4, ULUA_BUSY=5, ULUA_INTERNAL=6, ULUA_POISONED=7 };

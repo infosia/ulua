@@ -1,6 +1,6 @@
 # P3 host interop
 
-Status: open. Contracts: `abi.md` Rev 5, `collisions.md` Rev 41 (C18),
+Status: COMPLETE 2026-10-13. Contracts: `abi.md` Rev 5, `collisions.md` Rev 41 (C18),
 `surface.md` Rev 23, `pipeline.md` Rev 28 (§4.10, §8), `corpus.md` Rev 9
 (§3 `grants`, §7 fixtures). Decisions: D20 (revised: the library
 writes the host declarations; the script declares nothing), D21, D22
@@ -14,18 +14,18 @@ writes the host declarations; the script declares nothing), D21, D22
 
 ## Exit checklist (P3)
 
-- [ ] abi.md Rev 5 (§1.2, §1.7, §3 host codes, §4.3 to §4.6 string
+- [x] abi.md Rev 5 (§1.2, §1.7, §3 host codes, §4.3 to §4.6 string
   values, §6.2 capabilities, §6.3 `ulua_declarations`, §7 functions,
   §8 link tests); collisions.md C18; surface.md Rev 23;
   pipeline.md §4.10 and §8 `grants`; corpus.md §3 and §7 implemented.
   `include/ulua.h` declares every new item.
-- [ ] P3 entries pass in full; every earlier entry keeps passing.
-- [ ] `ulua_declarations`: the exact text for each type, grant order,
+- [x] P3 entries pass in full; every earlier entry keeps passing.
+- [x] `ulua_declarations`: the exact text for each type, grant order,
   an empty list, the length query, a small capacity, duplicate names,
   a revoked grant; a Rust test compares its text for the fixtures with
   the text that `tools/witness/corpus.mjs` writes (two derivations,
   CLAUDE.md principle 9).
-- [ ] Direct tests (one per public function, CLAUDE.md principle 1):
+- [x] Direct tests (one per public function, CLAUDE.md principle 1):
   each invalid capability descriptor; duplicate and revoked grants at
   compile, an unused grant, a shadowed grant, an unknown name (C18); each value type in
   both directions, NaN, -0, an empty string, non-ASCII text, a 1 MiB
@@ -39,17 +39,17 @@ writes the host declarations; the script declares nothing), D21, D22
   string result over `max_memory_bytes` gives `limit:memory`; one step
   per host call; `ulua_call` with invalid UTF-8 and with string
   results; the instance stays usable after each stop.
-- [ ] A panic in the Rust code around a host call gives
+- [x] A panic in the Rust code around a host call gives
   `ULUA_INTERNAL` and poisons the context (carry-over M2,
   `tracking/p05-measurements.md`).
-- [ ] Link tests: C11 and C++17 programs with `-Wall -Wextra
+- [x] Link tests: C11 and C++17 programs with `-Wall -Wextra
   -Wpedantic -Werror`, against the static and the dynamic library;
   the exported symbols of the dynamic library equal abi.md §7.
-- [ ] Limits: host declarations at and past the local budget (spill)
+- [x] Limits: host declarations at and past the local budget (spill)
   and the upvalue budget; growth shapes of host calls inside §3.10.
-- [ ] A random check of host calls against `node` (fixtures), `tsc`,
+- [x] A random check of host calls against `node` (fixtures), `tsc`,
   and `luau-analyze -j1`.
-- [ ] Phase Review with no open CRITICAL or MAJOR finding.
+- [x] Phase Review with no open CRITICAL or MAJOR finding.
 
 Source: the owner's prior projects. The declarations follow the
 project that generates a `.d.ts` from the host interface; the
@@ -90,6 +90,10 @@ error, so the primary agent read the logs and the tree):
   ratio 8.47 (bound 12); ceiling: `dense-assign` 0.326 s, largest
   ceiling ratio 31.2 (bound 50); P3 shapes `P3-protected` 24.7,
   `P3-arrows` 2.5, `P3-declarations` 1.1. Cost 649.9 s Debug.
+
+### P3 close
+
+Both round 2 MINOR findings are fixed: `arguments`, type-only library names (135, compared with the `tsc` lib files), and `global` blocks without `declare` give C11. D23: the C ABI has no compatibility rule and no experimental status (`abi.md` Rev 6); the header and the crate docs say so. `sh tools/gate.sh full` passes: `cargo-test` 473 s, `luau-witnesses` 53 s (175 entries in P3 or earlier, 66 generated modules, 14 stress modules); hygiene passes. Review rounds: 2, with 0 CRITICAL and 0 MAJOR findings. Running tasks at the close: none.
 
 ### P3 Phase Review round 1
 
