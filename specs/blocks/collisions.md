@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -873,10 +873,11 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    `await` as `Awaited<T>`. The job model holds native promises only. A promise relates only to an identical promise type
    (C1): `Promise<number>` does not flow to `Promise<number | null>`,
    which `tsc` accepts. A promise value has no member and no operator
-   in P4.1: an equality, a template substitution, a truth test,
+   other than those of rules 10 to 13: an equality, a template substitution, a truth test,
    `typeof`, and an array search (`indexOf`, `lastIndexOf`,
    `includes`) over promise elements are rejected (C19). The `Promise`
-   identifier as a value (`new Promise`, `Promise.resolve`) is rejected
+   identifier is accepted only as the object of `Promise.all` (rule
+   13); as a value (`new Promise`, `Promise.resolve`) it is rejected
    (C19). A script declaration named `Promise` (a class, a type alias)
    is rejected (C19): `tsc` then resolves `Promise<T>` to it (TS2315).
 3. **`await`.** `await e` is accepted only in an `async` body, not in
@@ -912,9 +913,9 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    awaiter, as the `node` runner awaits `main`. `node` reports it after the same drain
    (`unhandledRejection`) and ends the process. A reaction added in the
    same drain handles it. The instance stays usable (C17.8).
-8. **Array callbacks.** An argument of an array method whose result
-   type is a `Promise` type (an `async` arrow, or a function value) is
-   rejected (C19) in P4.1: `forEach` drops the promise of its callback.
+8. **Array callbacks.** An argument of an array method other than
+   `map` (rule 14) whose result type is a `Promise` type (an `async`
+   arrow, or a function value) is rejected (C19): `forEach` drops the promise of its callback.
    A promise that an `async` body returns to itself rejects it with a
    `TypeError`, as ES2022 does.
 9. **Limits.** Each `async` activation is one coroutine. An `async`
@@ -924,8 +925,39 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
    `max_memory_bytes`, and their work toward `max_steps` (`pipeline.md`
    §4.11).
 
-Accept: `a58`, `a59`, `a60`, `a61`. Reject: `r134`, `r135`, `r136`,
-`r137`, `r138`, `r139`, `r140`, `r141`. Trap: `t10`.
+10. **`then`.** `p.then(f)` with `p: Promise<T>` and one argument:
+   an arrow or a function value with one parameter of type `T` or no
+   parameter, and a result type `U` or `Promise<U>` (`U` as in rule 1;
+   `void` gives `Promise<void>`). The result is `Promise<U>`; a result
+   `Promise<U>` of `f` is adopted with the jobs of ES2022. A second
+   argument is rejected (C19): `catch` handles a rejection.
+11. **`catch`.** `p.catch(f)` with one argument: an arrow or a function
+   value with no parameter, or one parameter annotated `unknown`, and a
+   result type `T` or `Promise<T>`. The parameter has the uses of a
+   catch binding (C17.4): `instanceof` and `throw`. `tsc` types an
+   unannotated parameter `any`, so the annotation is required. The
+   result is `Promise<T>`.
+12. **`finally`.** `p.finally(f)` with one argument: an arrow or a
+   function value with no parameter and a result type `void` or
+   `Promise<void>`. The result is `Promise<T>`. The jobs follow ES2022
+   27.2.5.3 (Step 0 M4).
+13. **`Promise.all`.** `Promise.all(xs)` with `xs` an array of
+   `Promise<T>`, an array literal of one promise type, or an array
+   value. `T` is not `T | null` and not `void`: `node` gives an
+   element for each, and a plain Luau array cannot hold `nil` (P4
+   Step 0 M4; C6.5). The result is `Promise<T[]>`; it rejects with the
+   first rejection in settle order. Every other static member of
+   `Promise` stays rejected (rule 2).
+14. **`map`.** An `async` arrow or a function value with a `Promise<U>`
+   result is accepted as the callback of `map`, which gives
+   `Promise<U>[]`. Every other array method keeps rule 8.
+15. A promise that `then`, `catch`, `finally`, or `Promise.all` gives
+   follows rules 2, 4, 6, and 7: it is not floating, it has no
+   operator, its jobs run in the queue, and its unhandled rejection
+   stops the run.
+
+Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`. Reject: `r134`, `r135`, `r136`,
+`r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`. Trap: `t10`.
 
 ## Open items
 

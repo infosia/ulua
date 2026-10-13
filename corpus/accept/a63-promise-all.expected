@@ -1,0 +1,12 @@
+settle 2
+settle 3
+settle 1
+all 1,2,3
+settle 30
+settle 20
+settle 10
+mapped 10,20,30
+words a! b!
+settle 4
+caught first
+done

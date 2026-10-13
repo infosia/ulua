@@ -1,0 +1,12 @@
+sync end
+t tick 0
+then 1
+catch bad
+finally
+async then 3
+t tick 1
+t tick 2
+t tick 3
+t tick 4
+a=2 b=0 c=2 d=s30
+t tick 5

@@ -13,7 +13,7 @@ import path from "node:path";
 
 // The current phase and slice. Entries of this point or earlier are checked
 // in full. `P2.1` is slice 1 of P2; `P2` alone sorts after every P2 slice.
-const PHASE = "P4.1";
+const PHASE = "P4.2";
 const order = (p) => {
   const m = /^P(\d)(?:\.(\d))?$/.exec(p || "P9");
   return m ? Number(m[1]) * 10 + (m[2] ? Number(m[2]) : 9) : 99;

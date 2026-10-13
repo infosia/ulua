@@ -7,7 +7,7 @@ Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 | Slice | Family | Entries |
 |---|---|---|
 | P4.1 | Async functions, `await`, promise values, the job queue | `a58` to `a61`; `r134` to `r141`; `t10` |
-| P4.2 | `Promise.all`, `then`, `catch`, `finally`, `Promise.resolve`, `Promise.reject` | later |
+| P4.2 | `then`, `catch`, `finally`, `Promise.all`, `map` with a promise callback | `a62`, `a63`; `r143` to `r147` |
 | P4.3 | Host async requests, completion ABI, pump | later |
 
 ## Exit checklist (P4.1)
@@ -33,6 +33,35 @@ Status: open; P4.1 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
 - [x] A random check of async programs against `node`, `tsc`, and
   `luau-analyze -j1`.
 - [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+## Exit checklist (P4.2)
+
+- [ ] collisions.md C19.10 to C19.15 (C19.2 and C19.8 as revised);
+  surface.md Rev 25 implemented.
+- [ ] P4.2 entries pass in full; every earlier entry keeps passing.
+- [ ] Direct tests: each C19.10 to C19.15 rejection; job order against
+  `node` for `then` (value and promise results), `catch` (with and
+  without a rejection), `finally` (with a fulfilled and a rejected
+  source, and a callback that throws), `Promise.all` (settle order,
+  first rejection, an empty array, later rejections handled), `map`
+  with an async callback; an unhandled rejection of a derived promise;
+  each stop inside a callback.
+- [ ] Limits and growth: chains of `then` and `Promise.all` over large
+  arrays inside `max_steps` and `max_memory_bytes`; growth shapes
+  inside pipeline.md §3.10.
+- [ ] A random check of P4.2 forms against `node`, `tsc`, and
+  `luau-analyze -j1`.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+Source: the owner's prior project that holds promises as values
+(`then`, `catch`, `finally`, `Promise.all`; other statics rejected).
+Changes: one-argument `then`; an `unknown` annotation on the `catch`
+parameter; `Promise.all` without nullable or void elements (P4 Step 0
+M4).
+
+## Contract pin (P4.2)
+
+At `b17d7f2` (P4.1 compiler), `tools/witness/luau.mjs` (`PHASE = "P4.2"`): `a62`, `a63` rejected C19. `r143` to `r147` already give C19, since P4.1 rejects every promise member (C19.2 of P4.1); they pin the forms that stay rejected. Every earlier entry passes.
 
 ## Contract pin (P4.1)
 
