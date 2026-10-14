@@ -42,7 +42,7 @@ execFileSync("cargo", ["build", "--quiet", "-p", "ulua_corpus"], { cwd: root, st
 // CARGO_TARGET_DIR selects the build (target/sanitize for gate.sh sanitize).
 const targetDir = process.env.CARGO_TARGET_DIR || path.join(root, "target");
 const runner = path.join(targetDir, "debug/ulua-corpus");
-const luauDir = path.join(root, "target/corpus-luau");
+const luauDir = path.join(targetDir, "corpus-luau");
 rmSync(luauDir, { recursive: true, force: true });
 mkdirSync(luauDir, { recursive: true });
 const run = spawnSync(runner, ["--emit-luau", luauDir, ...entries.map((e) => e.path)], {
@@ -99,7 +99,7 @@ for (const e of entries) {
     fail(e.id, `later phase: status ${r.status}, code ${r.code}, want rejected unsupported`);
 }
 
-const stressDir = path.join(root, "target/stress-luau");
+const stressDir = path.join(targetDir, "stress-luau");
 rmSync(stressDir, { recursive: true, force: true });
 mkdirSync(stressDir, { recursive: true });
 const stress = spawnSync(runner, ["--emit-stress", stressDir], { cwd: root, encoding: "utf8" });

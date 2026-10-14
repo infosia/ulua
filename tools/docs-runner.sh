@@ -11,7 +11,7 @@ esac
 target=${CARGO_TARGET_DIR:-target}
 sanitize=""
 if [ "${ULUA_SANITIZE:-}" = 1 ]; then
-    sanitize="-fsanitize=address,undefined -fno-omit-frame-pointer"
+    sanitize="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
 fi
 cargo build --quiet -p ulua
 # shellcheck disable=SC2086

@@ -5,8 +5,11 @@
 #   sanitize: the tests, the Luau witnesses, the examples, and the docs
 #   witness on the ASan and UBSan build (pipeline.md §2.6), in
 #   target/sanitize. Any sanitizer report fails it.
-#   Both run, when Cargo.toml exists: cargo fmt --check, clippy, test,
-#   the Luau tools build, and the Luau witnesses. They need LUAU_SOURCE_DIR.
+#   quick and full also run, when Cargo.toml exists: cargo fmt --check,
+#   clippy, test, the Luau tools build, the Luau witnesses, and the docs
+#   witness. sanitize skips fmt and clippy (the normal gate runs them).
+#   Each shape needs LUAU_SOURCE_DIR. Cost on macOS arm64: full about
+#   6 minutes, sanitize about 7 minutes (tracking/p5-hardening.md).
 set -eu
 case "${1:-}" in
     quick|full|sanitize) shape=$1 ;;
@@ -33,8 +36,10 @@ if [ "$shape" = sanitize ]; then
     export CARGO_TARGET_DIR="$repo_root/target/sanitize"
     # LeakSanitizer is not available on every platform; leaks are a
     # P5.3 check of their own.
-    export ASAN_OPTIONS="${ASAN_OPTIONS:-halt_on_error=1:abort_on_error=1:detect_leaks=0}"
-    export UBSAN_OPTIONS="${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}"
+    # The gate's options come last, so a value from the environment
+    # cannot turn halt_on_error off.
+    export ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}halt_on_error=1:abort_on_error=1:detect_leaks=0"
+    export UBSAN_OPTIONS="${UBSAN_OPTIONS:+$UBSAN_OPTIONS:}halt_on_error=1:print_stacktrace=1"
     step cargo-test cargo test --quiet --workspace
     step luau-tools sh tools/luau-tools.sh
     step luau-witnesses "$NODE" tools/witness/luau.mjs

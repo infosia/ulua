@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -42,7 +42,12 @@ Status: open. Decisions: D28, D29 (`plan.md` §8).
   `luau-witnesses` 52 s.
 - Not covered: LeakSanitizer (not on macOS arm64; leaks are P5.3), the
   Rust code (sanitizers for Rust need a nightly toolchain, D29), Linux
-  and Windows (P5.6).
+  and Windows (P5.6). Luau's small-block page allocator
+  (`VM/src/lmem.cpp` of the pin) poisons only free blocks: an overflow
+  inside a page, into the tail of a size class or a live neighbour
+  block of 1,024 bytes or less, is invisible to ASan. The fuzzing of
+  P5.2 and the fault injection of P5.3 do not depend on ASan for those
+  objects.
 
 ## Exit checklist (P5.1)
 
@@ -57,4 +62,21 @@ Status: open. Decisions: D28, D29 (`plan.md` §8).
 - [x] Zero sanitizer reports over the whole sanitize gate; each report
   found on the way is fixed with a test.
 - [x] The cost of the sanitize gate is measured and stated.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+### P5.1 Phase Review round 1
+
+Reviewer: fresh agent, diff `fb96851..97345a9`. 0 CRITICAL, 1 MAJOR, 5 MINOR. Held: 68 of 68 native compile commands carry the sanitizer flags and `-O1`, and their objects reference `___asan_*` (67 also `___ubsan_handle_*`; `lperf.o` has no checkable operation); 10 of 10 test executables and `libulua.dylib` link the ASan runtime; a seeded ASan and a seeded UBSan defect in the shim make `ulua-corpus` exit 134 and fail the Luau witnesses; the normal build has no sanitizer symbol; the probes cannot pass without the sanitizer; 365 hostile programs (nesting at the limits, the source ceiling, memory and step limits, request storms, 1M chained `then`) give zero reports.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The docs witness compares stdout only: a seeded use-after-free in the shim made the sanitized runner exit 134 after its full output, and the witness passed | MAJOR | `tools/witness/docs.mjs` fails on an unexpected status, a signal, or stderr text; a fake runner that prints the expected output, then a report, gives 10 failures of 10 |
+| The ASan limit of Luau's small-block page allocator is not recorded | MINOR | Recorded under Measurements (P5.1) |
+| `rustc-link-lib=asan`/`ubsan` matches gcc names only; clang on Linux names `libclang_rt.*` | MINOR | P5.6 (D28) measures the Linux link path |
+| The gate header states no cost and has a stale shape list | MINOR | Header updated |
+| `corpus-luau` and `stress-luau` ignore `CARGO_TARGET_DIR`, so concurrent gates delete each other's files | MINOR | They follow `CARGO_TARGET_DIR`; `luau-tools` stays shared (one uninstrumented analyzer) |
+| User `ASAN_OPTIONS` and `UBSAN_OPTIONS` replace `halt_on_error=1`; the docs runner lacks `-fno-sanitize-recover` | MINOR | The gate appends its options last; the docs runner adds the flag |
+
+### P5.1 close
+
+Running tasks at the close: none.

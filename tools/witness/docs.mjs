@@ -26,6 +26,13 @@ for (const doc of docs) {
     if (run.stdout !== blocks[i + 1].body) {
       failures.push(`${doc}:${line}: output differs\n--- doc\n${blocks[i + 1].body}--- run\n${run.stdout}${run.stderr}`);
     }
+    // The runner exits 0 (end), 1 (rejection), or 2 (stop), and writes
+    // nothing to stderr. Any other status, a signal, or stderr text (a
+    // sanitizer report after the last output line) fails the program.
+    const expectedStatus = /^error /.test(blocks[i + 1].body) ? 1 : /^stopped /m.test(blocks[i + 1].body) ? 2 : 0;
+    if (run.status !== expectedStatus || run.signal !== null || run.stderr !== "") {
+      failures.push(`${doc}:${line}: status ${run.status} signal ${run.signal}, want ${expectedStatus}\n${run.stderr}`);
+    }
     checked++;
   }
 }
