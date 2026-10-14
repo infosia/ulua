@@ -641,6 +641,10 @@ ABI and prints one JSON line per entry:
    a corpus entry before its fix lands.
 5. **Gate.** `sh tools/gate.sh sanitize` runs `ulua-fuzz --smoke`:
    each target for a fixed input count with a fixed seed (a smoke run of at most 60 seconds
-   per target). A Phase Review runs each target for 10 minutes on the
-   sanitizer build, the four at the same time, and records the input count, the accepted count,
-   and the findings.
+   per target). A Phase Review runs each target for 60 seconds on the
+   sanitizer build with a fresh seed (not the smoke seed), the four at
+   the same time; its value is new inputs, not length. The only defect
+   that fuzzing found came from a 300-input trial, and 10-minute runs
+   (about 357,000 inputs) found none, so no measurement supports a
+   longer run. The review records the seed, the input count, the
+   accepted count, and the findings.

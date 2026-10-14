@@ -57,7 +57,7 @@ Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 - [x] A direct test per invariant: a seeded violation (test-only) is
   reported as a failure, so a clean run is evidence.
 - [x] The smoke runs in `sh tools/gate.sh sanitize`, with their cost.
-- [ ] 10 minutes per target on the sanitizer build with zero open
+- [ ] 60 seconds per target with a fresh seed on the sanitizer build with zero open
   findings; each finding became a test before its fix.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
