@@ -18,13 +18,15 @@ the prefix `ulua_`.
 
 The primary agent (the Claude Code main session) plans and
 orchestrates. It writes `specs/`, `corpus/` entries and goldens,
-`tools/`, and agent configuration. It sends task handoffs, reviews
+`tools/`, `docs/`, `README.md`, the scripts of `examples/`, and agent
+configuration. It sends task handoffs, reviews
 diffs against acceptance criteria, runs gates, and makes local commits.
 It does not write production code under `crates/`, `native/`, or
-`include/`.
+`include/`, or the hosts of `examples/`.
 
 The implementation agent is Codex, started as a fresh `codex:codex-rescue`
-agent of the Codex plugin. It writes production code and tests within one handoff. It
+agent of the Codex plugin. It writes production code and tests within one handoff,
+and the hosts of `examples/` (`host.c`) with their expected output. It
 does not plan, edit `specs/`, change scope, review its own work, start
 reviewer agents, or commit. A subagent that receives a handoff has this
 role. The handoff format is in `specs/workflow.md`.

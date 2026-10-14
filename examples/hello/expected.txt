@@ -1,0 +1,10 @@
+compile hello
+create instance with output callback
+call main
+hello from Ulua
+<alpha> <beta> <gamma>
+count 5
+length squared 25
+call greet(world)
+greet result: hello, world
+free resources

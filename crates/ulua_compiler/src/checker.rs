@@ -413,20 +413,6 @@ pub(crate) fn check_with_grants(
             _ => return Err(c.error(s.span(), "C11", "Module statements must be declarations")),
         }
     }
-    if !declarations.iter().any(|(id, f, exported, _)| {
-        *exported
-            && f.id.as_ref().is_some_and(|n| n.name == "main")
-            && c.bindings[*id]
-                .ty
-                .and_then(|ty| c.types.function(ty))
-                .is_some_and(|f| {
-                    f.params.is_empty()
-                        && (f.result == Type::Void
-                            || c.types.promise_value(f.result) == Some(Type::Void))
-                })
-    }) {
-        return Err(c.unsupported(program.span));
-    }
     let first_offset = program.body.first().map_or(0, |s| s.span().start);
     let mut body = vec![ir::Statement::Located(
         first_offset,

@@ -440,7 +440,7 @@ mod tests {
         );
         assert_eq!(
             compile(b"", Limits::default()).unwrap_err().code,
-            "unsupported"
+            "limit:output"
         );
         assert_eq!(
             compile(

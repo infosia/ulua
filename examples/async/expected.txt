@@ -1,0 +1,23 @@
+create async fetchScore capability
+compile scores with grant
+create instance with output callback
+requests before call: open=0 recorded=0
+call_start report
+requesting scores
+start fetchScore(1): request 1
+start fetchScore(2): request 2
+start fetchScore(3): request 3
+task: 1
+task_result: ULUA_PENDING
+requests after call: open=3 recorded=0
+complete request 1: score=10
+complete request 2: score=20
+complete request 3: score=30
+requests before pump: open=3 recorded=3
+pump
+total 60
+report done
+pump settled: 3
+requests after pump: open=0 recorded=0
+task_result: ULUA_OK, total=60
+free resources

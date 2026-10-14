@@ -1,0 +1,7 @@
+compile limits
+create instance: max_steps=10000 max_memory_bytes=1048576
+spin: status=3 (ULUA_FAILED), code=limit:steps
+grow: status=3 (ULUA_FAILED), code=limit:memory
+outOfRange: status=3 (ULUA_FAILED), code=trap:index-out-of-range
+ok: status=0 (ULUA_OK), result=3
+free resources

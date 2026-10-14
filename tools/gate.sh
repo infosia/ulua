@@ -32,6 +32,8 @@ if [ -f Cargo.toml ]; then
     step cargo-test cargo test --quiet --workspace
     step luau-tools sh tools/luau-tools.sh
     step luau-witnesses "$NODE" tools/witness/luau.mjs
+    step docs-runner sh tools/docs-runner.sh target/examples/docs-run
+    step docs-witness "$NODE" tools/witness/docs.mjs target/examples/docs-run docs/tutorial-typescript.md
 fi
 if [ "$shape" = full ]; then
     step hygiene sh tools/hygiene.sh

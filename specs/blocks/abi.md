@@ -420,7 +420,8 @@ ulua_status ulua_task_discard(ulua_instance* instance, uint64_t task);
    `ULUA_INVALID_ARGUMENT` before any script runs.
 8. After `ULUA_FAILED` or `ULUA_HOST_ERROR`, the instance keeps the
    state that the run reached. A later call on it is valid.
-9. The host thread of `ulua_instance_new` and `ulua_call` has a stack
+9. The host thread of `ulua_instance_new`, `ulua_call`,
+   `ulua_call_start`, and `ulua_pump` has a stack
    of at least `ULUA_MIN_RUN_STACK` bytes (`pipeline.md` §7.4). The
    header defines the value.
 
