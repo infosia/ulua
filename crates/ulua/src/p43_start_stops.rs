@@ -16,7 +16,7 @@ unsafe extern "C" {
     ) -> i32;
 }
 
-fn stats(r: &Run) -> (usize, usize, usize, u64) {
+pub(super) fn stats(r: &Run) -> (usize, usize, usize, u64) {
     let (mut bytes, mut promises, mut records, mut next) = (0, 0, 0, 0);
     // SAFETY: Collection stays protected; the fixture owns the VM and all outputs.
     unsafe {

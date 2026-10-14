@@ -114,7 +114,13 @@ ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,
 ulua_status ulua_call_start(ulua_instance*, uint32_t, const ulua_value*, size_t,
     uint64_t*, ulua_diagnostic*);
 ulua_status ulua_task_result(ulua_instance*, uint64_t, ulua_value*, ulua_diagnostic*);
-/* Completion records copy values and run no script. Pump settles in record order.
+/* Discard releases an unconsumed task. Unknown or consumed ids give ULUA_INVALID_ARGUMENT.
+   Each task operation gives ULUA_BUSY in a host callback of the context. */
+ulua_status ulua_task_discard(ulua_instance*, uint64_t);
+/* Complete and fail request no Luau allocation and run no script.
+   Completion string bytes use host memory outside max_memory_bytes.
+   Pump copies strings into Luau and settles in record order.
+   A refused copy discards the request and leaves its promise pending.
    Each settle has its own run limits. Zero max_requests means no limit. */
 ulua_status ulua_request_complete(ulua_instance*, uint64_t, const ulua_value*);
 ulua_status ulua_request_fail(ulua_instance*, uint64_t);

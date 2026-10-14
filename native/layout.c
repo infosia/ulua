@@ -61,7 +61,8 @@ size_t ulua_internal_layout_probe(size_t index) {
         offsetof(ulua_capability_desc, function),
         offsetof(ulua_capability_desc, start),
         offsetof(ulua_capability_desc, userdata),
-        ULUA_MAX_HOST_PARAMETERS
+        ULUA_MAX_HOST_PARAMETERS,
+        _Generic(&ulua_task_discard, ulua_status (*)(ulua_instance*, uint64_t): 1, default: 0)
     };
     return index < sizeof(layout) / sizeof(layout[0]) ? layout[index] : SIZE_MAX;
 }

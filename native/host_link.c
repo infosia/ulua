@@ -56,10 +56,15 @@ static void async_links(ulua_context* context, const ulua_run_limits* limits) {
     assert(ulua_pump(instance, 1, &settled, &diagnostic) == ULUA_OK && settled == 1);
     assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_OK && value.number == 7.5);
     assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_INVALID_ARGUMENT);
+    assert(ulua_task_discard(instance, task) == ULUA_INVALID_ARGUMENT);
     assert(ulua_call_start(instance, 0, NULL, 0, &task, &diagnostic) == ULUA_OK);
     assert(ulua_request_fail(instance, request_id) == ULUA_OK);
     assert(ulua_pump(instance, 0, &settled, &diagnostic) == ULUA_HOST_ERROR && settled == 1);
     assert(strcmp(diagnostic.code, "host:request") == 0);
+    assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_PENDING);
+    assert(ulua_task_discard(instance, task) == ULUA_OK);
+    assert(ulua_task_discard(instance, task) == ULUA_INVALID_ARGUMENT);
+    assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_INVALID_ARGUMENT);
     assert(ulua_instance_free(instance) == ULUA_OK);
     assert(ulua_module_free(module) == ULUA_OK);
     assert(ulua_capability_free(cap) == ULUA_OK);

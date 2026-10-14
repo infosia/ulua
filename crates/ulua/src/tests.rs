@@ -492,6 +492,7 @@ fn internal_poison_and_free() {
 }
 #[test]
 fn header_layout() {
+    let _: unsafe extern "C" fn(*mut Instance, u64) -> Status = ulua_task_discard;
     // SAFETY: The linked C probe has this signature and returns only static layout values.
     #[link(name = "ulua_test_layout", kind = "static")]
     unsafe extern "C" {
@@ -558,6 +559,7 @@ fn header_layout() {
         offset_of!(CapabilityDesc, start),
         offset_of!(CapabilityDesc, userdata),
         ULUA_MAX_HOST_PARAMETERS,
+        1, // The independent C declaration has the task discard signature above.
     ];
     for (index, expected) in expected.into_iter().enumerate() {
         // SAFETY: The probe accepts every index, and the C compiler derives these values from the public header.

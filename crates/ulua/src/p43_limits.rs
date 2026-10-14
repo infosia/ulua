@@ -1,4 +1,4 @@
-//! Request and task allocations obey the instance budget. Report bounded probe costs.
+//! Settle copies and task allocations obey the instance budget. Report bounded probe costs.
 use super::*;
 #[link(name = "ulua_test_native", kind = "static")]
 // SAFETY: The test-only probe adjusts this fixture's allocator budget.
@@ -6,15 +6,17 @@ unsafe extern "C" {
     fn ulua_internal_test_async_headroom(vm: *mut c_void, bytes: usize);
 }
 #[test]
-fn completion_copy_obeys_memory_limit_and_failed_copy_records_nothing() {
+fn completion_records_host_bytes_and_refused_settle_discards_only_its_request() {
     let now = Instant::now();
     let mut r = Run::new(
-        "export async function work():Promise<string>{return await host3(1,true,'s');}export function main():void{}",
-        &[3],
+        "export async function work():Promise<string>{return await host3(1,true,'s');}export async function next():Promise<number>{return await host1(2,true,'s');}export function main():void{}",
+        &[3, 1],
         RunLimits::default(),
     );
     let task = r.start("work").2;
     let id = r.data.requests.pop_front().unwrap().0;
+    let next = r.start("next").2;
+    let later = r.data.requests.pop_front().unwrap().0;
     // SAFETY: This fixture owns its live VM. Headroom is derived from allocator usage.
     unsafe {
         ulua_internal_test_async_headroom((*r.i).vm, 4096);
@@ -26,25 +28,22 @@ fn completion_copy_obeys_memory_limit_and_failed_copy_records_nothing() {
         length: bytes.len(),
         ..Value::default()
     };
-    assert_eq!(r.complete(id, value), ULUA_FAILED);
-    assert_eq!(r.counts(), (1, 0));
+    assert_eq!(r.complete(id, value), ULUA_OK);
+    assert_eq!(r.complete(later, number(42.0)), ULUA_OK);
+    assert_eq!(r.counts(), (2, 2));
+    let stopped = r.pump(0);
+    assert_eq!(stopped.0, ULUA_FAILED);
+    assert_eq!(code(&stopped.1), "limit:memory");
+    assert_eq!(stopped.2, 1);
+    assert_eq!(r.counts(), (1, 1));
     assert_eq!(r.result(task).0, ULUA_PENDING);
-    assert_eq!(
-        r.complete(
-            id,
-            Value {
-                r#type: 3,
-                data: c"ok".as_ptr(),
-                length: 2,
-                ..Value::default()
-            }
-        ),
-        ULUA_OK
-    );
+    assert_eq!(r.complete(id, value), ULUA_INVALID_ARGUMENT);
     assert_eq!(r.pump(1).0, ULUA_OK);
-    assert_eq!(r.result(task).2.length, 2);
+    assert_eq!(r.result(next).2.number, 42.0);
+    assert_eq!(r.result(task).0, ULUA_PENDING);
+    assert_eq!(r.counts(), (0, 0));
     eprintln!(
-        "P4.3 completion memory copy=65536 headroom=4096 failed_records=0 cost={:.3}s",
+        "P4.3 settle memory copy=65536 headroom=4096 discarded=1 next=42 cost={:.3}s",
         now.elapsed().as_secs_f64()
     );
 }

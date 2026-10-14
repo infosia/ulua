@@ -80,7 +80,7 @@ static void unlink_request(ulua_vm* vm, ulua_request* r) {
 }
 static void release_request(ulua_vm* vm, ulua_request* r) {
     if (r->promise) lua_unref(vm->thread, r->promise);
-    if (r->value) lua_unref(vm->thread, r->value);
+    if (r->value.type == ULUA_TYPE_STRING) std::free(const_cast<char*>(r->value.data));
     allocate(vm, r, sizeof(*r), 0);
 }
 static void discard_records(ulua_vm* vm) {
@@ -88,6 +88,7 @@ static void discard_records(ulua_vm* vm) {
     while (vm->requests) {
         ulua_request* r = vm->requests;
         vm->requests = r->next;
+        if (r->value.type == ULUA_TYPE_STRING) std::free(const_cast<char*>(r->value.data));
         allocate(vm, r, sizeof(*r), 0);
     }
     while (vm->tasks) {
@@ -96,36 +97,32 @@ static void discard_records(ulua_vm* vm) {
         allocate(vm, t, sizeof(*t), 0);
     }
 }
-struct Complete { ulua_vm* vm; ulua_request* request; const ulua_value* value; };
-static int complete(lua_State* state) {
-    Complete* args = static_cast<Complete*>(lua_tolightuserdata(state, 1));
-    if (args->value) {
-        push_value(state, args->value);
-        args->request->value = lua_ref(state, -1);
-    }
-    return 0;
-}
 extern "C" int ulua_internal_shim_complete(ulua_vm* vm, uint64_t id, const ulua_value* value, char* error) noexcept {
     try {
-        invalidate_result(vm);
         ulua_request* r = find_request(vm, id);
+        // Validate and copy before releasing a borrowed result that can supply the input bytes.
         if (!r || r->recorded || (value && value->type != r->type)) return SHIM_ARGUMENT;
-        Complete args = {vm, r, value};
-        vm->charging = false;
-        const int status = lua_cpcall(vm->thread, complete, &args);
-        if (status != LUA_OK) {
-            // A failed copy records nothing and does not alter the scheduler.
-            message(error, "Completion copy failed");
-            lua_settop(vm->thread, 0);
-            return status == LUA_ERRMEM ? SHIM_MEMORY : SHIM_INTERNAL;
+        ulua_value copy = {};
+        if (value) {
+            copy = *value;
+            if (value->type == ULUA_TYPE_STRING) {
+                char* bytes = nullptr;
+                if (value->length) {
+                    bytes = static_cast<char*>(std::malloc(value->length));
+                    if (!bytes) { message(error, "Completion host allocation failed"); return SHIM_MEMORY; }
+                    std::memcpy(bytes, value->data, value->length);
+                }
+                copy.data = bytes;
+            }
         }
+        invalidate_result(vm);
+        r->value = copy;
         r->recorded = true;
         r->failed = !value;
         if (vm->recorded_tail) vm->recorded_tail->completion_next = r;
         else vm->recorded_head = r;
         vm->recorded_tail = r;
         ++vm->recorded_requests;
-        lua_settop(vm->thread, 0);
         return SHIM_OK;
     } catch (...) { message(error, "Completion raised a C++ exception"); return SHIM_INTERNAL; }
 }
@@ -139,8 +136,7 @@ static int settle(lua_State* state) {
     reset_jobs(state, vm);
     lua_getref(state, vm->fulfill);
     lua_getref(state, args->request->promise);
-    if (args->request->value) lua_getref(state, args->request->value);
-    else lua_pushnil(state);
+    push_value(state, &args->request->value);
     if (lua_pcall(state, 2, 0, 0) != LUA_OK) raise_call_error(state, vm);
     lua_getref(state, vm->drain);
     if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, vm);
@@ -219,5 +215,16 @@ extern "C" int ulua_internal_shim_task_result(ulua_vm* vm, uint64_t id, ulua_val
         allocate(vm, t, sizeof(*t), 0);
         return code;
     } catch (...) { message(error, "Task query raised a C++ exception"); return SHIM_INTERNAL; }
+}
+extern "C" int ulua_internal_shim_task_discard(ulua_vm* vm, uint64_t id) noexcept {
+    ulua_task** cursor = &vm->tasks;
+    while (*cursor && (*cursor)->id != id) cursor = &(*cursor)->next;
+    if (!*cursor) return SHIM_ARGUMENT;
+    invalidate_result(vm);
+    ulua_task* t = *cursor;
+    *cursor = t->next;
+    lua_unref(vm->thread, t->reference);
+    allocate(vm, t, sizeof(*t), 0);
+    return SHIM_OK;
 }
 #endif

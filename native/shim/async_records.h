@@ -1,12 +1,13 @@
 #ifndef ULUA_ASYNC_RECORDS_H
 #define ULUA_ASYNC_RECORDS_H
+#include "ulua.h"
 #include <cstdint>
-// Native request and task records use the instance allocator.
+// Native records use the instance allocator. Completion string bytes use host memory.
 struct ulua_request {
     uint64_t id;
     uint32_t type;
     int promise;
-    int value;
+    ulua_value value;
     bool recorded;
     bool failed;
     ulua_request* next;

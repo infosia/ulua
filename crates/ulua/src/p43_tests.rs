@@ -43,6 +43,7 @@ unsafe extern "C" fn start(data: *mut c_void, args: *const Value, count: usize, 
                 ulua_instance_requests(d.instance, &mut n, &mut 0),
                 ulua_call_start(d.instance, 0, ptr::null(), 0, &mut task, ptr::null_mut()),
                 ulua_task_result(d.instance, task, &mut result, ptr::null_mut()),
+                ulua_task_discard(d.instance, task),
                 ulua_instance_free(d.instance),
                 ulua_context_free(d.context),
             ]);
@@ -371,10 +372,10 @@ fn ulua_request_complete_types_validation_copy_and_busy() {
     assert_eq!(r.data.strings, ["ok", "ok", "ok", "ok"]);
     assert_eq!(r.counts(), (0, 0));
     assert_eq!(r.result(task).0, ULUA_INVALID_ARGUMENT);
-    assert_eq!(r.data.busy.len(), 32);
+    assert_eq!(r.data.busy.len(), 36);
     assert!(r.data.busy.iter().all(|s| *s == ULUA_BUSY));
     eprintln!(
-        "P4.3 completion types=4 callback_busy=32 cost={:.3}s",
+        "P4.3 completion types=4 callback_busy=36 cost={:.3}s",
         now.elapsed().as_secs_f64()
     );
 }
@@ -797,3 +798,9 @@ mod limits;
 
 #[path = "p43_start_stops.rs"]
 mod start_stops;
+
+#[path = "p43_heap_records.rs"]
+mod heap_records;
+
+#[path = "p43_task_discard.rs"]
+mod task_discard;

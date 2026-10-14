@@ -67,7 +67,23 @@ pub unsafe extern "C" fn ulua_task_result(
         })
     }
 }
-/// Copy a completion value without executing script code.
+/// Release an unconsumed task and invalidate its id.
+/// # Safety
+/// The instance must be live and its context must be serialized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ulua_task_discard(instance: *mut Instance, task: u64) -> Status {
+    if instance.is_null() {
+        return ULUA_INVALID_ARGUMENT;
+    }
+    // SAFETY: The caller serializes this live instance and its context.
+    unsafe {
+        guard((*instance).context, ptr::null_mut(), || {
+            let code = native::ulua_internal_shim_task_discard((*instance).vm, task);
+            finish(code, &[0; 256], ptr::null_mut())
+        })
+    }
+}
+/// Copy a completion value into host memory without a Luau allocation or script execution.
 /// # Safety
 /// The instance and value must be live. String bytes must cover the stated length.
 #[unsafe(no_mangle)]

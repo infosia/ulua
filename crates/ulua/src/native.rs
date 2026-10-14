@@ -45,6 +45,7 @@ unsafe extern "C" {
         result: *mut Value,
         error: *mut c_char,
     ) -> i32;
+    pub(crate) fn ulua_internal_shim_task_discard(vm: *mut c_void, task: u64) -> i32;
     pub(crate) fn ulua_internal_shim_complete(
         vm: *mut c_void,
         request: u64,

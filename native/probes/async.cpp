@@ -4,6 +4,9 @@
 #include "lua.h"
 #include "lualib.h"
 struct AsyncStats { ulua_vm* vm; size_t bytes; size_t jobs; };
+extern "C" size_t ulua_internal_test_async_bytes(const ulua_vm* vm) {
+    return vm->used;
+}
 static int async_stats(lua_State* state) {
     AsyncStats* stats = static_cast<AsyncStats*>(lua_tolightuserdata(state, 1));
     lua_gc(state, LUA_GCCOLLECT, 0);
@@ -22,6 +25,9 @@ extern "C" int ulua_internal_test_async_stats(ulua_vm* vm, size_t* bytes, size_t
     return status;
 }
 #ifdef ULUA_MEASUREMENTS
+extern "C" uint64_t ulua_internal_test_allocation_calls(const ulua_vm* vm) {
+    return vm->allocation_calls;
+}
 extern "C" void ulua_internal_test_resume_stats(const ulua_vm* vm, uint64_t* checks, uint64_t* allocations) {
     *checks = vm->resume_checks;
     *allocations = vm->resume_allocations;

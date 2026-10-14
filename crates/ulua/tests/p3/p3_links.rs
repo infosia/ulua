@@ -90,6 +90,7 @@ fn c11_cpp17_static_dynamic_and_exports() {
         "ulua_call",
         "ulua_call_start",
         "ulua_task_result",
+        "ulua_task_discard",
         "ulua_request_complete",
         "ulua_request_fail",
         "ulua_pump",

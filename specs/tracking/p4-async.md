@@ -155,6 +155,8 @@ Reviewer: fresh agent, diff `b105752..b104ef3`, priority `b104ef3`. 0 CRITICAL, 
 | pipeline.md §4.11 lists two host-started runs | MINOR | §4.11 lists four |
 | §6.4.2 names a diagnostic code for functions without a diagnostic | MINOR | §6.4.2: the status is the whole result |
 
+Fix (Codex): request records and completion bytes live in a native table outside the Luau heap; complete and fail request no Luau allocation. The heap sweep of the finding (1,355 instances, 346,880 records): every complete and fail succeeds, Luau allocation growth 0, counts 0/0 after the pumps (3.79 s). A string copy refused at its settle discards the request; the next settle gives 42. `ulua_task_discard`: the id becomes invalid; unknown and consumed ids and BUSY checked; 256 discarded tasks: 747,496 to 592,064 bytes after a collection. `measurements` (timing binary) 999 s, ceiling ratio at most 21.8. Not tested: a real host `malloc` failure.
+
 ## Contract pin (P4.3)
 
 At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).
