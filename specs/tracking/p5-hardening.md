@@ -105,6 +105,30 @@ exception of `rules-history.md`; Codex refused the handoff twice):
   the run target checks no output value; the abi model checks exact
   values for the fixed programs only.
 
+### Gate split (principle 17)
+
+The tests that assert time ratios (the `witnesses` test binary: 5
+tests, 193 s inside gate full) build only with the feature `timing`
+and run in `sh tools/gate.sh timing` (pipeline.md Rev 37 §3.10). Warm
+build, macOS arm64: `gate.sh full` 116 s in total (`cargo-test` 55 s,
+`luau-witnesses` 56 s; before the split about 330 s); `gate.sh timing`
+200 s. Clippy runs with `--features ulua/timing`, so the timing tests
+stay linted.
+
+### P5.2 Phase Review round 1
+
+Reviewer: fresh agent, diff `11f70a5..fb0469f`. 0 CRITICAL, 1 MAJOR, 6 MINOR, all in the tool or its tests; no library finding. Runs (instrumented build): seed 31249 for 60 s each, compiler 13,307 inputs (2,570 accepted), run 12,764, abi 5,646, requests 3,025, 0 failures; seed 40961, abi 356,243 and requests 195,069 inputs in one hour, 0 failures. Held: the library fix closes the class (every table key from a script value is guarded or a constant; 47 methods and operators with NaN, infinities, large and negative zero numbers give no UBSan report); 9 injected violations each give their key; reduction is deterministic; the mutations reach invalid UTF-8, surrogate escapes, nesting to 5,348, and sizes at the ceiling; the smoke is deterministic and under 60 s per target.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A `tsc` witness batch has no deadline (`witness.rs:130`) and the supervisor blocks on worker output: a 59,362-byte growth shape kept stock `tsc` at 100% CPU past 120 s; the compiler and run runs hung for 40 minutes and lost their findings | MAJOR | pipeline.md Rev 38 §9.3: 30-second deadlines per witness batch and per input; a witness timeout is a witness resource limit; findings are written when they occur |
+| Caught generator panics in worker stderr key a later signal as `crash:panic`, so its replay does not reproduce | MINOR | Key from the signal first; generator panic messages stay out of the worker stderr |
+| Reduction is 1-minimal only when its budget suffices, and the record does not say which | MINOR | §9.4: the record states it |
+| The `tsc` witness omits `erasableSyntaxOnly` of `tsconfig.json` | MINOR | Use the options of `tsconfig.json` |
+| A `tsc` stack overflow skips the whole batch | MINOR | Check the other inputs one at a time |
+| The model expects `limit:memory` below 300,000 bytes, a measured value outside the contract | MINOR | Accept `ok` or `limit:memory` there |
+| The tests of the fix lack infinities and negative zero | MINOR | Add them |
+
 ## Exit checklist (P5.1)
 
 - [x] pipeline.md §2.6 implemented: `ULUA_SANITIZE=1`, the flags,

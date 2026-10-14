@@ -38,6 +38,8 @@ Rev 33: §6 `max_open_requests`, host-started runs (P4.3).
 Rev 34: §2.6 sanitizer build (P5.1).
 Rev 35: §9 fuzzing (P5.2).
 Rev 36: §3.7 rule ids, §9.2 object pool, §9.3 slow-compile metric (P5.2).
+Rev 37: §3.10 the timing gate (principle 17).
+Rev 38: §9.3 witness and input deadlines, §9.4 reduction record (P5.2 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -158,7 +160,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     ceiling.
     The time of `luau-analyze -j1` over the output of each growth shape
     grows at most 12 times for 4 times the input from 4 KiB to 16 KiB.
-    The gate asserts this ratio. At the ceiling of `max_source_bytes`,
+    The timing gate (`sh tools/gate.sh timing`) asserts this ratio, and
+    the compiler growth ratios of the growth tests. These ratios change
+    only when the compiler's output changes, so the timing gate runs at
+    the close of a slice and with each change to the checker or the
+    emitter; `gate.sh full` does not run it (principle 17). At the
+    ceiling of `max_source_bytes`,
     the time of each growth shape is at most 50 times the time of the
     reference shape `dense-assign`. Each Phase Review runs the
     `measurements` feature: it asserts the ceiling bound, prints each
@@ -635,9 +642,17 @@ ABI and prints one JSON line per entry:
      wall-clock gate assertion; principle 15). A smaller source is
      outside the metric: the fixed cost of the compiler thread
      dominates it.
+   Each `tsc` and `luau-analyze` batch has a deadline of 30 seconds,
+   and the supervisor gives each input a deadline of 30 seconds. A
+   witness that passes its deadline is a resource limit of that
+   witness (invariant 3), recorded with its input and not a failure;
+   the other inputs of the batch are checked again one at a time. An
+   input that passes its own deadline is a failure with the key
+   `hang`. So `--seconds` always ends a run.
 4. **Findings.** A failure writes its input, its seed, and its target
-   to `target/fuzz/findings/`, and the fuzzer reduces it to a minimal
-   input that keeps the failure. Each finding becomes a direct test or
+   to `target/fuzz/findings/` when it occurs, and the fuzzer reduces it
+   to a minimal input that keeps the failure; the record states whether
+   the reduction reached a 1-minimal input or stopped at its budget. Each finding becomes a direct test or
    a corpus entry before its fix lands.
 5. **Gate.** `sh tools/gate.sh sanitize` runs `ulua-fuzz --smoke`:
    each target for a fixed input count with a fixed seed (a smoke run of at most 60 seconds

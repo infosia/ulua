@@ -1,19 +1,22 @@
 #!/bin/sh
-# Standing gate. Usage: sh tools/gate.sh <quick|full|sanitize>
+# Standing gate. Usage: sh tools/gate.sh <quick|full|sanitize|timing>
 #   quick: corpus witnesses (header, tsc, node).
 #   full:  quick, then the hygiene scan.
 #   sanitize: the tests, the Luau witnesses, the examples, and the docs
 #   witness on the ASan and UBSan build (pipeline.md §2.6), in
 #   target/sanitize. Any sanitizer report fails it.
+#   timing: the tests that assert time ratios (the `witnesses` test
+#   binary, feature `timing`; pipeline.md §3.10). Run it at the close
+#   of a slice and with each change to the checker or the emitter.
 #   quick and full also run, when Cargo.toml exists: cargo fmt --check,
 #   clippy, test, the Luau tools build, the Luau witnesses, and the docs
 #   witness. sanitize skips fmt and clippy (the normal gate runs them).
-#   Each shape needs LUAU_SOURCE_DIR. Cost on macOS arm64: full about
-#   6 minutes, sanitize about 7 minutes (tracking/p5-hardening.md).
+#   Each shape needs LUAU_SOURCE_DIR. Measured cost on macOS arm64,
+#   warm build: full 116 s, timing 200 s (tracking/p5-hardening.md).
 set -eu
 case "${1:-}" in
-    quick|full|sanitize) shape=$1 ;;
-    *) echo 'usage: sh tools/gate.sh <quick|full|sanitize>' >&2; exit 2 ;;
+    quick|full|sanitize|timing) shape=$1 ;;
+    *) echo 'usage: sh tools/gate.sh <quick|full|sanitize|timing>' >&2; exit 2 ;;
 esac
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
@@ -31,6 +34,12 @@ step() {
     fi
 }
 
+if [ "$shape" = timing ]; then
+    step luau-tools sh tools/luau-tools.sh
+    step timing cargo test --quiet -p ulua --features timing --test witnesses
+    printf 'gate timing: PASS\n'
+    exit 0
+fi
 if [ "$shape" = sanitize ]; then
     export ULUA_SANITIZE=1
     export CARGO_TARGET_DIR="$repo_root/target/sanitize"
@@ -53,7 +62,7 @@ fi
 step corpus-witnesses "$NODE" tools/witness/corpus.mjs
 if [ -f Cargo.toml ]; then
     step cargo-fmt cargo fmt --all --check
-    step cargo-clippy cargo clippy --quiet --workspace --all-targets -- -D warnings
+    step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing -- -D warnings
     step cargo-test cargo test --quiet --workspace
     step luau-tools sh tools/luau-tools.sh
     step luau-witnesses "$NODE" tools/witness/luau.mjs
