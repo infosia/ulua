@@ -1,17 +1,19 @@
 # Ulua for TypeScript developers
 
-Ulua writes the logic that runs inside a native application. The
-application owns the process and the main loop. It calls the functions
-that your script exports, and it decides which host functions your
-script can call.
+A Ulua script runs in a sandbox inside someone else's application.
+The application does not trust the script. It decides which host
+functions the script can call, how many steps each call can take, and
+how much memory the script can use. Your script has no file system, no
+network, no clock, and no global environment, unless the host grants a
+function for it.
 
 The syntax is a subset of TypeScript. Every accepted program also
-type-checks under stock `tsc`, so tsserver gives you completion,
-rename, and go-to-definition with no plugin. Below the syntax, the
-values are plain Luau values: a `number` is a Luau number, a `string`
-is a UTF-8 Luau string, an array is a Luau table. Where JavaScript and
-Luau agree, Ulua prints what `node` prints. Where they cannot agree,
-the compiler rejects the form, or the language names the difference.
+type-checks under stock `tsc`, so your editor gives you completion,
+rename, and inline errors with no plugin. Below the syntax, the values
+are plain Luau values: a `number` is a Luau number, a `string` is a
+UTF-8 Luau string, an array is a Luau table. Where the subset accepts a
+program, it prints what `node` prints. Where it cannot, the compiler
+rejects the form, or the language names the difference.
 
 This page is the list of what changes. Every program and every output
 on this page was run against the repository as committed, and every

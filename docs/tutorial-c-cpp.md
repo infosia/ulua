@@ -6,10 +6,13 @@ and emits typed Luau source; the pinned Luau VM runs it inside your
 process. You drive it through one C header, `include/ulua.h`, and
 every function of that header returns a status.
 
-Ulua treats each script as hostile. Your host sets the limits, grants
-each function that a script can call, and decides when script code
-runs. No thread and no event loop of Ulua runs script code behind
-your back.
+Ulua treats each script as hostile, and your host as trusted. Your
+host sets the limits, grants each function that a script can call,
+and decides when script code runs. A stop (a trap, a limit, a host
+error) ends the run, and no script `catch` or `finally` runs after
+it. No thread and no event loop of Ulua runs script code behind your
+back. The guarantees, and the preconditions that your host keeps, are
+in [`specs/blocks/abi.md`](../specs/blocks/abi.md).
 
 This tutorial assumes C, not TypeScript. Every command and every
 output below comes from a run against the repository as committed.
