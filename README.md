@@ -1,43 +1,32 @@
 # Ulua
 
-An **embedded scripting language for native applications**: a
-**TypeScript-subset syntax on the Luau virtual machine**. A Rust
-compiler checks the script and emits typed Luau source. The pinned
-Luau compiler and VM run it inside your process, behind a C ABI with
-the prefix `ulua_`.
+Write scripts in TypeScript; run them on Luau. Ulua is an **embedded
+scripting language for native applications**: a Rust compiler checks a
+**TypeScript-subset** script and emits typed Luau source, and the
+pinned **Luau** compiler and VM run it inside your process, behind a C
+ABI with the prefix `ulua_`.
+
+Running on Luau means running inside a battle-tested sandbox. Luau is
+the language that Roblox develops and uses to run the code that its
+creators publish, and its VM is built to run code that the host did
+not write: each script gets an isolated environment with read-only
+built-in libraries, and the host can interrupt it at any time
+([Luau sandboxing](https://luau-lang.org/sandbox)). Ulua turns that
+sandbox on for every instance (`luaL_sandbox`, `luaL_sandboxthread`),
+and adds what the C ABI enforces on top: host-set limits, explicit
+grants, and stops that no script can catch.
 
 Because the syntax is a subset of TypeScript, standard TypeScript
 editor tooling works against it. Because the values are plain Luau
 values (a number is a Luau number, an array is a Luau table), a script
-needs no runtime layer that imitates JavaScript. Performance numbers
-come with the benchmarks of P6.
+needs no runtime layer that imitates JavaScript. Ulua is a language
+project, not a JavaScript runtime and not a JavaScript binding.
 
-Ulua is a language project, not a JavaScript runtime and not a
-JavaScript binding.
+## Made for scripts you do not trust
 
-## Why it exists
-
-A host that runs user-authored logic usually picks one of two:
-
-- **An embedded dynamic language** (Lua, JavaScript): fast iteration,
-  but no static types, and the script can do anything the binding
-  layer lets it do.
-- **A general-purpose language runtime** (a JavaScript engine): broad
-  compatibility, but a large runtime, its own event loop, and
-  semantics that the host does not control.
-
-Ulua takes a third position: **TypeScript syntax and tooling**, a
-**sound subset** that the compiler checks before anything runs, and a
-**small, sandboxed VM** that the host drives through a narrow C ABI.
-Where the subset accepts a program, it prints what `node` prints;
-where the two cannot agree, the compiler rejects the form or the
-contract names the difference.
-
-## Who it's for
-
-Developers who embed scripts in a native host that **owns its main
-loop** and **does not trust the scripts it runs**: mods in a game,
-user rules in a server, plug-in logic in a tool. They want:
+Ulua fits a native host that **owns its main loop** and **runs code
+that someone else wrote**: mods in a game, user rules in a server,
+plug-in logic in a tool. It gives that host:
 
 - **Hostile scripts stay inside their limits.** The host sets the
   source size, the nesting depth, the step budget, and the memory
@@ -63,9 +52,9 @@ user rules in a server, plug-in logic in a tool. They want:
   pumps the instance. No event loop and no background thread runs
   script code.
 
-### Who it's *not* for
+## What Ulua leaves out
 
-These limits are permanent, not gaps to be closed later:
+By design, and for good:
 
 - **No npm and no existing TypeScript.** The subset rejects each form
   that neither agrees with `node` nor has a named divergence. Existing
@@ -80,21 +69,7 @@ These limits are permanent, not gaps to be closed later:
 - **No raw Luau.** The C ABI accepts TypeScript source only. Generated
   Luau and bytecode stay internal.
 
-## Tutorials
-
-- [Ulua for TypeScript developers](docs/tutorial-typescript.md): what
-  changes coming from TypeScript, with the complete list of rejected
-  forms.
-- [Ulua for C and C++ developers](docs/tutorial-c-cpp.md): the
-  language from the host's side, and a step-by-step embedding
-  walkthrough with the programs in [`examples/`](examples/).
-
-Every command and every output in the tutorials was run against the
-repository as committed.
-
-## What you get
-
-### A sound TypeScript subset
+## A first script
 
 ```ts
 type Point = { x: number; y: number };
@@ -123,7 +98,9 @@ and `async`/`await` with `Promise<T>` are in the subset. A form that
 `tsc` accepts and Ulua cannot run as `node` runs it is rejected at its
 source position, with a code that names the rule.
 
-### A narrow C ABI
+## Under the hood
+
+### One C header
 
 The host compiles a source string with a list of grants, makes an
 instance with limits, and calls exports with typed values. Every
@@ -140,14 +117,26 @@ that keep the generated Luau inside the Luau limits (for example, at
 most 192 upvalues in one function). Each limit gives a diagnostic code;
 none gives a crash.
 
-### Witnesses on every gate run
+### Four witnesses on every gate run
 
 The corpus is the definition of the language. Each gate run checks
 every entry against its golden output, and against four witnesses:
 `tsc` (acceptance), `node` (behaviour), `luau-analyze` in strict mode
 (the generated Luau), and the Luau VM through the C ABI.
 
-## Build
+## Learn more
+
+- [Ulua for TypeScript developers](docs/tutorial-typescript.md): what
+  changes coming from TypeScript, with the complete list of rejected
+  forms.
+- [Ulua for C and C++ developers](docs/tutorial-c-cpp.md): the
+  language from the host's side, and a step-by-step embedding
+  walkthrough with the programs in [`examples/`](examples/).
+
+Every command and every output in the tutorials was run against the
+repository as committed.
+
+## Build and gate
 
 The build needs Rust (the version in `rust-toolchain.toml`), a C and
 C++ compiler, Node 24, and a Luau checkout at the revision in
@@ -159,13 +148,11 @@ export LUAU_SOURCE_DIR=/path/to/luau          # checkout at luau-revision.txt
 cargo build --release -p ulua                 # libulua.a and the dynamic library
 ```
 
-The header is [`include/ulua.h`](include/ulua.h).
-
-## Gate
+The header is [`include/ulua.h`](include/ulua.h). The gate:
 
 ```sh
 sh tools/gate.sh quick    # corpus headers, tsc, node
-sh tools/gate.sh full     # also fmt, clippy, tests, luau-analyze, the VM
+sh tools/gate.sh full     # also fmt, clippy, tests, luau-analyze, the VM, the docs
 sh tools/hygiene.sh
 ```
 
