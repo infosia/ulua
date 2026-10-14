@@ -1,5 +1,5 @@
 //! Assignment assertions erase. Initializer assertions can change native optimizations.
-//! Measured Debug cost: 3.21 seconds. The test prints its wall cost.
+//! Measured Debug cost: 5.11 seconds. The test prints its wall cost.
 // The stress source generators serve both the CLI and this bytecode comparison.
 #[allow(dead_code)]
 #[path = "../../../ulua_corpus/src/stress.rs"]
@@ -106,10 +106,12 @@ fn assignment_assertions_erase_and_initializers_report_native_differences() {
                 let all_plain = bytecode(&without_write_assertions(&compiled.luau, true));
                 let first = typed.iter().zip(&all_plain).position(|(a, b)| a != b);
                 let suffix = typed.iter().rev().zip(all_plain.iter().rev()).take_while(|(a, b)| a == b).count();
-                // Unspilled fixtures keep the full stress body in the common suffix.
+                // The complete bytecode comparison above checks assignment assertion erasure, including interrupt calls.
+                // Unspilled fixtures keep the stress body in the common suffix.
+                // The measured prefix is 1,039 bytes with the interrupt helper, and 999 bytes before it.
                 // Spill fixtures also change table access optimization and constant layout.
                 if !compiled.luau.contains("local __ulua_spill") {
-                    assert!(suffix >= typed.len().min(all_plain.len()).saturating_sub(1024));
+                    assert!(suffix >= typed.len().min(all_plain.len()).saturating_sub(1536));
                 }
                 eprintln!("S4 bytecode {form}: assignment assertions identical; all assertions typed={} plain={} first_difference={first:?} common_suffix={suffix}", typed.len(), all_plain.len());
             }

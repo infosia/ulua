@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 to P5.4 COMPLETE 2026-10-14; P5.5 implemented, review open. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -58,7 +58,7 @@ Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` �
 - [x] For each operation: the work of one step is constant, or in
   proportion to its allocation charge, or a finding with a measured
   shape (time of one step, at the default limits, Release).
-- [ ] Each finding is fixed, contract first, with a test; or
+- [x] Each finding is fixed, contract first, with a test; or
   pipeline.md §6.3 names the bound that covers it, with the measured
   worst case.
 - [x] The P5.4 Phase Review runs in the same review.
@@ -102,6 +102,32 @@ empty classes). `COMPILE_MEMORY_FACTOR` 1,115, `COMPILE_MEMORY_BASE`
 native input came out). The measurement hook is under feature
 `timing` only.
 
+## Measurements (P5.5)
+
+Interrupt points (pipeline.md §5.19), measured by the implementation
+under `lua_singlestep` with the production options (O1), 64 KiB:
+
+- Largest instruction gap over 45 shapes: 34 (before: 74,848 for
+  `s=s+'';`, 63,971 for the 42-term addition, 65,478 for a long
+  `finally` body). `INTERRUPT_INSTRUCTIONS` 44.
+- Ratio to `while (true) { i++ }` at the default `max_steps`
+  (Release): largest 4.58 (boolean template); addition 2.12 (before:
+  5,633). The addition call takes 113.9 us (114.3 us before the
+  change).
+- First implementation: an inline `for _ = 1, 1 do end` and one node
+  per pure statement. It failed the gate: `luau-analyze` gave "Code is
+  too complex to typecheck" on P25-logical-wrapped-tests at 16 KiB,
+  and the analyzer time of S4-module-bindings rose to 1.47 s (0.13 s
+  with the call form). The final form: `__ulua_interrupt()` and 3
+  nodes per pure statement.
+- The interrupt helper is one more captured upvalue and one more
+  module temporary; the upvalue bound tests count it (192 passes, 193
+  fails). The S4 bytecode prefix of unspilled fixtures grew from 999
+  to 1,039 bytes.
+- Test costs (Debug): gaps 13.4 s, strict 61 inputs 2.3 s (runtime
+  target); ratios 45 shapes 16.5 s (witnesses, `timing`). Gate timing
+  takes 373 s.
+
 ## Exit checklist (P5.4)
 
 - [x] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and
@@ -111,7 +137,7 @@ native input came out). The measurement hook is under feature
   measured and recorded.
 - [x] The test cost is stated; the test runs in `gate.sh full` if it
   costs at most 10 s, else in `gate.sh timing` (principle 17).
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements (P5.4)
 

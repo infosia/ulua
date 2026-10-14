@@ -149,13 +149,24 @@ impl Emitter<'_> {
                     self.locations.insert(id, format!("{name}{page}.{field}"));
                 }
             }
-            let (ty, value) = types::spill_constructor(&fields);
+            let (ty, _) = types::spill_constructor(&fields);
             let header = if key == 0 {
                 &mut layout.headers
             } else {
                 layout.entries.entry(key).or_default()
             };
-            let _ = writeln!(header, "local {name}: {ty} = ({value}) :: {ty}");
+            // Each statement initializes one field. Storage pages retain their fixed layout.
+            let _ = writeln!(header, "local {name}: {ty} = ({{}} :: any) :: {ty}");
+            if fields.len() <= SPILL_FIELDS {
+                initialize_fields(header, &name, &fields);
+            } else {
+                for (index, fields) in fields.chunks(SPILL_FIELDS).enumerate() {
+                    let (page_type, _) = types::spill_constructor(fields);
+                    let page = format!("{name}.__ulua_page{index}");
+                    let _ = writeln!(header, "{page} = ({{}} :: any) :: {page_type}");
+                    initialize_fields(header, &page, fields);
+                }
+            }
         }
         for (i, slot) in self.slots.iter().enumerate() {
             let _ = writeln!(
@@ -167,5 +178,11 @@ impl Emitter<'_> {
             );
         }
         Ok(layout)
+    }
+}
+
+fn initialize_fields(header: &mut String, receiver: &str, fields: &[(String, String, &str)]) {
+    for (field, ty, value) in fields {
+        let _ = writeln!(header, "{receiver}.{field} = ({value}) :: {ty}");
     }
 }

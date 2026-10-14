@@ -2,8 +2,14 @@
 use super::*;
 use crate::ir::Statement as S;
 
+// An export statement stores one field. The single-export return is also one field.
+const EXPORT_FIELDS: usize = 1;
 const EXPORT_TABLE_PREFIX: &str = "return {\n";
 const EXPORT_TABLE_SUFFIX: &str = "}\n";
+const EXPORT_LOOP_PREFIX: &str = "local __ulua_exports: {[string]: any} = {\n";
+#[cfg(feature = "test-output-limit")]
+pub(super) const EXPORT_LOOP_OVERHEAD: usize =
+    "while true do\nend\n".len() + EXPORT_LOOP_PREFIX.len() - EXPORT_TABLE_PREFIX.len();
 pub(super) const EMPTY_EXPORT_TABLE_BYTES: usize =
     EXPORT_TABLE_PREFIX.len() + EXPORT_TABLE_SUFFIX.len();
 
@@ -24,9 +30,22 @@ pub(super) struct Emission {
 }
 
 pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
+    emit_with_exports(module, bound, false)
+}
+#[cfg(feature = "test-output-limit")]
+pub(super) fn emit_export_loop(module: &ir::Module, bound: usize) -> Result<String, Diagnostic> {
+    emit_with_exports(module, bound, true)
+}
+fn emit_with_exports(
+    module: &ir::Module,
+    bound: usize,
+    repeat_exports: bool,
+) -> Result<String, Diagnostic> {
     let types = types::FunctionTypes::new(module)?;
     let numeric_arrows = constants::numeric_arrows(module, &types)?;
+    let paged_exports = module.functions.iter().filter(|f| f.exported).count() > EXPORT_FIELDS;
     let library_locals = LIBRARY_LOCALS
+        + usize::from(paged_exports || repeat_exports)
         + usize::from(!module.hosts.is_empty())
         + numeric_arrows.locals
         + if module.asynchronous {
@@ -204,6 +223,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         "__ulua_get",
         "__ulua_set",
         "__ulua_literal_set",
+        "__ulua_interrupt",
         "__ulua_equal",
         "__ulua_unequal",
         "__ulua_receiver",
@@ -236,7 +256,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     out.push_str(&types.declarations);
     out.push_str(&context.numeric_arrows.declarations);
     if let Some(layout) = &context.layouts[0] {
-        out.push_str(&layout.headers);
+        out.push_str(&chunk.headers(&layout.headers));
     }
     let output = output::Output::new(bound);
     let first_offset = module
@@ -266,18 +286,6 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
         )?;
     }
     chunk.statements(&module.body[1..], 0)?;
-    out.push_str(&chunk.out);
-    let trailer_start = out.len();
-    out.push_str(EXPORT_TABLE_PREFIX);
-    for f in module.functions.iter().filter(|f| f.exported) {
-        let _ = writeln!(
-            out,
-            "    [{}] = {},",
-            quote(&f.name),
-            chunk.location(f.binding)?
-        );
-    }
-    out.push_str(EXPORT_TABLE_SUFFIX);
     let last_offset = module
         .body
         .iter()
@@ -287,12 +295,52 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
             _ => None,
         })
         .unwrap_or(first_offset);
-    output.charge(out.len() - trailer_start, last_offset);
+    chunk.statement_offset = last_offset;
+    if repeat_exports {
+        chunk.line("while true do");
+    }
+    chunk.exports(paged_exports, !repeat_exports)?;
+    if repeat_exports {
+        chunk.line("end");
+    }
+    out.push_str(&chunk.out);
     output.finish(module, out.len())?;
     Ok(out)
 }
 
 impl Emitter<'_> {
+    fn exports(&mut self, paged_exports: bool, terminal: bool) -> Result<(), Diagnostic> {
+        if paged_exports {
+            self.line("local __ulua_exports: {[string]: any} = {}");
+            for f in self.module.functions.iter().filter(|f| f.exported) {
+                self.line(format!(
+                    "__ulua_exports[{}] = {}",
+                    quote(&f.name),
+                    self.location(f.binding)?
+                ));
+            }
+            if terminal {
+                self.line("return __ulua_exports");
+            }
+        } else {
+            let mut trailer = String::from(if terminal {
+                EXPORT_TABLE_PREFIX
+            } else {
+                EXPORT_LOOP_PREFIX
+            });
+            for f in self.module.functions.iter().filter(|f| f.exported) {
+                let _ = writeln!(
+                    trailer,
+                    "    [{}] = {},",
+                    quote(&f.name),
+                    self.location(f.binding)?
+                );
+            }
+            trailer.push_str(EXPORT_TABLE_SUFFIX.trim_end());
+            self.line(trailer);
+        }
+        Ok(())
+    }
     pub(super) fn closure(&mut self, id: usize, depth: u32) -> Result<String, Diagnostic> {
         let Some(context) = self.context else {
             return Ok("nil :: any".into());
@@ -349,7 +397,7 @@ impl Emitter<'_> {
                 parameters.push(format!("__ulua_arg{id}: {ty}?"));
                 let _ = writeln!(
                     parameter_locals,
-                    "    local __ulua_b{id}: {ty} = ({}) :: {ty}",
+                    "local __ulua_b{id}: {ty} = ({}) :: {ty}",
                     initial(
                         self.module.bindings[*id]
                             .ty
@@ -381,7 +429,7 @@ impl Emitter<'_> {
             parameters.join(", "),
             self.function_types.luau(&f.result),
             async_prefix,
-            parameter_locals,
+            child.headers(&parameter_locals),
             child.headers(&layout.headers)
         );
         child.output = self.output;

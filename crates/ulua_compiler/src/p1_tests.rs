@@ -225,16 +225,17 @@ fn c15_small_functions_avoid_spill_and_nested_bindings_share_one_table() {
     let large = accept(&body(&text));
     assert_eq!(large.luau.matches("local __ulua_spill").count(), 1);
     assert!(large.luau.contains("__ulua_spill1.__ulua_b"));
-    assert!(!large.luau.contains("{} :: any"));
-    for line in large
+    assert!(large.luau.contains(" = ({} :: any) :: { __ulua_b"));
+    // Two temporary slots and one table leave 173 local bindings. The remaining 47 fields start at zero.
+    let defaults = large
         .luau
         .lines()
-        .filter(|line| line.contains("local __ulua_spill"))
-    {
-        let constructor = line.split_once(" = ({ ").unwrap().1;
-        assert!(constructor.matches(" = ").count() <= 128);
-        assert!(constructor.contains("(0) :: number"));
-    }
+        .filter(|line| {
+            line.trim_start().starts_with("__ulua_spill1.__ulua_b")
+                && line.ends_with(" = (0) :: number")
+        })
+        .count();
+    assert_eq!(defaults, 47);
 }
 #[test]
 fn depth_checks_cover_defaults_and_assignment_operands() {

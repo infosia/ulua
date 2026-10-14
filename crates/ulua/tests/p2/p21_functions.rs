@@ -47,12 +47,14 @@ fn result(source: &str) -> f64 {
 }
 #[test]
 fn bound_and_one_past_include_captures_from_two_enclosing_functions() {
+    // The long addition body captures the interrupt helper, besides the source bindings.
+    let bindings = UPVALUE_BUDGET - 1;
     assert_eq!(
-        result(&inputs::upvalues(UPVALUE_BUDGET)),
-        (UPVALUE_BUDGET * (UPVALUE_BUDGET - 1) / 2) as f64
+        result(&inputs::upvalues(bindings)),
+        (bindings * (bindings - 1) / 2) as f64
     );
     Script::compile(
-        &inputs::upvalues(UPVALUE_BUDGET + 1),
+        &inputs::upvalues(bindings + 1),
         CompileLimits::default(),
         "limit:upvalues",
     );
@@ -136,11 +138,12 @@ fn pinned_compiler_accepts_two_hundred_upvalues_and_rejects_two_hundred_one() {
 
 #[test]
 fn upvalue_budget_includes_generated_library_captures() {
-    let source =
-        inputs::upvalues(UPVALUE_BUDGET - 2).replace("return total;};", "return total%Infinity;};");
+    // The closure captures the remainder, Infinity, and interrupt helpers.
+    let bindings = UPVALUE_BUDGET - 3;
+    let source = inputs::upvalues(bindings).replace("return total;};", "return total%Infinity;};");
     Script::new(&source);
     let source =
-        inputs::upvalues(UPVALUE_BUDGET - 1).replace("return total;};", "return total%Infinity;};");
+        inputs::upvalues(bindings + 1).replace("return total;};", "return total%Infinity;};");
     Script::compile(&source, CompileLimits::default(), "limit:upvalues");
 }
 

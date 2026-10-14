@@ -140,7 +140,9 @@ fn local_spill_and_upvalue_edges() {
             compiled.luau.contains("__ulua_spill0")
         );
     }
-    for captures in [91, 92, 93] {
+    // The inner closure captures 100 host functions and the interrupt helper.
+    let bound = ulua_compiler::UPVALUE_BUDGET - 100 - 1;
+    for captures in [bound - 1, bound, bound + 1] {
         let (mut source, grants) = declarations(100);
         source.push_str("function outer():void{");
         for i in 0..captures {
@@ -155,18 +157,22 @@ fn local_spill_and_upvalue_edges() {
         }
         source.push_str("return n;}inner();}export function main():void{outer();}");
         let compiled = compile_with_grants(source.as_bytes(), Limits::default(), &grants);
-        if captures == 93 {
+        if captures > bound {
             assert_eq!(compiled.unwrap_err().code, "limit:upvalues");
         } else {
             let compiled = compiled.unwrap();
             run(&source, &grants);
             let file = dir
-                .join(format!("upvalues-{}", 100 + captures))
+                .join(format!("upvalues-{}", 100 + captures + 1))
                 .with_extension("luau");
             std::fs::write(&file, compiled.luau).unwrap();
             files.push(file);
         }
-        eprintln!("P3 upvalues={} accepted={}", 100 + captures, captures < 93);
+        eprintln!(
+            "P3 upvalues={} accepted={}",
+            100 + captures + 1,
+            captures <= bound
+        );
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))

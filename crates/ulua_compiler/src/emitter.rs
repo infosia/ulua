@@ -6,6 +6,7 @@ mod constants;
 mod exceptions;
 mod expressions;
 mod functions;
+mod interrupts;
 mod joins;
 pub(crate) mod methods;
 mod output;
@@ -23,7 +24,7 @@ use std::{collections::HashMap, fmt::Write};
 const SPILL_FIELDS: usize = 128;
 
 pub(crate) use prelude::LIBRARIES;
-const LIBRARY_LOCALS: usize = 14;
+const LIBRARY_LOCALS: usize = 15;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
@@ -69,6 +70,7 @@ struct Emitter<'a> {
     owner: usize,
     out: String,
     indent: usize,
+    interrupts: interrupts::Interrupts,
     slots: Vec<Slot>,
     locations: HashMap<usize, String>,
     module_locations: &'a HashMap<usize, String>,
@@ -117,6 +119,7 @@ impl<'a> Emitter<'a> {
             owner,
             out: String::new(),
             indent: 1,
+            interrupts: Default::default(),
             slots: vec![],
             locations: HashMap::new(),
             module_locations,
@@ -165,6 +168,17 @@ impl<'a> Emitter<'a> {
             return;
         }
         let text = text.as_ref();
+        if self.interrupts.before(text) {
+            let credited = std::mem::take(&mut self.credited);
+            // A shared empty function avoids an analyzer loop join at each checkpoint.
+            // Production O1 retains its CALL and RETURN interrupts.
+            self.capture("__ulua_interrupt");
+            self.raw_line("__ulua_interrupt()");
+            self.credited = credited;
+        }
+        self.raw_line(text);
+    }
+    fn raw_line(&mut self, text: &str) {
         let bytes = text.len() + if self.indent == 0 { 1 } else { 5 };
         let credited = std::mem::take(&mut self.credited);
         if let Some(output) = self.output {
@@ -347,18 +361,24 @@ impl<'a> Emitter<'a> {
         }
         Ok(name)
     }
-    fn headers(&self, declarations: &str) -> String {
-        declarations
-            .lines()
-            .map(|s| format!("{}{s}\n", if self.indent == 0 { "" } else { "    " }))
-            .collect()
+    fn headers(&mut self, declarations: &str) -> String {
+        let mut out = String::new();
+        let indent = if self.indent == 0 { "" } else { "    " };
+        for text in declarations.lines() {
+            if self.interrupts.before(text) {
+                self.capture("__ulua_interrupt");
+                let _ = writeln!(out, "{indent}__ulua_interrupt()");
+            }
+            let _ = writeln!(out, "{indent}{text}");
+        }
+        out
     }
 }
 
 pub(crate) const ASYNC_PRELUDE_BYTES: usize =
     asynchronous::PRELUDE.len() + prelude::EXCEPTIONS.len();
 
-pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
+fn output_bound(module: &ir::Module, factor: usize) -> Result<usize, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
         // Empty source has no byte allowance for the fixed export table.
         // Keep every nonempty source bound unchanged.
@@ -379,7 +399,17 @@ pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnos
         })
         .saturating_add(methods::prelude(&module.methods)?.0.len())
         .saturating_add(factor.saturating_mul(module.source.len()));
-    functions::emit(module, bound)
+    Ok(bound)
+}
+
+pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
+    functions::emit(module, output_bound(module, factor)?)
+}
+
+#[cfg(feature = "test-output-limit")]
+pub(crate) fn export_loop(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
+    let bound = output_bound(module, factor)?.saturating_add(functions::EXPORT_LOOP_OVERHEAD);
+    functions::emit_export_loop(module, bound)
 }
 
 #[cfg(test)]

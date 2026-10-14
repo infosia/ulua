@@ -1,5 +1,6 @@
 //! Fixed library calls have constant work or work bounded by their output bytes.
 pub(crate) const LIBRARIES: &str = r#"local __ulua_trap: (number) -> () = (...) :: (number) -> ()
+local function __ulua_interrupt(): () end
 local function __ulua_literal_set<T>(a: {T}, i: number, value: T): ()
     a[i] = value
 end
@@ -44,6 +45,7 @@ local function __ulua_set<T>(a: {T}, i: number, v: T): ()
     if not (i >= 0 and i <= #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end
     a[i + 1] = v
 end
+__ulua_interrupt()
 "#;
 
 pub(super) const EXCEPTIONS: &str = r#"local __ulua_register: (any) -> () = select(3, ...)

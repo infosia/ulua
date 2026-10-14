@@ -1,6 +1,10 @@
 //! Reusable typed temporaries fix the time of each value read.
 use super::*;
 use crate::ir::{Expr, ExprKind as E};
+
+// Fixed pure-expression work also keeps short-circuit analyzer graphs small.
+// Three nodes permit one binary operation. Larger trees use interruptible slot statements.
+const PURE_EXPRESSION_NODES: usize = 3;
 impl Emitter<'_> {
     pub(super) fn expression(&mut self, expr: &Expr, depth: u32) -> Result<usize, Diagnostic> {
         self.offset = expr.start as usize;
@@ -236,7 +240,22 @@ impl Emitter<'_> {
                     return Ok(dest);
                 }
                 let a = self.expression(a, depth)?;
-                self.write_slot(dest, self.temp(a));
+                // Keep a bounded pure expression on the right. This avoids a refinement join for each split operation.
+                if let Some(b) = self.pure(b, depth)? {
+                    self.write_slot(
+                        dest,
+                        format!("({} {} {b})", self.temp(a), if *and { "and" } else { "or" }),
+                    );
+                    self.release(a);
+                    return Ok(dest);
+                }
+                // A fresh local breaks refinement aliases before the short-circuit join.
+                let fresh = self.generated()?;
+                self.line("do");
+                self.line(format!("local {fresh}: boolean = {}", self.temp(a)));
+                self.write_slot(dest, &fresh);
+                self.line("end");
+                self.generated_live -= 1;
                 self.release(a);
                 self.line(format!(
                     "if {}{target} then",
@@ -251,7 +270,9 @@ impl Emitter<'_> {
                 self.line("end");
             }
             E::Conditional(test, a, b) => {
-                if let Some((id, tests)) = same_conditional_read(expr) {
+                if let Some((id, tests)) = same_conditional_read(expr)
+                    && tests.len() <= 1
+                {
                     // The disjunction evaluates exactly the tests on the selected false-arm chain.
                     let tests = tests
                         .into_iter()
@@ -482,6 +503,26 @@ impl Emitter<'_> {
         Ok(dest)
     }
     fn pure(&mut self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {
+        // A balanced pure tree can grow without a larger depth. Bound its node count before aggregation.
+        let mut work = vec![expr];
+        let mut nodes = 0;
+        while let Some(expr) = work.pop() {
+            nodes += 1;
+            if nodes > PURE_EXPRESSION_NODES {
+                return Ok(None);
+            }
+            match &expr.kind {
+                E::Unary(_, a) => work.push(a),
+                E::Logical(_, a, b) | E::Binary(_, a, b) => {
+                    work.push(a);
+                    work.push(b);
+                }
+                _ => {}
+            }
+        }
+        self.pure_bounded(expr, depth)
+    }
+    fn pure_bounded(&mut self, expr: &Expr, depth: u32) -> Result<Option<String>, Diagnostic> {
         let depth = self.guard(depth)?;
         Ok(match &expr.kind {
             E::Number(n) => {
@@ -494,20 +535,26 @@ impl Emitter<'_> {
             E::Boolean(b) => Some(b.to_string()),
             E::String(s) => Some(quote(s)),
             E::Read(id) => Some(self.read_binding(*id)?),
-            E::Unary(op, a) => self.pure(a, depth)?.map(|a| format!("({op} ({a}))")),
-            E::Logical(and, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
-                (Some(a), Some(b)) => {
-                    Some(format!("({a} {} {b})", if *and { "and" } else { "or" }))
+            E::Unary(op, a) => self
+                .pure_bounded(a, depth)?
+                .map(|a| format!("({op} ({a}))")),
+            E::Logical(and, a, b) => {
+                match (self.pure_bounded(a, depth)?, self.pure_bounded(b, depth)?) {
+                    (Some(a), Some(b)) => {
+                        Some(format!("({a} {} {b})", if *and { "and" } else { "or" }))
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
-            E::Binary(op, a, b) => match (self.pure(a, depth)?, self.pure(b, depth)?) {
-                (Some(a), Some(b)) => {
-                    self.capture_binary(op);
-                    Some(self.binary(op, &a, &b))
+            }
+            E::Binary(op, a, b) => {
+                match (self.pure_bounded(a, depth)?, self.pure_bounded(b, depth)?) {
+                    (Some(a), Some(b)) => {
+                        self.capture_binary(op);
+                        Some(self.binary(op, &a, &b))
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             _ => None,
         })
     }

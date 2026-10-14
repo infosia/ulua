@@ -1,5 +1,6 @@
 //! Protected closure budgets include owner locals, outer upvalues, and helpers.
-//! Bound witnesses use 192 binding upvalues. Temporary shadows are closure locals; the next count is 193.
+//! Bound witnesses use 191 binding upvalues and one interrupt helper. The next total is 193.
+//! Temporary shadows are closure locals.
 //! Measured single-worker Debug costs: budgets 1.258 seconds; shared values 0.401 seconds; target 1.66 seconds.
 //! This target reports its measured Debug cost without a time assertion.
 #[allow(dead_code)]
@@ -49,9 +50,13 @@ fn protected_closures_obey_the_bound_and_the_next_count() {
     let mut suite = witnesses::Suite::named("P2.7 protected upvalues");
     for kind in ["function", "method", "arrow"] {
         for position in ["try", "catch", "finally"] {
-            let accepted = source(kind, position, 96, 96);
+            // Each write captures one outer binding and one owner binding.
+            // The long protected body also captures the interrupt helper.
+            let outer = 96;
+            let own = ulua_compiler::UPVALUE_BUDGET - outer - 1;
+            let accepted = source(kind, position, outer, own);
             suite.source(&accepted, Some("3\n"));
-            for (outer, own) in [(96, 97), (98, 98), (99, 99), (120, 120), (100, 100)] {
+            for (outer, own) in [(outer, own + 1), (98, 98), (99, 99), (120, 120), (100, 100)] {
                 let rejected = source(kind, position, outer, own);
                 let diagnostic =
                     ulua_compiler::compile(rejected.as_bytes(), Default::default()).unwrap_err();

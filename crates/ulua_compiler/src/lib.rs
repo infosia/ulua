@@ -53,6 +53,13 @@ pub const OUTPUT_PRELUDE_BYTES: usize = "--!strict\n".len() + emitter::LIBRARIES
 /// Bytes of the fixed promise and exception helpers for an async module.
 /// Add these bytes to the base prelude for an async output bound.
 pub const OUTPUT_ASYNC_PRELUDE_BYTES: usize = emitter::ASYNC_PRELUDE_BYTES;
+/// Maximum generated statements on a forward path between interrupt points.
+/// The O1 emitter calls a shared empty Luau function before statement 17.
+pub const INTERRUPT_STATEMENTS: usize = 16;
+/// Maximum executed VM instructions between interrupt callbacks.
+/// The repaired P5.5 witness measures 34 instructions at 64 KiB under O1.
+/// This bound retains the original maximum, 35 times 1.25, rounded up.
+pub const INTERRUPT_INSTRUCTIONS: u64 = 44;
 /// AST and parser depth ceiling.
 pub const DEPTH_CEILING: u32 = 48;
 /// Stack size for the complete compiler pipeline.
@@ -198,7 +205,14 @@ pub fn compile_with_grants(
     limits: Limits,
     grants: &[HostSignature],
 ) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, grants, OUTPUT_FACTOR, |_, _| {})
+    compile_observed(
+        source,
+        limits,
+        grants,
+        OUTPUT_FACTOR,
+        emitter::emit,
+        |_, _| {},
+    )
 }
 
 /// Compile with a lower output factor for ABI limit tests.
@@ -209,7 +223,28 @@ pub fn test_compile_with_output_factor(
     limits: Limits,
     factor: usize,
 ) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, &[], factor.min(OUTPUT_FACTOR), |_, _| {})
+    compile_observed(
+        source,
+        limits,
+        &[],
+        factor.min(OUTPUT_FACTOR),
+        emitter::emit,
+        |_, _| {},
+    )
+}
+
+/// Compile a test loop around the production export-table emission.
+/// Module initialization must reach the default step limit in this fixture.
+#[cfg(feature = "test-output-limit")]
+pub fn test_compile_export_loop(source: &[u8], limits: Limits) -> Result<Compiled, Diagnostic> {
+    compile_observed(
+        source,
+        limits,
+        &[],
+        OUTPUT_FACTOR,
+        emitter::export_loop,
+        |_, _| {},
+    )
 }
 
 /// Measure each stage with a callback before and after its work.
@@ -220,7 +255,7 @@ pub fn measure_compile(
     limits: Limits,
     observer: impl FnMut(&'static str, bool),
 ) -> Result<Compiled, Diagnostic> {
-    compile_observed(source, limits, &[], OUTPUT_FACTOR, observer)
+    compile_observed(source, limits, &[], OUTPUT_FACTOR, emitter::emit, observer)
 }
 
 /// Emit a typed template fixture beyond the checker bound, for native limit measurements only.
@@ -314,6 +349,7 @@ fn compile_observed(
     limits: Limits,
     grants: &[HostSignature],
     output_factor: usize,
+    emission: fn(&ir::Module, usize) -> Result<String, Diagnostic>,
     mut observer: impl FnMut(&'static str, bool),
 ) -> Result<Compiled, Diagnostic> {
     let max_source = limits.max_source_bytes.min(SOURCE_CEILING);
@@ -384,7 +420,7 @@ fn compile_observed(
         }
     }
     observer("emit", true);
-    let luau = emitter::emit(&module, output_factor);
+    let luau = emission(&module, output_factor);
     observer("emit", false);
     Ok(Compiled {
         hosts: module.hosts.iter().map(|(_, n)| n.clone()).collect(),

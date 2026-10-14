@@ -52,8 +52,8 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .collect::<Vec<_>>()
         .join(",");
     let mut args = vec!["1"; 32];
-    // The three new fixed helpers move the module's remaining temporary capacity by three.
-    args[21] = "987654321";
+    // Four fixed helpers reduce the module's remaining temporary capacity by four.
+    args[20] = "987654321";
     let mut value = format!("f({})", args.join(","));
     for _ in 0..3 {
         value = format!("f({},{value})", vec!["1"; 31].join(","));

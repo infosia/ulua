@@ -7,6 +7,7 @@ mod p25_growth;
 mod p25_witness_time;
 mod p3_growth;
 mod p41_growth;
+mod p55_ratio;
 mod s4_growth;
 
 fn measurement_lock() -> MutexGuard<'static, ()> {

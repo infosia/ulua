@@ -507,17 +507,31 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       count after the loop is the larger of the count before the loop
       and the count at the end of the body.
     - Before the count passes `INTERRUPT_STATEMENTS` (16), the emitter
-      emits `for _ = 1, 1 do end`. This form fires one interrupt and
-      costs 5 instructions; `repeat until true` and `while false do
-      end` are folded and fire none (P5.5 review, O1).
+      emits `__ulua_interrupt()`, a call to an empty prelude function.
+      It fires two interrupts (the call and the return). A repeated
+      inline `for _ = 1, 1 do end` fires one, but raised the
+      `luau-analyze` time of growth shapes (S4-module-bindings 1.47 s
+      against 0.13 s at 16 KiB); `repeat until true` and `while false
+      do end` are folded and fire none (P5.5, O1). The function is one
+      module-level local, so it takes one of the module temporaries.
     - Each generated statement does a bounded number of instructions:
       the C15 bounds and the slot form of §5.8 bound it. A statement
-      that the emitter cannot bound is a compiler defect.
+      that the emitter cannot bound is a compiler defect. A pure
+      expression emits at most 3 nodes per statement; a spill table
+      header and the export table emit one field per statement. A
+      long `&&`, `||`, or spill initializer was 525 to 4,117
+      instructions in one statement before this rule. One node per
+      statement added short-circuit branches with refinements, and
+      `luau-analyze` failed with "Code is too complex to typecheck"
+      on P25-logical-wrapped-tests at 16 KiB (P5.5).
     - A test runs straight-line shapes at the source ceiling under
       `lua_singlestep` and counts the instructions between two
       interrupts. It asserts the largest count against
-      `INTERRUPT_INSTRUCTIONS`, a constant from the measured maximum
-      times 1.25. The count is independent of time (principle 15).
+      `INTERRUPT_INSTRUCTIONS` (44), from the measured maximum (35)
+      times 1.25; the final form measures 34. The count is independent of time (principle 15).
+    - A ratio test runs each shape in `while (true)` at the default
+      `max_steps` and asserts at most 8 times the run time of
+      `while (true) { i++ }` (gate timing).
     - The production compile options stay at O1. A change of the
       options reruns that test: O2 can unroll the loop form.
 

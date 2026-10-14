@@ -748,6 +748,7 @@ fn host_steps_include_the_vm_call_interrupt() {
     }
     assert_eq!(r.compile(&source, &[r.cap]).0, ULUA_OK);
     // These loops cost more steps than instance setup, so setup cannot set the measured threshold.
+    let mut measurements = vec![];
     for iterations in [4096, 8192] {
         let mut costs = vec![];
         for (name, calls) in [("zero", 0), ("one", 1), ("two", 2)] {
@@ -786,12 +787,16 @@ fn host_steps_include_the_vm_call_interrupt() {
             }
             costs.push(high);
         }
-        assert_eq!(costs[1] - costs[0], 2 * iterations as u64);
-        assert_eq!(costs[2] - costs[1], 2 * iterations as u64);
-        eprintln!(
-            "P3 interrupt-on iterations={iterations} calls=0/1/2 minimum_steps={costs:?} host_cost=2"
-        );
+        eprintln!("P3 interrupt-on iterations={iterations} calls=0/1/2 minimum_steps={costs:?}");
+        measurements.push(costs);
     }
+    // The zero-call layout has an extra checkpoint before return. Compare iteration growth to remove fixed exit costs.
+    let growth: Vec<_> = (0..3)
+        .map(|calls| measurements[1][calls] - measurements[0][calls])
+        .collect();
+    assert_eq!(growth[1] - growth[0], 2 * (8192 - 4096));
+    assert_eq!(growth[2] - growth[1], 2 * (8192 - 4096));
+    eprintln!("P3 interrupt-on iteration_growth={growth:?} host_cost=2");
     eprintln!(
         "P3 interrupt-on bisection cost={:.3}s",
         start.elapsed().as_secs_f64()

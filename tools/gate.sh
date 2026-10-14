@@ -12,7 +12,7 @@
 #   clippy, test, the Luau tools build, the Luau witnesses, and the docs
 #   witness. sanitize skips fmt and clippy (the normal gate runs them).
 #   Each shape needs LUAU_SOURCE_DIR. Measured cost on macOS arm64,
-#   warm build: full about 2 to 3 minutes, timing about 260 s,
+#   warm build: full about 2 to 3 minutes, timing about 6 minutes,
 #   sanitize about 4 minutes (tracking/p5-hardening.md).
 set -eu
 case "${1:-}" in
