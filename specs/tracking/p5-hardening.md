@@ -49,6 +49,21 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` Â
   P5.2 and the fault injection of P5.3 do not depend on ASan for those
   objects.
 
+## Measurements (P5.6)
+
+- Windows (owner's run, MSVC, commit 4c1bb2c): `gate.sh full` passes;
+  `cargo test` 353 passed, 2 ignored (sanitizer probes), 97 s; luau
+  witnesses 56 s. Fixes: `layout.c` builds as C11 under MSVC (no
+  `_Generic` before `/std:c11`); `-fno-math-errno` only where the
+  compiler accepts it; witness paths through `fileURLToPath`; `tsc`
+  file names normalized before the prelude filter (TS2304 on 199
+  entries before); `luau-analyze` in batches of 64 files (error 206
+  before); CRLF output compared exactly.
+- macOS arm64 after 4c1bb2c: `gate.sh full` passes in 166 s warm
+  (`cargo-test` 98 s, `luau-witnesses` 63 s); `gate.sh timing`
+  passes. A first run after the pull took 442 s with a cold build.
+- Linux: not run.
+
 ## Exit checklist (P5.5)
 
 - [x] A fresh reviewer audits each run-time operation that does work
