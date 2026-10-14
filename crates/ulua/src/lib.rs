@@ -3,6 +3,9 @@
 
 mod abi;
 mod capabilities;
+#[cfg(feature = "timing")]
+#[doc(hidden)]
+pub mod compile_measurement;
 mod declarations;
 #[cfg(feature = "fault-injection")]
 pub mod fault_injection;

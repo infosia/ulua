@@ -73,6 +73,10 @@ int main(int argc, char** argv)
 {
     try
     {
+        size_t largestPeak = 0;
+        double largestRatio = 0;
+        const char* peakShape = "";
+        const char* ratioShape = "";
         for (int i = 1; i < argc; ++i)
         {
             std::ifstream file(argv[i], std::ios::binary);
@@ -87,12 +91,25 @@ int main(int argc, char** argv)
             if (!bytecode)
                 return 1;
             bool success = size != 0 && bytecode[0] != 0;
-            std::printf("%s output=%zu peak=%zu allocations=%zu bytecode=%zu success=%d\n",
-                argv[i], source.size(), peak, allocations, size, success);
+            double ratio = source.empty() ? 0 : double(peak) / double(source.size());
+            if (peak > largestPeak)
+            {
+                largestPeak = peak;
+                peakShape = argv[i];
+            }
+            if (ratio > largestRatio)
+            {
+                largestRatio = ratio;
+                ratioShape = argv[i];
+            }
+            std::printf("%s output=%zu peak=%zu ratio=%.6f allocations=%zu bytecode=%zu success=%d\n",
+                argv[i], source.size(), peak, ratio, allocations, size, success);
             release(bytecode);
             if (live != 0)
                 return 2;
         }
+        std::printf("P5.4 native largest-peak=%zu shape=%s largest-ratio=%.6f shape=%s\n",
+            largestPeak, peakShape, largestRatio, ratioShape);
     }
     catch (const std::exception& error)
     {

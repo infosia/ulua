@@ -153,6 +153,8 @@ pub unsafe extern "C" fn ulua_compile(
                 return ULUA_INVALID_ARGUMENT;
             };
             let signatures: Vec<_> = grants.iter().map(|g| g.signature.clone()).collect();
+            #[cfg(feature = "timing")]
+            let observer = crate::compile_measurement::observer();
             #[cfg(test)]
             let output_factor = TEST_OUTPUT_FACTOR.with(|factor| factor.take());
             let joined = std::thread::scope(|scope| {
@@ -164,6 +166,11 @@ pub unsafe extern "C" fn ulua_compile(
                     .name("ulua-compiler".into())
                     .stack_size(ulua_compiler::COMPILER_STACK_BYTES)
                     .spawn_scoped(scope, move || -> Result<_, ulua_compiler::Diagnostic> {
+                        #[cfg(feature = "timing")]
+                        crate::compile_measurement::notify(
+                            observer,
+                            crate::compile_measurement::CompileEvent::Start,
+                        );
                         #[cfg(test)]
                         let compiled = match output_factor {
                             Some(factor) => ulua_compiler::test_compile_with_output_factor(
@@ -176,13 +183,29 @@ pub unsafe extern "C" fn ulua_compile(
                                 compiler_limits(limits),
                                 &signatures,
                             ),
-                        }?;
+                        };
                         #[cfg(not(test))]
                         let compiled = ulua_compiler::compile_with_grants(
                             source,
                             compiler_limits(limits),
                             &signatures,
-                        )?;
+                        );
+                        let compiled = match compiled {
+                            Ok(compiled) => compiled,
+                            Err(diagnostic) => {
+                                #[cfg(feature = "timing")]
+                                crate::compile_measurement::notify(
+                                    observer,
+                                    crate::compile_measurement::CompileEvent::Rejected,
+                                );
+                                return Err(diagnostic);
+                            }
+                        };
+                        #[cfg(feature = "timing")]
+                        crate::compile_measurement::notify(
+                            observer,
+                            crate::compile_measurement::CompileEvent::Rust(&compiled.luau),
+                        );
                         let mut bytecode = ptr::null_mut();
                         let mut size = 0;
                         let mut error = [0; 256];
@@ -192,6 +215,11 @@ pub unsafe extern "C" fn ulua_compile(
                             &mut bytecode,
                             &mut size,
                             error.as_mut_ptr(),
+                        );
+                        #[cfg(feature = "timing")]
+                        crate::compile_measurement::notify(
+                            observer,
+                            crate::compile_measurement::CompileEvent::Native,
                         );
                         if status != 0 {
                             return Ok(Err(error));

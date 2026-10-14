@@ -49,6 +49,59 @@ Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` �
   P5.2 and the fault injection of P5.3 do not depend on ASan for those
   objects.
 
+## Exit checklist (P5.5)
+
+- [x] A fresh reviewer audits each run-time operation that does work
+  outside the interrupt count: Luau library calls that the emitted
+  code and the helpers make, VM operations on strings and tables, GC
+  steps, error unwinding, and the async job queue.
+- [x] For each operation: the work of one step is constant, or in
+  proportion to its allocation charge, or a finding with a measured
+  shape (time of one step, at the default limits, Release).
+- [ ] Each finding is fixed, contract first, with a test; or
+  pipeline.md §6.3 names the bound that covers it, with the measured
+  worst case.
+- [x] The P5.4 Phase Review runs in the same review.
+
+## P5.4 and P5.5 Phase Review round 1
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The base came from the empty source (8,897 B). Small sources exceed the bound: `class A{}` (9 B) peak 34,363 > 20,671; `;` 18,344 > 12,183 | MAJOR | pipeline.md Rev 41: a small-source set gives the base |
+| Nested empty blocks give 891.2 B per source byte at 64 KiB, above the recorded maximum 849 | MINOR | the shape joins the test |
+| Native `luau_compile` was measured for the 5 largest outputs; the peak per output byte ranges 2.7 to 18.7 by shape | MINOR | each shape at 64 KiB is measured |
+| The test measured `compile_with_grants`, not `ulua_compile`; the ABI copies the bytecode while the Luau output is live | MINOR | the test calls `ulua_compile` |
+| A straight-line function body runs as one step: 64 KiB of `x=x+...+x;` is 63,807 instructions, one step of 112 to 122 us; `while(true){f();}` runs 38.2 s before `limit:steps` | MAJOR | pipeline.md Rev 42 §5.19: interrupt points |
+| One GC step traverses a whole table and clears weak tables in the atomic phase: 0.078 ms at 5 MB live, 1.37 ms at 34 MB; 20M steps take 0.88 to 1.04 s at each heap size | MINOR | §6.3 names it; the collector work follows the charged allocation |
+
+Candidates found covered (reviewer, with source lines of the pin):
+string ordering (rejected, C5); string equality (interned); string
+creation and hashing (in proportion to allocation); substrings (pieces
+of at most 256 bytes); searches (KMP Luau loops); `repeat`, pads, trims;
+array methods (Luau loops); `xs.length = 0` (a Luau loop); `table.insert`
+(append form only); `table.clear` (once per settle or run); `#t` (dense
+arrays); `__ulua_concat`, `__ulua_format`; the async drain and the
+rejection scan; error unwinding (each frame is entered by a call); the
+allocator charge.
+
+Interrupt point forms (reviewer, pinned VM, O1): `for _ = 1, 1 do end`
+fires 1 interrupt, 5 instructions, 5.7 ns; a no-op call fires 2, 6.7
+ns; `repeat until true` and `while false do end` are folded and fire
+none. With the loop form every 16 statements, the 64 KiB shape has a
+longest gap of 2.9 us (32: 5.3 us; 64: 9.6 us) and the same call time
+(118.6 us).
+
+Round 1 fixes of P5.4: 277 shapes and 166 small sources through
+`ulua_compile`, Debug and Release equal. Largest ratio 891.25
+(`nested-empty-blocks`, 64 KiB); largest small peak 68,017 B (seven
+empty classes). `COMPILE_MEMORY_FACTOR` 1,115, `COMPILE_MEMORY_BASE`
+85,022. Native `luau_compile`: largest peak 44,158,440 B
+(`dense-template`); largest 21.49 B per output byte
+(`dense-nested-functions`). Test cost: 80.7 s Debug, 22.0 s Release
+(a first version cost 135 s; a second Rust compile per shape for the
+native input came out). The measurement hook is under feature
+`timing` only.
+
 ## Exit checklist (P5.4)
 
 - [x] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and

@@ -42,6 +42,8 @@ Rev 37: §3.10 the timing gate (principle 17).
 Rev 38: §9.3 witness and input deadlines, §9.4 reduction record (P5.2 review).
 Rev 39: §10 fault injection (P5.3).
 Rev 40: §6.4 compiler memory bound (P5.4).
+Rev 41: §6.4 the test calls `ulua_compile`; a small-source base; native memory per shape (P5.4 review).
+Rev 42: §5.19 interrupt points, §6.3 the instruction bound and GC steps (P5.5).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -492,6 +494,33 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     7. Object values and nullable values never cross the C ABI
        (`abi.md` §4).
 
+19. **Interrupt points (P5.5).** The pinned VM calls the interrupt
+    only at a call, a return, and a loop back-edge
+    (`VM/src/lvmexecute.cpp`). Straight-line code and forward jumps
+    run without an interrupt. So the emitter bounds the straight-line
+    work of each generated function.
+    - The emitter counts the generated Luau statements of a function
+      on each forward path since the last interrupt. A statement that
+      always makes a Luau call ends the count.
+    - At a join after branches, the count is the largest count of the
+      branches. A loop body starts with the count before the loop. The
+      count after the loop is the larger of the count before the loop
+      and the count at the end of the body.
+    - Before the count passes `INTERRUPT_STATEMENTS` (16), the emitter
+      emits `for _ = 1, 1 do end`. This form fires one interrupt and
+      costs 5 instructions; `repeat until true` and `while false do
+      end` are folded and fire none (P5.5 review, O1).
+    - Each generated statement does a bounded number of instructions:
+      the C15 bounds and the slot form of §5.8 bound it. A statement
+      that the emitter cannot bound is a compiler defect.
+    - A test runs straight-line shapes at the source ceiling under
+      `lua_singlestep` and counts the instructions between two
+      interrupts. It asserts the largest count against
+      `INTERRUPT_INSTRUCTIONS`, a constant from the measured maximum
+      times 1.25. The count is independent of time (principle 15).
+    - The production compile options stay at O1. A change of the
+      options reruns that test: O2 can unroll the loop form.
+
 ## 6. Limits
 
 | Limit | Applies to | Diagnostic or failure |
@@ -538,18 +567,38 @@ necessary and that this table does not name is a contract question.
    size is never charged and never fails: Luau requires this
    (`VM/src/lmem.cpp` of the pin). The charge
    bounds the time of one step by a constant, so `max_steps` bounds
-   the run time. P1 measures `ALLOCATION_STEP_BYTES` (§7).
+   the run time. P1 measures `ALLOCATION_STEP_BYTES` (§7). The
+   interrupt points of §5.19 bound the instructions between two
+   interrupts by `INTERRUPT_INSTRUCTIONS`.
+   - A GC step is outside the time of one step: one step of the Luau
+     incremental collector traverses a whole table, and the atomic
+     phase clears every weak table (`VM/src/lgc.cpp`). The work of
+     the collector is in proportion to the allocation that drives
+     it, and allocation is charged. So `max_steps` still bounds the
+     total run time. Measured (P5.5 review, Release): the longest
+     single step is 0.078 ms with 5 MB live and 1.37 ms with 34 MB
+     live and a table of 3M slots; 20M steps take 0.88 to 1.04 s at
+     each heap size.
 4. Compiler memory is outside `max_memory_bytes`. The source ceiling
    bounds it: the peak Rust heap of one `ulua_compile` is at most
    `COMPILE_MEMORY_FACTOR` bytes per source byte plus
-   `COMPILE_MEMORY_BASE` bytes (P5.4). A test compiles every growth
-   shape at 16 KiB and at 64 KiB under a counting global allocator and
-   asserts the bound; the count does not depend on time or machine
-   load, so the assertion is a byte count (principle 15). The constants
-   come from the measured maximum with a margin of one quarter; the
-   test prints the largest ratio. The native `luau_compile` memory of
-   the generated Luau is measured and recorded beside it; it follows
-   `OUTPUT_FACTOR` (§3.10).
+   `COMPILE_MEMORY_BASE` bytes (P5.4). The test calls `ulua_compile`
+   through the C ABI under a counting global allocator, so the copy
+   of the bytecode is counted. The count does not depend on time or
+   machine load, so the assertion is a byte count (principle 15).
+   - The factor: every growth shape at 16 KiB and at 64 KiB, and the
+     nested empty block shape (`{` and `}` 44 deep, repeated). The
+     factor is the largest peak per source byte, times 1.25.
+   - The base: a set of small sources of at most 64 bytes, accepted
+     and rejected (an empty source, `;`, `let a=1`, `class A{}`, and
+     repetitions of each up to 64 bytes). The base is the largest
+     peak of the set, times 1.25. The test asserts the bound for each
+     small source and for each shape.
+   - The test prints the largest ratio and the largest small peak.
+   - Native `luau_compile` memory: the output of each growth shape at
+     64 KiB is measured. The record names the largest peak and the
+     largest peak per output byte; it follows `OUTPUT_FACTOR`
+     (§3.10).
 5. `max_memory_bytes` counts allocated bytes, garbage included. A
    collection runs only when Luau starts it.
 
