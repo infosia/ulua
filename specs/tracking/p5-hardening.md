@@ -49,6 +49,17 @@ Status: open; P5.1 and P5.2 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` 
   P5.2 and the fault injection of P5.3 do not depend on ASan for those
   objects.
 
+## Exit checklist (P5.3)
+
+- [ ] pipeline.md §10 implemented: the `fault-injection` feature, the
+  allocator hook, the request table hook.
+- [ ] The sweep over the set of §10.2 with the properties of §10.3,
+  with its count of runs and its cost.
+- [ ] A direct test shows that a seeded leak (a test-only allocation
+  that is never freed) fails the live-bytes check.
+- [ ] Each failure found becomes a test before its fix.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
 ## Exit checklist (P5.2)
 
 - [x] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four

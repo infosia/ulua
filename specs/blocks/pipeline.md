@@ -40,6 +40,7 @@ Rev 35: §9 fuzzing (P5.2).
 Rev 36: §3.7 rule ids, §9.2 object pool, §9.3 slow-compile metric (P5.2).
 Rev 37: §3.10 the timing gate (principle 17).
 Rev 38: §9.3 witness and input deadlines, §9.4 reduction record (P5.2 review).
+Rev 39: §10 fault injection (P5.3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -663,3 +664,38 @@ ABI and prints one JSON line per entry:
    (about 357,000 inputs) found none, so no measurement supports a
    longer run. The review records the seed, the input count, the
    accepted count, and the findings.
+
+## 10. Fault injection (P5.3)
+
+1. **Build.** The test-only feature `fault-injection` adds a hook to
+   the budget allocator of each instance and to the native allocation
+   of the request table: the hook fails the allocation with index `k`
+   of a run (counted from the start of the run) and no other. Neither
+   library build has the hook.
+2. **Sweep.** For each program of the sweep set (one corpus entry per
+   P1 to P4 family, an async export with host requests, a module with
+   a grant, and the example scripts), the test first counts the
+   allocations `n` of an undisturbed run of `ulua_instance_new`, of
+   each export call, of each completion, and of each settle. Then it
+   runs once for each `k` from 1 to `n`, each in a fresh instance.
+3. **Properties.** For each `k`:
+   - the failed run gives `ULUA_FAILED` with `limit:memory`, or, where
+     `abi.md` allows it for that call, the status of a refused
+     resource (`ulua_request_complete`: `ULUA_FAILED`; §6.4.2); never
+     `ULUA_INTERNAL`, a crash, or a sanitizer report;
+   - no `catch` and no `finally` of the script runs after the failure;
+   - the instance stays usable: a later call of a small export gives
+     its result;
+   - after `ulua_instance_free`, the bytes that the budget allocator
+     counts as live return to zero, and the request table holds no
+     record (the leak check that LeakSanitizer gives elsewhere).
+4. **Rust allocations.** A Rust allocation failure aborts the process
+   (the Rust standard library). The library does not recover from it;
+   a host that needs that guarantee bounds the source size and the
+   instance memory (§6). This is a host precondition, not a tested
+   path.
+5. **Cost.** The sweep runs in the sanitize gate when its count of runs
+   is below 20,000 per program; a larger program uses every `k` that is
+   a multiple of `ceil(n / 20000)`, and every `k` within 64 of a
+   phase boundary (the start of `instance_new`, of each call, of each
+   settle). The test states its cost (principle 17).
