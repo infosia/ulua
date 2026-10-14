@@ -10,7 +10,7 @@ const config = ts.getParsedCommandLineOfConfigFile(path.join(root, "tsconfig.jso
 });
 if (config.errors.length) throw Error("tsconfig errors");
 const files = fs.readdirSync(directory).filter(f => /^case-\d+\.ts$/.test(f)).map(f => path.join(directory, f));
-const prelude = config.fileNames.filter(f => f.includes(`${path.sep}prelude${path.sep}`));
+const prelude = config.fileNames.filter(f => path.normalize(f).includes(`${path.sep}prelude${path.sep}`));
 const hostFiles = fs.readdirSync(directory).filter(f => f.endsWith(".d.ts")).map(f => path.join(directory, f));
 const program = ts.createProgram([...prelude, ...files, ...hostFiles.slice(0,1)], config.options);
 const checker = program.getTypeChecker();

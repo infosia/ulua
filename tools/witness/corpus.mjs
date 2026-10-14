@@ -8,10 +8,10 @@ import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, rmSy
 import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { install, FIXTURE_NAMES, declarations } from "./node-prelude.mjs";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 const tsPath = process.env.TSC_JS || path.join(root, "node_modules/typescript/lib/typescript.js");
 if (!existsSync(tsPath)) {
@@ -103,7 +103,7 @@ function tscCodes(files, hostFiles) {
     },
   });
   for (const d of config.errors) fail("tsconfig.json", ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-  const prelude = config.fileNames.filter((f) => f.includes(`${path.sep}prelude${path.sep}`));
+  const prelude = config.fileNames.filter((f) => path.normalize(f).includes(`${path.sep}prelude${path.sep}`));
   const program = ts.createProgram([...prelude, ...hostFiles, ...files], config.options);
   const byFile = new Map(files.map((f) => [path.resolve(f), new Set()]));
   const atEquality = new Map(files.map((f) => [path.resolve(f), true]));

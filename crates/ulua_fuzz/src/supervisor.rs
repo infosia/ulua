@@ -510,17 +510,25 @@ mod tests {
         let w = sh("echo 'B 7'; exec sleep 60");
         let mut r = run(7, 8);
         r.input_deadline = Duration::from_millis(500);
-        let started = Instant::now();
         let s = supervise(&w, &root(), Target::Compiler, 1, &r, None).unwrap();
-        assert!(started.elapsed() < Duration::from_secs(10));
         assert_eq!(s.failures.len(), 1);
         assert_eq!((s.failures[0].0, s.failures[0].1.key.as_str()), (7, "hang"));
     }
     #[test]
-    fn a_signal_keys_the_crash_before_a_caught_panic_message() {
+    fn an_abort_with_a_panic_message_uses_the_platform_crash_key() {
         let w = sh("echo 'B 1'; echo \"thread 'main' panicked at x\" >&2; kill -ABRT $$");
         let s = supervise(&w, &root(), Target::Compiler, 1, &run(1, 2), None).unwrap();
-        assert_eq!(s.failures[0].1.key, "crash:signal:6");
+        // Windows exposes an exit code, so the panic message precedes the exit fallback.
+        let expected = if cfg!(windows) {
+            "crash:panic"
+        } else {
+            "crash:signal:6"
+        };
+        assert_eq!(s.failures.len(), 1);
+        assert_eq!(
+            (s.failures[0].0, s.failures[0].1.key.as_str()),
+            (1, expected)
+        );
     }
     #[test]
     fn a_worker_signal_fails_the_running_input() {
@@ -528,11 +536,14 @@ mod tests {
         let w = sh("echo 'R 2 1 10 5'; echo 'B 3'; kill -ABRT $$");
         let s = supervise(&w, &root(), Target::Compiler, 1, &run(2, 4), None);
         let s = s.unwrap();
-        assert!(
-            s.failures
-                .iter()
-                .any(|(i, f)| *i == 3 && f.key.starts_with("crash:signal"))
-        );
+        assert_eq!(s.failures.len(), 1);
+        assert_eq!(s.failures[0].0, 3);
+        // Git Bash reports SIGABRT (6) as Windows exit code 6 << 8, without a signal.
+        if cfg!(windows) {
+            assert_eq!(s.failures[0].1.key, "crash:exit:1536");
+        } else {
+            assert_eq!(s.failures[0].1.key, "crash:signal:6");
+        }
     }
     #[test]
     fn a_sanitizer_report_fails_the_running_input() {

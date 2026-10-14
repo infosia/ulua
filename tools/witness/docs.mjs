@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [runner, ...docs] = process.argv.slice(2);
 const dir = mkdtempSync(path.join(os.tmpdir(), "ulua-docs-"));
@@ -23,7 +24,9 @@ for (const doc of docs) {
     files.push(file);
     const run = spawnSync(runner, [file], { encoding: "utf8" });
     const line = text.slice(0, blocks[i].at).split("\n").length;
-    if (run.stdout !== blocks[i + 1].body) {
+    // MSVC stdout in text mode writes each LF as CRLF.
+    const want = process.platform === "win32" ? blocks[i + 1].body.replaceAll("\n", "\r\n") : blocks[i + 1].body;
+    if (run.stdout !== want) {
       failures.push(`${doc}:${line}: output differs\n--- doc\n${blocks[i + 1].body}--- run\n${run.stdout}${run.stderr}`);
     }
     // The runner exits 0 (end), 1 (rejection), or 2 (stop), and writes
@@ -37,7 +40,7 @@ for (const doc of docs) {
   }
 }
 // Each program type-checks under stock tsc --strict with the prelude.
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 for (const file of files) {
   const tsc = spawnSync("node", [path.join(root, "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--target", "es2022",
     "--module", "esnext", "--lib", "es2022", path.join(root, "prelude/ulua.d.ts"), file], { encoding: "utf8" });

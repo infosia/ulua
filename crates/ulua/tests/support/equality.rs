@@ -117,7 +117,7 @@ impl Suite {
         let analyze = std::env::var_os("LUAU_ANALYZE")
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join("target/luau-tools/luau-analyze"));
-        let out = analyzer::command(analyze).args(files).output().unwrap();
+        let out = analyzer::output(analyze, &files);
         assert!(
             out.status.success(),
             "luau-analyze {}",

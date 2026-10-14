@@ -63,10 +63,7 @@ fn protected_pipeline_and_nesting_ceiling() {
     files.push(file);
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(&files)
-        .output()
-        .unwrap();
+    let out = analyzer::output(root.join("target/luau-tools/luau-analyze"), &files);
     assert!(out.status.success(), "{}", analyzer::failure(&out));
     eprintln!(
         "P2.7 growth analyzer={} ceiling={ceiling} analyzer_cost={:.3}s total_cost={:.3}s",

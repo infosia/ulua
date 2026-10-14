@@ -131,9 +131,12 @@ impl Tools {
                     .to_string(),
             ],
             analyze: vec![
-                root.join("target/luau-tools/luau-analyze")
-                    .display()
-                    .to_string(),
+                root.join(format!(
+                    "target/luau-tools/luau-analyze{}",
+                    std::env::consts::EXE_SUFFIX
+                ))
+                .display()
+                .to_string(),
                 "-j1".into(),
             ],
             deadline: DEADLINE,
@@ -469,38 +472,51 @@ mod tests {
     fn a_witness_past_its_deadline_is_a_limit_and_the_batch_is_checked_again() {
         // A stub tsc that never ends within the deadline; the analyzer is a stub that passes.
         let mut tools = Tools::new(&root());
-        tools.tsc = vec![
-            "sh".into(),
-            "-c".into(),
-            "exec sleep 20".into(),
-            "stub".into(),
+        let node = Command::new("node")
+            .args(["-p", "process.execPath"])
+            .output()
+            .unwrap();
+        assert!(node.status.success());
+        let node = String::from_utf8(node.stdout).unwrap().trim().to_owned();
+        let calls = root().join(format!(
+            "target/witness-deadline-{}.log",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&calls);
+        let slow = format!(
+            "require('fs').appendFileSync({:?}, 'call\\n'); setTimeout(() => {{}}, 20000)",
+            calls.display().to_string()
+        );
+        tools.tsc = vec![node.clone(), "-e".into(), slow.clone(), "--".into()];
+        tools.analyze = vec![
+            node.clone(),
+            "-e".into(),
+            "process.exit(0)".into(),
+            "--".into(),
         ];
-        tools.analyze = vec!["/usr/bin/true".into()];
         tools.deadline = Duration::from_millis(500);
         let samples = [
             sample(5, "export function main(): void {}", "--!strict\n"),
             sample(6, "export function f(): void {}", "--!strict\n"),
         ];
-        let started = Instant::now();
         let c = check(&tools, &samples).unwrap();
         assert!(c.failures.is_empty(), "{c:?}");
         let limited: Vec<_> = c.limits.iter().map(|l| l.0).collect();
         assert_eq!(limited, [5, 6]);
         // One batch run and one run per input, each killed at the deadline.
-        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(std::fs::read_to_string(&calls).unwrap().lines().count(), 3);
+        std::fs::write(&calls, "").unwrap();
         // A stub analyzer past its deadline gives the same record.
         let mut tools = Tools::new(&root());
-        tools.analyze = vec![
-            "/bin/sh".into(),
-            "-c".into(),
-            "exec sleep 20".into(),
-            "stub".into(),
-        ];
+        tools.analyze = vec![node, "-e".into(), slow, "--".into()];
         tools.deadline = Duration::from_millis(500);
         let mut out = Checked::default();
         let dir = root().join("target/fuzz/tmp/witness-test-analyze");
         std::fs::create_dir_all(&dir).unwrap();
         analyze(&tools, &dir, &samples[..1], &mut out).unwrap();
-        assert_eq!(out.limits.len(), 1);
+        assert_eq!(out.limits.iter().map(|l| l.0).collect::<Vec<_>>(), [5]);
+        assert_eq!(std::fs::read_to_string(&calls).unwrap().lines().count(), 2);
+        std::fs::remove_file(calls).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

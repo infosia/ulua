@@ -1,6 +1,8 @@
 //! Five C11 builds and ten runs, plus one stock tsc batch for nine accepted scripts.
 //! The test prints build, run, tsc, and total costs. It has no time assertion.
 //! Measured Debug cost: 3.242 seconds for all five hosts and ten runs.
+#[path = "../support/host.rs"]
+mod host;
 use std::{
     path::PathBuf,
     process::{Command, Output},
@@ -19,6 +21,25 @@ fn checked(command: &mut Command) -> Output {
     output
 }
 
+fn expected(path: &std::path::Path) -> Vec<u8> {
+    let bytes = std::fs::read(path).unwrap();
+    // MSVC stdout in text mode expands every LF byte to CRLF.
+    if cfg!(windows) {
+        bytes
+            .into_iter()
+            .flat_map(|b| {
+                if b == b'\n' {
+                    vec![b'\r', b'\n']
+                } else {
+                    vec![b]
+                }
+            })
+            .collect()
+    } else {
+        bytes
+    }
+}
+
 struct Scratch(PathBuf);
 
 impl Drop for Scratch {
@@ -32,11 +53,16 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
     let start = Instant::now();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     // Use the archive from this test's profile, as the link tests do.
-    let library = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("libulua.a");
+    let library =
+        std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(if cfg!(target_env = "msvc") {
+                "ulua.lib"
+            } else {
+                "libulua.a"
+            });
     assert!(library.is_file(), "{}", library.display());
     let scratch =
         Scratch(std::env::temp_dir().join(format!("ulua-example-hosts-{}", std::process::id())));
@@ -93,31 +119,16 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
     let mut failures = Vec::new();
     for (name, script, _) in examples {
         let directory = root.join("examples").join(name);
-        let executable = scratch.0.join(name);
-        let mut compiler = Command::new("cc");
-        if cfg!(ulua_sanitize) {
-            compiler.arg("-fsanitize=address,undefined");
-        }
-        compiler
-            .args(["-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"])
-            .arg(directory.join("host.c"))
-            .arg("-I")
-            .arg(root.join("include"))
-            .arg(&library)
-            .arg("-o")
-            .arg(&executable);
-        if cfg!(target_os = "macos") {
-            compiler.args([
-                "-lc++",
-                "-liconv",
-                "-framework",
-                "Security",
-                "-framework",
-                "CoreFoundation",
-            ]);
-        } else {
-            compiler.args(["-lstdc++", "-lpthread", "-ldl", "-lm"]);
-        }
+        let executable = scratch
+            .0
+            .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+        let mut compiler = host::compile(
+            &root,
+            &directory.join("host.c"),
+            &library,
+            &executable,
+            false,
+        );
         let build_start = Instant::now();
         checked(&mut compiler);
         build_cost += build_start.elapsed().as_secs_f64();
@@ -127,7 +138,7 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
             .output()
             .unwrap();
         run_cost += run_start.elapsed().as_secs_f64();
-        let expected = std::fs::read(directory.join("expected.txt")).unwrap();
+        let expected = expected(&directory.join("expected.txt"));
         if !output.status.success() || !output.stderr.is_empty() || output.stdout != expected {
             failures.push(format!(
                 "{name}: status={} stdout_matches={}\nstdout:\n{}stderr:\n{}",
@@ -143,12 +154,16 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
     for (script, expected, code) in runner_cases {
         let directory = root.join("examples/run");
         let run_start = Instant::now();
-        let output = Command::new(scratch.0.join("run"))
-            .arg(directory.join(script))
-            .output()
-            .unwrap();
+        let output = Command::new(
+            scratch
+                .0
+                .join(format!("run{}", std::env::consts::EXE_SUFFIX)),
+        )
+        .arg(directory.join(script))
+        .output()
+        .unwrap();
         run_cost += run_start.elapsed().as_secs_f64();
-        let expected = std::fs::read(directory.join(expected)).unwrap();
+        let expected = self::expected(&directory.join(expected));
         if output.status.code() != Some(code)
             || !output.stderr.is_empty()
             || output.stdout != expected

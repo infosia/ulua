@@ -10,6 +10,7 @@
 import { readFileSync, readdirSync, existsSync, rmSync, mkdirSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // The current phase and slice. Entries of this point or earlier are checked
 // in full. `P2.1` is slice 1 of P2; `P2` alone sorts after every P2 slice.
@@ -19,7 +20,7 @@ const order = (p) => {
   return m ? Number(m[1]) * 10 + (m[2] ? Number(m[2]) : 9) : 99;
 };
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const failures = [];
 const fail = (entry, message) => failures.push(`${entry}: ${message}`);
 
@@ -107,7 +108,9 @@ if (stress.status !== 0) fail("stress", `ulua-corpus --emit-stress exited with s
 const stressFiles = readdirSync(stressDir).map((f) => path.join(stressDir, f));
 if (stressFiles.length === 0) fail("stress", "no stress modules");
 
-const analyze = process.env.LUAU_ANALYZE || path.join(root, "target/luau-tools/luau-analyze");
+// tools/luau-tools.sh writes luau-analyze.exe on Windows.
+const exe = process.platform === "win32" ? ".exe" : "";
+const analyze = process.env.LUAU_ANALYZE || path.join(root, `target/luau-tools/luau-analyze${exe}`);
 const files = readdirSync(luauDir).map((f) => path.join(luauDir, f));
 if (!existsSync(analyze)) fail("luau-analyze", `not found at ${path.relative(root, analyze)}; run sh tools/luau-tools.sh`);
 else if (files.length > 0) {

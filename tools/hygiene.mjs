@@ -7,8 +7,9 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root })
   .toString()
   .split("\0")

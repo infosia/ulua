@@ -338,10 +338,13 @@ fn type_depth_bound_and_ceiling_combinations() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let output = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(paths.iter().map(|p| p.with_extension("luau")))
-        .output()
-        .unwrap();
+    let output = analyzer::output(
+        root.join("target/luau-tools/luau-analyze"),
+        &paths
+            .iter()
+            .map(|p| p.with_extension("luau"))
+            .collect::<Vec<_>>(),
+    );
     assert!(
         output.status.success(),
         "Bound shape exceeds the analyzer budget:\n{}",

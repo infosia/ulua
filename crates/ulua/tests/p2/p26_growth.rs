@@ -48,10 +48,7 @@ fn class_full_pipeline_growth() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(&files)
-        .output()
-        .unwrap();
+    let out = analyzer::output(root.join("target/luau-tools/luau-analyze"), &files);
     assert!(
         out.status.success(),
         "luau-analyze {}",

@@ -61,10 +61,7 @@ fn protected_loops_reach_each_nesting_ceiling() {
         }
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(&paths)
-        .output()
-        .unwrap();
+    let output = analyzer::output(root.join("target/luau-tools/luau-analyze"), &paths);
     assert!(output.status.success(), "{}", analyzer::failure(&output));
     std::fs::remove_dir_all(directory).unwrap();
     eprintln!(

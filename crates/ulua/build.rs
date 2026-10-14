@@ -111,7 +111,7 @@ fn run() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     compile_memory::build(&root, &configure())?;
     let mut vm = configure();
-    vm.flag("-fno-math-errno")
+    vm.flag_if_supported("-fno-math-errno")
         .files(files(&source.join("VM/src"))?);
     println!("cargo:rerun-if-changed={}", source.join("VM").display());
     vm.try_compile("ulua_vm").map_err(|e| e.to_string())?;
@@ -121,6 +121,9 @@ fn run() -> Result<(), String> {
     );
     let mut layout = cc::Build::new();
     instrument(&mut layout);
+    if layout.get_compiler().is_like_msvc() {
+        layout.std("c11");
+    }
     layout
         .cargo_metadata(false)
         .include(root.join("include"))

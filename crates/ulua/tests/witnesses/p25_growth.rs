@@ -104,10 +104,7 @@ fn p25_full_pipeline_growth_and_output() {
         }
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let result = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(&paths)
-        .output()
-        .unwrap();
+    let result = analyzer::output(root.join("target/luau-tools/luau-analyze"), &paths);
     assert!(
         result.status.success(),
         "luau-analyze outputs={}\n{}",

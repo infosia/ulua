@@ -274,10 +274,13 @@ fn field_bound_and_combined_ceiling_shapes_pass_the_analyzer() {
         );
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let result = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(paths.iter().map(|p| p.with_extension("luau")))
-        .output()
-        .unwrap();
+    let result = analyzer::output(
+        root.join("target/luau-tools/luau-analyze"),
+        &paths
+            .iter()
+            .map(|p| p.with_extension("luau"))
+            .collect::<Vec<_>>(),
+    );
     assert!(
         result.status.success(),
         "Combined field count exceeds the analyzer budget:\n{}",

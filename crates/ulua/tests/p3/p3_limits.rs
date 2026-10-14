@@ -196,10 +196,7 @@ fn local_spill_and_upvalue_edges() {
         );
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(files)
-        .output()
-        .unwrap();
+    let out = analyzer::output(root.join("target/luau-tools/luau-analyze"), &files);
     assert!(out.status.success(), "{}", analyzer::failure(&out));
     std::fs::remove_dir_all(dir).unwrap();
     eprintln!("P3 limits cost={:.3}s", start.elapsed().as_secs_f64());

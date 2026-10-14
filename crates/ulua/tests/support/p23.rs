@@ -2,6 +2,8 @@
 //! Measured single-worker Debug cost: 5.04 seconds for p23_methods.
 #[path = "analyzer.rs"]
 mod analyzer;
+#[path = "tsc.rs"]
+mod tsc;
 use super::support::Script;
 use std::{
     ffi::{c_char, c_void},
@@ -87,25 +89,10 @@ impl Suite {
             .map(|i| self.directory.join(format!("case-{i}.ts")))
             .collect();
         let luau: Vec<_> = ts.iter().map(|p| p.with_extension("luau")).collect();
-        let mut tsc = Command::new("node");
-        tsc.current_dir(&root)
-            .args([
-                "node_modules/typescript/bin/tsc",
-                "--noEmit",
-                "--strict",
-                "--target",
-                "es2022",
-                "--module",
-                "esnext",
-                "--lib",
-                "es2022",
-                "prelude/ulua.d.ts",
-            ])
-            .args(&ts);
+        let mut tsc = tsc::command(&root, &self.directory, &ts);
         success(&mut tsc);
-        let mut analyze = analyzer::command(root.join("target/luau-tools/luau-analyze"));
-        analyze.args(&luau);
-        success(&mut analyze);
+        let out = analyzer::output(root.join("target/luau-tools/luau-analyze"), &luau);
+        assert!(out.status.success(), "{}", analyzer::failure(&out));
         let runner = self.directory.join("witness.cjs");
         std::fs::write(&runner, r#"const fs=require('fs'),path=require('path');
 const ts=require(process.argv[2]);const dir=process.argv[3];let count=0;

@@ -1,5 +1,7 @@
 //! Default-build C11/C++17 static/dynamic links and the exact dynamic symbol set.
 //! Four compilations and four runs cost 7.181 seconds in the measured Debug build.
+#[path = "../support/host.rs"]
+mod host;
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
@@ -25,8 +27,14 @@ fn c11_cpp17_static_dynamic_and_exports() {
         .parent()
         .unwrap()
         .to_owned();
-    let static_library = deps.join("libulua.a");
-    let dynamic_library = deps.join(if cfg!(target_os = "macos") {
+    let static_library = deps.join(if cfg!(target_env = "msvc") {
+        "ulua.lib"
+    } else {
+        "libulua.a"
+    });
+    let dynamic_library = deps.join(if cfg!(target_os = "windows") {
+        "ulua.dll"
+    } else if cfg!(target_os = "macos") {
         "libulua.dylib"
     } else {
         "libulua.so"
@@ -35,35 +43,26 @@ fn c11_cpp17_static_dynamic_and_exports() {
     assert!(dynamic_library.is_file());
     let scratch = std::env::temp_dir().join(format!("ulua-p3-links-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).unwrap();
-    for (lang, compiler, standard) in [("c", "cc", "c11"), ("c++", "c++", "c++17")] {
+    if cfg!(target_os = "windows") {
+        std::fs::copy(&dynamic_library, scratch.join("ulua.dll")).unwrap();
+    }
+    for (cpp, standard) in [(false, "c11"), (true, "c++17")] {
         for (kind, library) in [("static", &static_library), ("dynamic", &dynamic_library)] {
-            let executable = scratch.join(format!("{standard}-{kind}"));
-            let mut cmd = Command::new(compiler);
-            if cfg!(ulua_sanitize) {
-                cmd.arg("-fsanitize=address,undefined");
-            }
-            cmd.arg(format!("-std={standard}"))
-                .args(["-Wall", "-Wextra", "-Wpedantic", "-Werror", "-x", lang])
-                .arg(root.join("native/host_link.c"))
-                .arg("-I")
-                .arg(root.join("include"))
-                .args(["-x", "none"])
-                .arg(library)
-                .arg("-o")
-                .arg(&executable);
-            if cfg!(target_os = "macos") {
-                cmd.args([
-                    "-lc++",
-                    "-liconv",
-                    "-framework",
-                    "Security",
-                    "-framework",
-                    "CoreFoundation",
-                ]);
+            let executable =
+                scratch.join(format!("{standard}-{kind}{}", std::env::consts::EXE_SUFFIX));
+            let link_library = if cfg!(target_env = "msvc") && kind == "dynamic" {
+                deps.join("ulua.dll.lib")
             } else {
-                cmd.args(["-lstdc++", "-lpthread", "-ldl", "-lm"]);
-            }
-            if kind == "dynamic" {
+                library.clone()
+            };
+            let mut cmd = host::compile(
+                &root,
+                &root.join("native/host_link.c"),
+                &link_library,
+                &executable,
+                cpp,
+            );
+            if kind == "dynamic" && !cfg!(target_env = "msvc") {
                 cmd.arg(format!("-Wl,-rpath,{}", deps.display()));
             }
             checked(&mut cmd);
@@ -111,6 +110,27 @@ fn c11_cpp17_static_dynamic_and_exports() {
     );
 }
 fn exported(library: &Path) -> BTreeSet<String> {
+    if cfg!(target_env = "msvc") {
+        let tool = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "cl.exe").unwrap();
+        let mut cmd = Command::new(tool.path().with_file_name("dumpbin.exe"));
+        for (key, value) in tool.env() {
+            cmd.env(key, value);
+        }
+        let output = checked(cmd.arg("/nologo").arg("/exports").arg(library));
+        return String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .filter_map(|line| {
+                let fields: Vec<_> = line.split_whitespace().collect();
+                (fields.len() >= 4
+                    && fields[0].parse::<u32>().is_ok()
+                    && fields[1].chars().all(|c| c.is_ascii_hexdigit())
+                    && fields[2].len() == 8
+                    && fields[2].chars().all(|c| c.is_ascii_hexdigit()))
+                .then(|| fields[3].to_owned())
+            })
+            .collect();
+    }
     let mut cmd = Command::new("nm");
     if cfg!(target_os = "macos") {
         cmd.arg("-gU");

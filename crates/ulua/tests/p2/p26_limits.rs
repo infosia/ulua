@@ -117,10 +117,7 @@ fn class_boundaries_and_nominal_flows() {
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let now = Instant::now();
-    let out = analyzer::command(root.join("target/luau-tools/luau-analyze"))
-        .args(&paths)
-        .output()
-        .unwrap();
+    let out = analyzer::output(root.join("target/luau-tools/luau-analyze"), &paths);
     assert!(
         out.status.success(),
         "luau-analyze {}",
