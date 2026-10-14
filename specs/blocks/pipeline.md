@@ -251,7 +251,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    the private Error table holds rejects the promise. The queue keeps a
    private head index and a tail index and clears each consumed entry,
    so a drain retains no completed job. The queue drains after each
-   host-started run (`ulua_instance_new`, `ulua_call`) inside the same
+   host-started run (`ulua_instance_new`, `ulua_call`,
+   `ulua_call_start`, each settle of `ulua_pump`) inside the same
    protected call, under the same `max_steps` and `max_memory_bytes`.
    The unhandled-rejection check (C19.7) runs at the end of the drain.
    A stop during a run clears the job queue: no job of that run runs in

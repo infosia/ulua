@@ -144,6 +144,17 @@ Reviewer: fresh agent, diff `b105752..86432d3`. 0 CRITICAL, 1 MAJOR, 1 MINOR. He
 
 Fix (Codex): every path that leaves a run between the creation of a request and the return of `start` (a non-zero return, a revoked grant, a memory failure while the record or the promise is created, `limit:requests`, and the start trampoline) leaves no open request, no record, and no reachable promise. 5 paths, sync and async, 10,000 repetitions each: the counts and the existing records and promises do not change, the id is invalid, retained memory does not grow (0.68 s). The count violation reproduces at `86432d3`. Not tested: OS allocation exhaustion and a direct injection of a `lua_ref` registry failure.
 
+### P4.3 Phase Review round 2
+
+Reviewer: fresh agent, diff `b105752..b104ef3`, priority `b104ef3`. 0 CRITICAL, 1 MAJOR, 3 MINOR. The round 1 fix holds: 10,000 failed starts with every reentrant call from `start` (`ULUA_BUSY`); 2,000 failed starts inside settles; a memory sweep over 1,296 limits and a steps sweep over 16,192 instances keep the counts equal to the ids that `start` received; 606 programs equal the `node` settle loop; 115 programs `tsc` and `luau-analyze` clean.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A script fills the heap; `ulua_request_fail` and `ulua_request_complete` then return `ULUA_FAILED` (`lua_cpcall` allocates a closure, `native/shim/requests.h:108-124`): 255 of 256 requests stay open in 271 of 271 instances; the host cannot cancel them | MAJOR | abi.md Rev 9 §6.4.2: complete and fail record outside the Luau heap and request no Luau allocation; a settle copies the string, and a refused copy stops the settle with `limit:memory` and discards the request |
+| A stopped settle leaves a call task `ULUA_PENDING` for good, with its record | MINOR | `ulua_task_discard` (§6.4.4) |
+| pipeline.md §4.11 lists two host-started runs | MINOR | §4.11 lists four |
+| §6.4.2 names a diagnostic code for functions without a diagnostic | MINOR | §6.4.2: the status is the whole result |
+
 ## Contract pin (P4.3)
 
 At the P4.3 contract commit, `tools/witness/luau.mjs` (`PHASE = "P4.3"`): `ulua-corpus` exits with "Unknown grant fixture: hostLater", so the Luau witnesses fail as a whole until the harness implements the fixture. `node tools/witness/corpus.mjs` passes (`tsc` and `node` for `a64` and `r148`).

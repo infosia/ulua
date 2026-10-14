@@ -1,6 +1,6 @@
 # C ABI
 
-Status: Rev 8, 2026-10-14. ABI version 1. No binary compatibility
+Status: Rev 9, 2026-10-14. ABI version 1. No binary compatibility
 rule applies (D23): a change of this file changes `include/ulua.h`, the
 implementation, and the tests in one commit.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
@@ -13,7 +13,8 @@ host declarations (D20 revised).
 Rev 6: status, no compatibility rule (D23).
 Rev 7: §3, §4.7 async exports (P4.1).
 Rev 8: §2 `ULUA_PENDING`, §5 `max_open_requests`, §6.2 `start`, §6.4
-async host requests, §7 (P4.3).
+async host requests, §7 (P4.3). Rev 9: §6.4 records outside the Luau
+heap, `ulua_task_discard` (P4.3 review 2).
 
 `include/ulua.h` declares every item of this file. The value type
 carries every family from version 1, so a later phase adds a family
@@ -301,23 +302,31 @@ An async capability has a `start` function. A script call gives a
    from its start until the pump settles it.
 2. **Complete.** `ulua_request_complete(instance, request, value)`
    records the value of an open request; `ulua_request_fail(instance,
-   request)` records a failure. Neither runs script code. The value
-   follows §4 and the result type; a `STRING` value is valid UTF-8 and
-   is copied at the call. A wrong type, an unknown id, or a request
-   that has a recorded completion gives `ULUA_INVALID_ARGUMENT` and
-   records nothing. A copy that `max_memory_bytes` refuses gives
-   `ULUA_FAILED` with `limit:memory` and records nothing. From a host callback of the context, each gives
-   `ULUA_BUSY` (§1.7).
+   request)` records a failure. Neither runs script code, and neither
+   requests a Luau allocation: the record is kept in the request table
+   of the instance, outside the Luau heap, so a full heap never refuses
+   it. The value follows §4 and the result type; a `STRING` value is
+   valid UTF-8 and its bytes are copied into the record at the call.
+   These bytes are host memory, outside `max_memory_bytes` (§6.2.8). A
+   wrong type, an unknown id, or a request that has a recorded
+   completion gives `ULUA_INVALID_ARGUMENT` and records nothing. The
+   two functions take no diagnostic; their status is the whole result.
+   From a host callback of the context, each gives `ULUA_BUSY` (§1.7).
 3. **Pump.** `ulua_pump(instance, max_requests, settled, diagnostic)`
    settles recorded completions in the order of their record, at most
    `max_requests` (0 means no limit), and writes their count to
-   `*settled`; a settle that stops counts. Each settle is one host-started run (collisions.md
-   C19.6): it fulfills the promise of the request with the value, then
-   drains the job queue and checks for unhandled rejections (C19.7).
-   `max_steps` applies to each settle. A recorded failure stops that
-   run with `ULUA_HOST_ERROR` and `host:request` (D26): the promise is
-   not rejected and no script code runs. After a stop, the pump
-   returns at once; completions not yet settled stay recorded.
+   `*settled`; a settle that stops counts. Each settle is one
+   host-started run (collisions.md C19.6): it fulfills the promise of
+   the request with the value, then drains the job queue and checks
+   for unhandled rejections (C19.7). `max_steps` applies to each
+   settle. A recorded failure stops that run with `ULUA_HOST_ERROR` and
+   `host:request` (D26): the promise is not rejected and no script code
+   runs. A settle copies a `STRING` value into the Luau heap; a copy
+   that `max_memory_bytes` refuses stops that settle with
+   `limit:memory` and discards the request: its promise stays pending.
+   A settled or discarded request leaves the request table. After a
+   stop, the pump returns at once; completions not yet settled stay
+   recorded.
 4. **Call tasks.** `ulua_call_start(instance, export_index, arguments,
    argument_count, task, diagnostic)` runs an export as `ulua_call`
    does and writes a task id. If the run stops, the call gives the stop
@@ -326,7 +335,10 @@ An async capability has a `start` function. A script call gives a
    pending; then the result of §4.7, once. A sync export gives its
    result at the first query. An unknown or consumed task id gives
    `ULUA_INVALID_ARGUMENT`. `ulua_call` of an async export keeps §4.7:
-   a pending promise gives `async:pending`.
+   a pending promise gives `async:pending`. A stop can leave the
+   promise of a task pending for good: `ulua_task_discard(instance,
+   task)` releases a task that is not consumed, and its id is then
+   invalid.
 5. **Counts.** `ulua_instance_requests(instance, open, recorded)`
    writes the count of open requests and of recorded completions.
 6. **Lifetime.** `ulua_instance_free` discards each request and task
@@ -384,6 +396,7 @@ ulua_status ulua_pump(ulua_instance* instance, uint32_t max_requests,
     uint32_t* settled, ulua_diagnostic* diagnostic);
 ulua_status ulua_instance_requests(const ulua_instance* instance,
     uint32_t* open, uint32_t* recorded);
+ulua_status ulua_task_discard(ulua_instance* instance, uint64_t task);
 ```
 
 1. `ulua_context_free` frees each module, instance, and capability of
