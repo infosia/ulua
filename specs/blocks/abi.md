@@ -311,6 +311,8 @@ An async capability has a `start` function. A script call gives a
    wrong type, an unknown id, or a request that has a recorded
    completion gives `ULUA_INVALID_ARGUMENT` and records nothing. The
    two functions take no diagnostic; their status is the whole result.
+   If the host allocator refuses the record bytes, `ulua_request_complete`
+   gives `ULUA_FAILED` and records nothing; the request stays open.
    From a host callback of the context, each gives `ULUA_BUSY` (§1.7).
 3. **Pump.** `ulua_pump(instance, max_requests, settled, diagnostic)`
    settles recorded completions in the order of their record, at most

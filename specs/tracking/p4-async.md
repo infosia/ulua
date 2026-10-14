@@ -1,6 +1,6 @@
 # P4 async
 
-Status: open; P4.1 and P4.2 COMPLETE 2026-10-14. Decisions: D24 to D26 (`plan.md` §8).
+Status: COMPLETE 2026-10-14 (P4.1, P4.2, P4.3). Decisions: D24 to D26 (`plan.md` §8).
 
 ## Slices
 
@@ -102,12 +102,12 @@ Timing fix (Codex): 7 tests that assert a time ratio moved into the `witnesses` 
 
 ## Exit checklist (P4.3)
 
-- [ ] abi.md Rev 8 (§2 `ULUA_PENDING`, §5 `max_open_requests`, §6.2
+- [x] abi.md Rev 8 (§2 `ULUA_PENDING`, §5 `max_open_requests`, §6.2
   `start`, §6.3 async declarations, §6.4, §7); collisions.md C19.16;
   pipeline.md §6; corpus.md Rev 11 §7 (`hostLater` and the settle
   loop) implemented; `include/ulua.h` declares every new item.
-- [ ] P4.3 entries pass in full; every earlier entry keeps passing.
-- [ ] Direct tests (one per public function): start with each value
+- [x] P4.3 entries pass in full; every earlier entry keeps passing.
+- [x] Direct tests (one per public function): start with each value
   type; complete with each type, a wrong type, an unknown id, twice,
   from a host callback (`ULUA_BUSY`); fail gives `host:request` and
   runs no `catch`; the pump order, `max_requests`, the step charge,
@@ -117,11 +117,11 @@ Timing fix (Codex): 7 tests that assert a time ratio moved into the `witnesses` 
   consumed); counts; revocation keeps open requests; instance free
   with open requests; the declarations text of an async capability;
   layout and link tests for the new items.
-- [ ] Job order against `node` with the settle loop of corpus.md §7
+- [x] Job order against `node` with the settle loop of corpus.md §7
   for interleaved requests, `Promise.all`, `then`, and `finally`.
-- [ ] A random check of programs with async host requests against
+- [x] A random check of programs with async host requests against
   `node`, `tsc` (with the declarations), and `luau-analyze -j1`.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 Source: the owner's prior projects. The push completion that runs no
 script and the host-driven step follow the project that holds promises
@@ -156,6 +156,18 @@ Reviewer: fresh agent, diff `b105752..b104ef3`, priority `b104ef3`. 0 CRITICAL, 
 | §6.4.2 names a diagnostic code for functions without a diagnostic | MINOR | §6.4.2: the status is the whole result |
 
 Fix (Codex): request records and completion bytes live in a native table outside the Luau heap; complete and fail request no Luau allocation. The heap sweep of the finding (1,355 instances, 346,880 records): every complete and fail succeeds, Luau allocation growth 0, counts 0/0 after the pumps (3.79 s). A string copy refused at its settle discards the request; the next settle gives 42. `ulua_task_discard`: the id becomes invalid; unknown and consumed ids and BUSY checked; 256 discarded tasks: 747,496 to 592,064 bytes after a collection. `measurements` (timing binary) 999 s, ceiling ratio at most 21.8. Not tested: a real host `malloc` failure.
+
+### P4.3 Phase Review round 3
+
+Reviewer: fresh agent, diff `b105752..f1a0dc6`, priority `f1a0dc6`. 0 CRITICAL, 0 MAJOR, 1 MINOR. Held: complete and fail with a full heap succeed; a refused settle copy stops with `limit:memory`, keeps the next settle and other chains, runs no `catch` or `finally`; a 2^30+16 byte string gives `limit:memory` without poisoning; record order and states; BUSY from `start` and from the output callback for 7 entry points; `ulua_task_discard` in every task state, ids not reused; revoke and free with open requests; a script cannot grow the native table past `max_open_requests`; RSS flat over 120,000 request cycles, 250 instance frees, and 400 context frees; ASan clean in 11 scenarios; no std container in the native code.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A host `malloc` failure in `ulua_request_complete` gives `ULUA_FAILED`; §6.4.2 names no such status | MINOR | §6.4.2 states it |
+
+### P4.3 close
+
+Review rounds: 3. `sh tools/gate.sh full` passes at `f1a0dc6`: `cargo-test` 258 s, `luau-witnesses` 53 s (199 entries in P4.3 or earlier, 75 generated modules, 14 stress modules); hygiene passes. The close commit changes text only. P4 is complete: P4.1, P4.2, and P4.3. Running tasks at the close: none.
 
 ## Contract pin (P4.3)
 
