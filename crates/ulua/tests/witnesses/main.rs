@@ -2,6 +2,7 @@
 #![allow(clippy::duplicate_mod)]
 use std::sync::{Mutex, MutexGuard};
 
+mod compile_memory;
 mod p25_growth;
 mod p25_witness_time;
 mod p3_growth;

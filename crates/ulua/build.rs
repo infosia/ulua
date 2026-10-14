@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+#[path = "build/compile_memory.rs"]
+mod compile_memory;
 #[path = "build/sanitize.rs"]
 mod sanitize;
 
@@ -107,6 +109,7 @@ fn run() -> Result<(), String> {
     native
         .try_compile("ulua_native")
         .map_err(|e| e.to_string())?;
+    compile_memory::build(&root, &configure())?;
     let mut vm = configure();
     vm.flag("-fno-math-errno")
         .files(files(&source.join("VM/src"))?);

@@ -51,14 +51,29 @@ Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` �
 
 ## Exit checklist (P5.4)
 
-- [ ] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and
+- [x] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and
   `COMPILE_MEMORY_BASE` from the measured maximum with a margin of one
   quarter, and the test over every growth shape at 16 and 64 KiB.
-- [ ] The native `luau_compile` memory of the largest outputs is
+- [x] The native `luau_compile` memory of the largest outputs is
   measured and recorded.
-- [ ] The test cost is stated; the test runs in `gate.sh full` if it
+- [x] The test cost is stated; the test runs in `gate.sh full` if it
   costs at most 10 s, else in `gate.sh timing` (principle 17).
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+## Measurements (P5.4)
+
+Implementation record (Codex): every growth shape compiled at 16 and
+64 KiB under a counting global allocator (the peak live Rust heap of
+one compile; requested sizes, without allocator overhead, stack, or
+RSS); Debug and Release give the same counts; no shape above 2,000
+bytes per source byte. Constants (the measured maximum and base, each
+times 1.25, rounded up): `COMPILE_MEMORY_FACTOR` 1,061 bytes per
+source byte, `COMPILE_MEMORY_BASE` 11,122 bytes. Native `luau_compile`
+of the 5 largest outputs (64 KiB inputs, 4.1 to 4.3 MB of Luau): peak
+42.2 to 42.8 MB, each compiles. The test costs 60.5 s Debug (10.4 s
+Release), so it runs in `gate.sh timing` (now 259 s). Close gates:
+`gate.sh full` 185 s, `gate.sh timing` 259 s. The Phase Review of P5.4
+runs with the review of P5.5.
 
 ## Exit checklist (P5.3)
 
