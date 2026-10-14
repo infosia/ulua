@@ -39,7 +39,9 @@ for (const dir of ["accept", "reject", "trap"]) {
 }
 
 execFileSync("cargo", ["build", "--quiet", "-p", "ulua_corpus"], { cwd: root, stdio: "inherit" });
-const runner = path.join(root, "target/debug/ulua-corpus");
+// CARGO_TARGET_DIR selects the build (target/sanitize for gate.sh sanitize).
+const targetDir = process.env.CARGO_TARGET_DIR || path.join(root, "target");
+const runner = path.join(targetDir, "debug/ulua-corpus");
 const luauDir = path.join(root, "target/corpus-luau");
 rmSync(luauDir, { recursive: true, force: true });
 mkdirSync(luauDir, { recursive: true });
