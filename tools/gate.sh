@@ -45,6 +45,8 @@ if [ "$shape" = sanitize ]; then
     step luau-witnesses "$NODE" tools/witness/luau.mjs
     step docs-runner sh tools/docs-runner.sh "$CARGO_TARGET_DIR/examples/docs-run"
     step docs-witness "$NODE" tools/witness/docs.mjs "$CARGO_TARGET_DIR/examples/docs-run" docs/tutorial-typescript.md
+    # pipeline.md §9.5: each fuzz target, a fixed seed and input count.
+    step fuzz-smoke cargo run --quiet -p ulua_fuzz -- --smoke
     printf 'gate sanitize: PASS\n'
     exit 0
 fi

@@ -49,6 +49,18 @@ Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
   P5.2 and the fault injection of P5.3 do not depend on ASan for those
   objects.
 
+## Exit checklist (P5.2)
+
+- [ ] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four
+  targets, the invariants, deterministic seeds, reduction, and the
+  findings directory.
+- [ ] A direct test per invariant: a seeded violation (test-only) is
+  reported as a failure, so a clean run is evidence.
+- [ ] The smoke runs in `sh tools/gate.sh sanitize`, with their cost.
+- [ ] One hour per target on the sanitizer build with zero open
+  findings; each finding became a test before its fix.
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
 ## Exit checklist (P5.1)
 
 - [x] pipeline.md §2.6 implemented: `ULUA_SANITIZE=1`, the flags,

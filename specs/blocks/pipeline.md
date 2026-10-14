@@ -36,6 +36,7 @@ Rev 31: §4.11 a stop clears the queue before the collection (P4.1 review).
 Rev 32: §4.9 one completion helper (P4.1 review 3).
 Rev 33: §6 `max_open_requests`, host-started runs (P4.3).
 Rev 34: §2.6 sanitizer build (P5.1).
+Rev 35: §9 fuzzing (P5.2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -585,3 +586,53 @@ ABI and prints one JSON line per entry:
 - It reads the `grants` header of each entry (corpus.md §3) and passes
   one capability per named fixture of corpus.md §7 to `ulua_compile`.
   The fixtures write to the same output lines as `print`.
+
+## 9. Fuzzing (P5.2, D29)
+
+1. **Tool.** The workspace crate `ulua_fuzz` builds the binary
+   `ulua-fuzz`. It runs one target for a fixed number of inputs from a
+   seed (`--target <name> --seed <n> --inputs <n>`), or for a time box
+   (`--seconds <n>`). The same seed and the same input count give the
+   same inputs. Fuzzing runs on the sanitizer build (§2.6).
+2. **Targets.**
+   - `compiler`: source bytes into `ulua_compile`. The inputs are
+     mutations of the corpus programs and of the programs of the
+     random checks: byte flips, inserts, and deletes; token inserts,
+     deletes, and swaps; a subtree copied in place of another;
+     splices between two programs; nesting raised past the limits;
+     invalid UTF-8 and lone surrogate escapes; sizes up to the source
+     ceiling.
+   - `run`: each accepted input of `compiler`, instantiated and with
+     each export called, under small run limits, with granted fixture
+     capabilities (sync and async) whose results the fuzzer chooses.
+   - `abi`: random sequences of the functions of `abi.md` §7 over a
+     pool of live and freed objects, with valid and invalid arguments
+     (null pointers, wrong `struct_size`, nonzero unused fields,
+     invalid UTF-8, objects of another context, ids that never
+     existed or were consumed), and calls from inside host callbacks.
+   - `requests`: random sequences of async starts, completions,
+     failures, pumps, task queries, discards, revocations, and frees.
+3. **Invariants.** Each input is a failure if any of these holds:
+   - a sanitizer report, a signal, or a Rust panic;
+   - the status `ULUA_INTERNAL` or a diagnostic with the code
+     `internal`;
+   - a status or a code that `abi.md` does not allow for the call and
+     its arguments;
+   - an accepted input whose generated Luau the pinned `luau_compile`
+     refuses, or (on a sample of one input in 64) whose generated Luau
+     `luau-analyze -j1` rejects, or (on the same sample) that stock
+     `tsc` rejects with a diagnostic outside invariant 3;
+   - a count of `ulua_instance_requests` that differs from the model of
+     the fuzzer;
+   - a compile that takes more than 1,000 times the median compile
+     time of its run per source byte (a report for review, not a
+     wall-clock gate assertion; principle 15).
+4. **Findings.** A failure writes its input, its seed, and its target
+   to `target/fuzz/findings/`, and the fuzzer reduces it to a minimal
+   input that keeps the failure. Each finding becomes a direct test or
+   a corpus entry before its fix lands.
+5. **Gate.** `sh tools/gate.sh sanitize` runs `ulua-fuzz --smoke`:
+   each target for a fixed input count with a fixed seed (a smoke run of at most 60 seconds
+   per target). A Phase Review runs each target for one hour on the
+   sanitizer build and records the input count, the accepted count,
+   and the findings.
