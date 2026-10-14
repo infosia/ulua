@@ -360,6 +360,13 @@ pub(crate) const ASYNC_PRELUDE_BYTES: usize =
 
 pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
+        // Empty source has no byte allowance for the fixed export table.
+        // Keep every nonempty source bound unchanged.
+        .saturating_add(if module.source.is_empty() {
+            functions::EMPTY_EXPORT_TABLE_BYTES
+        } else {
+            0
+        })
         .saturating_add(if module.exceptions {
             prelude::EXCEPTIONS.len()
         } else {
@@ -378,6 +385,36 @@ pub(crate) fn emit(module: &ir::Module, factor: usize) -> Result<String, Diagnos
 #[cfg(test)]
 mod output_tests {
     use super::*;
+
+    #[test]
+    fn empty_source_allows_only_the_fixed_module_output() {
+        for source in ["", " ", "// Only a comment.\n"] {
+            let allocator = oxc_allocator::Allocator::default();
+            let parsed =
+                oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::ts()).parse();
+            let module =
+                crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                    .unwrap();
+            let generated = emit(&module, crate::OUTPUT_FACTOR).unwrap();
+            assert_eq!(generated, format!("--!strict\n{LIBRARIES}return {{\n}}\n"));
+            assert_eq!(
+                functions::emit(&module, generated.len()).unwrap(),
+                generated
+            );
+            let error = functions::emit(&module, generated.len() - 1).unwrap_err();
+            assert_eq!(error.code, "limit:output");
+            if source.is_empty() {
+                assert_eq!(emit(&module, 0).unwrap(), generated);
+                assert_eq!(generated.len(), crate::OUTPUT_PRELUDE_BYTES + 11);
+            } else {
+                assert_eq!(emit(&module, 0).unwrap_err().code, "limit:output");
+                assert!(
+                    generated.len()
+                        <= crate::OUTPUT_PRELUDE_BYTES + crate::OUTPUT_FACTOR * source.len()
+                );
+            }
+        }
+    }
 
     #[test]
     fn the_budget_counts_nested_output_exactly_once() {

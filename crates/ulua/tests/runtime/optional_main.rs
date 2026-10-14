@@ -155,6 +155,24 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn empty_source_compiles_and_instantiates_without_exports() {
+    let fixture = Fixture::new("", &[]);
+    assert!(fixture.capture.bytes.is_empty());
+}
+
+#[test]
+fn one_space_compiles_and_instantiates_without_exports() {
+    let fixture = Fixture::new(" ", &[]);
+    assert!(fixture.capture.bytes.is_empty());
+}
+
+#[test]
+fn comment_only_compiles_and_instantiates_without_exports() {
+    let fixture = Fixture::new("// A module without statements.\n", &[]);
+    assert!(fixture.capture.bytes.is_empty());
+}
+
+#[test]
 fn no_exports_still_run_module_initializers() {
     let empty = Fixture::new("// A module without exports.\n", &[]);
     assert!(empty.capture.bytes.is_empty());

@@ -2,6 +2,11 @@
 use super::*;
 use crate::ir::Statement as S;
 
+const EXPORT_TABLE_PREFIX: &str = "return {\n";
+const EXPORT_TABLE_SUFFIX: &str = "}\n";
+pub(super) const EMPTY_EXPORT_TABLE_BYTES: usize =
+    EXPORT_TABLE_PREFIX.len() + EXPORT_TABLE_SUFFIX.len();
+
 pub(super) struct Layout {
     pub(super) headers: String,
     pub(super) entries: HashMap<usize, String>,
@@ -263,7 +268,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
     chunk.statements(&module.body[1..], 0)?;
     out.push_str(&chunk.out);
     let trailer_start = out.len();
-    out.push_str("return {\n");
+    out.push_str(EXPORT_TABLE_PREFIX);
     for f in module.functions.iter().filter(|f| f.exported) {
         let _ = writeln!(
             out,
@@ -272,7 +277,7 @@ pub(super) fn emit(module: &ir::Module, bound: usize) -> Result<String, Diagnost
             chunk.location(f.binding)?
         );
     }
-    out.push_str("}\n");
+    out.push_str(EXPORT_TABLE_SUFFIX);
     let last_offset = module
         .body
         .iter()

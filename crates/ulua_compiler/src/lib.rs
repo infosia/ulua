@@ -438,10 +438,7 @@ mod tests {
             .code,
             "C8"
         );
-        assert_eq!(
-            compile(b"", Limits::default()).unwrap_err().code,
-            "limit:output"
-        );
+        assert!(compile(b"", Limits::default()).unwrap().exports.is_empty());
         assert_eq!(
             compile(
                 b"export async function main(): void { print('x'); }",
