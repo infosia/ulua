@@ -11,7 +11,7 @@ at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: infe
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
 reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
-optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2).
+optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2; Rev 26: `main` is optional, D27).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -30,7 +30,7 @@ C16 only, not the `tsc` type.
 
 | Node kind | Accepted form |
 |---|---|
-| `Program` | A module. Its statements are the declarations of this table. It exports `function main(): void`. |
+| `Program` | A module. Its statements are the declarations of this table. It exports zero or more functions (D27); `main` is a corpus convention only (corpus.md §2). |
 | `ExportNamedDeclaration` | Only `export` before a module-level `FunctionDeclaration`. No specifiers, no `export default`. |
 | `FunctionDeclaration` | Not a generator. `async` with a result type `Promise<T>` (C19). A `BindingIdentifier` name. Each parameter is a `FormalParameter` of §4. A result type annotation is required. |
 | `VariableDeclaration` | `let` or `const`, one or more `VariableDeclarator`s. |

@@ -93,7 +93,10 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 - **P4 — async.** Coroutines, tasks, requests.
 - **P5 — hardening.** Sanitizers, fuzzing, compiler memory bounds,
   Linux and Windows gates.
-- **P6 — performance and reload.** Workload measurements.
+- **P6 — performance and reload.** Workload measurements. The
+  benchmark contract follows the owner's prior project: its subjects,
+  its timing method, its workload set, and its boundary-price
+  measurement, changed where an Ulua rule forces it.
 
 ## 7. Measurement items (P0.5)
 
@@ -142,6 +145,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D24 | `Promise<T>` is a value: it can be stored, passed, returned, and awaited more than once. `async` functions, `await`, `Promise.all`, `then`, `catch`, and `finally` are in the surface. A promise is a prelude table whose state the script cannot read | 2026-10-13 | owner decision at the P4 start, after a comparison with the owner's prior projects (the one that holds promises as values) |
 | D25 | Promise jobs run in the order of `node`: each reaction is one job of a FIFO queue, and the queue drains after each run that the host starts. An entry that interleaves tasks is `js-comparable` | 2026-10-13 | owner decision at the P4 start |
 | D26 | An exception in an `async` body rejects its promise, and `await` throws it again: `try`/`catch` catches it (C17). A failed host request stops the run (D22) | 2026-10-13 | owner decision at the P4 start |
+| D27 | A module exports zero or more functions; `main` is a corpus convention, not a language rule. A host calls any export | 2026-10-14 | `surface.md` Rev 26; owner decision while the examples were written |
 
 ## 9. Corrections and revisions
 
