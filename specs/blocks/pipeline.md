@@ -41,6 +41,7 @@ Rev 36: §3.7 rule ids, §9.2 object pool, §9.3 slow-compile metric (P5.2).
 Rev 37: §3.10 the timing gate (principle 17).
 Rev 38: §9.3 witness and input deadlines, §9.4 reduction record (P5.2 review).
 Rev 39: §10 fault injection (P5.3).
+Rev 40: §6.4 compiler memory bound (P5.4).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -539,7 +540,16 @@ necessary and that this table does not name is a contract question.
    bounds the time of one step by a constant, so `max_steps` bounds
    the run time. P1 measures `ALLOCATION_STEP_BYTES` (§7).
 4. Compiler memory is outside `max_memory_bytes`. The source ceiling
-   bounds it; P1 measures it.
+   bounds it: the peak Rust heap of one `ulua_compile` is at most
+   `COMPILE_MEMORY_FACTOR` bytes per source byte plus
+   `COMPILE_MEMORY_BASE` bytes (P5.4). A test compiles every growth
+   shape at 16 KiB and at 64 KiB under a counting global allocator and
+   asserts the bound; the count does not depend on time or machine
+   load, so the assertion is a byte count (principle 15). The constants
+   come from the measured maximum with a margin of one quarter; the
+   test prints the largest ratio. The native `luau_compile` memory of
+   the generated Luau is measured and recorded beside it; it follows
+   `OUTPUT_FACTOR` (§3.10).
 5. `max_memory_bytes` counts allocated bytes, garbage included. A
    collection runs only when Luau starts it.
 

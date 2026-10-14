@@ -49,6 +49,17 @@ Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` �
   P5.2 and the fault injection of P5.3 do not depend on ASan for those
   objects.
 
+## Exit checklist (P5.4)
+
+- [ ] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and
+  `COMPILE_MEMORY_BASE` from the measured maximum with a margin of one
+  quarter, and the test over every growth shape at 16 and 64 KiB.
+- [ ] The native `luau_compile` memory of the largest outputs is
+  measured and recorded.
+- [ ] The test cost is stated; the test runs in `gate.sh full` if it
+  costs at most 10 s, else in `gate.sh timing` (principle 17).
+- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
 ## Exit checklist (P5.3)
 
 - [x] pipeline.md §10 implemented: the `fault-injection` feature, the
