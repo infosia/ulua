@@ -203,6 +203,15 @@ for one concept, no hedging.
 16. **A hidden cost is rejected.** If the cost of a form depends on
     something that the source does not show, reject the form with a
     diagnostic that names the cause.
+17. **Fast iteration is part of the work.** Each run of a test, a gate,
+    a measurement, or a review costs time and machine load; state why
+    it is needed now. Run the narrowest check that can show the result.
+    During a slice, run the affected tests and `gate.sh quick`; run
+    `gate.sh full`, the sanitize gate, and the measurements at a commit
+    that closes a slice or a review round, not after each small change.
+    A duration, a repeat count, or a load needs a measurement that
+    supports it; without one, take the shortest run that has shown the
+    result.
 
 ## Code conventions
 
