@@ -8,3 +8,4 @@ mod s4_bytecode;
 mod s4_review;
 mod s5_native;
 mod s8_runtime;
+mod sanitize;

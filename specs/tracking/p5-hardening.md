@@ -22,17 +22,39 @@ Status: open. Decisions: D28, D29 (`plan.md` §8).
 - M1, M2 of P0.5 were measured on macOS arm64 only
   (`tracking/p05-measurements.md`).
 
+## Measurements (P5.1)
+
+- `sh tools/gate.sh sanitize` (macOS arm64, Apple clang, working
+  symbolizer): `cargo-test` 345 s, `luau-witnesses` 55 s, docs witness
+  3 s; zero sanitizer reports from the library code and from the
+  pinned Luau sources. Codex's runs without a symbolizer and with
+  `ASAN_SYMBOLIZER_PATH=/usr/bin/atos`: both pass, about 400 s.
+- Seeded defects in `native/probes/sanitize.cpp` (not linked into
+  either library), run in a child process: an 8-byte heap overflow
+  gives ASan `heap-buffer-overflow` at `sanitize.cpp:12`;
+  `INT_MAX + 1` gives UBSan `signed integer overflow` at
+  `sanitize.cpp:16`. The tests are ignored in the normal build; the
+  normal build has no sanitizer runtime.
+- A first version of the probe test asserted the executable name in
+  the report, which appears only without a symbolizer; it failed with
+  a working symbolizer. It now asserts the seeded source line.
+- `sh tools/gate.sh full` (normal build) passes: `cargo-test` 262 s,
+  `luau-witnesses` 52 s.
+- Not covered: LeakSanitizer (not on macOS arm64; leaks are P5.3), the
+  Rust code (sanitizers for Rust need a nightly toolchain, D29), Linux
+  and Windows (P5.6).
+
 ## Exit checklist (P5.1)
 
-- [ ] pipeline.md §2.6 implemented: `ULUA_SANITIZE=1`, the flags,
+- [x] pipeline.md §2.6 implemented: `ULUA_SANITIZE=1`, the flags,
   the separate target directory, the sanitizer runtime in test binaries
   and example hosts.
-- [ ] `tools/gate.sh sanitize` runs the tests, the Luau witnesses, the
+- [x] `tools/gate.sh sanitize` runs the tests, the Luau witnesses, the
   examples, and the docs witness on the sanitized build.
-- [ ] A direct test shows that the sanitized build reports a seeded
+- [x] A direct test shows that the sanitized build reports a seeded
   defect (a test-only out-of-bounds write in a probe, not in either
   library), so a clean run is evidence.
-- [ ] Zero sanitizer reports over the whole sanitize gate; each report
+- [x] Zero sanitizer reports over the whole sanitize gate; each report
   found on the way is fixed with a test.
-- [ ] The cost of the sanitize gate is measured and stated.
+- [x] The cost of the sanitize gate is measured and stated.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.

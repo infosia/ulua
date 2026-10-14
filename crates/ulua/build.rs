@@ -4,6 +4,18 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+#[path = "build/sanitize.rs"]
+mod sanitize;
+
+fn instrument(build: &mut cc::Build) {
+    if sanitize::enabled() {
+        build
+            .opt_level(1)
+            .flag("-fsanitize=address,undefined")
+            .flag("-fno-omit-frame-pointer")
+            .flag("-fno-sanitize-recover=undefined");
+    }
+}
 
 fn files(path: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = fs::read_dir(path)
@@ -16,6 +28,7 @@ fn files(path: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 fn run() -> Result<(), String> {
+    sanitize::link()?;
     println!("cargo:rerun-if-env-changed=LUAU_SOURCE_DIR");
     let source = PathBuf::from(
         env::var_os("LUAU_SOURCE_DIR").ok_or("Set LUAU_SOURCE_DIR to the pinned Luau checkout")?,
@@ -50,6 +63,7 @@ fn run() -> Result<(), String> {
             .warnings(false)
             .define("NDEBUG", None)
             .define("LUA_USE_LONGJMP", "1");
+        instrument(&mut b);
         for dir in [
             "Common/include",
             "Ast/include",
@@ -99,7 +113,9 @@ fn run() -> Result<(), String> {
         "cargo:rerun-if-changed={}",
         root.join("native/layout.c").display()
     );
-    cc::Build::new()
+    let mut layout = cc::Build::new();
+    instrument(&mut layout);
+    layout
         .cargo_metadata(false)
         .include(root.join("include"))
         .file(root.join("native/layout.c"))
@@ -125,6 +141,27 @@ fn run() -> Result<(), String> {
         "cargo:rerun-if-changed={}",
         root.join("native/probes").display()
     );
+    if sanitize::enabled() {
+        let executable = PathBuf::from(env::var_os("OUT_DIR").ok_or("OUT_DIR is absent")?)
+            .join("ulua-sanitize-probe");
+        // Compile a standalone child. Neither library contains the seeded defects.
+        let mut command = configure().get_compiler().to_command();
+        command
+            .arg(root.join("native/probes/sanitize.cpp"))
+            .arg("-o")
+            .arg(&executable);
+        let output = command.output().map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(format!(
+                "Sanitizer probe build failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        println!(
+            "cargo:rustc-env=ULUA_SANITIZE_PROBE={}",
+            executable.display()
+        );
+    }
     Ok(())
 }
 fn main() {

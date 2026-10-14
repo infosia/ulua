@@ -39,6 +39,9 @@ fn c11_cpp17_static_dynamic_and_exports() {
         for (kind, library) in [("static", &static_library), ("dynamic", &dynamic_library)] {
             let executable = scratch.join(format!("{standard}-{kind}"));
             let mut cmd = Command::new(compiler);
+            if cfg!(ulua_sanitize) {
+                cmd.arg("-fsanitize=address,undefined");
+            }
             cmd.arg(format!("-std={standard}"))
                 .args(["-Wall", "-Wextra", "-Wpedantic", "-Werror", "-x", lang])
                 .arg(root.join("native/host_link.c"))

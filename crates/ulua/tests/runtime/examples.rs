@@ -95,6 +95,9 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
         let directory = root.join("examples").join(name);
         let executable = scratch.0.join(name);
         let mut compiler = Command::new("cc");
+        if cfg!(ulua_sanitize) {
+            compiler.arg("-fsanitize=address,undefined");
+        }
         compiler
             .args(["-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"])
             .arg(directory.join("host.c"))
