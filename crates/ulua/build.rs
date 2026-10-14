@@ -135,6 +135,7 @@ fn run() -> Result<(), String> {
         .file(root.join("native/probes/stack_shrink.cpp"))
         .file(root.join("native/probes/host_steps.cpp"))
         .file(root.join("native/probes/interrupts.cpp"))
+        .file(root.join("native/probes/capture_memory.cpp"))
         .file(root.join("native/probes/async.cpp"));
     if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
         probes

@@ -45,6 +45,7 @@ Rev 40: §6.4 compiler memory bound (P5.4).
 Rev 41: §6.4 the test calls `ulua_compile`; a small-source base; native memory per shape (P5.4 review).
 Rev 42: §5.19 interrupt points, §6.3 the instruction bound and GC steps (P5.5).
 Rev 43: §5.19 loop exits, a derived instruction bound, the prelude, async shapes (P5.5 review 2).
+Rev 44: §5.14.5a `CAPTURE_LOCALS`; §5.19 helper bodies, uncounted lines, the ratio bound 6 (P5.5 review 3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -392,6 +393,19 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
        generated function on its own. A captured binding past the
        budget spills (§5.8); a closure reads it through the spill
        table.
+    5a. A generated function keeps at most `CAPTURE_LOCALS` captured
+       bindings as Luau locals; each further captured binding of the
+       function spills (§5.8). The Luau `NEWCLOSURE` of a capture by
+       reference walks the open upvalues of the thread above the
+       captured slot (`luaF_findupval`, `VM/src/lfunc.cpp`), so one
+       closure creation over N captured locals of its own frame does
+       work in proportion to N squared without allocation. Measured
+       (P5.5 review 3, Release, a closure in `while (true)` over N
+       captured `const` bindings, ratio to the `i++` baseline): N 10
+       gives 5.0, 30 gives 18.1, 130 gives 120. `CAPTURE_LOCALS` (10) is
+       the largest N whose ratio stays at most 5 (4.99 Debug, 4.94
+       Release; 16 gives 7.35). After the rule, 130 and 190 captured
+       bindings give 1.98.
     6. A call through a function value is a plain Luau call. C10 makes
        the value non-nil at each call. A function value never crosses
        the C ABI (`abi.md` §4).
@@ -541,7 +555,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       call). `INTERRUPT_INSTRUCTIONS` is `INTERRUPT_STATEMENTS` times
       `STATEMENT_INSTRUCTIONS`, plus the instructions of one interrupt
       point: 36 (a 32-argument method call: 34 moves, the call, the
-      result move) and 16 × 36 + 3 = 579. A fitted constant (the measured maximum times 1.25) was
+      result move) and 16 × 36 + 3 = 579. Some lines are not counted:
+      a `function(` argument line of `__ulua_try`, a `nil` line, the
+      jump at `else`. Each of them is a few instructions, and a
+      statement near 36 instructions is a call, which ends the count.
+      So an uncounted line cannot raise a gap above the bound; the
+      largest measured gap is 49. A fitted constant (the measured maximum times 1.25) was
       false: a 32-argument call after 15 statements gave 49 against 44
       (P5.5 review 2).
     - A test runs shapes at the source ceiling under `lua_singlestep`
@@ -555,11 +574,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       async prelude, async functions, and the resume path of each
       `await`. The count is independent of time (principle 15).
     - The prelude follows the same rule: a run of more than
-      `INTERRUPT_STATEMENTS` prelude statements contains an interrupt
-      point. The async prelude gave a gap of 47 at its
+      `INTERRUPT_STATEMENTS` top-level prelude statements contains an
+      interrupt point. The bodies of the fixed helpers are fixed text
+      outside the count; their largest gap is measured (44 in
+      `__ulua_sf`, P5.5 review 3) and stays below the bound. The async prelude gave a gap of 47 at its
       `__ulua_async_register` call (P5.5 review 2).
     - A ratio test runs each shape in `while (true)` at the default
-      `max_steps` and asserts at most 8 times the run time of
+      `max_steps` and asserts at most 6 times the run time of
       `while (true) { i++ }` (gate timing).
     - The production compile options stay at O1. A change of the
       options reruns that test: O2 can unroll the loop form.

@@ -113,8 +113,24 @@ fn emit_with_exports(
             _ => {}
         }
     }
-    for ids in &mut owners {
+    let captured_catches: std::collections::HashSet<_> = catch_ids
+        .iter()
+        .filter(|id| module.captured[**id])
+        .map(|id| module.bindings[*id].owner)
+        .collect();
+    for (owner, ids) in owners.iter_mut().enumerate() {
         ids.retain(|id| !catch_ids.contains(id));
+        let mut captured = 0;
+        for &id in ids.iter() {
+            if module.captured[id] {
+                captured += 1;
+                if captured > crate::CAPTURE_LOCALS - usize::from(captured_catches.contains(&owner))
+                {
+                    // Spill fields do not carry mutable-local versions in the Luau analyzer.
+                    context.accessors[id] = false;
+                }
+            }
+        }
     }
     let mut locations = HashMap::new();
     let empty = HashMap::new();
@@ -147,7 +163,9 @@ fn emit_with_exports(
                 accessor_count + f.parameters.iter().filter(|(_, d)| d.is_some()).count(),
             )
         };
-        let mut layout = probe.plan(&parameters, overhead, &groups)?;
+        // A protected catch closure can capture its own parameter beside these block bindings.
+        let reserve = usize::from(captured_catches.contains(&owner));
+        let mut layout = probe.plan(&parameters, overhead, &groups, reserve)?;
         for id in owners[owner]
             .iter()
             .copied()
@@ -395,16 +413,18 @@ impl Emitter<'_> {
             let ty = self.function_types.luau(ty);
             if default.is_some() {
                 parameters.push(format!("__ulua_arg{id}: {ty}?"));
-                let _ = writeln!(
-                    parameter_locals,
-                    "local __ulua_b{id}: {ty} = ({}) :: {ty}",
-                    initial(
-                        self.module.bindings[*id]
-                            .ty
-                            .as_ref()
-                            .ok_or_else(|| self.limit("internal", "Missing default type"))?
-                    )
-                );
+                if child.location(*id)? == format!("__ulua_b{id}") {
+                    let _ = writeln!(
+                        parameter_locals,
+                        "local __ulua_b{id}: {ty} = ({}) :: {ty}",
+                        initial(
+                            self.module.bindings[*id]
+                                .ty
+                                .as_ref()
+                                .ok_or_else(|| self.limit("internal", "Missing default type"))?
+                        )
+                    );
+                }
             } else {
                 parameters.push(format!("__ulua_b{id}: {ty}"));
             }

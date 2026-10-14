@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 to P5.4 COMPLETE 2026-10-14; P5.5 implemented, review open. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -149,6 +149,38 @@ Red; no accepted program at 0e3146e exceeds 36. `STORE_WEIGHT` 8
 point after each store) cost 614 steps per 128-field spill entry.
 Largest ratio 4.77 over 64 shapes. Largest growth output factor
 66.56 (`spillD`) against 80.
+
+## P5.5 Phase Review round 3
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A closure over N captured locals of its own frame does work in proportion to N squared in one `NEWCLOSURE` (`luaF_findupval`), with no allocation after the first iteration: ratio 120 at N 130 (0.80 s against 6.7 ms) | MAJOR | pipeline.md Rev 44 §5.14.5a `CAPTURE_LOCALS` |
+| The ratio test asserts 6; §5.19 said 8 | MINOR | Rev 44: 6 |
+| Fixed helper bodies run up to 17 statements without an interrupt (`__ulua_sf`, gap 44) | MINOR | Rev 44 names them; the gap is measured |
+| The derivation 16 × 36 + 3 omits uncounted lines (`function(` arguments, `nil`, `else`); a corpus entry ran 18 statement lines, gap 20 | MINOR | Rev 44 states why the bound holds |
+| The test cost of the gap test: header 8.69 s, this note 13.4 s | MINOR | this note: the header value is the test alone; 13.4 s was the runtime target |
+
+The reviewer found no program above 579 instructions or a statement
+above 36 (130 corpus entries, 32-argument calls of each kind, 1,000
+element and field literals, 500 template substitutions, nested loop
+exits). Round 3 fixes: `CAPTURE_LOCALS` 10; the 11th and later captured
+bindings of a function spill (parameters, defaults, per-iteration
+bindings, catch bindings included). Ratios after the fix: N 10 4.92,
+11 5.29, 130 1.98, 190 1.97 (Release); at 8878873 N 130 gave 117.6
+and N 190 gave `limit:memory`. The capture ratio test is Red at
+8878873.
+
+The `limit:memory` of the 180-binding closure loop at 8878873 is GC
+pacing: at 16 MiB it stops after 96,117 steps with 16,777,124 bytes
+in use, at 32 MiB after 195,142 steps; the collector is in the
+remark phase and completes no cycle. A GC goal of 1000 instead of
+200 (a measurement only) keeps the peak at 548,324 bytes over 1,549
+cycles. A full collection leaves 379,252 bytes; no leak. After the
+fix the loop peaks at 515,488 bytes at the default settings. Gap:
+GC pacing against `max_memory_bytes` (§6.5) for P6.
+
+P5.5 close: `gate.sh full` 187 s, `gate.sh timing` 378 s, hygiene
+passes. Running tasks at the close: none.
 
 ## Exit checklist (P5.4)
 

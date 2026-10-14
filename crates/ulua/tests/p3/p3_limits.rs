@@ -118,7 +118,18 @@ fn local_spill_and_upvalue_edges() {
     let dir = std::env::temp_dir().join(format!("ulua-p3-limits-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut files = vec![];
-    for count in [159, 160, 161, 162, 176, 177, 512, 1200] {
+    for count in [
+        ulua_compiler::CAPTURE_LOCALS,
+        ulua_compiler::CAPTURE_LOCALS + 1,
+        159,
+        160,
+        161,
+        162,
+        176,
+        177,
+        512,
+        1200,
+    ] {
         let (mut source, grants) = declarations(count);
         source.push_str("export function main():void{let n=0;");
         for i in 0..count {
@@ -126,7 +137,7 @@ fn local_spill_and_upvalue_edges() {
         }
         source.push('}');
         let compiled = compile_with_grants(source.as_bytes(), Limits::default(), &grants).unwrap();
-        if count >= 161 {
+        if count > ulua_compiler::CAPTURE_LOCALS {
             assert!(compiled.luau.contains("__ulua_spill0"));
         }
         run(&source, &grants);
@@ -140,12 +151,18 @@ fn local_spill_and_upvalue_edges() {
             compiled.luau.contains("__ulua_spill0")
         );
     }
-    // The inner closure captures 100 host functions and the interrupt helper.
-    let bound = ulua_compiler::UPVALUE_BUDGET - 100 - 1;
+    // The module's outer function uses one capture slot. Hosts use the remaining locals and one table.
+    let host_upvalues = ulua_compiler::CAPTURE_LOCALS;
+    let bound = ulua_compiler::UPVALUE_BUDGET - host_upvalues - 1;
     for captures in [bound - 1, bound, bound + 1] {
         let (mut source, grants) = declarations(100);
         source.push_str("function outer():void{");
+        let mut scopes = 0;
         for i in 0..captures {
+            if i > 0 && i.is_multiple_of(ulua_compiler::CAPTURE_LOCALS) {
+                source.push_str(&format!("function scope{scopes}():void{{"));
+                scopes += 1;
+            }
             source.push_str(&format!("const a{i}=1;"));
         }
         source.push_str("function inner():number{let n=0;");
@@ -155,7 +172,11 @@ fn local_spill_and_upvalue_edges() {
         for i in 0..captures {
             source.push_str(&format!("n+=a{i};"));
         }
-        source.push_str("return n;}inner();}export function main():void{outer();}");
+        source.push_str("return n;}inner();");
+        for scope in (0..scopes).rev() {
+            source.push_str(&format!("}}scope{scope}();"));
+        }
+        source.push_str("}export function main():void{outer();}");
         let compiled = compile_with_grants(source.as_bytes(), Limits::default(), &grants);
         if captures > bound {
             assert_eq!(compiled.unwrap_err().code, "limit:upvalues");
@@ -163,14 +184,14 @@ fn local_spill_and_upvalue_edges() {
             let compiled = compiled.unwrap();
             run(&source, &grants);
             let file = dir
-                .join(format!("upvalues-{}", 100 + captures + 1))
+                .join(format!("upvalues-{}", host_upvalues + captures + 1))
                 .with_extension("luau");
             std::fs::write(&file, compiled.luau).unwrap();
             files.push(file);
         }
         eprintln!(
             "P3 upvalues={} accepted={}",
-            100 + captures + 1,
+            host_upvalues + captures + 1,
             captures <= bound
         );
     }

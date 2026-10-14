@@ -46,7 +46,7 @@ fn result(source: &str) -> f64 {
     value.number
 }
 #[test]
-fn bound_and_one_past_include_captures_from_two_enclosing_functions() {
+fn bound_and_one_past_include_captures_from_multiple_enclosing_functions() {
     // The long addition body captures the interrupt helper, besides the source bindings.
     let bindings = UPVALUE_BUDGET - 1;
     assert_eq!(
@@ -151,4 +151,66 @@ fn upvalue_budget_includes_generated_library_captures() {
 fn escaped_closures_can_write_the_binding_of_their_own_iteration() {
     let source = "export function score():number{let a=():void=>{};let b=():void=>{};let first=()=>0;let last=()=>0;for(let i=0;i<2;i++){function set():void{i+=10;}function get():number{return i;}if(i===0){a=set;first=get;}else{b=set;last=get;}}a();b();return first()*100+last();}export function main():void{}";
     assert_eq!(result(source), 1011.0);
+}
+
+#[test]
+fn spilled_captures_share_writes_and_keep_iteration_lifetimes() {
+    let start = std::time::Instant::now();
+    for count in [
+        ulua_compiler::CAPTURE_LOCALS,
+        ulua_compiler::CAPTURE_LOCALS + 1,
+        130,
+        190,
+    ] {
+        let declarations = (0..count)
+            .map(|i| format!("let v{i}={i};"))
+            .collect::<String>();
+        let writes = (0..count).map(|i| format!("v{i}+=1;")).collect::<String>();
+        let reads = (0..count).map(|i| format!("s+=v{i};")).collect::<String>();
+        let source = format!(
+            "export function score():number{{{declarations}const set=():void=>{{{writes}}};const get=():number=>{{let s=0;{reads}return s;}};set();return get();}}export function main():void{{}}"
+        );
+        assert_eq!(result(&source), (count * (count + 1) / 2) as f64);
+    }
+    let count = ulua_compiler::CAPTURE_LOCALS + 1;
+    let head = (0..count)
+        .map(|i| format!("v{i}=0"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let writes = (0..count).map(|i| format!("v{i}+=10;")).collect::<String>();
+    let reads = (0..count).map(|i| format!("s+=v{i};")).collect::<String>();
+    let source = format!(
+        "export function score():number{{let a=()=>0;let b=()=>0;for(let {head};v0<2;v0++){{const get=():number=>{{{writes}let s=0;{reads}return s;}};if(v0===0){{a=get;continue;}}else{{b=get;}}}}return a()*1000+b()+a();}}export function main():void{{}}"
+    );
+    assert_eq!(
+        result(&source),
+        (count * 10 * 1000 + count * 10 + 1 + count * 20) as f64
+    );
+    eprintln!(
+        "P5.5 captured values shapes=5 cost={:.3}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+fn captured_parameters_spill_with_defaults_and_body_bindings() {
+    let count = ulua_compiler::CAPTURE_LOCALS + 2;
+    for defaults in [false, true] {
+        let params = (0..count)
+            .map(|i| format!("p{i}:number{}", if defaults { "=1" } else { "" }))
+            .collect::<Vec<_>>()
+            .join(",");
+        let args = if defaults {
+            String::new()
+        } else {
+            vec!["1"; count].join(",")
+        };
+        let writes = (0..count)
+            .map(|i| format!("p{i}+=1;s+=p{i};"))
+            .collect::<String>();
+        let source = format!(
+            "function work({params}):number{{let v=3;const g=():number=>{{let s=0;{writes}v+=1;return s+v;}};return g()+g();}}export function score():number{{return work({args});}}export function main():void{{}}"
+        );
+        assert_eq!(result(&source), (5 * count + 9) as f64);
+    }
 }

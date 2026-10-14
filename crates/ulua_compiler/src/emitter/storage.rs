@@ -11,25 +11,43 @@ impl Emitter<'_> {
         parameters: &[usize],
         overhead: usize,
         groups: &[usize],
+        capture_reserve: usize,
     ) -> Result<Layout, Diagnostic> {
         self.offset = self.storage_offset;
         let fixed = parameters.len() + self.slots.len() + self.generated_peak + overhead;
         if self.slots.len() + self.generated_peak + overhead > TEMPORARY_BOUND {
             return Err(self.limit("limit:temporaries", "Non-spill local limit exceeded"));
         }
-        let ids: Vec<_> = self
+        let mut captured = 0;
+        let mut forced = std::collections::HashSet::new();
+        for &id in parameters.iter().chain(
+            self.binding_ids
+                .iter()
+                .filter(|id| !parameters.contains(id)),
+        ) {
+            if self.module.captured[id] {
+                captured += 1;
+                if captured > crate::CAPTURE_LOCALS - capture_reserve {
+                    forced.insert(id);
+                }
+            }
+        }
+        let mut ids: Vec<_> = self
             .binding_ids
             .iter()
             .copied()
-            .filter(|id| !parameters.contains(id))
+            .filter(|id| !parameters.contains(id) || forced.contains(id))
             .collect();
+        // Preserve source order within each class. Forced spills cannot consume a local slot.
+        ids.sort_by_key(|id| forced.contains(id));
+        let eligible = ids.iter().take_while(|id| !forced.contains(id)).count();
         let capacity = LOCAL_BUDGET
             .checked_sub(fixed)
             .ok_or_else(|| self.limit("limit:temporaries", "No room for binding storage"))?;
-        let mut table_count = usize::from(ids.len() > capacity);
+        let mut table_count = usize::from(ids.len() > capacity || eligible < ids.len());
         let mut fields_per_table = SPILL_FIELDS;
         let group = |id: usize| {
-            if self.module.captured[id] {
+            if self.module.captured[id] && !parameters.contains(&id) {
                 groups[id]
             } else {
                 0
@@ -43,14 +61,14 @@ impl Emitter<'_> {
                 )
             })?;
             let mut counts = HashMap::<usize, usize>::new();
-            for &id in ids.iter().skip(available) {
+            for &id in ids.iter().skip(available.min(eligible)) {
                 *counts.entry(group(id)).or_default() += 1;
             }
             if counts.len() > capacity {
                 let mut seen = std::collections::HashSet::new();
                 if let Some(id) = ids
                     .iter()
-                    .skip(available)
+                    .skip(available.min(eligible))
                     .find(|id| seen.insert(group(**id)) && seen.len() > capacity)
                 {
                     self.offset = self.module.bindings[*id].start as usize;
@@ -81,7 +99,7 @@ impl Emitter<'_> {
             }
             table_count = needed;
         }
-        let available = capacity - table_count;
+        let available = (capacity - table_count).min(eligible);
         let mut layout = Layout {
             overhead,
             headers: String::new(),

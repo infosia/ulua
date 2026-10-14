@@ -71,19 +71,25 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
 
 #[test]
 fn upvalues_point_at_the_closure_before_its_later_statement() {
-    let bindings = |start, end| {
-        (start..end)
-            .map(|i| format!("let x{i}={i};"))
-            .collect::<String>()
-    };
+    let mut bindings = String::new();
+    let mut scopes = 0;
+    for i in 0usize..193 {
+        if i > 0 && i.is_multiple_of(crate::CAPTURE_LOCALS) {
+            bindings.push_str(&format!("function scope{scopes}():number{{"));
+            scopes += 1;
+        }
+        bindings.push_str(&format!("let x{i}={i};"));
+    }
     let reads = (0..193)
         .map(|i| format!("total+=x{i};"))
         .collect::<String>();
-    let source = format!(
-        "export function score():number{{{}\nfunction middle():number{{{}\n  const f=():number=>{{let total=0;{reads}return total;}};\n  print('later');return f();}}return middle();}}export function main():void{{}}",
-        bindings(0, 100),
-        bindings(100, 193)
+    let mut source = format!(
+        "export function score():number{{{bindings}\nconst f=():number=>{{let total=0;{reads}return total;}};print('later');return f();"
     );
+    for scope in (0..scopes).rev() {
+        source.push_str(&format!("}}return scope{scope}();"));
+    }
+    source.push_str("}export function main():void{}");
     position(
         &source,
         "():number=>",

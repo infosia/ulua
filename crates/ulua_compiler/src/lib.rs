@@ -57,6 +57,11 @@ pub const OUTPUT_ASYNC_PRELUDE_BYTES: usize = emitter::ASYNC_PRELUDE_BYTES;
 /// The O1 emitter calls a shared empty Luau function before the weighted count exceeds this limit.
 pub const INTERRUPT_STATEMENTS: usize = 16;
 
+/// Maximum captured bindings that keep local storage in one generated function.
+/// Capture counts 10 and 11 measured ratios below 5 and above 5 in Debug and Release.
+/// Further bindings use the existing typed spill tables to bound reference-capture searches.
+pub const CAPTURE_LOCALS: usize = 10;
+
 /// Minimum statement weight of a table store in the interrupt count.
 /// Stores cost more time per instruction. P5.5 measurements select 8; weights 2 and 4 exceed a ratio of 6.
 /// Each weight permits at most `INTERRUPT_STATEMENTS / STORE_WEIGHT` consecutive stores between interrupt points.
@@ -592,6 +597,8 @@ mod p1_tests;
 #[cfg(test)]
 mod flow_tests;
 
+#[cfg(test)]
+mod capture_tests;
 #[cfg(test)]
 mod p21_tests;
 

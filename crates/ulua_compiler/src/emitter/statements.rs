@@ -16,6 +16,8 @@ impl Emitter<'_> {
                 self.write_binding(*id, format!("__ulua_arg{id}"))?;
                 self.indent -= 1;
                 self.line("end");
+            } else if self.location(*id)? != format!("__ulua_b{id}") {
+                self.write_binding(*id, format!("__ulua_b{id}"))?;
             }
         }
         Ok(())
@@ -195,13 +197,28 @@ impl Emitter<'_> {
                 self.line(format!("local {tail}: boolean = true"));
                 let mut copies = vec![];
                 let mut previous = vec![];
+                let mut spill: Option<String> = None;
+                let mut fields = vec![];
                 for id in ids {
                     let ty = self.module.bindings[*id]
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    let local = self.generated()?;
                     let head = self.location(*id)?;
+                    let local = if head.contains('.') {
+                        let name = if let Some(name) = &spill {
+                            name.clone()
+                        } else {
+                            let name = self.generated()?;
+                            spill = Some(name.clone());
+                            name
+                        };
+                        let field = format!("__ulua_b{id}");
+                        fields.push((field.clone(), self.function_types.luau(ty), initial(ty)));
+                        format!("{name}.{field}")
+                    } else {
+                        self.generated()?
+                    };
                     copies.push((head, local.clone(), self.function_types.luau(ty)));
                     previous.push((*id, self.copies.insert(*id, local)));
                 }
@@ -222,15 +239,23 @@ impl Emitter<'_> {
                     self.line(format!("if not {} then break end", self.temp(t)));
                     self.release(t);
                 }
+                if let Some(name) = &spill {
+                    let (ty, _) = types::spill_constructor(&fields);
+                    self.line(format!("local {name}: {ty} = ({{}} :: any) :: {ty}"));
+                }
                 for (id, (head, local, _)) in ids.iter().zip(&copies) {
                     let ty = self.module.bindings[*id]
                         .ty
                         .as_ref()
                         .ok_or_else(|| self.limit("C11", "Missing loop type"))?;
-                    self.line(format!(
-                        "local {local}: {0} = ({head}) :: {0}",
-                        self.function_types.luau(ty)
-                    ));
+                    if local.contains('.') {
+                        self.write(local, head, &self.function_types.luau(ty));
+                    } else {
+                        self.line(format!(
+                            "local {local}: {0} = ({head}) :: {0}",
+                            self.function_types.luau(ty)
+                        ));
+                    }
                 }
                 for (id, (_, local, _)) in ids.iter().zip(&copies) {
                     self.copies.insert(*id, local.clone());

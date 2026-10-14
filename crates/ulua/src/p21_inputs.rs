@@ -108,22 +108,26 @@ fn type_product(shape: &str, bytes: usize) -> String {
     out
 }
 
-/// Capture a specified number of distinct locals from two enclosing functions.
+/// Capture distinct locals across enough enclosing functions to avoid capture spills.
 pub fn upvalues(count: usize) -> String {
-    let first = count.min(100);
     let mut out = String::from("export function score():number{");
-    for i in 0..first {
-        out.push_str(&format!("let x{i}:number={i};"));
-    }
-    out.push_str("function middle():number{");
-    for i in first..count {
+    let mut scopes = 0;
+    for i in 0..count {
+        if i > 0 && i.is_multiple_of(ulua_compiler::CAPTURE_LOCALS) {
+            out.push_str(&format!("function scope{scopes}():number{{"));
+            scopes += 1;
+        }
         out.push_str(&format!("let x{i}:number={i};"));
     }
     out.push_str("const inner=():number=>{let total=0;");
     for i in 0..count {
         out.push_str(&format!("total+=x{i};"));
     }
-    out.push_str("return total;};return inner();}return middle();}export function main():void{}");
+    out.push_str("return total;};return inner();");
+    for scope in (0..scopes).rev() {
+        out.push_str(&format!("}}return scope{scope}();"));
+    }
+    out.push_str("}export function main():void{}");
     out
 }
 
