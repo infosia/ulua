@@ -35,6 +35,7 @@ Rev 30: §4.11 async (P4.1).
 Rev 31: §4.11 a stop clears the queue before the collection (P4.1 review).
 Rev 32: §4.9 one completion helper (P4.1 review 3).
 Rev 33: §6 `max_open_requests`, host-started runs (P4.3).
+Rev 34: §2.6 sanitizer build (P5.1).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -66,6 +67,16 @@ the C ABI. `collisions.md` states the lowering of each form.
    adds `-fno-math-errno`. No other `LUA*` define.
 5. No path of a developer machine enters a build output that the
    repository tracks.
+6. **Sanitizer build (P5.1).** With `ULUA_SANITIZE=1`, `build.rs`
+   compiles every native unit (Luau and the shim) with
+   `-fsanitize=address,undefined -fno-omit-frame-pointer
+   -fno-sanitize-recover=undefined -O1`, and links the sanitizer
+   runtime into each test binary and example host. No other flag and
+   no source changes. The sanitized build writes to its own target
+   directory (`target/sanitize`), so it never mixes objects with the
+   normal build. `sh tools/gate.sh sanitize` runs the tests, the Luau
+   witnesses, the examples, and the docs witness on that build; any
+   sanitizer report fails the gate.
 
 ## 3. Compiler
 

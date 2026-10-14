@@ -146,6 +146,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D25 | Promise jobs run in the order of `node`: each reaction is one job of a FIFO queue, and the queue drains after each run that the host starts. An entry that interleaves tasks is `js-comparable` | 2026-10-13 | owner decision at the P4 start |
 | D26 | An exception in an `async` body rejects its promise, and `await` throws it again: `try`/`catch` catches it (C17). A failed host request stops the run (D22) | 2026-10-13 | owner decision at the P4 start |
 | D27 | A module exports zero or more functions; `main` is a corpus convention, not a language rule. A host calls any export | 2026-10-14 | `surface.md` Rev 26; owner decision while the examples were written |
+| D28 | The Linux and Windows gates run on the owner's machines. The build and the gate scripts work on macOS, Linux, and Windows; the owner runs them and records the results | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
+| D29 | Fuzzing is in-house: structured and byte-level mutation over the corpus and generated programs, time-boxed, under the sanitizer build. No coverage-guided tool (it needs a nightly toolchain) | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
 
 ## 9. Corrections and revisions
 
