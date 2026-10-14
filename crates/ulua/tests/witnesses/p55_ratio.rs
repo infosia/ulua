@@ -1,5 +1,5 @@
 //! Each interrupt shape repeats in a script loop at the default one-million-step budget.
-//! Measured Debug cost: 16.475 seconds for 45 shapes and a 100-call addition cost sample.
+//! Measured cost: Debug 17.046 seconds, Release 3.911 seconds, for 64 shapes and a 100-call addition cost sample.
 #[path = "../support/interrupt_shapes.rs"]
 #[allow(dead_code)]
 mod shapes;
@@ -43,6 +43,18 @@ fn all_interrupt_shape_step_time_ratios() {
                     )
                 })
                 .chain(shapes::growth_loops(65536 - 256))
+                .chain(shapes::round2::all(65536 - 256).into_iter()
+                    .filter(|(name, _)| !name.contains("-boundary-"))
+                    .map(|(name, source)| {
+                        let source = if name.starts_with("async-") {
+                            let work = source.trim_end().replace("export async function main(b:boolean)", "async function work(b:boolean)");
+                            let mut out = work + "async function start():Promise<number>{while(true){await work(true);await work(false);}return 0;}const stop=start();export function main():void{}";
+                            assert!(out.len() <= 65536);
+                            out.extend(std::iter::repeat_n(' ', 65536 - out.len()));
+                            out
+                        } else { shapes::loop_source(&source) };
+                        (name, source)
+                    }))
                 .collect::<Vec<_>>()
         })
         .unwrap()
@@ -63,7 +75,7 @@ fn all_interrupt_shape_step_time_ratios() {
         eprintln!(
             "interrupt ratio {name}: baseline={baseline:.6}s time={elapsed:.6}s ratio={ratio:.3}"
         );
-        if ratio > 8.0 {
+        if ratio > 6.0 {
             failures.push((name, ratio));
         }
     }
@@ -71,7 +83,7 @@ fn all_interrupt_shape_step_time_ratios() {
         "interrupt all ratios cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
-    assert!(failures.is_empty(), "ratios exceed 8: {failures:?}");
+    assert!(failures.is_empty(), "ratios exceed 6: {failures:?}");
 }
 
 // SAFETY: The private probe accepts live source bytes, a limits descriptor, and a fixed diagnostic buffer.
@@ -85,6 +97,14 @@ unsafe extern "C" {
         error: *mut std::ffi::c_char,
     ) -> i32;
     fn ulua_internal_shim_bytecode_free(out: *mut std::ffi::c_char);
+    fn ulua_internal_probe_entry(
+        bytecode: *const std::ffi::c_char,
+        length: usize,
+        limits: *const std::ffi::c_void,
+        steps: *mut u64,
+        seconds: *mut f64,
+        error: *mut std::ffi::c_char,
+    ) -> i32;
     fn ulua_internal_probe_step_loop(
         source: *const u8,
         length: usize,
@@ -176,5 +196,72 @@ fn addition_call_cost() {
     eprintln!(
         "interrupt addition call: samples=100 us={:.3}",
         now.elapsed().as_secs_f64() * 1e6 / 100.0
+    );
+}
+
+/// One call measures charged steps. A 100-call batch amortizes the clock cost; no time assertion applies.
+#[test]
+fn spilled_header_entry_cost() {
+    let _measurement = crate::measurement_lock();
+    let start = Instant::now();
+    // 174 direct bindings and 128 fields fill one spill header under the C15 local budget.
+    let body = (0..302).map(|i| format!("let a{i}=0;")).collect::<String>();
+    let source = format!("export function main():number{{{body}return 0;}}");
+    let luau = ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
+        .unwrap()
+        .luau;
+    let header = luau
+        .lines()
+        .find(|line| line.trim_start().starts_with("local __ulua_spill"))
+        .unwrap();
+    let fields = header
+        .split_once(" = (")
+        .unwrap()
+        .0
+        .matches("__ulua_b")
+        .count();
+    assert_eq!(
+        fields, 128,
+        "the entry must contain one 128-field spill header"
+    );
+    let mut error = [0; 256];
+    let mut bytecode = std::ptr::null_mut();
+    let mut size = 0;
+    let mut steps = 0;
+    let mut seconds = 0.0;
+    // SAFETY: All buffers cover their declared lengths. Free the owned bytecode after the synchronous calls.
+    let status = unsafe {
+        assert_eq!(
+            ulua_internal_shim_compile(
+                luau.as_ptr().cast(),
+                luau.len(),
+                &mut bytecode,
+                &mut size,
+                error.as_mut_ptr()
+            ),
+            0
+        );
+        let status = ulua_internal_probe_entry(
+            bytecode,
+            size,
+            (&RunLimits::default() as *const RunLimits).cast(),
+            &mut steps,
+            &mut seconds,
+            error.as_mut_ptr(),
+        );
+        ulua_internal_shim_bytecode_free(bytecode);
+        status
+    };
+    // SAFETY: The native probe terminates this fixed diagnostic buffer.
+    assert_eq!(
+        status,
+        0,
+        "{}",
+        unsafe { std::ffi::CStr::from_ptr(error.as_ptr()) }.to_string_lossy()
+    );
+    eprintln!(
+        "interrupt spill entry: fields=128 steps={steps} us={:.3} samples=100 test_cost={:.3}s",
+        seconds * 1e6,
+        start.elapsed().as_secs_f64()
     );
 }

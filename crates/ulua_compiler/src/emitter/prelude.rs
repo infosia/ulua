@@ -1,4 +1,39 @@
 //! Fixed library calls have constant work or work bounded by their output bytes.
+use crate::INTERRUPT_STATEMENTS;
+
+/// Bound module initialization across fixed helper declarations.
+/// Function bodies use VM calls and loop back edges; each top-level closure creation is one statement.
+/// Fixed preludes put each top-level executable statement on its own line without indentation.
+pub(super) fn checkpoint(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    let mut count = 0;
+    for line in text.lines() {
+        if line == "__ulua_interrupt()" {
+            count = 0;
+        } else if line.starts_with("local ") || line.starts_with("__ulua_") {
+            if count == INTERRUPT_STATEMENTS {
+                out.push_str("__ulua_interrupt()\n");
+                count = 0;
+            }
+            count += 1;
+            // Fixed top-level calls fire a VM interrupt, including the native async registration.
+            if line.starts_with("__ulua_") && line.contains('(') {
+                count = 0;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    // The following generated code starts with a fresh forward-path count.
+    if count != 0 {
+        out.push_str("__ulua_interrupt()\n");
+    }
+    out
+}
+
 pub(crate) const LIBRARIES: &str = r#"local __ulua_trap: (number) -> () = (...) :: (number) -> ()
 local function __ulua_interrupt(): () end
 local function __ulua_literal_set<T>(a: {T}, i: number, value: T): ()

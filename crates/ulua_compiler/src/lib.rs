@@ -54,12 +54,23 @@ pub const OUTPUT_PRELUDE_BYTES: usize = "--!strict\n".len() + emitter::LIBRARIES
 /// Add these bytes to the base prelude for an async output bound.
 pub const OUTPUT_ASYNC_PRELUDE_BYTES: usize = emitter::ASYNC_PRELUDE_BYTES;
 /// Maximum generated statements on a forward path between interrupt points.
-/// The O1 emitter calls a shared empty Luau function before statement 17.
+/// The O1 emitter calls a shared empty Luau function before the weighted count exceeds this limit.
 pub const INTERRUPT_STATEMENTS: usize = 16;
+
+/// Minimum statement weight of a table store in the interrupt count.
+/// Stores cost more time per instruction. P5.5 measurements select 8; weights 2 and 4 exceed a ratio of 6.
+/// Each weight permits at most `INTERRUPT_STATEMENTS / STORE_WEIGHT` consecutive stores between interrupt points.
+/// This weight only tightens the count; it does not change the derived instruction bound.
+pub const STORE_WEIGHT: usize = 8;
+/// Maximum executed VM instructions in one generated statement under production O1.
+/// C15 permits 32 arguments. A method adds its receiver: 34 moves, CALL, and one result move.
+/// Ordinary calls need 33 moves, CALL, and at most one result move (35 instructions).
+/// Three-node pure groups, single-field stores, and fixed prelude statements need fewer instructions.
+/// The independent VM witness checks this bound, including the receiver and result moves.
+pub const STATEMENT_INSTRUCTIONS: u64 = ARGUMENT_BOUND as u64 + 4;
 /// Maximum executed VM instructions between interrupt callbacks.
-/// The repaired P5.5 witness measures 34 instructions at 64 KiB under O1.
-/// This bound retains the original maximum, 35 times 1.25, rounded up.
-pub const INTERRUPT_INSTRUCTIONS: u64 = 44;
+/// Sixteen bounded statements precede an interrupt point: a function move, CALL, and RETURN.
+pub const INTERRUPT_INSTRUCTIONS: u64 = INTERRUPT_STATEMENTS as u64 * STATEMENT_INSTRUCTIONS + 3;
 /// AST and parser depth ceiling.
 pub const DEPTH_CEILING: u32 = 48;
 /// Stack size for the complete compiler pipeline.

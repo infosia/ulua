@@ -375,8 +375,10 @@ impl<'a> Emitter<'a> {
     }
 }
 
+// One exception tail point and one point before async closure declaration 17.
+// The final native registration call resets the count without another point.
 pub(crate) const ASYNC_PRELUDE_BYTES: usize =
-    asynchronous::PRELUDE.len() + prelude::EXCEPTIONS.len();
+    asynchronous::PRELUDE.len() + prelude::EXCEPTIONS.len() + 2 * "__ulua_interrupt()\n".len();
 
 fn output_bound(module: &ir::Module, factor: usize) -> Result<usize, Diagnostic> {
     let bound = crate::OUTPUT_PRELUDE_BYTES
@@ -388,16 +390,16 @@ fn output_bound(module: &ir::Module, factor: usize) -> Result<usize, Diagnostic>
             0
         })
         .saturating_add(if module.exceptions {
-            prelude::EXCEPTIONS.len()
+            prelude::checkpoint(prelude::EXCEPTIONS).len()
         } else {
             0
         })
         .saturating_add(if module.asynchronous {
-            asynchronous::PRELUDE.len()
+            prelude::checkpoint(asynchronous::PRELUDE).len()
         } else {
             0
         })
-        .saturating_add(methods::prelude(&module.methods)?.0.len())
+        .saturating_add(prelude::checkpoint(&methods::prelude(&module.methods)?.0).len())
         .saturating_add(factor.saturating_mul(module.source.len()));
     Ok(bound)
 }

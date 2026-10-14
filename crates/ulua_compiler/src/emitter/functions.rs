@@ -245,16 +245,16 @@ fn emit_with_exports(
         s.busy = false;
     }
     let mut out = String::from("--!strict\n");
-    out.push_str(LIBRARIES);
+    out.push_str(&prelude::checkpoint(LIBRARIES));
     if module.exceptions {
-        out.push_str(prelude::EXCEPTIONS);
+        out.push_str(&prelude::checkpoint(prelude::EXCEPTIONS));
     }
     if module.asynchronous {
-        out.push_str(asynchronous::PRELUDE);
+        out.push_str(&prelude::checkpoint(asynchronous::PRELUDE));
     }
-    out.push_str(&method_prelude);
+    out.push_str(&prelude::checkpoint(&method_prelude));
     out.push_str(&types.declarations);
-    out.push_str(&context.numeric_arrows.declarations);
+    out.push_str(&chunk.headers(&context.numeric_arrows.declarations));
     if let Some(layout) = &context.layouts[0] {
         out.push_str(&chunk.headers(&layout.headers));
     }

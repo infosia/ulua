@@ -44,6 +44,7 @@ Rev 39: §10 fault injection (P5.3).
 Rev 40: §6.4 compiler memory bound (P5.4).
 Rev 41: §6.4 the test calls `ulua_compile`; a small-source base; native memory per shape (P5.4 review).
 Rev 42: §5.19 interrupt points, §6.3 the instruction bound and GC steps (P5.5).
+Rev 43: §5.19 loop exits, a derived instruction bound, the prelude, async shapes (P5.5 review 2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -504,8 +505,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       always makes a Luau call ends the count.
     - At a join after branches, the count is the largest count of the
       branches. A loop body starts with the count before the loop. The
-      count after the loop is the larger of the count before the loop
-      and the count at the end of the body.
+      count after the loop is the largest count of the loop entry, of
+      the body end, and of each forward exit of the loop: each
+      `break`, each `continue` lowered to an exit, and the exit of the
+      loop condition. An interrupt point later in the body does not
+      erase the count of an earlier exit.
     - Before the count passes `INTERRUPT_STATEMENTS` (16), the emitter
       emits `__ulua_interrupt()`, a call to an empty prelude function.
       It fires two interrupts (the call and the return). A repeated
@@ -524,11 +528,36 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       statement added short-circuit branches with refinements, and
       `luau-analyze` failed with "Code is too complex to typecheck"
       on P25-logical-wrapped-tests at 16 KiB (P5.5).
-    - A test runs straight-line shapes at the source ceiling under
-      `lua_singlestep` and counts the instructions between two
-      interrupts. It asserts the largest count against
-      `INTERRUPT_INSTRUCTIONS` (44), from the measured maximum (35)
-      times 1.25; the final form measures 34. The count is independent of time (principle 15).
+    - A table store counts `STORE_WEIGHT` (8) statements, so two
+      stores follow an interrupt point at most. A store does few
+      instructions but costs more time per instruction: without the
+      weight the largest ratio (below) was 10.59 (S4-function-
+      bindings); weights 2, 4, 8 gave 7.98, 6.38, 4.77 (Release). The
+      entry of a function with a 128-field spill header costs 488
+      steps (32 before P5.5).
+    - The bound is derived, not fitted. `STATEMENT_INSTRUCTIONS` is
+      the largest instruction count of one generated statement; the
+      C15 bounds give it (a call with 32 arguments: 33 moves and the
+      call). `INTERRUPT_INSTRUCTIONS` is `INTERRUPT_STATEMENTS` times
+      `STATEMENT_INSTRUCTIONS`, plus the instructions of one interrupt
+      point: 36 (a 32-argument method call: 34 moves, the call, the
+      result move) and 16 × 36 + 3 = 579. A fitted constant (the measured maximum times 1.25) was
+      false: a 32-argument call after 15 statements gave 49 against 44
+      (P5.5 review 2).
+    - A test runs shapes at the source ceiling under `lua_singlestep`
+      and counts the instructions between two interrupts. It asserts
+      two facts: the largest gap is at most `INTERRUPT_INSTRUCTIONS`,
+      and the largest single statement is at most
+      `STATEMENT_INSTRUCTIONS`. The shapes include, at the largest
+      C15 operand counts, a call, a constructor, and a record literal
+      after 15 counted statements; loop exits in the middle of a body
+      (`break`, `continue`, the condition); and async modules: the
+      async prelude, async functions, and the resume path of each
+      `await`. The count is independent of time (principle 15).
+    - The prelude follows the same rule: a run of more than
+      `INTERRUPT_STATEMENTS` prelude statements contains an interrupt
+      point. The async prelude gave a gap of 47 at its
+      `__ulua_async_register` call (P5.5 review 2).
     - A ratio test runs each shape in `while (true)` at the default
       `max_steps` and asserts at most 8 times the run time of
       `while (true) { i++ }` (gate timing).

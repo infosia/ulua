@@ -128,6 +128,28 @@ under `lua_singlestep` with the production options (O1), 64 KiB:
   target); ratios 45 shapes 16.5 s (witnesses, `timing`). Gate timing
   takes 373 s.
 
+## P5.5 Phase Review round 2 (interrupt points)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `INTERRUPT_INSTRUCTIONS` 44 was fitted: a 32-argument call (33 moves and the call) after 15 counted statements gives a gap of 49; `new K(32 args)` and a 32-argument arrow call also give 49 | MAJOR | pipeline.md Rev 43: a derived bound from `STATEMENT_INSTRUCTIONS` |
+| A forward loop exit escapes the count: `while(true){7 x++; if(b){break;} 3 x++}` then 20 `x++` gives 31 against 18 straight; a condition exit gives 24 | MAJOR | Rev 43: the count after a loop joins each exit |
+| The async prelude has a gap of 47 at `__ulua_async_register`; the probe cannot run async modules, so no async shape is measured | MAJOR | Rev 43: the prelude rule and async shapes |
+| The shapes miss the three classes above; the expected value is a fitted maximum | MINOR | Rev 43: two derived assertions |
+| Cost changes recorded in part: two interrupts per point use steps; spill headers store one field per statement with an interrupt point after each 16; output density rose (field-inc 33.0 to 36.8 bytes per byte) | MINOR | the round 2 fix records the `OUTPUT_FACTOR` margin and the spill entry cost |
+
+Round 2 fixes: `STATEMENT_INSTRUCTIONS` 36, `INTERRUPT_INSTRUCTIONS`
+579 (derived). Largest gap 49, largest statement 36 over 195 cases.
+Loop exits: break 24 to 18, continue 22 to 19, condition exit 24 to
+18, nested loops 30 to 18, for-of 24 to 20. Async prelude and resume
+paths 47 to 23; a numeric-arrow prelude run 37 to 18. A hand-written
+40-argument Luau call (42 instructions) shows the statement assertion
+Red; no accepted program at 0e3146e exceeds 36. `STORE_WEIGHT` 8
+(table above in pipeline.md §5.19); the earlier rule (an interrupt
+point after each store) cost 614 steps per 128-field spill entry.
+Largest ratio 4.77 over 64 shapes. Largest growth output factor
+66.56 (`spillD`) against 80.
+
 ## Exit checklist (P5.4)
 
 - [x] pipeline.md §6.4 implemented: `COMPILE_MEMORY_FACTOR` and

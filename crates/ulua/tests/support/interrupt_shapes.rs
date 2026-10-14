@@ -1,5 +1,7 @@
 //! Source-ceiling shapes expose forward paths, constructors, and nested function work.
 use ulua_compiler::{Limits, SOURCE_CEILING, compile};
+#[path = "interrupt_round2.rs"]
+pub mod round2;
 
 #[allow(dead_code)]
 #[path = "p25_shapes.rs"]
@@ -383,6 +385,11 @@ pub fn small() -> Vec<(String, String)> {
             .map(|(name, source)| (name.to_owned(), source)),
     );
     shapes.extend(growth_loops(4096));
+    shapes.extend(
+        round2::all(16384)
+            .into_iter()
+            .filter(|(name, _)| !name.contains("-boundary-")),
+    );
     let (_, paged) = all_at(20 * 1024)
         .into_iter()
         .find(|(name, _)| *name == "paged-spill")

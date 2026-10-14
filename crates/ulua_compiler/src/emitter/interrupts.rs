@@ -1,16 +1,14 @@
 //! Count generated statements on each forward path of one Luau function.
-use crate::INTERRUPT_STATEMENTS;
+use crate::{INTERRUPT_STATEMENTS, STORE_WEIGHT};
 
 #[derive(Clone, Copy, Default)]
 struct Flow {
     count: usize,
-    after_store: bool,
 }
 impl Flow {
     fn join(self, other: Self) -> Self {
         Self {
             count: self.count.max(other.count),
-            after_store: self.after_store || other.after_store,
         }
     }
 }
@@ -79,9 +77,12 @@ impl Interrupts {
         } else {
             1
         };
-        let cost = (base + value.matches(".__ulua_").count()).min(INTERRUPT_STATEMENTS);
+        let weight = if table_store(text) { STORE_WEIGHT } else { 1 };
+        let cost = (base + value.matches(".__ulua_").count())
+            .max(weight)
+            .min(INTERRUPT_STATEMENTS);
         if !block && !repeat && !argument_function {
-            if self.flow.count + cost > INTERRUPT_STATEMENTS || self.flow.after_store {
+            if self.flow.count + cost > INTERRUPT_STATEMENTS {
                 insert = true;
                 self.flow = Flow::default();
             }
@@ -109,9 +110,21 @@ impl Interrupts {
         {
             self.flow = Flow::default();
         }
-        if table_store(text) {
-            // A table write can resize or hash. Charge it before the next execution statement.
-            self.flow.after_store = true;
+        if text == "do break end"
+            || text == "do continue end"
+            || (text.starts_with("if ") && text.ends_with(" then break end"))
+        {
+            // Save each exit before a later checkpoint can reset the body's count.
+            for frame in self.frames.iter_mut().rev() {
+                match frame.kind {
+                    Kind::Loop => {
+                        frame.largest = frame.largest.join(self.flow);
+                        break;
+                    }
+                    Kind::Function => break,
+                    Kind::Branch | Kind::Block => {}
+                }
+            }
         }
         insert
     }

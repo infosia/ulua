@@ -1,8 +1,8 @@
 //! Growth gate: full ABI timing at n and 4n; output checks always use the source ceiling.
 //! Dense fixtures cover P1 and P2.1 to P2.4 emitted constructs.
 //! Ratios above 6.5 use the minimum of two runs per size.
-//! Largest measured output ratio: 63.167526; this measurement does not prove a margin.
-//! Measured P2.5 Debug cost: 10.002 seconds, with serial ABI timing and two joined size-check workers.
+//! Largest measured output ratio: 66.555405 (spillD), against OUTPUT_FACTOR 80.
+//! Measured Debug cost: 28.266 seconds, with serial ABI timing and two joined size-check workers.
 //! D17 removes five equality-state shapes. Nested writes and spilled logic still measure emitter joins.
 // This test uses the source and graph generators only.
 #[allow(dead_code)]
@@ -37,6 +37,7 @@ fn full_pipeline_growth_stays_below_eight() {
     let n = 2 * 1024;
     let mut max_growth: f64 = 0.0;
     let mut max_output: f64 = 0.0;
+    let mut max_output_shape = "";
     let mut outputs = vec![];
     for shape in inputs::SOURCE_SHAPES
         .iter()
@@ -190,10 +191,16 @@ fn full_pipeline_growth_stays_below_eight() {
                 ratio <= OUTPUT_FACTOR as f64,
                 "output {shape}: ratio {ratio}"
             );
-            max_output = max_output.max(ratio);
+            if ratio > max_output {
+                max_output = ratio;
+                max_output_shape = shape;
+            }
         }
     }
     eprintln!("S4 growth gate cost: {:?}", start.elapsed());
     assert!(max_growth <= 8.0, "growth ratio {max_growth}");
-    eprintln!("S4 largest measured output ratio: {max_output:.6}");
+    eprintln!(
+        "S4 largest measured output ratio: {max_output:.6} shape={max_output_shape} limit={OUTPUT_FACTOR} margin={:.6}",
+        OUTPUT_FACTOR as f64 - max_output
+    );
 }

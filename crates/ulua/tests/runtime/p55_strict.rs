@@ -1,5 +1,5 @@
 //! Small instances cross the interrupt and split boundaries in the strict Luau analyzer.
-//! Measured Debug cost: 2.307 seconds for 61 small boundary instances with one analyzer worker.
+//! Measured Debug cost: 2.697 seconds for 80 small boundary instances with one analyzer worker.
 #[path = "../support/analyzer.rs"]
 mod analyzer;
 // Shared generators also serve the source-ceiling probes.
