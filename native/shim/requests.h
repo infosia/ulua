@@ -3,6 +3,9 @@
 // Included inside the protected shim.
 #include "async_records.h"
 static void begin_run(ulua_vm* vm) {
+#ifdef ULUA_FAULT_INJECTION
+    fault_begin(&vm->fault);
+#endif
     vm->steps = 0;
     vm->flag = 0;
     vm->trap_kind = 0;
@@ -80,7 +83,12 @@ static void unlink_request(ulua_vm* vm, ulua_request* r) {
 }
 static void release_request(ulua_vm* vm, ulua_request* r) {
     if (r->promise) lua_unref(vm->thread, r->promise);
-    if (r->value.type == ULUA_TYPE_STRING) std::free(const_cast<char*>(r->value.data));
+    if (r->value.type == ULUA_TYPE_STRING) {
+#ifdef ULUA_FAULT_INJECTION
+        vm->fault.snapshot.host_bytes -= r->value.length;
+#endif
+        std::free(const_cast<char*>(r->value.data));
+    }
     allocate(vm, r, sizeof(*r), 0);
 }
 static void discard_records(ulua_vm* vm) {
@@ -88,7 +96,12 @@ static void discard_records(ulua_vm* vm) {
     while (vm->requests) {
         ulua_request* r = vm->requests;
         vm->requests = r->next;
-        if (r->value.type == ULUA_TYPE_STRING) std::free(const_cast<char*>(r->value.data));
+        if (r->value.type == ULUA_TYPE_STRING) {
+#ifdef ULUA_FAULT_INJECTION
+            vm->fault.snapshot.host_bytes -= r->value.length;
+#endif
+            std::free(const_cast<char*>(r->value.data));
+        }
         allocate(vm, r, sizeof(*r), 0);
     }
     while (vm->tasks) {
@@ -99,6 +112,11 @@ static void discard_records(ulua_vm* vm) {
 }
 extern "C" int ulua_internal_shim_complete(ulua_vm* vm, uint64_t id, const ulua_value* value, char* error) noexcept {
     try {
+#ifdef ULUA_FAULT_INJECTION
+        fault_begin(&vm->fault);
+        // Completion has one host allocation and no raising VM operation.
+        vm->fault.active = false;
+#endif
         ulua_request* r = find_request(vm, id);
         // Validate and copy before releasing a borrowed result that can supply the input bytes.
         if (!r || r->recorded || (value && value->type != r->type)) return SHIM_ARGUMENT;
@@ -108,9 +126,19 @@ extern "C" int ulua_internal_shim_complete(ulua_vm* vm, uint64_t id, const ulua_
             if (value->type == ULUA_TYPE_STRING) {
                 char* bytes = nullptr;
                 if (value->length) {
+#ifdef ULUA_FAULT_INJECTION
+                    vm->fault.active = true;
+                    bool refused = fault_refuse(&vm->fault);
+                    fault_end(&vm->fault);
+                    bytes = refused ? nullptr : static_cast<char*>(std::malloc(value->length));
+#else
                     bytes = static_cast<char*>(std::malloc(value->length));
+#endif
                     if (!bytes) { message(error, "Completion host allocation failed"); return SHIM_MEMORY; }
                     std::memcpy(bytes, value->data, value->length);
+#ifdef ULUA_FAULT_INJECTION
+                    vm->fault.snapshot.host_bytes += value->length;
+#endif
                 }
                 copy.data = bytes;
             }
@@ -123,6 +151,9 @@ extern "C" int ulua_internal_shim_complete(ulua_vm* vm, uint64_t id, const ulua_
         else vm->recorded_head = r;
         vm->recorded_tail = r;
         ++vm->recorded_requests;
+#ifdef ULUA_FAULT_INJECTION
+        fault_end(&vm->fault);
+#endif
         return SHIM_OK;
     } catch (...) { message(error, "Completion raised a C++ exception"); return SHIM_INTERNAL; }
 }
@@ -157,6 +188,9 @@ extern "C" int ulua_internal_shim_pump(ulua_vm* vm, uint32_t maximum, uint32_t* 
             int code = finish(vm, vm->thread, lua_cpcall(vm->thread, settle, &args), error);
             lua_settop(vm->thread, 0);
             release_request(vm, r);
+#ifdef ULUA_FAULT_INJECTION
+            fault_end(&vm->fault);
+#endif
             ++*settled;
             if (code) return code;
         }

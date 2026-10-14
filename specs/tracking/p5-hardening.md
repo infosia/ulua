@@ -60,6 +60,19 @@ Status: open; P5.1 and P5.2 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` 
 - [ ] Each failure found becomes a test before its fix.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
+## Measurements (P5.3)
+
+Implementation record (Codex): the feature `fault-injection` (not in
+the default or the `measurements` features) adds a hook to the budget
+allocator and to the native request table; the test target `faults`
+builds only with it. Sweep: 26 programs, 182 baseline runs, 1,239
+allocation indices, each failed once in a fresh instance; 3,913 ABI
+runs with the recovery calls; 0 failures; a seeded 31-byte leak fails
+the live-bytes check; 0.37 s on the instrumented build. No library
+defect and no contract question. Close gates: `gate.sh sanitize` 243 s
+(fault sweep 2 s); `gate.sh full` after `cargo fmt` of
+`crates/ulua/src/lib.rs` (Codex did not run it).
+
 ## Exit checklist (P5.2)
 
 - [x] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four

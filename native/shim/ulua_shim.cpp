@@ -399,6 +399,11 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     if (!vm) return;
     discard_records(vm);
     try { if (vm->state) lua_close(vm->state); } catch (...) { }
+#ifdef ULUA_FAULT_INJECTION
+    vm->fault.snapshot.live_bytes = vm->used;
+    vm->fault.snapshot.records = (vm->requests != nullptr) + (vm->tasks != nullptr);
+    fault_end(&vm->fault);
+#endif
     std::free(vm);
 }
 extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
@@ -413,6 +418,9 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
         vm->max_open_requests = limits->max_open_requests;
         vm->host = *host;
         vm->charging = true;
+#ifdef ULUA_FAULT_INJECTION
+        fault_begin(&vm->fault);
+#endif
         vm->state = lua_newstate(allocate, vm);
         if (!vm->state) {
             message(error, "Memory limit exceeded at VM creation");
@@ -436,6 +444,9 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
         }
         if (code) { ulua_internal_shim_free(vm); return code; }
         lua_settop(vm->thread, 0);
+#ifdef ULUA_FAULT_INJECTION
+        fault_end(&vm->fault);
+#endif
         *out = vm;
         return SHIM_OK;
     } catch (...) {
@@ -447,18 +458,13 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
 extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua_value* arguments,
     size_t count, uint32_t result_type, ulua_value* result, char* error) noexcept {
     try {
-        vm->steps = 0;
-        vm->flag = 0;
-        vm->trap_kind = 0;
-        vm->charging = true;
-#ifdef ULUA_MEASUREMENTS
-        vm->allocation_bytes = 0;
-        vm->allocation_steps = 0;
-        vm->interrupts = 0;
-#endif
+        begin_run(vm);
         Call args = {vm, name, arguments, count, result_type, result, nullptr};
         int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call, &args), error);
         lua_settop(vm->thread, 0);
+#ifdef ULUA_FAULT_INJECTION
+        fault_end(&vm->fault);
+#endif
         return code;
     } catch (...) {
         message(error, "VM call raised a C++ exception");
@@ -494,6 +500,13 @@ extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, const char* name, cons
             *task = args.task->id;
         }
         lua_settop(vm->thread, 0);
+#ifdef ULUA_FAULT_INJECTION
+        fault_end(&vm->fault);
+#endif
         return code;
     } catch (...) { message(error, "Task start raised a C++ exception"); return SHIM_INTERNAL; }
 }
+
+#ifdef ULUA_FAULT_INJECTION
+#include "fault_api.h"
+#endif

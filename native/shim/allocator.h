@@ -2,6 +2,9 @@
 #define ULUA_ALLOCATOR_H
 #include "ulua_shim.h"
 #include <cstdlib>
+#ifdef ULUA_FAULT_INJECTION
+#include "faults.h"
+#endif
 struct lua_State;
 struct ulua_request;
 struct ulua_task;
@@ -49,6 +52,9 @@ struct ulua_vm {
     uint64_t resume_snapshot;
     bool resume_unwind;
 #endif
+#ifdef ULUA_FAULT_INJECTION
+    ulua_fault_state fault;
+#endif
     ulua_host host;
 };
 static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new_size) {
@@ -69,6 +75,9 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
         vm->used -= old_size - new_size;
         return result ? result : pointer;
     }
+#ifdef ULUA_FAULT_INJECTION
+    if (fault_refuse(&vm->fault)) return nullptr;
+#endif
     if (vm->charging) {
         const uint64_t charge = new_size / ALLOCATION_STEP_BYTES + (new_size % ALLOCATION_STEP_BYTES != 0);
         if (vm->steps > vm->max_steps || charge > vm->max_steps - vm->steps) {

@@ -85,6 +85,9 @@ fn run() -> Result<(), String> {
         native.files(files(&source.join(dir))?);
     }
     native.files(files(&root.join("native/shim"))?);
+    if env::var_os("CARGO_FEATURE_FAULT_INJECTION").is_some() {
+        native.define("ULUA_FAULT_INJECTION", None);
+    }
     if env::var_os("CARGO_FEATURE_MEASUREMENTS").is_some() {
         native.define("ULUA_MEASUREMENTS", None);
 

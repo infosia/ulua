@@ -4,6 +4,8 @@
 mod abi;
 mod capabilities;
 mod declarations;
+#[cfg(feature = "fault-injection")]
+pub mod fault_injection;
 mod host_names;
 mod native;
 mod objects;

@@ -6,8 +6,14 @@ rust-version.workspace = true
 license.workspace = true
 
 [features]
+fault-injection = []
 timing = []
 measurements = ["timing", "ulua_compiler/measurements"]
+
+[[test]]
+name = "faults"
+path = "tests/faults/main.rs"
+required-features = ["fault-injection"]
 
 [[test]]
 name = "witnesses"
