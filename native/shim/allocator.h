@@ -96,4 +96,13 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
     if (result) vm->used = base + new_size;
     return result;
 }
+static void* allocate_record(ulua_vm* vm, void* pointer, size_t old_size, size_t new_size) {
+    void* result = allocate(vm, pointer, old_size, new_size);
+#ifdef ULUA_FAULT_INJECTION
+    // Count owned allocations independently of the request and task lists.
+    if (!pointer && result) ++vm->fault.snapshot.records;
+    if (pointer && !new_size) --vm->fault.snapshot.records;
+#endif
+    return result;
+}
 #endif

@@ -401,7 +401,6 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     try { if (vm->state) lua_close(vm->state); } catch (...) { }
 #ifdef ULUA_FAULT_INJECTION
     vm->fault.snapshot.live_bytes = vm->used;
-    vm->fault.snapshot.records = (vm->requests != nullptr) + (vm->tasks != nullptr);
     fault_end(&vm->fault);
 #endif
     std::free(vm);
@@ -476,7 +475,7 @@ static int call_start(lua_State* state) {
     Call* args = static_cast<Call*>(lua_tolightuserdata(state, 1));
     ulua_vm* vm = args->vm;
     if (vm->next_task == UINT64_MAX) luaL_error(state, "Task ids exhausted");
-    args->task = static_cast<ulua_task*>(allocate(vm, nullptr, 0, sizeof(ulua_task)));
+    args->task = static_cast<ulua_task*>(allocate_record(vm, nullptr, 0, sizeof(ulua_task)));
     if (!args->task) luaL_error(state, "not enough memory");
     std::memset(args->task, 0, sizeof(ulua_task));
     args->task->id = ++vm->next_task;
@@ -492,7 +491,7 @@ extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, const char* name, cons
         if (code) {
             if (args.task) {
                 if (args.task->reference) lua_unref(vm->thread, args.task->reference);
-                allocate(vm, args.task, sizeof(ulua_task), 0);
+                allocate_record(vm, args.task, sizeof(ulua_task), 0);
             }
         } else {
             args.task->next = vm->tasks;

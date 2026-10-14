@@ -9,6 +9,7 @@ use ulua::{fault_injection as fault, *};
 
 pub const SMALL: &str = "__fault_small";
 pub const MARKER: &str = "__fault_handler";
+pub const TRY_MARKER: &str = "__fault_try";
 
 #[derive(Default)]
 pub struct HostState {
@@ -16,6 +17,7 @@ pub struct HostState {
     pub output: Vec<String>,
     buffer: String,
     pub handler_after_failure: bool,
+    pub started_requests: u32,
 }
 unsafe extern "C" fn output(data: *mut c_void, bytes: *const c_char, length: usize) -> i32 {
     // SAFETY: The fixture owns the callback data; the shim supplies readable UTF-8 bytes.
@@ -33,6 +35,7 @@ unsafe extern "C" fn later(data: *mut c_void, args: *const Value, _: usize, id: 
     // SAFETY: The descriptor guarantees one argument and the fixture owns the callback data.
     unsafe {
         (*data.cast::<HostState>()).requests.push_back((id, *args));
+        (*data.cast::<HostState>()).started_requests += 1;
     }
     0
 }
@@ -44,6 +47,7 @@ unsafe extern "C" fn later_text(data: *mut c_void, _: *const Value, _: usize, id
     // SAFETY: The descriptor guarantees that the fixture owns the live callback data.
     unsafe {
         (*data.cast::<HostState>()).requests.push_back((id, value));
+        (*data.cast::<HostState>()).started_requests += 1;
     }
     0
 }
@@ -127,6 +131,7 @@ pub struct Fixture {
     pub task: u64,
     pub completion: Option<(u64, Value)>,
     pub runs: usize,
+    settled_requests: u32,
 }
 impl Fixture {
     pub fn new(source: &str, names: &[&str]) -> Self {
@@ -141,6 +146,7 @@ impl Fixture {
             task: 0,
             completion: None,
             runs: 0,
+            settled_requests: 0,
         };
         // SAFETY: This fixture owns and serializes every ABI object and callback buffer.
         unsafe {
@@ -205,6 +211,8 @@ impl Fixture {
         self.host.requests.clear();
         self.host.output.clear();
         self.host.handler_after_failure = false;
+        self.host.started_requests = 0;
+        self.settled_requests = 0;
         self.task = 0;
         self.completion = None;
         let mut host = Host::default();
@@ -301,6 +309,7 @@ impl Fixture {
         // SAFETY: The fixture owns a serialized instance and writable outputs.
         let status = unsafe { ulua_pump(self.instance, 1, &mut settled, &mut self.diagnostic) };
         assert_eq!(settled, 1);
+        self.settled_requests += settled;
         status
     }
     pub fn small(&mut self) {
@@ -367,6 +376,15 @@ impl Fixture {
     pub fn free(&mut self) -> fault::Snapshot {
         // SAFETY: The fixture releases its instance once and invalidates its pointer.
         unsafe {
+            if !self.instance.is_null() {
+                let mut open = 0;
+                let mut recorded = 0;
+                assert_eq!(
+                    ulua_instance_requests(self.instance, &mut open, &mut recorded),
+                    ULUA_OK
+                );
+                assert_eq!(open, self.host.started_requests - self.settled_requests);
+            }
             assert_eq!(ulua_instance_free(self.instance), ULUA_OK);
         }
         self.instance = ptr::null_mut();
@@ -388,11 +406,12 @@ impl Drop for Fixture {
     }
 }
 fn handlers(source: &str) -> String {
-    // Test inputs use braced catch and finally bodies. Add an allocation-free marker at their entry.
+    // Mark catch bodies with or without a binding, and finally bodies. Each marker uses a loaded string constant.
     let mut result = source.to_owned();
     let mut insertions = vec![];
     for (start, _) in source
         .match_indices("catch (")
+        .chain(source.match_indices("catch {"))
         .chain(source.match_indices("finally {"))
     {
         let brace = source[start..].find('{').unwrap() + start + 1;

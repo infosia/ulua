@@ -48,7 +48,7 @@ static int start_request(lua_State* state, ulua_vm* vm, const ulua_internal_capa
     lua_pushnil(state);
     if (lua_pcall(state, 1, 1, 0) != LUA_OK) raise_call_error(state, vm);
     const int promise = lua_ref(state, -1);
-    ulua_request* request = static_cast<ulua_request*>(allocate(vm, nullptr, 0, sizeof(ulua_request)));
+    ulua_request* request = static_cast<ulua_request*>(allocate_record(vm, nullptr, 0, sizeof(ulua_request)));
     if (!request) { lua_unref(state, promise); luaL_error(state, "not enough memory"); }
     std::memset(request, 0, sizeof(*request));
     request->id = ++vm->next_request;
@@ -58,7 +58,7 @@ static int start_request(lua_State* state, ulua_vm* vm, const ulua_internal_capa
     if (code) {
         // No raising VM operation occurs between allocation and this release.
         lua_unref(state, promise);
-        allocate(vm, request, sizeof(*request), 0);
+        allocate_record(vm, request, sizeof(*request), 0);
         vm->flag = code;
         std::memcpy(vm->capability_name, cap->desc.name, cap->desc.name_length);
         vm->capability_name[cap->desc.name_length] = 0;
@@ -89,7 +89,7 @@ static void release_request(ulua_vm* vm, ulua_request* r) {
 #endif
         std::free(const_cast<char*>(r->value.data));
     }
-    allocate(vm, r, sizeof(*r), 0);
+    allocate_record(vm, r, sizeof(*r), 0);
 }
 static void discard_records(ulua_vm* vm) {
     // lua_close frees all references. Only native record allocations need a separate release.
@@ -102,12 +102,12 @@ static void discard_records(ulua_vm* vm) {
 #endif
             std::free(const_cast<char*>(r->value.data));
         }
-        allocate(vm, r, sizeof(*r), 0);
+        allocate_record(vm, r, sizeof(*r), 0);
     }
     while (vm->tasks) {
         ulua_task* t = vm->tasks;
         vm->tasks = t->next;
-        allocate(vm, t, sizeof(*t), 0);
+        allocate_record(vm, t, sizeof(*t), 0);
     }
 }
 extern "C" int ulua_internal_shim_complete(ulua_vm* vm, uint64_t id, const ulua_value* value, char* error) noexcept {
@@ -246,7 +246,7 @@ extern "C" int ulua_internal_shim_task_result(ulua_vm* vm, uint64_t id, ulua_val
         lua_settop(vm->thread, 0);
         *cursor = t->next;
         lua_unref(vm->thread, t->reference);
-        allocate(vm, t, sizeof(*t), 0);
+        allocate_record(vm, t, sizeof(*t), 0);
         return code;
     } catch (...) { message(error, "Task query raised a C++ exception"); return SHIM_INTERNAL; }
 }
@@ -258,7 +258,7 @@ extern "C" int ulua_internal_shim_task_discard(ulua_vm* vm, uint64_t id) noexcep
     ulua_task* t = *cursor;
     *cursor = t->next;
     lua_unref(vm->thread, t->reference);
-    allocate(vm, t, sizeof(*t), 0);
+    allocate_record(vm, t, sizeof(*t), 0);
     return SHIM_OK;
 }
 #endif

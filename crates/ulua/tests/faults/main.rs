@@ -1,13 +1,13 @@
 //! P5.3: native allocation sweeps. Baselines count each creation, call, completion, and settle.
 //! Each selected index uses a fresh instance. No external witness or measurement process runs.
-//! Sanitizer sweep: 26 programs, 182 baseline runs, 1,239 injection trials; measured cost 0.37 seconds.
-//! Replay and recovery bring the ABI run count to 3,913. Each source adds a recovery export and handler markers.
+//! Sanitizer sweep: 26 programs, 182 baseline runs, 1,257 injection trials; measured cost 0.37 seconds.
+//! Replay and recovery bring the ABI run count to 3,967. Each source adds a recovery export and handler markers.
 //! One rejected example has no native runtime allocation. The total ABI run count includes replay and recovery.
 //! Programs above 20,000 indices use stride ceil(n/20,000), plus 64 indices beside every phase boundary.
 //! The summary prints baseline and injection runs, eligible allocations, and cost. No time assertion applies.
 mod fixture;
 mod programs;
-use fixture::{Fixture, assert_clean, code};
+use fixture::{Fixture, MARKER, TRY_MARKER, assert_clean, code};
 use std::{ptr, time::Instant};
 use ulua::{fault_injection as fault, *};
 
@@ -94,14 +94,20 @@ fn selected(index: u64, total: u64, boundaries: &[u64]) -> bool {
         || index.is_multiple_of(total.div_ceil(20_000))
         || boundaries.iter().any(|&b| index.abs_diff(b) <= 64)
 }
-fn inject(f: &mut Fixture, runs: &[Run], target: usize, k: u64, label: &str) {
+fn inject(f: &mut Fixture, runs: &[Run], target: usize, k: u64, label: &str) -> bool {
     f.reset();
+    let mut protected_failure = false;
     for (i, run) in runs.iter().enumerate().take(target + 1) {
         fault::arm(if i == target { k } else { 0 });
         let status = run.phase.run(f);
         if i != target {
             assert_eq!(status, run.status, "prefix {label} phase={i}");
             assert_eq!(code(&f.diagnostic), run.code, "prefix {label} phase={i}");
+            assert_eq!(
+                fault::last().allocations,
+                run.allocations,
+                "prefix {label} phase={i} allocation count"
+            );
             continue;
         }
         let snapshot = fault::last();
@@ -148,6 +154,10 @@ fn inject(f: &mut Fixture, runs: &[Run], target: usize, k: u64, label: &str) {
             "handler ran after refusal: {label} phase={:?} k={k}",
             run.phase
         );
+        if label == "protected-allocation" && f.host.output.iter().any(|s| s == TRY_MARKER) {
+            assert!(!f.host.output.iter().any(|s| s == MARKER));
+            protected_failure = true;
+        }
         if !f.instance.is_null() {
             f.small();
             assert_clean(f.free()).unwrap();
@@ -162,6 +172,7 @@ fn inject(f: &mut Fixture, runs: &[Run], target: usize, k: u64, label: &str) {
             }
         }
     }
+    protected_failure
 }
 
 #[test]
@@ -260,17 +271,26 @@ fn allocation_failure_sweep() {
         }
         boundaries.push(total);
         let before = injections;
+        let mut protected_failures = 0;
         offset = 0;
         for (i, plan) in plans.iter().enumerate() {
             for (phase, run) in plan.iter().enumerate().skip(usize::from(i != 0)) {
                 for k in 1..=run.allocations {
                     if selected(offset + k, total, &boundaries) {
-                        inject(&mut f, plan, phase, k, program.name);
+                        protected_failures +=
+                            usize::from(inject(&mut f, plan, phase, k, program.name));
                         injections += 1;
                     }
                 }
                 offset += run.allocations;
             }
+        }
+        if program.name == "protected-allocation" {
+            assert!(
+                protected_failures > 0,
+                "no allocation refusal inside the try body"
+            );
+            eprintln!("fault protected-allocation try_failures={protected_failures}");
         }
         abi_runs += f.runs;
         allocations += total;

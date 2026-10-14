@@ -73,7 +73,8 @@ pub fn programs() -> Vec<Program> {
     });
     result.push(Program {
         name: "protected-allocation",
-        source: "export function main(): number { try { const xs: number[] = [1, 2, 3]; return xs.map((x: number): number => x + 1).length; } catch (e) { print(\"catch\"); return 0; } finally { print(\"finally\"); } }".into(),
+        // The runtime string exceeds Luau's largest size class and reaches the native allocator.
+        source: "export function main(): number { try { print(\"__fault_try\"); const text: string = \"x\".repeat(8192); return text.length; } catch (e) { print(\"catch\"); return 0; } finally { print(\"finally\"); } }".into(),
         grants: vec![], rejected: false,
     });
     result

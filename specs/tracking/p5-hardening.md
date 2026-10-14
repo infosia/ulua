@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 and P5.2 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 to P5.3 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -51,14 +51,14 @@ Status: open; P5.1 and P5.2 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` 
 
 ## Exit checklist (P5.3)
 
-- [ ] pipeline.md §10 implemented: the `fault-injection` feature, the
+- [x] pipeline.md §10 implemented: the `fault-injection` feature, the
   allocator hook, the request table hook.
-- [ ] The sweep over the set of §10.2 with the properties of §10.3,
+- [x] The sweep over the set of §10.2 with the properties of §10.3,
   with its count of runs and its cost.
-- [ ] A direct test shows that a seeded leak (a test-only allocation
+- [x] A direct test shows that a seeded leak (a test-only allocation
   that is never freed) fails the live-bytes check.
-- [ ] Each failure found becomes a test before its fix.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Each failure found becomes a test before its fix.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements (P5.3)
 
@@ -83,6 +83,12 @@ Reviewer: fresh agent, diff `2ab2c56..e7ff5c3`. 0 CRITICAL, 0 MAJOR, 4 MINOR. Th
 | The protected-allocation program makes no counted allocation inside its `try` body, so no swept index fails there | MINOR | A large block inside the `try` body |
 | The request-records check runs after `discard_records` and cannot fail (principle 9) | MINOR | Count the records from an independent fact before the discard |
 | A replayed prefix is not checked to make its baseline count | MINOR | Assert the count |
+
+Fixes (Codex): every handler form carries a marker; the protected-allocation program allocates a large block inside its `try` body, and 18 swept indices fail after the `try` began with no `catch` or `finally` marker; the records check counts open requests from the test's own model before the discard; each replayed prefix makes its baseline count. Sweep: 26 programs, 1,257 indices, 3,967 ABI runs, 0.371 s.
+
+### P5.3 close
+
+Review rounds: 1. Close gates: `gate.sh full` 170 s, `gate.sh sanitize` 246 s. Running tasks at the close: none.
 
 ## Exit checklist (P5.2)
 

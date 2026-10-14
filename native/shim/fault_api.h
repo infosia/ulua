@@ -5,9 +5,6 @@ extern "C" void ulua_internal_fault_last(ulua_fault_snapshot* out) noexcept { *o
 extern "C" void ulua_internal_fault_live(const ulua_vm* vm, ulua_fault_snapshot* out) noexcept {
     *out = vm->fault.snapshot;
     out->live_bytes = vm->used;
-    out->records = 0;
-    for (ulua_request* r = vm->requests; r; r = r->next) ++out->records;
-    for (ulua_task* t = vm->tasks; t; t = t->next) ++out->records;
 }
 extern "C" bool ulua_internal_fault_seed(ulua_vm* vm) noexcept {
     if (fault_seed) return false;
