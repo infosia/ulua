@@ -73,6 +73,17 @@ defect and no contract question. Close gates: `gate.sh sanitize` 243 s
 (fault sweep 2 s); `gate.sh full` after `cargo fmt` of
 `crates/ulua/src/lib.rs` (Codex did not run it).
 
+### P5.3 Phase Review round 1
+
+Reviewer: fresh agent, diff `2ab2c56..e7ff5c3`. 0 CRITICAL, 0 MAJOR, 4 MINOR. The count covers every allocation that can fail: `fault_begin` runs before `lua_newstate`; a scratch counter saw 0 eligible allocations outside the counted runs. The count is low (about 35 to 47 per creation) because Luau serves small GC objects from size-class pages (`VM/src/lmem.cpp`); only a page or a large block reaches the allocator, in production as in the sweep. 1,079 of 1,239 indices fall in `ulua_instance_new`, 154 in calls, 2 in completions, 4 in settles; 63 fail inside script execution. Held: exactly the k-th allocation fails (a shrink is never refused); the completion hook matches abi.md §6.4.2; the usable-instance check uses the test's own fact; the sweep set matches §10.2; no build without the feature carries the hook.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `catch {` without a binding gets no handler marker (`a51`, `a52`) | MINOR | Mark every handler form |
+| The protected-allocation program makes no counted allocation inside its `try` body, so no swept index fails there | MINOR | A large block inside the `try` body |
+| The request-records check runs after `discard_records` and cannot fail (principle 9) | MINOR | Count the records from an independent fact before the discard |
+| A replayed prefix is not checked to make its baseline count | MINOR | Assert the count |
+
 ## Exit checklist (P5.2)
 
 - [x] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four
