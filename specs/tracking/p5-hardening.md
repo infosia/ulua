@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 and P5.2 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -57,9 +57,9 @@ Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 - [x] A direct test per invariant: a seeded violation (test-only) is
   reported as a failure, so a clean run is evidence.
 - [x] The smoke runs in `sh tools/gate.sh sanitize`, with their cost.
-- [ ] 60 seconds per target with a fresh seed on the sanitizer build with zero open
+- [x] 60 seconds per target with a fresh seed on the sanitizer build with zero open
   findings; each finding became a test before its fix.
-- [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+- [x] Phase Review of the slice with no open CRITICAL or MAJOR finding.
 
 ## Measurements (P5.2)
 
@@ -128,6 +128,12 @@ Reviewer: fresh agent, diff `11f70a5..fb0469f`. 0 CRITICAL, 1 MAJOR, 6 MINOR, al
 | A `tsc` stack overflow skips the whole batch | MINOR | Check the other inputs one at a time |
 | The model expects `limit:memory` below 300,000 bytes, a measured value outside the contract | MINOR | Accept `ok` or `limit:memory` there |
 | The tests of the fix lack infinities and negative zero | MINOR | Add them |
+
+Fixes (the implementation subagent): a 30-second deadline per witness batch (the child is killed; a timeout or a `tsc` stack overflow checks each input again alone, and an input past the deadline alone is a witness limit record); a 30-second watchdog per input in the supervisor (key `hang`); findings written when they occur; `--seconds` always ends a run; crash keys from the sanitizer report and the signal before a panic message; a silent panic hook around the generators; `reduction.txt` states the reduction result; `tsc` runs with the options of `tsconfig.json`; the memory expectation accepts `ok` or `limit:memory`; tests for the infinities and negative zero. Stub tests show the deadlines (a `tsc` that sleeps, a worker that never ends). A 60-second compiler run with seed 40961 ends: 16,081 inputs, 3,100 accepted, 0 failures.
+
+### P5.2 close
+
+Review rounds: 1, with the MAJOR fixed and shown by stub tests. Close gates (warm build): `gate.sh full` 134 s, `gate.sh sanitize` 209 s (fuzz smoke 56 s). The timing gate did not run: no checker or emitter change since its last run (principle 17). Running tasks at the close: none.
 
 ## Exit checklist (P5.1)
 

@@ -187,10 +187,13 @@ fn one(
 }
 
 fn flush_samples(out: &mut impl Write, root: &Path, samples: &mut Vec<witness::Sample>) -> bool {
-    match witness::check(root, samples) {
-        Ok(failures) => {
-            for (index, f) in failures {
+    match witness::check(&witness::Tools::new(root), samples) {
+        Ok(checked) => {
+            for (index, f) in checked.failures {
                 emit(out, index, &f);
+            }
+            for (index, detail) in checked.limits {
+                let _ = writeln!(out, "L {index} {}", line(&detail));
             }
             samples.clear();
             true
@@ -286,10 +289,26 @@ fn fuzz(
         prefix: vec![],
     };
     let end = inputs.unwrap_or(if seconds.is_some() { u64::MAX } else { 1000 });
-    let deadline = seconds.map(Duration::from_secs);
-    let summary = supervisor::supervise(&w, &root, target, seed, 0, end, deadline)?;
+    let run = supervisor::Run {
+        start: 0,
+        end,
+        seconds: seconds.map(Duration::from_secs),
+        input_deadline: supervisor::INPUT_DEADLINE,
+    };
     let pool = seeds::Pool::load(&root)?;
-    let dirs = supervisor::findings(&w, &root, &pool, target, seed, &summary, SHRINK_BUDGET)?;
+    let rec = supervisor::Recorder {
+        root: &root,
+        pool: &pool,
+        target,
+        seed,
+    };
+    let summary = supervisor::supervise(&w, &root, target, seed, &run, Some(&rec))?;
+    // In a time box, reduction ends with the grace period after the box.
+    let until = seconds.map(|s| started + Duration::from_secs(s) + supervisor::GRACE);
+    let dirs = supervisor::reduce(&w, &rec, &summary, SHRINK_BUDGET, until)?;
+    for (index, detail) in &summary.limits {
+        eprintln!("ulua-fuzz: witness limit, input {index}: {detail}");
+    }
     for (index, per_byte, median) in supervisor::slow(&summary.timings) {
         eprintln!(
             "ulua-fuzz: review: input {index} of {} seed {seed} compiles in {per_byte:.0} ns per byte, median {median:.0}",
@@ -315,11 +334,12 @@ fn fuzz(
     let stats_path = root.join(format!("target/fuzz/stats-{}-{seed}.txt", target.name()));
     std::fs::write(&stats_path, stats).map_err(|e| e.to_string())?;
     println!(
-        "ulua-fuzz target={} seed={seed} inputs={} accepted={} witness_samples={} failures={} observed={} cost={:.1}s",
+        "ulua-fuzz target={} seed={seed} inputs={} accepted={} witness_samples={} witness_limits={} failures={} observed={} cost={:.1}s",
         target.name(),
         summary.inputs,
         summary.accepted,
         summary.samples,
+        summary.limits.len(),
         summary.failures.len(),
         summary.stats.len(),
         supervisor::cost(started)

@@ -32,3 +32,25 @@ fn host_completions_outside_the_int_range_resolve() {
     let source = "// grants: hostLater\nasync function wait(n: number): Promise<number> { const v = await hostLater(n); return v; }\nexport async function main(): Promise<void> { print(`${await wait(0 / 0)} ${await wait(1e300)}`); }";
     assert_eq!(run(source), (ULUA_OK, String::new(), "NaN 1e+300\n".into()));
 }
+
+#[test]
+fn async_results_of_infinities_and_negative_zero_resolve() {
+    let source = "async function f(x: number): Promise<number> { return x; }\nfunction negativeZero(x: number): boolean { return x === 0 && 1 / x < 0; }\nexport async function main(): Promise<void> { const z = await f(-0); print(`${await f(1 / 0)} ${await f(-1 / 0)} ${z} ${negativeZero(z)}`); }";
+    assert_eq!(
+        run(source),
+        (ULUA_OK, String::new(), "Infinity -Infinity 0 true\n".into())
+    );
+}
+
+#[test]
+fn host_completions_of_infinities_and_negative_zero_resolve() {
+    let source = "// grants: hostLater\nasync function wait(n: number): Promise<number> { const v = await hostLater(n); return v; }\nexport async function main(): Promise<void> { const z = await wait(-0); print(`${await wait(1 / 0)} ${await wait(-1 / 0)} ${1 / z}`); }";
+    assert_eq!(
+        run(source),
+        (
+            ULUA_OK,
+            String::new(),
+            "Infinity -Infinity -Infinity\n".into()
+        )
+    );
+}

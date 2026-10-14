@@ -3,8 +3,10 @@
 use crate::check::Failure;
 use std::{
     collections::BTreeMap,
+    io::Read,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output, Stdio},
+    time::{Duration, Instant},
 };
 
 /// One accepted input of the sample.
@@ -102,7 +104,179 @@ fn case(index: u64) -> String {
     format!("case-{index}")
 }
 
-fn tsc(root: &Path, dir: &Path, samples: &[Sample]) -> Result<Vec<(u64, Failure)>, String> {
+/// The deadline of one witness batch (pipeline.md §9.3).
+pub const DEADLINE: Duration = Duration::from_secs(30);
+
+/// The witness commands and their deadline. Tests replace the commands with stubs.
+pub struct Tools {
+    /// The repository root: `prelude/`, `tsconfig.json`, `node_modules/`.
+    pub root: PathBuf,
+    /// The `tsc` program and its leading arguments; `-p <config>` follows.
+    pub tsc: Vec<String>,
+    /// The `luau-analyze` program and its leading arguments; the files follow.
+    pub analyze: Vec<String>,
+    /// The deadline of each process.
+    pub deadline: Duration,
+}
+
+impl Tools {
+    /// The stock tools of the repository.
+    pub fn new(root: &Path) -> Self {
+        Self {
+            root: root.to_path_buf(),
+            tsc: vec![
+                "node".into(),
+                root.join("node_modules/typescript/bin/tsc")
+                    .display()
+                    .to_string(),
+            ],
+            analyze: vec![
+                root.join("target/luau-tools/luau-analyze")
+                    .display()
+                    .to_string(),
+                "-j1".into(),
+            ],
+            deadline: DEADLINE,
+        }
+    }
+}
+
+/// The output of a process, or `None` when it passed the deadline and was killed.
+pub fn run_with_deadline(cmd: &mut Command, deadline: Duration) -> Result<Option<Output>, String> {
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("{cmd:?}: {e}"))?;
+    let read = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut bytes = vec![];
+            if let Some(mut p) = pipe {
+                let _ = p.read_to_end(&mut bytes);
+            }
+            bytes
+        })
+    };
+    let out = read(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let err = read(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if started.elapsed() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    Ok(Some(Output {
+        status,
+        stdout: out.join().unwrap_or_default(),
+        stderr: err.join().unwrap_or_default(),
+    }))
+}
+
+/// The result of a witness check: failures, and witness resource limits (a deadline or a
+/// `tsc` stack overflow, outside invariant 3), each with its input index.
+#[derive(Default, Debug)]
+pub struct Checked {
+    /// The failures.
+    pub failures: Vec<(u64, Failure)>,
+    /// The witness resource limits: index and a description.
+    pub limits: Vec<(u64, String)>,
+}
+
+/// One `tsc` process over one group. `None` is a resource limit of the group.
+fn tsc_group(
+    tools: &Tools,
+    dir: &Path,
+    n: usize,
+    decl: &str,
+    group: &[&Sample],
+) -> Result<Option<Vec<(u64, Failure)>>, String> {
+    let root = &tools.root;
+    let mut files: Vec<PathBuf> = vec![root.join("prelude/ulua.d.ts")];
+    if group.iter().any(|s| !s.signatures.is_empty()) {
+        let host = dir.join(format!("host-{n}.d.ts"));
+        std::fs::write(&host, decl).map_err(|e| e.to_string())?;
+        files.push(host);
+    }
+    for s in group {
+        // pipeline.md §3.3: the compiler parses a module; the marker gives `tsc` the
+        // same goal, so the files of one batch do not share a global scope.
+        let mut text = s.source.clone();
+        text.extend_from_slice(b"\nexport {};\n");
+        let path = dir.join(format!("{}.ts", case(s.index)));
+        std::fs::write(&path, text).map_err(|e| e.to_string())?;
+        files.push(path);
+    }
+    // The options of tsconfig.json, as tools/witness/corpus.mjs uses them; only the files differ.
+    let quoted: Vec<String> = files
+        .iter()
+        .map(|f| format!("{:?}", f.display().to_string()))
+        .collect();
+    let config = dir.join(format!("tsconfig-{n}.json"));
+    let text = format!(
+        "{{\"extends\": {:?}, \"files\": [{}], \"include\": []}}\n",
+        root.join("tsconfig.json").display().to_string(),
+        quoted.join(", ")
+    );
+    std::fs::write(&config, text).map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(&tools.tsc[0]);
+    cmd.current_dir(root)
+        .args(&tools.tsc[1..])
+        .arg("-p")
+        .arg(&config);
+    let Some(out) = run_with_deadline(&mut cmd, tools.deadline)? else {
+        return Ok(None);
+    };
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if stderr.contains("Maximum call stack size exceeded") {
+        // A `tsc` stack overflow is outside invariant 3.
+        return Ok(None);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success() && out.status.code() != Some(2) {
+        return Err(format!("tsc exited with {}: {stderr}{stdout}", out.status));
+    }
+    let mut failures = vec![];
+    for d in parse_tsc(&stdout)? {
+        let Some(s) = group
+            .iter()
+            .find(|s| d.file.ends_with(&format!("{}.ts", case(s.index))))
+        else {
+            return Err(format!(
+                "tsc diagnostic outside the cases: {} TS{} {}",
+                d.file, d.code, d.message
+            ));
+        };
+        if !exempt(d.code, &d.message) {
+            failures.push((
+                s.index,
+                Failure {
+                    key: format!("witness:tsc:TS{}", d.code),
+                    detail: format!("tsc TS{}: {}", d.code, d.message),
+                },
+            ));
+        }
+    }
+    Ok(Some(failures))
+}
+
+fn tsc(tools: &Tools, dir: &Path, samples: &[Sample], out: &mut Checked) -> Result<(), String> {
     let mut groups: BTreeMap<String, Vec<&Sample>> = BTreeMap::new();
     for s in samples {
         groups
@@ -110,93 +284,47 @@ fn tsc(root: &Path, dir: &Path, samples: &[Sample]) -> Result<Vec<(u64, Failure)
             .or_default()
             .push(s);
     }
-    let mut failures = vec![];
-    for (n, (decl, group)) in groups.iter().enumerate() {
-        let mut args: Vec<PathBuf> = vec![root.join("prelude/ulua.d.ts")];
-        if group.iter().any(|s| !s.signatures.is_empty()) {
-            let host = dir.join(format!("host-{n}.d.ts"));
-            std::fs::write(&host, decl).map_err(|e| e.to_string())?;
-            args.push(host);
-        }
-        for s in group {
-            // pipeline.md §3.3: the compiler parses a module; the marker gives `tsc` the
-            // same goal, so the files of one batch do not share a global scope.
-            let mut text = s.source.clone();
-            text.extend_from_slice(b"\nexport {};\n");
-            let path = dir.join(format!("{}.ts", case(s.index)));
-            std::fs::write(&path, text).map_err(|e| e.to_string())?;
-            args.push(path);
-        }
-        let out = Command::new("node")
-            .current_dir(root)
-            .args([
-                "node_modules/typescript/bin/tsc",
-                "--noEmit",
-                "--strict",
-                "--target",
-                "es2022",
-                "--module",
-                "esnext",
-                "--lib",
-                "es2022",
-            ])
-            .args(&args)
-            .output()
-            .map_err(|e| format!("tsc: {e}"))?;
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        if stderr.contains("Maximum call stack size exceeded") {
-            // A `tsc` stack overflow is outside invariant 3.
+    let mut n = 0;
+    for (decl, group) in &groups {
+        n += 1;
+        if let Some(f) = tsc_group(tools, dir, n, decl, group)? {
+            out.failures.extend(f);
             continue;
         }
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        if !out.status.success() && out.status.code() != Some(2) {
-            return Err(format!("tsc exited with {}: {stderr}{stdout}", out.status));
-        }
-        for d in parse_tsc(&stdout)? {
-            let Some(s) = group
-                .iter()
-                .find(|s| d.file.ends_with(&format!("{}.ts", case(s.index))))
-            else {
-                return Err(format!(
-                    "tsc diagnostic outside the cases: {} TS{} {}",
-                    d.file, d.code, d.message
-                ));
-            };
-            if !exempt(d.code, &d.message) {
-                failures.push((
+        // The batch passed a resource limit: check each input again on its own.
+        for s in group {
+            n += 1;
+            match tsc_group(tools, dir, n, decl, std::slice::from_ref(s))? {
+                Some(f) => out.failures.extend(f),
+                None => out.limits.push((
                     s.index,
-                    Failure {
-                        key: format!("witness:tsc:TS{}", d.code),
-                        detail: format!("tsc TS{}: {}", d.code, d.message),
-                    },
-                ));
+                    "tsc passed its deadline or its stack (invariant 3)".into(),
+                )),
             }
         }
     }
-    Ok(failures)
+    Ok(())
 }
 
-fn analyze(root: &Path, dir: &Path, samples: &[Sample]) -> Result<Vec<(u64, Failure)>, String> {
-    let tool = root.join("target/luau-tools/luau-analyze");
-    if !tool.is_file() {
-        return Err(format!(
-            "{} is absent; run sh tools/luau-tools.sh",
-            tool.display()
-        ));
-    }
+/// One `luau-analyze` process. `None` is a deadline.
+fn analyze_batch(
+    tools: &Tools,
+    dir: &Path,
+    samples: &[&Sample],
+) -> Result<Option<Vec<(u64, Failure)>>, String> {
     let mut paths = vec![];
     for s in samples {
         let p = dir.join(format!("{}.luau", case(s.index)));
         std::fs::write(&p, &s.luau).map_err(|e| e.to_string())?;
         paths.push(p);
     }
-    let out = Command::new(&tool)
-        .arg("-j1")
-        .args(&paths)
-        .output()
-        .map_err(|e| format!("luau-analyze: {e}"))?;
+    let mut cmd = Command::new(&tools.analyze[0]);
+    cmd.args(&tools.analyze[1..]).args(&paths);
+    let Some(out) = run_with_deadline(&mut cmd, tools.deadline)? else {
+        return Ok(None);
+    };
     if out.status.success() {
-        return Ok(vec![]);
+        return Ok(Some(vec![]));
     }
     let text = format!(
         "{}{}",
@@ -231,27 +359,50 @@ fn analyze(root: &Path, dir: &Path, samples: &[Sample]) -> Result<Vec<(u64, Fail
             ));
         }
     }
-    Ok(failures)
+    Ok(Some(failures))
+}
+
+fn analyze(tools: &Tools, dir: &Path, samples: &[Sample], out: &mut Checked) -> Result<(), String> {
+    if !Path::new(&tools.analyze[0]).is_file() {
+        return Err(format!(
+            "{} is absent; run sh tools/luau-tools.sh",
+            tools.analyze[0]
+        ));
+    }
+    let all: Vec<&Sample> = samples.iter().collect();
+    if let Some(f) = analyze_batch(tools, dir, &all)? {
+        out.failures.extend(f);
+        return Ok(());
+    }
+    for s in &all {
+        match analyze_batch(tools, dir, std::slice::from_ref(s))? {
+            Some(f) => out.failures.extend(f),
+            None => out
+                .limits
+                .push((s.index, "luau-analyze passed its deadline".into())),
+        }
+    }
+    Ok(())
 }
 
 /// Check one batch with both witnesses. A tool error (a missing tool, an unparsed line)
 /// is an error of the run, not a failure of an input.
-pub fn check(root: &Path, samples: &[Sample]) -> Result<Vec<(u64, Failure)>, String> {
+pub fn check(tools: &Tools, samples: &[Sample]) -> Result<Checked, String> {
+    let mut out = Checked::default();
     if samples.is_empty() {
-        return Ok(vec![]);
+        return Ok(out);
     }
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = root
+    let dir = tools
+        .root
         .join("target/fuzz/tmp")
         .join(format!("witness-{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let result = tsc(root, &dir, samples).and_then(|mut f| {
-        f.extend(analyze(root, &dir, samples)?);
-        Ok(f)
-    });
+    let result =
+        tsc(tools, &dir, samples, &mut out).and_then(|()| analyze(tools, &dir, samples, &mut out));
     let _ = std::fs::remove_dir_all(&dir);
-    result
+    result.map(|()| out)
 }
 
 #[cfg(test)]
@@ -294,7 +445,7 @@ mod tests {
                 "--!strict\nlocal y: number = \"s\"\n",
             ),
         ];
-        let failures = check(&root(), &samples).unwrap();
+        let failures = check(&Tools::new(&root()), &samples).unwrap().failures;
         let keys: Vec<_> = failures.iter().map(|(i, f)| (*i, f.key.as_str())).collect();
         assert!(keys.contains(&(2, "witness:tsc:TS2322")), "{keys:?}");
         assert!(
@@ -311,6 +462,45 @@ mod tests {
             "--!strict\n",
         );
         s.signatures = crate::seeds::grants(&s.source);
-        assert!(check(&root(), &[s]).unwrap().is_empty());
+        let c = check(&Tools::new(&root()), &[s]).unwrap();
+        assert!(c.failures.is_empty() && c.limits.is_empty(), "{c:?}");
+    }
+    #[test]
+    fn a_witness_past_its_deadline_is_a_limit_and_the_batch_is_checked_again() {
+        // A stub tsc that never ends within the deadline; the analyzer is a stub that passes.
+        let mut tools = Tools::new(&root());
+        tools.tsc = vec![
+            "sh".into(),
+            "-c".into(),
+            "exec sleep 20".into(),
+            "stub".into(),
+        ];
+        tools.analyze = vec!["/usr/bin/true".into()];
+        tools.deadline = Duration::from_millis(500);
+        let samples = [
+            sample(5, "export function main(): void {}", "--!strict\n"),
+            sample(6, "export function f(): void {}", "--!strict\n"),
+        ];
+        let started = Instant::now();
+        let c = check(&tools, &samples).unwrap();
+        assert!(c.failures.is_empty(), "{c:?}");
+        let limited: Vec<_> = c.limits.iter().map(|l| l.0).collect();
+        assert_eq!(limited, [5, 6]);
+        // One batch run and one run per input, each killed at the deadline.
+        assert!(started.elapsed() < Duration::from_secs(10));
+        // A stub analyzer past its deadline gives the same record.
+        let mut tools = Tools::new(&root());
+        tools.analyze = vec![
+            "/bin/sh".into(),
+            "-c".into(),
+            "exec sleep 20".into(),
+            "stub".into(),
+        ];
+        tools.deadline = Duration::from_millis(500);
+        let mut out = Checked::default();
+        let dir = root().join("target/fuzz/tmp/witness-test-analyze");
+        std::fs::create_dir_all(&dir).unwrap();
+        analyze(&tools, &dir, &samples[..1], &mut out).unwrap();
+        assert_eq!(out.limits.len(), 1);
     }
 }

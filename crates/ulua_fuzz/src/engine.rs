@@ -619,7 +619,11 @@ impl<'r> Engine<'r> {
         let init = PROGRAMS[program].init;
         let expect = match (defect, init) {
             (Some(_), _) => model::Expect::Stop(ULUA_INVALID_ARGUMENT, ""),
-            _ if memory > 0 && memory < 300_000 => model::Expect::Stop(ULUA_FAILED, "limit:memory"),
+            // abi.md states no minimum instance size: below the measured 300,000 bytes
+            // either outcome is valid; the status chooses the expectation.
+            _ if memory > 0 && memory < 300_000 && s != ULUA_OK => {
+                model::Expect::Stop(ULUA_FAILED, "limit:memory")
+            }
             (None, Init::Trap(code)) => model::Expect::Stop(ULUA_FAILED, code),
             (None, Init::Print) if output == crate::host::Mode::Error => {
                 model::Expect::Stop(ULUA_HOST_ERROR, "host:output")

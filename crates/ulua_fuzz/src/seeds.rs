@@ -13,6 +13,16 @@ pub struct Pool {
     shapes: Vec<growth::Shape>,
 }
 
+/// Run a generator and catch its panic with a silent hook, so a caught generator panic
+/// leaves no message in the worker stderr (a message there would key a later crash).
+fn quiet<T>(f: impl FnOnce() -> T + std::panic::UnwindSafe) -> std::thread::Result<T> {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = std::panic::catch_unwind(f);
+    std::panic::set_hook(previous);
+    result
+}
+
 /// The host signature of each corpus fixture (corpus.md §7).
 pub fn fixture(name: &str) -> Option<ulua_compiler::HostSignature> {
     let (p, r) = match name {
@@ -46,7 +56,7 @@ pub fn grants(source: &[u8]) -> Vec<ulua_compiler::HostSignature> {
     }
     if out.is_empty() {
         // The growth helpers read only the first line of a shape.
-        out = std::panic::catch_unwind(|| growth::grants(&text)).unwrap_or_default();
+        out = quiet(|| growth::grants(&text)).unwrap_or_default();
     }
     out
 }
@@ -110,7 +120,7 @@ impl Pool {
         let s = r.pick(&self.shapes);
         let (make, key) = (s.make, s.key);
         // A generator can assert a minimum size; that input then comes from the corpus.
-        match std::panic::catch_unwind(|| make(key, bytes)) {
+        match quiet(|| make(key, bytes)) {
             Ok(text) => text.into_bytes(),
             Err(_) => r.pick(&self.corpus).clone(),
         }
