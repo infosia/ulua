@@ -51,15 +51,59 @@ Status: open; P5.1 COMPLETE 2026-10-14. Decisions: D28, D29 (`plan.md` §8).
 
 ## Exit checklist (P5.2)
 
-- [ ] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four
+- [x] pipeline.md §9 implemented: the `ulua_fuzz` crate, the four
   targets, the invariants, deterministic seeds, reduction, and the
   findings directory.
-- [ ] A direct test per invariant: a seeded violation (test-only) is
+- [x] A direct test per invariant: a seeded violation (test-only) is
   reported as a failure, so a clean run is evidence.
-- [ ] The smoke runs in `sh tools/gate.sh sanitize`, with their cost.
+- [x] The smoke runs in `sh tools/gate.sh sanitize`, with their cost.
 - [ ] One hour per target on the sanitizer build with zero open
   findings; each finding became a test before its fix.
 - [ ] Phase Review of the slice with no open CRITICAL or MAJOR finding.
+
+## Measurements (P5.2)
+
+Implementation record (a Claude general-purpose subagent, by the roles
+exception of `rules-history.md`; Codex refused the handoff twice):
+
+- `crates/ulua_fuzz` (binary `ulua-fuzz`), stable Rust, no new
+  dependency: an in-crate PRNG (input `i` of seed `s` is `mix(s, i)`),
+  a worker process per run under a supervisor (a signal, an abort, or a
+  sanitizer report fails the running input), ddmin shrinking over
+  bytes then tokens, findings under `target/fuzz/findings/`.
+- Library finding (the `requests` target, an early trial, seed 5, 23
+  inputs, shrunk to 28 bytes): on the sanitizer build,
+  `VM/src/lvmexecute.cpp:779: runtime error: nan is outside the range
+  of representable values of type 'int'`. A request completed with
+  NaN; the async export returns it; `__ulua_resolve` reads the weak
+  table `__ulua_promises[value]` with a number key, and the
+  `LOP_GETTABLE` fast path of the pinned VM converts the key with
+  `int(indexd)`, undefined for NaN and for numbers outside the `int`
+  range. The normal build shows nothing. Tests first:
+  `p52_findings::async_results_outside_the_int_range_resolve` and
+  `host_completions_outside_the_int_range_resolve` (SIGABRT before the
+  fix on the sanitizer build). Fix: the generated helpers read the
+  table only when the value is a table; the value representation does
+  not change.
+- Two tool defects found and fixed in the runs (false failures): queued
+  nested calls of a callback that never ran; a perturbed grant
+  signature that stayed compatible.
+- Smoke (seed `0x52f022d`, instrumented Debug): compiler 3,000 inputs
+  (550 accepted, 6 witness samples) 10.3 s; run 3,000 (550) 10.5 s;
+  abi 2,000 (1,760 compiling) 14.6 s; requests 1,500 20.3 s; 0
+  failures; about 58 s in all.
+- 10-minute runs (sanitizer build, seed `0x10ad`, the four at once):
+  compiler 130,945 inputs (25,038 accepted, 368 witness samples); run
+  127,317 (24,321, 359); abi 63,954; requests 34,496; 0 failures. One
+  slow-compile report: the empty source (the fixed cost of the compiler
+  thread); pipeline.md Rev 36 §9.3 measures inputs of at least 1 KiB.
+- Contract questions decided in pipeline.md Rev 36: §3.7 rule ids
+  (`C1` to `C19`); §9.2 the object pool (objects whose parent is freed,
+  consumed ids; never a freed pointer); §9.3 the slow-compile metric.
+- Gaps: the tsc CLI gives no syntax node, so TS2367 and TS2845 are
+  exempt by code, not by the equality-node test of the corpus witness;
+  the run target checks no output value; the abi model checks exact
+  values for the fixed programs only.
 
 ## Exit checklist (P5.1)
 

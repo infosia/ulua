@@ -11,3 +11,4 @@ mod p42_nullable;
 mod p42_promises;
 
 mod p43_order;
+mod p52_findings;

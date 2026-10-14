@@ -59,7 +59,9 @@ end
 local function __ulua_resolve<T>(result: __ulua_Promise<T>, value: any): ()
     if value == result then
         __ulua_reject(result, __ulua_error("TypeError", "Chaining cycle detected for promise #<Promise>"))
-    elseif __ulua_promises[value] then
+    -- A weak-table read keyed by a number outside the int range is undefined in the
+    -- array fast path of the pinned VM; only a table can be a promise.
+    elseif typeof(value) == "table" and __ulua_promises[value] then
         local adopted: __ulua_Promise<T> = value
         -- PromiseResolveThenableJob precedes the adoption reaction job.
         __ulua_enqueue(function(): ()
@@ -100,7 +102,7 @@ local function __ulua_on_finally<T>(p: __ulua_Promise<T>, f: () -> unknown, resu
         __ulua_reaction(result, function(): unknown
             local returned = f()
             local waited: __ulua_Promise<unknown>
-            if __ulua_promises[returned] then waited = returned :: any
+            if typeof(returned) == "table" and __ulua_promises[returned] then waited = returned :: any
             else
                 waited = __ulua_new(nil :: __ulua_Promise<unknown>?)
                 __ulua_fulfill(waited, returned)

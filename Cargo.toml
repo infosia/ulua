@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ulua_compiler", "crates/ulua", "crates/ulua_corpus"]
+members = ["crates/ulua_compiler", "crates/ulua", "crates/ulua_corpus", "crates/ulua_fuzz"]
 resolver = "3"
 
 [workspace.package]

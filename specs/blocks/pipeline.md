@@ -37,6 +37,7 @@ Rev 32: §4.9 one completion helper (P4.1 review 3).
 Rev 33: §6 `max_open_requests`, host-started runs (P4.3).
 Rev 34: §2.6 sanitizer build (P5.1).
 Rev 35: §9 fuzzing (P5.2).
+Rev 36: §3.7 rule ids, §9.2 object pool, §9.3 slow-compile metric (P5.2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -118,7 +119,7 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    compile result carries one diagnostic: a code, a byte offset, a
    line, a column, and a message.
 7. **Codes.** A diagnostic code is one of:
-   - a rule id of `collisions.md` (`C1` to `C16`);
+   - a rule id of `collisions.md` (each `## Cn.` section: `C1` to `C19`);
    - `syntax`;
    - `limit:source-bytes`, `limit:nesting-depth`, or a C15 bound
      `limit:<name>`;
@@ -606,7 +607,11 @@ ABI and prints one JSON line per entry:
      each export called, under small run limits, with granted fixture
      capabilities (sync and async) whose results the fuzzer chooses.
    - `abi`: random sequences of the functions of `abi.md` §7 over a
-     pool of live and freed objects, with valid and invalid arguments
+     pool of live objects, objects whose parent is freed (an instance
+     after its module is freed, a module after its capability is
+     freed), and consumed ids (a freed pointer itself is a host
+     precondition, `abi.md` §7.1, so the tool never passes one), with
+     valid and invalid arguments
      (null pointers, wrong `struct_size`, nonzero unused fields,
      invalid UTF-8, objects of another context, ids that never
      existed or were consumed), and calls from inside host callbacks.
@@ -624,9 +629,12 @@ ABI and prints one JSON line per entry:
      `tsc` rejects with a diagnostic outside invariant 3;
    - a count of `ulua_instance_requests` that differs from the model of
      the fuzzer;
-   - a compile that takes more than 1,000 times the median compile
-     time of its run per source byte (a report for review, not a
-     wall-clock gate assertion; principle 15).
+   - a compile of a source of at least 1 KiB that takes more than
+     1,000 times the median compile time per source byte of the inputs
+     of at least 1 KiB in its run (a report for review, not a
+     wall-clock gate assertion; principle 15). A smaller source is
+     outside the metric: the fixed cost of the compiler thread
+     dominates it.
 4. **Findings.** A failure writes its input, its seed, and its target
    to `target/fuzz/findings/`, and the fuzzer reduces it to a minimal
    input that keeps the failure. Each finding becomes a direct test or
