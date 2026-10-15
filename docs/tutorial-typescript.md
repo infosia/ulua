@@ -26,6 +26,7 @@ program type-checks under stock `tsc --strict`.
 | Structural types, `interface` | `type` aliases of object literal types; same fields, same type |
 | `class` with `extends` | Nominal classes, no inheritance, no getters or setters |
 | `any`, generics | Neither; every type is concrete |
+| `==` coerces, so style guides prefer `===` | `==` is `===`: one operand type, no coercion; this guide writes `==` |
 | `throw` any value | The seven `Error`-family classes only |
 | A fault such as `xs[10]` | A trap: the run stops, and no `catch` or `finally` sees it |
 | Event loop, `Promise` | `Promise<T>` in the job order of `node`; the host drives each run |
@@ -105,7 +106,7 @@ type User = { name: string; email: string | null };
 
 function contact(u: User): string {
   const email = u.email;
-  if (email !== null) {
+  if (email != null) {
     return email;
   }
   return `${u.name} has no email`;
@@ -237,7 +238,7 @@ with `instanceof` before you read `name` or `message`.
 
 ```ts
 function parse(text: string): number {
-  if (text.length === 0) {
+  if (text.length == 0) {
     throw new RangeError("empty input");
   }
   return text.length;
