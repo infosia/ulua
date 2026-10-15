@@ -62,7 +62,16 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` Â
 - macOS arm64 after 4c1bb2c: `gate.sh full` passes in 166 s warm
   (`cargo-test` 98 s, `luau-witnesses` 63 s); `gate.sh timing`
   passes. A first run after the pull took 442 s with a cold build.
-- Linux: not run.
+- Linux x86_64 (owner's machine, gcc 15.2.0, kernel 7.0, commit
+  c693b77): `gate.sh full` passes with no source change. `cargo-test`
+  100 s, `luau-witnesses` 85 s, `luau-tools` 38 s, `cargo-clippy`
+  38 s. The documented Linux link tail `-lstdc++ -lpthread -ldl -lm`
+  is the tail that the host tests and the docs runner use. gcc gives
+  `-Wbidi-chars` and `-Wnonnull` warnings in the pinned Luau sources
+  (`Ast/src/Confusables.cpp`, `CodeGen/src/CodeGenLower.h`); the build
+  does not fail on them.
+- Linux: `gate.sh sanitize` and `gate.sh timing` are not run. The gcc
+  sanitizer link path (P5.1 review, MINOR) is not measured.
 
 ## Exit checklist (P5.5)
 
