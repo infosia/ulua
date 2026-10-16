@@ -19,6 +19,8 @@ the gate bound comes from the record after the shrinks.
 | Slice | Family | Exit |
 |---|---|---|
 | P6.S1 | Builtin aliases and the index check (`pipeline.md` §5.20) | Each builtin alias compiles to `FASTCALL`; the trap set of the array helpers is unchanged (tests at each trap edge); the §5.19 tests pass; a new full record |
+| P6.S2 | Loop form (`pipeline.md` §5.21, C9.2) | The corpus and goldens are unchanged; C9 entries (`a07`, `a09`, `a17`) and a new captured-binding entry pass; the §5.19 tests pass; a new full record |
+| P6.S3 | Expression form: literals, binding reads, and comparisons as operands (contract to follow) | |
 
 ## Carry-over into P6
 
@@ -130,6 +132,30 @@ The step and allocation charge is 2.2 ns of `ulua_call`. Shrink
 candidates: the protected wrapper and export lookup of `ulua_call`,
 and the Rust-side work of a host call. P6.2 changes no production
 code; a shrink is a later slice.
+
+## Measurements: slot form (before P6.S2)
+
+Measurement only, at f5f026e: 110 hand-edited variants of the
+generated Luau, each with the checksum of HEAD and `luau-analyze`
+strict clean; instruction counts from `lua_singlestep`. Share of the
+difference to hand-written Luau, each layer removed alone:
+
+| Layer | fib-rec | primes | fib-loop | queen | particles |
+|---|---:|---:|---:|---:|---:|
+| Instructions per unit, HEAD (hand) | 24.5 (6.5) | 32.7 (6.1) | 25.2 (4.5) | 104.8 (14.8) | 54.7 (12.2) |
+| Loop form (copies, tail flag, `repeat`) | 1.9% | 8.5% | 12.6% | 5.9% | 5.2% |
+| Expression form (literal, comparison, call argument, operand, store), together | 54.0% | 22.9% | 43.4% | 10.1% | 13.4% |
+| Entry temporaries as single-assignment locals, alone | 51.2% | 14.9% | -6.2% | 7.9% | 4.1% |
+| Entry after the expression form | 0.7% | 1.2% | 0.5% | 2.1% | 2.9% |
+| All slot layers | 53.7% | 34.9% | 55.8% | 18.2% | 17.4% |
+
+The pass-to-pass spread is up to 8.3%; a share below 5% is not
+resolved. Outside the slot form: `__ulua_interrupt()` lines 6 to 29%;
+the array helpers up to 61% (queen, an upper bound that removes the
+check). Order of slices: the loop form (small change), then the
+expression form (largest share). The entry form adds little after
+the expression form and changes the slot allocator; it is not
+planned.
 
 ## Exit checklist (P6.1)
 

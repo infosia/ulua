@@ -47,6 +47,7 @@ Rev 42: §5.19 interrupt points, §6.3 the instruction bound and GC steps (P5.5)
 Rev 43: §5.19 loop exits, a derived instruction bound, the prelude, async shapes (P5.5 review 2).
 Rev 44: §5.14.5a `CAPTURE_LOCALS`; §5.19 helper bodies, uncounted lines, the ratio bound 6 (P5.5 review 3).
 Rev 45: §5.20 builtin aliases and the index check (P6.S1).
+Rev 46: §5.21 loop form; `collisions.md` C9.2 copies only captured bindings (P6.S2).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -612,6 +613,17 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       and 36.9% of the queen overhead; `math.floor(i) == i` gives
       sort 378 to 229 ms and queen 1,902 to 1,417 ms; an alias
       without the assertion gives fib-loop 1,331 to 1,199 ms.
+
+21. **Loop form (P6.S2).** A `for` loop emits the per-iteration copy
+    of C9.2 only for a head binding that a closure in the body
+    captures. It emits the `repeat ... until true` block and the tail
+    flag only when the body contains a `continue` of that loop
+    (`ir::loop_continue`). A loop without both keeps the plain `while`
+    form. The §5.19 count and its loop exit joins apply to the form
+    that the emitter writes. Measured before the rule (P6.S2
+    measurement, O1): the loop form is 4 to 13% of the overhead of
+    the loop workloads and 3 to 4 instructions per iteration
+    (fib-loop 25.2 to 21.9 per inner iteration).
 
 ## 6. Limits
 

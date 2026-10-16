@@ -418,10 +418,12 @@ Reject: `r01`, `r11`, `r25`, `r26`, `r27`, `r28`.
 
 1. Each iteration of a `for` loop gives each `let` binding of its head
    a new binding, with the value that the previous iteration left.
-2. The lowering copies each such binding into a local of the body at
-   the start of each iteration. It copies the local back before the
-   update. The copy-back runs on every path to the update, `continue`
-   included.
+2. For a binding that a closure in the body captures, the lowering
+   copies the binding into a local of the body at the start of each
+   iteration and copies the local back before the update. The
+   copy-back runs on every path to the update, `continue` included.
+   A binding that no closure captures has no observable per-iteration
+   identity, so the lowering uses the head binding directly (P6.S2).
 3. A closure anywhere in a `for` head (initializer, condition, update)
    is rejected. In JavaScript a closure in the head binds to one
    specific iteration's binding, which the body-local copy of rule 2
