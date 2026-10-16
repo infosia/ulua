@@ -39,7 +39,7 @@ static int output(lua_State* state) {
     const char* text = luaL_checklstring(state, 1, &length);
     int status = vm->host.output ? vm->host.output(vm->host.userdata, text, length) : 0;
     if (status) {
-        vm->flag = SHIM_HOST;
+        record_stop(vm, SHIM_HOST);
         // The host and Rust frames have returned before this raise.
         luaL_error(state, "Output callback failed");
     }
@@ -75,7 +75,7 @@ static int host_call(lua_State* state) {
             return 1;
         }
     }
-    vm->flag = code;
+    record_stop(vm, code);
     std::memcpy(vm->capability_name, cap->desc.name, cap->desc.name_length);
     vm->capability_name[cap->desc.name_length] = 0;
     // Rust and host frames return before this stop. Protected closures cannot catch it.
@@ -188,12 +188,13 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
     vm->charging = false;
     const bool request_starting = vm->request_starting;
     vm->request_starting = false;
-    vm->async_failed = status != LUA_OK;
-    if (status == LUA_OK) return SHIM_OK;
+    vm->async_failed = status != LUA_OK || vm->flag || vm->trap_kind;
+    if (!vm->async_failed) return SHIM_OK;
     const char* text = run_message(lua_type(state, -1) == LUA_TSTRING ? lua_tostring(state, -1) : "VM returned a non-string error");
     message(error, text);
     int code = run_error_code(status, text);
     if (vm->flag) code = vm->flag;
+    if (vm->flag == SHIM_MEMORY) message(error, "not enough memory");
     if (code == SHIM_STEPS) message(error, "Step limit exceeded");
     if (!vm->flag && vm->trap_kind == 1) {
         code = SHIM_INDEX;
@@ -234,7 +235,13 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         lua_getref(state, vm->collection);
         lua_pcall(state, 0, 0, 0);
         lua_settop(state, 0);
+        // The collector can also catch an allocation refusal after the original stop.
+        if (vm->flag == SHIM_MEMORY) {
+            code = SHIM_MEMORY;
+            message(error, "not enough memory");
+        }
     }
+    vm->flag = 0;
     return code;
 }
 #include "requests.h"
@@ -346,7 +353,7 @@ static int call(lua_State* state) {
         lua_rawgetfield(state, result_index, "state");
         const int settled = lua_tointeger(state, -1);
         lua_pop(state, 1);
-        if (settled == 0) { args->vm->flag = SHIM_PENDING; luaL_error(state, "Async export is pending"); }
+        if (settled == 0) { record_stop(args->vm, SHIM_PENDING); luaL_error(state, "Async export is pending"); }
         if (settled == 2) {
             lua_rawgetfield(state, result_index, "reason");
             raise_call_error(state, args->vm);

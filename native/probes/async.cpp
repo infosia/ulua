@@ -3,6 +3,8 @@
 #include "../shim/async_records.h"
 #include "lua.h"
 #include "lualib.h"
+#include <algorithm>
+#include <cstring>
 struct AsyncStats { ulua_vm* vm; size_t bytes; size_t jobs; };
 extern "C" size_t ulua_internal_test_async_bytes(const ulua_vm* vm) {
     return vm->used;
@@ -125,5 +127,59 @@ extern "C" int ulua_internal_test_request_stats(ulua_vm* vm, size_t* bytes, size
     *records = 0;
     for (const ulua_request* r = vm->requests; r; r = r->next) ++*records;
     *next = vm->next_request;
+    return status;
+}
+
+struct QueueIndices {
+    ulua_vm* vm;
+    double largest = 0;
+    double previous = 0;
+    size_t rebases = 0;
+};
+static int queue_index(lua_State* state) {
+    auto* indices = static_cast<QueueIndices*>(lua_tolightuserdata(state, lua_upvalueindex(1)));
+    const double index = lua_tonumber(state, 2);
+    indices->largest = std::max(indices->largest, index);
+    if (index < indices->previous) ++indices->rebases;
+    indices->previous = index;
+    // Observe new numeric keys without a conversion to int. Preserve the production table contents.
+    lua_pushvalue(state, 2);
+    lua_pushvalue(state, 3);
+    lua_rawset(state, 1);
+    return 0;
+}
+static int observe_queue(lua_State* state) {
+    auto* indices = static_cast<QueueIndices*>(lua_tolightuserdata(state, 1));
+    lua_getref(state, indices->vm->jobs);
+    lua_newtable(state);
+    lua_pushlightuserdata(state, indices);
+    lua_pushcclosure(state, queue_index, "queue_index", 1);
+    lua_setfield(state, -2, "__newindex");
+    lua_setmetatable(state, -2);
+    return 0;
+}
+// New job keys are absent. Reads use inserted keys; compaction moves them only to lower keys.
+extern "C" int ulua_internal_probe_async_queue(const char* source, size_t length,
+    const ulua_host* host, const ulua_run_limits* limits, double* largest, size_t* rebases, char* error) {
+    char* bytecode = nullptr;
+    size_t size = 0;
+    int status = ulua_internal_shim_compile(source, length, &bytecode, &size, error);
+    if (status) return status;
+    ulua_vm* vm = nullptr;
+    status = ulua_internal_shim_new(bytecode, size, host, nullptr, 0, limits, &vm, error);
+    ulua_internal_shim_bytecode_free(bytecode);
+    if (status) return status;
+    QueueIndices indices = {vm};
+    status = lua_cpcall(vm->thread, observe_queue, &indices);
+    if (status) {
+        std::strncpy(error, lua_tostring(vm->thread, -1), 255);
+        error[255] = '\0';
+    } else {
+        ulua_value result = {};
+        status = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_VOID, &result, error);
+    }
+    *largest = indices.largest;
+    *rebases = indices.rebases;
+    ulua_internal_shim_free(vm);
     return status;
 }

@@ -114,22 +114,22 @@ fn rejected_array_members_keep_c6() {
     }
 }
 #[test]
-fn array_function_types_use_shared_aliases_and_inline_reads_check_nil_and_floor() {
+fn array_function_types_use_shared_aliases_and_inline_reads_check_bounds_before_access() {
     let out = check(
         "const fs:(()=>number)[][]=[[()=>1]];const xs=[1];print(`${xs[0.9999999999999999]}`);",
     )
     .unwrap()
     .luau;
     assert!(out.contains("= {__ulua_fn"));
-    let guard = out.rfind(" == nil or __ulua_floor(").unwrap();
-    assert!(out[..guard].contains(" + 1]"));
-    assert!(
-        out[guard..]
-            .lines()
-            .next()
-            .unwrap()
-            .ends_with("then __ulua_trap(1) end")
-    );
+    let guard = out.rfind("if not (").unwrap();
+    let access = out.rfind(" + 1]").unwrap();
+    assert!(guard < access);
+    let condition = out[guard..].lines().next().unwrap();
+    assert!(condition.contains(" >= 0 and "));
+    assert!(condition.contains(" < #"));
+    assert!(condition.contains(" and __ulua_floor("));
+    assert!(!condition.contains('['));
+    assert!(out[guard..access].contains("then __ulua_trap(1) end"));
     assert!(out.contains("local __ulua_trap: (number) -> () = (...)"));
     assert!(!out.contains("getfenv"));
     assert!(!out.contains("__ulua_get(__ulua_t"));

@@ -186,6 +186,21 @@ local function __ulua_drain(): ()
         local job = __ulua_jobs[__ulua_head]
         __ulua_jobs[__ulua_head] = nil
         __ulua_head += 1
+        if __ulua_head > __ulua_tail then
+            __ulua_head = 1
+            __ulua_tail = 0
+        elseif __ulua_head > 1024 then
+            -- Copy in FIFO order. Destinations precede their sources, so overlaps preserve unread jobs.
+            local remaining = __ulua_tail - __ulua_head + 1
+            for i = 1, remaining do
+                __ulua_jobs[i] = __ulua_jobs[__ulua_head + i - 1]
+                __ulua_jobs[__ulua_head + i - 1] = nil
+            end
+            __ulua_head = 1
+            __ulua_tail = remaining
+        end
+        -- Between jobs, head is at most 1024 and tail is at most live jobs + 1023.
+        -- VM/src/ltable.cpp caps each table part at 2^26 slots. Queue keys remain below 2^31.
         job()
     end
     __ulua_head = 1

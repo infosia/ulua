@@ -177,6 +177,40 @@ fn inject(f: &mut Fixture, runs: &[Run], target: usize, k: u64, label: &str) -> 
     protected_failure
 }
 
+// Cost: two compiler calls, two injected calls, and two recovery calls.
+#[test]
+fn refused_gc_allocations_cannot_return_pending_or_steps() {
+    let start = Instant::now();
+    for (source, grants, k) in [
+        (
+            include_str!("../../../../corpus/accept/a64-host-requests.ts"),
+            &["hostLater", "hostLog"][..],
+            5,
+        ),
+        (
+            include_str!("../../../../examples/limits/limits.ts"),
+            &[][..],
+            1,
+        ),
+    ] {
+        let mut f = Fixture::new(source, grants);
+        fault::arm(0);
+        assert_eq!(f.create(), ULUA_OK);
+        // These indices reach GC stack resize during the call and its post-stop collection.
+        fault::arm(k);
+        assert_eq!(f.call(0, false), ULUA_FAILED);
+        assert_eq!(fault::last().failures, 1);
+        assert_eq!(code(&f.diagnostic), "limit:memory", "k={k}");
+        assert!(!f.host.handler_after_failure);
+        f.small();
+        assert_clean(f.free()).unwrap();
+    }
+    eprintln!(
+        "GC refused allocations call_k=5 cleanup_k=1 recovery=ok cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
 #[test]
 fn allocation_failure_sweep() {
     let start = Instant::now();

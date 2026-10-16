@@ -39,7 +39,7 @@ static void push_value(lua_State* state, const ulua_value* value) {
 static int start_request(lua_State* state, ulua_vm* vm, const ulua_internal_capability* cap,
     const ulua_value* arguments) {
     if (vm->open_requests >= vm->max_open_requests) {
-        vm->flag = SHIM_REQUEST_LIMIT;
+        record_stop(vm, SHIM_REQUEST_LIMIT);
         luaL_error(state, "Request limit exceeded");
     }
     if (vm->next_request == UINT64_MAX) luaL_error(state, "Request ids exhausted");
@@ -59,7 +59,7 @@ static int start_request(lua_State* state, ulua_vm* vm, const ulua_internal_capa
         // No raising VM operation occurs between allocation and this release.
         lua_unref(state, promise);
         allocate_record(vm, request, sizeof(*request), 0);
-        vm->flag = code;
+        record_stop(vm, code);
         std::memcpy(vm->capability_name, cap->desc.name, cap->desc.name_length);
         vm->capability_name[cap->desc.name_length] = 0;
         luaL_error(state, "Host start stopped");
@@ -161,9 +161,9 @@ struct Settle { ulua_vm* vm; ulua_request* request; };
 static int settle(lua_State* state) {
     Settle* args = static_cast<Settle*>(lua_tolightuserdata(state, 1));
     ulua_vm* vm = args->vm;
-    if (vm->steps >= vm->max_steps) { vm->flag = SHIM_STEPS; luaL_error(state, "Step limit exceeded"); }
+    if (vm->steps >= vm->max_steps) { record_stop(vm, SHIM_STEPS); luaL_error(state, "Step limit exceeded"); }
     ++vm->steps;
-    if (args->request->failed) { vm->flag = SHIM_REQUEST; luaL_error(state, "Host request failed"); }
+    if (args->request->failed) { record_stop(vm, SHIM_REQUEST); luaL_error(state, "Host request failed"); }
     reset_jobs(state, vm);
     lua_getref(state, vm->fulfill);
     lua_getref(state, args->request->promise);

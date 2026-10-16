@@ -277,16 +277,16 @@ mod tests {
     fn inline_checks_and_equality_retain_the_forward_count() {
         for (line, cost) in [
             (
-                "if v == nil or __ulua_floor(i) ~= i then __ulua_trap(1) end",
-                3,
+                "if not (i >= 0 and i < #a and __ulua_floor(i) == i) then __ulua_trap(1) end",
+                4,
             ),
             (
-                "if __ulua_floor(i) ~= i or (a[i + 1] == nil and i ~= #a) then __ulua_trap(1) end",
+                "if not (i >= 0 and i <= #a and __ulua_floor(i) == i) then __ulua_trap(1) end",
                 4,
             ),
             ("__ulua_t0 = ((a == b)) :: boolean", 2),
             (
-                "local __ulua_g0_1: boolean = __ulua_floor(i) ~= i or (a[i + 1] == nil and i ~= #a)",
+                "local __ulua_g0_1: boolean = not (i >= 0 and i <= #a and __ulua_floor(i) == i)",
                 4,
             ),
             ("if __ulua_g0_1 then __ulua_trap(1) end", 1),

@@ -65,6 +65,16 @@ fn wide_literals_keep_constants_reads_and_side_effects_in_source_order() {
 
 #[test]
 fn reads_writes_and_push_freeze_receivers_indices_values_and_lengths() {
+    // Captured bindings change during the RHS; the write keeps both earlier values.
+    result(
+        "let xs=[10,20];const old=xs;let i=0;function rhs():number{xs=[50];i=1;return 3;}xs[i]+=rhs();return old[0]*100+old[1]*10+xs[0]+i;",
+        1551.0,
+    );
+    // The index call replaces the receiver before the RHS replaces both bindings again.
+    result(
+        "let xs=[10,20];const old=xs;let i=0;function index():number{xs=[30,40];return i;}function rhs():number{i=1;xs=[50,60];return 3;}xs[index()]+=rhs();return old[0]*1000+xs[0]*10+i;",
+        13501.0,
+    );
     result(
         "const Math:number[]=[];const Utf8:number[]=[];const __ulua_trap:number[]=[];Math.push(1);Utf8.push(2);__ulua_trap.push(3);return Math[0]*100+Utf8[0]*10+__ulua_trap[0];",
         123.0,

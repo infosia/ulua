@@ -57,6 +57,14 @@ struct ulua_vm {
 #endif
     ulua_host host;
 };
+static void record_stop(ulua_vm* vm, int code) {
+    if (!vm->flag) vm->flag = code;
+}
+static void* memory_stop(ulua_vm* vm) {
+    // GC resize paths can catch LUA_ERRMEM. Retain the refusal until the run boundary.
+    record_stop(vm, SHIM_MEMORY);
+    return nullptr;
+}
 static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new_size) {
     ulua_vm* vm = static_cast<ulua_vm*>(userdata);
     size_t old = pointer ? old_size : 0;
@@ -76,12 +84,12 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
         return result ? result : pointer;
     }
 #ifdef ULUA_FAULT_INJECTION
-    if (fault_refuse(&vm->fault)) return nullptr;
+    if (fault_refuse(&vm->fault)) return memory_stop(vm);
 #endif
     if (vm->charging) {
         const uint64_t charge = new_size / ALLOCATION_STEP_BYTES + (new_size % ALLOCATION_STEP_BYTES != 0);
         if (vm->steps > vm->max_steps || charge > vm->max_steps - vm->steps) {
-            if (!vm->flag) vm->flag = SHIM_STEPS;
+            record_stop(vm, SHIM_STEPS);
             return nullptr;
         }
         vm->steps += charge;
@@ -91,9 +99,10 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
 #endif
     }
     size_t base = vm->used - old;
-    if (new_size > vm->budget || base > vm->budget - new_size) return nullptr;
+    if (new_size > vm->budget || base > vm->budget - new_size) return memory_stop(vm);
     void* result = std::realloc(pointer, new_size);
-    if (result) vm->used = base + new_size;
+    if (!result) return memory_stop(vm);
+    vm->used = base + new_size;
     return result;
 }
 static void* allocate_record(ulua_vm* vm, void* pointer, size_t old_size, size_t new_size) {

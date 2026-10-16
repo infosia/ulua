@@ -3,6 +3,7 @@
 #![allow(clippy::duplicate_mod)]
 mod p41_async;
 mod p41_growth;
+mod p41_queue;
 mod p41_random;
 mod p41_review;
 mod p41_stops;

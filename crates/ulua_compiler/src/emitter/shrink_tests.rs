@@ -58,9 +58,10 @@ fn element_checks_are_inline_and_keep_the_rhs_before_the_write_check() {
     let code = compile(source, Limits::default()).unwrap().luau;
     assert!(!code.contains("__ulua_get("), "{code}");
     assert!(!code.contains("__ulua_set("), "{code}");
-    let check = code.find("or (").unwrap();
+    let check = code.find(": boolean = not (").unwrap();
     assert!(code[..check].contains("__ulua_b0()"), "{code}");
-    assert!(code.contains(" == nil or __ulua_floor("), "{code}");
+    assert!(code[check..].contains(" <= #"), "{code}");
+    assert!(code[check..].contains(" and __ulua_floor("), "{code}");
 }
 
 // Cost: one small compile. A loop back-edge does not pay the full capture cost by itself.

@@ -52,6 +52,7 @@ Rev 47: §5.22 expression form (P6.S3).
 Rev 48: §5.19 the loop-head point goes before the loop; §5.20 inline index check; §5.23 native equality (P6.S4).
 Rev 49: §6.5 collector settings (P6.4).
 Rev 50: §5.22 conditions with `&&` and `||`; §5.24 counted loops (P6.S5).
+Rev 51: §5.20 the index test runs before the table access (UBSan, P6 close).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -616,19 +617,28 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       (`#a + 1` for a write), a non-integer, and NaN trap; an
       infinite index fails the bounds test first; `-0` reads slot 1.
     - An element read or write outside an optional chain is emitted
-      inline (P6.S4), with no helper call. C6.5 keeps every element
-      non-nil, so a missing slot is the out-of-range case:
-      - read: `v = a[i + 1]`, then a trap when `v == nil` or
-        `floor(i) ~= i`;
-      - write: a trap when `floor(i) ~= i`, or when `a[i + 1] == nil`
-        and `i ~= #a`; then the store.
-      The trap set is the set above: a negative index, NaN, and an
-      infinite index read nil; `0.9999999999999999` fails the floor
-      test. The C12 order holds: a write checks after the right side.
-      The deferred read of an optional chain keeps `__ulua_get`.
-      Measured before the rule (P6.S4 measurement): the index check is
-      85% of the sort overhead, 77% of queen, 47% of particles; the
-      inline nil-and-floor form recovers 40 to 42% of it.
+      inline (P6.S4), with no helper call: the test of the helper,
+      `i >= 0 and i < #a and floor(i) == i` (`i <= #a` for a write),
+      runs before the table access, then the access. The trap set and
+      the C12 order are the helper's. The deferred read of an
+      optional chain keeps `__ulua_get`.
+    - The table access never runs with an index outside the tested
+      range. The pinned VM converts a number key with `int(indexd)`
+      in the `GETTABLE` fast path (`VM/src/lvmexecute.cpp`), which is
+      undefined behaviour for NaN, an infinity, or a magnitude at or
+      above 2^31. A first form read `a[i + 1]` before the test (a nil
+      test and a floor test after it); `gate.sh sanitize` gave UBSan
+      "nan is outside the range of representable values of type
+      'int'" at `lvmexecute.cpp:779` (P6 close). Measured before the
+      rule (P6.S4 measurement): the index check is 85% of the sort
+      overhead, 77% of queen, 47% of particles; the call is 12 to 23%
+      of it.
+    - The same class covers each other table access with a number key
+      that a run can grow: the async job queue resets its head and
+      tail when it empties and compacts when the head passes 1,024, so
+      between two jobs the head stays at most 1,024 and the tail at
+      most the live length plus 1,023 (P6 close; one drain of 3,079
+      jobs keeps the D25 order).
     - A successful `FASTCALL` skips the `CALL` and fires no interrupt.
       A statement that calls a builtin alias does not end the count of
       §5.19. A statement that calls `__ulua_tostring` counts 2

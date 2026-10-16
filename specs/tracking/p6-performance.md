@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -264,6 +264,35 @@ Rust, native O3): ten workloads at reduced sizes (Luau medians 7.9 to
 2.98, queen 3.07, particles 3.52, callbacks 3.97, collect 2.56. Red
 against a build with the compiler of 84b6118 (before P6.S3): 8 of 10
 fail (callbacks and collect pass). Cost 4.7 s. `gate.sh timing` 375 s.
+
+## P6 Phase Review
+
+Cumulative review of 6cc1a27..5e96d10: 0 CRITICAL, 0 MAJOR, 2 MINOR.
+No accepted program differs from `node` or from 6cc1a27 (361 random
+differential programs, 120 index edges × forms, counted-loop bounds
+NaN, ±Infinity, -0, non-integers, 2^53 ± k with step 2, overflowing
+steps); largest interrupt gap 21 and statement 16 on 7 new shapes.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The spill fixpoint loop of `emit_with_exports` has no iteration bound; termination rests on a comment | MINOR | an iteration cap with an `internal` diagnostic and a test that builds a non-monotone plan |
+| `gate.sh sanitize` at the close: UBSan "nan is outside the range of representable values of type 'int'" at the pinned `lvmexecute.cpp:779`; the P6.S4 inline element read indexed `a[i + 1]` before its test, so NaN, an infinity, or a magnitude at or above 2^31 reached `int(indexd)` | MAJOR | `pipeline.md` Rev 51: the helper's test runs before the access; the async job queue indices are bounded; sort 3.00 to 3.70, queen 2.44 to 3.22, particles 2.80 to 3.39 |
+| The P6.3 bounds come from 3 runs × 1.25; a loaded machine can move a median-of-7 ratio past the margin | MINOR | open: a flake risk only; the test runs under the timing lock in `gate.sh timing` |
+
+## P6 close
+
+Fixes after the Phase Review: the spill fixpoint has an iteration cap
+(bindings + 1, an `internal` diagnostic; largest observed 3); the
+index test runs before the table access (Rev 51); the async job queue
+indices are bounded; a refused allocation inside a GC stack shrink is
+kept as the stop reason (it gave `async:pending` for `a64` at k=5
+under the P6.4 settings); a write scopes its receiver (analyzer ratio
+of P22-array-index-writes 14.05 to 7.89). The P6.3 bounds are
+re-derived after Rev 51: sort 4.54, queen 4.01, particles 4.42,
+primes 3.62, others within 0.1 of before. `gate.sh sanitize` excludes
+`ulua_bench` (its hosts link the unsanitized VM; gate full runs its
+tests). Close gates: `gate.sh full` 124 s, `gate.sh sanitize` 228 s,
+timing witnesses 376 s. Running tasks at the close: none.
 
 ## Exit checklist (P6.1)
 

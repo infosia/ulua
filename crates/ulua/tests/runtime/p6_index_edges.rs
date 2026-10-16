@@ -1,5 +1,4 @@
-//! HEAD observations pin output and trap kind. Cost: two small compiles and 39 short ABI calls.
-//! Measured Release cost: 0.006 seconds, including compilation and all output comparisons.
+//! Hand-checked observations pin output and trap kind. Cost: two small compiles and 80 short ABI calls.
 #[allow(dead_code)]
 #[path = "../support/script.rs"]
 mod support;
@@ -28,6 +27,7 @@ function rhs():number{print('rhs');return 30;}
 function side():number{print('index');return 0;}
 export function read(i:number):void{const a=[10,20];print('before');print(`${a[i]}`);print('after');}
 export function set(i:number):void{const a=[10,20];print('before');a[i]=rhs();print(`${a.length}:${a[0]}:${a[1]}:${a[a.length-1]}`);print('after');}
+export function update(i:number):void{const a=[10,20];print('before');a[i]+=rhs();print(`${a[i]}`);print('after');}
 export function deferred(i:number):void{const a=[[10],[20]];print('before');print(`${a[i][side()]}`);print('after');}
 export function main():void{}
 "#;
@@ -61,17 +61,30 @@ export function main():void{}
         ("NaN", f64::NAN, None, None),
         ("Infinity", f64::INFINITY, None, None),
         ("-Infinity", f64::NEG_INFINITY, None, None),
+        ("2^31-2", 2147483646.0, None, None),
+        ("2^31-1", 2147483647.0, None, None),
+        ("2^31", 2147483648.0, None, None),
+        ("-2^31", -2147483648.0, None, None),
+        ("-2^31-1", -2147483649.0, None, None),
         ("2^53", 9007199254740992.0, None, None),
+        ("large", 1e100, None, None),
+        ("negative-large", -1e100, None, None),
     ];
     for (name, number, read, set) in cases {
-        for (operation, expected) in [("read", read), ("set", set), ("deferred", read)] {
+        let update = read.map(|value| if value == "10" { "40" } else { "50" });
+        for (operation, expected) in [
+            ("read", read),
+            ("set", set),
+            ("deferred", read),
+            ("update", update),
+        ] {
             lines.clear();
             let mut argument = Value::default();
             argument.r#type = ULUA_TYPE_NUMBER;
             argument.number = number;
             let (status, code, _) = script.call(script.index(operation), &[argument]);
             let mut expected_lines = vec!["before"];
-            if operation == "set" {
+            if operation == "set" || (operation == "update" && expected.is_some()) {
                 expected_lines.push("rhs");
             }
             if operation == "deferred" {

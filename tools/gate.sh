@@ -51,7 +51,9 @@ if [ "$shape" = sanitize ]; then
     export ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}halt_on_error=1:abort_on_error=1:detect_leaks=0"
     export UBSAN_OPTIONS="${UBSAN_OPTIONS:+$UBSAN_OPTIONS:}halt_on_error=1:print_stacktrace=1"
     step luau-tools sh tools/luau-tools.sh
-    step cargo-test cargo test --quiet --workspace
+    # ulua_bench links its own unsanitized Luau hosts (benchmarks.md
+    # §2); it is a measurement tool, and gate full runs its tests.
+    step cargo-test cargo test --quiet --workspace --exclude ulua_bench
     step luau-witnesses "$NODE" tools/witness/luau.mjs
     step docs-runner sh tools/docs-runner.sh "$CARGO_TARGET_DIR/examples/docs-run"
     step docs-witness "$NODE" tools/witness/docs.mjs "$CARGO_TARGET_DIR/examples/docs-run" docs/tutorial-typescript.md

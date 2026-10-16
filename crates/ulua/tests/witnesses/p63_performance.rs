@@ -1,5 +1,5 @@
 //! P6.3: ten reduced benchmark pairs, with the §6 sample policy.
-//! Measured cost: 4.7 to 4.8 seconds in the timing gate profile; ten workload pairs.
+//! Measured cost: 4.9 to 5.1 seconds in the timing gate profile; ten workload pairs.
 //! Profile: Debug Rust tests; native shim and pinned VM use O3 and NDEBUG.
 use std::time::Instant;
 
@@ -39,33 +39,33 @@ macro_rules! case {
 
 // Close measurements in this profile. Bound = ceil(max(runs) * 1.25 * 100) / 100.
 // Workload          Run 1        Run 2        Run 3        Bound
-// fib-recursive     1.736388366  1.733542109  1.744075403  2.19
-// fib-loop          2.303264188  2.195084977  2.230205411  2.88
-// mandelbrot        1.158397938  1.163063465  1.159995903  1.46
-// primes            2.735638594  2.751796248  2.731273287  3.44
-// sort              2.924415678  2.919930158  2.896846280  3.66
-// tree              2.380664758  2.359168865  2.380129988  2.98
-// queen             2.440318460  2.441281306  2.453885722  3.07
-// particles         2.796500348  2.802562290  2.811003896  3.52
-// callbacks         3.143028815  3.164516948  3.175967028  3.97
-// collect           2.035103023  2.047758372  2.045750418  2.56
+// fib-recursive     1.728378618  1.738812740  1.717784320  2.18
+// fib-loop          2.275175843  2.195648634  2.214573412  2.85
+// mandelbrot        1.151970196  1.160009387  1.157890324  1.46
+// primes            2.888844444  2.881059780  2.763153279  3.62
+// sort              3.590058200  3.627846468  3.488790685  4.54
+// tree              2.300722816  2.293444286  2.290509119  2.88
+// queen             3.200331157  3.206669378  3.071503879  4.01
+// particles         3.533115665  3.386335171  3.335365588  4.42
+// callbacks         3.174364506  3.176350313  3.132888022  3.98
+// collect           2.077057366  2.063421737  2.081703582  2.61
 
 // Each mapping applies to both sources, including the inclusive Luau loop bounds.
 const CASES: [Case; 10] = [
-    case!("fib-recursive", &[("31", "27")], 2.19),
+    case!("fib-recursive", &[("31", "27")], 2.18),
     case!(
         "fib-loop",
         &[("1000000", "100000"), ("999999", "99999")],
-        2.88
+        2.85
     ),
     case!("mandelbrot", &[("400", "60"), ("399", "59")], 1.46),
-    case!("primes", &[("200000", "50000")], 3.44),
-    case!("sort", &[("100000", "20000"), ("99999", "19999")], 3.66),
-    case!("tree", &[("14", "12")], 2.98),
-    case!("queen", &[("11", "9"), ("10", "8")], 3.07),
-    case!("particles", &[("20000", "4000"), ("19999", "3999")], 3.52),
-    case!("callbacks", &[("100000", "10000"), ("99999", "9999")], 3.97),
-    case!("collect", &[("40000", "4000"), ("39999", "3999")], 2.56),
+    case!("primes", &[("200000", "50000")], 3.62),
+    case!("sort", &[("100000", "20000"), ("99999", "19999")], 4.54),
+    case!("tree", &[("14", "12")], 2.88),
+    case!("queen", &[("11", "9"), ("10", "8")], 4.01),
+    case!("particles", &[("20000", "4000"), ("19999", "3999")], 4.42),
+    case!("callbacks", &[("100000", "10000"), ("99999", "9999")], 3.98),
+    case!("collect", &[("40000", "4000"), ("39999", "3999")], 2.61),
 ];
 
 fn reduced(source: &str, sizes: &[(&str, &str)]) -> String {

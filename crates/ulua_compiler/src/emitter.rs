@@ -24,6 +24,8 @@ mod output;
 mod prelude;
 #[cfg(test)]
 mod shrink_tests;
+#[cfg(test)]
+mod spill_tests;
 mod statements;
 mod storage;
 mod strings;

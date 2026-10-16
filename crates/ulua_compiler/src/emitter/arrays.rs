@@ -32,9 +32,12 @@ impl Emitter<'_> {
         Ok((self.expression(receiver, depth)?, false))
     }
     pub(super) fn access_receiver_check(&mut self, receiver: usize, deferred: bool) {
+        self.access_receiver_check_text(&self.temp(receiver), deferred);
+    }
+    fn access_receiver_check_text(&mut self, receiver: &str, deferred: bool) {
         if deferred {
             self.capture("__ulua_receiver");
-            self.line(format!("__ulua_receiver({})", self.temp(receiver)));
+            self.line(format!("__ulua_receiver({receiver})"));
         }
     }
     pub(super) fn array_literal(
@@ -97,20 +100,24 @@ impl Emitter<'_> {
         array: usize,
         index: &str,
     ) -> Result<(), Diagnostic> {
+        self.element_read_text(dest, ty, &self.temp(array), index)
+    }
+    fn element_read_text(
+        &mut self,
+        dest: ElementTarget,
+        ty: Type,
+        array: &str,
+        index: &str,
+    ) -> Result<(), Diagnostic> {
         self.capture("__ulua_floor");
         self.capture("__ulua_trap");
+        // Reject unsafe numeric keys before the VM converts a table index to an integer.
         // A fresh scoped local bounds analyzer growth across repeated element checks.
         let read = self.generated()?;
         let ty = self.function_types.luau(&ty);
         self.line("do");
-        self.line(format!(
-            "local {read}: {ty} = {}[{index} + 1]",
-            self.temp(array)
-        ));
-        self.line_weighted(
-            format!("if {read} == nil or __ulua_floor({index}) ~= {index} then __ulua_trap(1) end"),
-            3,
-        );
+        self.line_weighted(format!("if not ({index} >= 0 and {index} < #{array} and __ulua_floor({index}) == {index}) then __ulua_trap(1) end"), 4);
+        self.line(format!("local {read}: {ty} = {array}[{index} + 1]"));
         match dest {
             ElementTarget::Slot(dest) => self.write_slot(dest, read),
             ElementTarget::Binding(id) => self.write_binding(id, read)?,
@@ -119,11 +126,11 @@ impl Emitter<'_> {
         self.generated_live -= 1;
         Ok(())
     }
-    fn element_check(&mut self, condition: String, cost: usize) -> Result<(), Diagnostic> {
-        let check = self.generated()?;
+    fn element_check(&mut self, array: &str, index: &str, bound: &str) -> Result<(), Diagnostic> {
+        let checked = self.generated()?;
         self.line("do");
-        self.line_weighted(format!("local {check}: boolean = {condition}"), cost);
-        self.line(format!("if {check} then __ulua_trap(1) end"));
+        self.line_weighted(format!("local {checked}: boolean = not ({index} >= 0 and {index} {bound} #{array} and __ulua_floor({index}) == {index})"), 4);
+        self.line(format!("if {checked} then __ulua_trap(1) end"));
         self.line("end");
         self.generated_live -= 1;
         Ok(())
@@ -136,19 +143,35 @@ impl Emitter<'_> {
         e: &Expr,
         depth: u32,
     ) -> Result<(), Diagnostic> {
-        let (a, deferred) = self.access_receiver(a, depth)?;
-        let i = self.expression(i, depth)?;
+        // Stable receivers need no mutable snapshot across index and RHS calls.
+        let receiver_type = self.function_types.luau(&a.ty);
+        let (a, deferred) = if self.inline_enabled && self.inline_tree(a, true, 1).is_some() {
+            (self.operand(a, depth, true, 1)?, false)
+        } else {
+            let (slot, deferred) = self.access_receiver(a, depth)?;
+            (operands::Operand::Temporary(slot), deferred)
+        };
+        // Each write gets a receiver definition; repeated stores cannot join its refinement graph.
+        let array = self.generated()?;
+        self.line("do");
+        self.line(format!(
+            "local {array}: {receiver_type} = {}",
+            self.operand_text(&a)
+        ));
+        // Keep stable operands inline; snapshot an index that a later call can change.
+        let i = self.operand(i, depth, true, 1)?;
+        let index = self.operand_text(&i);
         let old = if op.is_some() {
-            self.access_receiver_check(a, deferred);
+            self.access_receiver_check_text(&array, deferred);
             let old = self.slot(&e.ty)?;
-            self.element_read(ElementTarget::Slot(old), e.ty, a, &self.temp(i))?;
+            self.element_read_text(ElementTarget::Slot(old), e.ty, &array, &index)?;
             Some(old)
         } else {
             None
         };
         let value = self.expression(e, depth)?;
         if op.is_none() {
-            self.access_receiver_check(a, deferred);
+            self.access_receiver_check_text(&array, deferred);
         }
         let result = if let (Some(op), Some(old)) = (op, old) {
             if op == "%" {
@@ -163,20 +186,17 @@ impl Emitter<'_> {
         };
         self.capture("__ulua_floor");
         self.capture("__ulua_trap");
-        self.element_check(
-            format!(
-                "__ulua_floor({0}) ~= {0} or ({1}[{0} + 1] == nil and {0} ~= #{1})",
-                self.temp(i),
-                self.temp(a)
-            ),
-            4,
-        )?;
+        self.element_check(&array, &index, "<=")?;
         self.write(
-            &format!("{}[{} + 1]", self.temp(a), self.temp(i)),
+            &format!("{array}[{index} + 1]"),
             result,
             &self.function_types.luau(&e.ty),
         );
-        for slot in [Some(a), Some(i), Some(value), old].into_iter().flatten() {
+        self.line("end");
+        self.generated_live -= 1;
+        self.release_operand(i);
+        self.release_operand(a);
+        for slot in [Some(value), old].into_iter().flatten() {
             self.release(slot);
         }
         Ok(())

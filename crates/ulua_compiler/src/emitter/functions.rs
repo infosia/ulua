@@ -42,6 +42,24 @@ fn emit_with_exports(
     bound: usize,
     repeat_exports: bool,
 ) -> Result<String, Diagnostic> {
+    emit_with_plan_hook(
+        module,
+        bound,
+        repeat_exports,
+        #[cfg(test)]
+        &mut |_, _, _, _| {},
+    )
+}
+
+#[cfg(test)]
+type PlanHook<'a> = &'a mut dyn FnMut(usize, usize, usize, &mut std::collections::HashSet<usize>);
+
+pub(super) fn emit_with_plan_hook(
+    module: &ir::Module,
+    bound: usize,
+    repeat_exports: bool,
+    #[cfg(test)] plan_hook: PlanHook<'_>,
+) -> Result<String, Diagnostic> {
     let types = types::FunctionTypes::new(module)?;
     let numeric_arrows = constants::numeric_arrows(module, &types)?;
     let paged_exports = module.functions.iter().filter(|f| f.exported).count() > EXPORT_FIELDS;
@@ -171,7 +189,11 @@ fn emit_with_exports(
             });
         let reserve = usize::from(captured_catches.contains(&owner));
         let mut spills = std::collections::HashSet::new();
+        // From an empty set, N candidates permit at most N strict increases and one equality check.
+        let iteration_cap = owners[owner].len() + 1;
+        let mut iterations = 0;
         let (probe, mut layout) = loop {
+            iterations += 1;
             let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
             probe.inline_enabled = true;
             probe.probe_accessors = Some(&context.accessors);
@@ -187,8 +209,16 @@ fn emit_with_exports(
             }
             probe.spilled.clear();
             let layout = probe.plan(&parameters, overhead, &groups, reserve)?;
+            #[cfg(test)]
+            plan_hook(owner, iterations, iteration_cap, &mut probe.spilled);
             if probe.spilled == spills {
                 break (probe, layout);
+            }
+            if iterations == iteration_cap {
+                return Err(probe.limit(
+                    "internal",
+                    "Spill plan did not converge within the iteration cap",
+                ));
             }
             // Each new spill can only add slot demand. Loop-copy locals retain their conservative reservation.
             spills = probe.spilled.clone();
