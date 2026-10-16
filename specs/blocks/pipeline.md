@@ -604,7 +604,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       infinite index fails the bounds test first; `-0` reads slot 1.
     - A successful `FASTCALL` skips the `CALL` and fires no interrupt.
       A statement that calls a builtin alias does not end the count of
-      §5.19.
+      §5.19. A statement that calls `__ulua_tostring` counts 2
+      statements: with one, the boolean-template ratio of §5.19 rose
+      to 6.31 against the bound 6; with 2 it is 5.83.
     - Measured before the rule (P6.1 review, Release): the index
       check `__ulua_fmod(i, 1) == 0` is 52.7% of the sort overhead
       and 36.9% of the queen overhead; `math.floor(i) == i` gives

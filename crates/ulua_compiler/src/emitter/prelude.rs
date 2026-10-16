@@ -53,11 +53,12 @@ local function __ulua_concat(parts: {string}, separator: string?): string
     -- Each retained entry contributes at least one output byte.
     return table.concat(nonempty)
 end
-local __ulua_print: typeof(print) = (print) :: typeof(print)
-local __ulua_fmod: typeof(math.fmod) = (math.fmod) :: typeof(math.fmod)
-local __ulua_tostring: typeof(tostring) = (tostring) :: typeof(tostring)
-local __ulua_gsub: typeof(string.gsub) = (string.gsub) :: typeof(string.gsub)
-local __ulua_huge: typeof(math.huge) = (math.huge) :: typeof(math.huge)
+local __ulua_print: typeof(print) = print
+local __ulua_fmod: typeof(math.fmod) = math.fmod
+local __ulua_floor: typeof(math.floor) = math.floor
+local __ulua_tostring: typeof(tostring) = tostring
+local __ulua_gsub: typeof(string.gsub) = string.gsub
+local __ulua_huge: typeof(math.huge) = math.huge
 local function __ulua_format(__ulua_n: number): string
     if __ulua_n ~= __ulua_n then return "NaN" end
     if __ulua_n == __ulua_huge then return "Infinity" end
@@ -67,7 +68,7 @@ local function __ulua_format(__ulua_n: number): string
     return __ulua_s
 end
 local function __ulua_get<T>(a: {T}, i: number, deferred: boolean?): T
-    if not (i >= 0 and i < #a and __ulua_fmod(i, 1) == 0) then
+    if not (i >= 0 and i < #a and __ulua_floor(i) == i) then
         if deferred then return nil :: any end
         __ulua_trap(1)
     end
@@ -77,7 +78,7 @@ local function __ulua_receiver(value: unknown): ()
     if value == nil then __ulua_trap(1) end
 end
 local function __ulua_set<T>(a: {T}, i: number, v: T): ()
-    if not (i >= 0 and i <= #a and __ulua_fmod(i, 1) == 0) then __ulua_trap(1) end
+    if not (i >= 0 and i <= #a and __ulua_floor(i) == i) then __ulua_trap(1) end
     a[i + 1] = v
 end
 __ulua_interrupt()

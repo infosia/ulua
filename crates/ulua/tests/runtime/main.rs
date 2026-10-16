@@ -6,6 +6,8 @@ mod examples;
 mod optional_main;
 mod p55_interrupts;
 mod p55_strict;
+mod p6_builtin_aliases;
+mod p6_index_edges;
 mod s4_bytecode;
 mod s4_review;
 mod s5_native;

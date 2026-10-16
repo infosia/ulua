@@ -77,7 +77,15 @@ impl Interrupts {
         } else {
             1
         };
-        let weight = if table_store(text) { STORE_WEIGHT } else { 1 };
+        let weight = if table_store(text) {
+            STORE_WEIGHT
+        } else if value.starts_with("__ulua_tostring(") || text.starts_with("__ulua_tostring(") {
+            // FASTCALL removes the conversion's CALL interrupt but retains its string lookup work.
+            // Weight one gave a 6.308 step-time ratio for boolean templates against the bound of six.
+            2
+        } else {
+            1
+        };
         let cost = (base + value.matches(".__ulua_").count())
             .max(weight)
             .min(INTERRUPT_STATEMENTS);
@@ -138,8 +146,12 @@ fn always_calls(text: &str) -> bool {
         return false;
     };
     // Native aliases can use FASTCALL, which skips the CALL interrupt.
+    // Count all library aliases conservatively, including print and gsub without FASTCALL at this pin.
     (callee.starts_with("__ulua_") || callee == "error")
-        && !matches!(callee, "__ulua_fmod" | "__ulua_tostring" | "__ulua_gsub")
+        && !matches!(
+            callee,
+            "__ulua_fmod" | "__ulua_floor" | "__ulua_tostring" | "__ulua_gsub" | "__ulua_print"
+        )
         && callee
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
@@ -152,4 +164,45 @@ fn table_store(text: &str) -> bool {
         return false;
     };
     target.starts_with("__ulua_") && target.contains(['.', '['])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Interrupts;
+    use crate::INTERRUPT_STATEMENTS;
+
+    // Cost: 154 fixed statement classifications; no native compile or execution.
+    #[test]
+    fn library_alias_calls_retain_the_forward_count() {
+        for (call, count) in [
+            ("__ulua_fmod(x, 3)", INTERRUPT_STATEMENTS),
+            ("__ulua_floor(x)", INTERRUPT_STATEMENTS),
+            ("__ulua_tostring(x)", INTERRUPT_STATEMENTS / 2),
+            ("__ulua_gsub(s, 'x', 'y')", INTERRUPT_STATEMENTS),
+            ("__ulua_print(s)", INTERRUPT_STATEMENTS),
+        ] {
+            for statement in [call.to_owned(), format!("__ulua_t0 = ({call}) :: number")] {
+                let mut counter = Interrupts::default();
+                for _ in 0..count {
+                    assert!(!counter.before(&statement), "{statement}");
+                }
+                assert!(
+                    counter.before("local next = 1"),
+                    "{statement} erased the count"
+                );
+            }
+        }
+    }
+
+    // Cost: one fixed prelude scan; the count comes from declarations, independently of the reservation.
+    #[test]
+    fn library_local_reservation_matches_declarations() {
+        assert_eq!(
+            super::super::prelude::LIBRARIES
+                .lines()
+                .filter(|line| line.starts_with("local "))
+                .count(),
+            super::super::LIBRARY_LOCALS,
+        );
+    }
 }

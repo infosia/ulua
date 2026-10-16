@@ -233,6 +233,7 @@ fn emit_with_exports(
         "__ulua_concat",
         "__ulua_print",
         "__ulua_fmod",
+        "__ulua_floor",
         "__ulua_tostring",
         "__ulua_gsub",
         "__ulua_huge",

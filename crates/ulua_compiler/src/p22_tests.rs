@@ -121,7 +121,7 @@ fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
     .unwrap()
     .luau;
     assert!(out.contains("= {__ulua_fn"));
-    let guard = out.find("__ulua_fmod(i, 1)").unwrap();
+    let guard = out.find("__ulua_floor(i) == i").unwrap();
     let read = out[guard..].find(" + 1]").unwrap();
     assert!(read > 0);
     assert!(out.contains("local __ulua_trap: (number) -> () = (...)"));

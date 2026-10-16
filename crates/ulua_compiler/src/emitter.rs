@@ -24,7 +24,7 @@ use std::{collections::HashMap, fmt::Write};
 const SPILL_FIELDS: usize = 128;
 
 pub(crate) use prelude::LIBRARIES;
-const LIBRARY_LOCALS: usize = 15;
+const LIBRARY_LOCALS: usize = 16;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
