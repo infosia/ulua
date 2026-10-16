@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` §8).
+Status: open; P5.1 to P5.5 COMPLETE 2026-10-15; P5.6 COMPLETE 2026-10-16; the P5 Phase Review is next. Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -84,8 +84,10 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` �
 - Linux `gate.sh sanitize` after the fix: PASS. `cargo-test` 166 s,
   `luau-witnesses` 108 s, `fuzz-smoke` 125 s, `fault-sweep` 57 s. The
   gcc sanitizer link path (P5.1 review, MINOR) works.
-- Gaps: Linux `gate.sh timing` is not run. macOS `gate.sh sanitize` is
-  not rerun after the probe change. A clang-built probe on Linux hangs
+- macOS arm64 `gate.sh sanitize` after the probe change (00867ca):
+  PASS. `cargo-test` 245 s, `luau-witnesses` 164 s, `fuzz-smoke` 67 s,
+  `fault-sweep` 105 s; total 585 s.
+- Gaps: Linux `gate.sh timing` is not run. A clang-built probe on Linux hangs
   in llvm-symbolizer with default symbolization (old and new probe);
   the Linux gate uses gcc.
 
