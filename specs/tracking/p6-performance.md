@@ -294,6 +294,11 @@ primes 3.62, others within 0.1 of before. `gate.sh sanitize` excludes
 tests). Close gates: `gate.sh full` 124 s, `gate.sh sanitize` 228 s,
 timing witnesses 376 s. Running tasks at the close: none.
 
+Final record at 7cca876 (clean tree), `ulua / luau`: mandelbrot 1.16,
+fib-recursive 1.75, collect 2.08, fib-loop 2.31, tree 2.32, queen
+3.07, callbacks 3.16, primes 3.40, particles 3.51, sort 3.69 (P6.1
+start: 2.00 to 8.29).
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten

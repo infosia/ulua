@@ -163,7 +163,9 @@ values, records, classes, exceptions, host interop with capabilities,
 and async with host requests. P5 (hardening) is complete:
 sanitizers, fuzzing, fault injection, the compiler memory bound, a
 run-time bound on the work of one step, and `gate.sh full` on macOS
-arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is next. The ABI has no compatibility
+arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
+complete: Ulua runs at 1.16 to 3.69 times the time of hand-written
+Luau on the same VM (`crates/ulua_bench`). The ABI has no compatibility
 promise yet.
 
 Design and phase records live in [`specs/`](specs/): `specs/plan.md`
