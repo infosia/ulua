@@ -53,6 +53,7 @@ Rev 48: §5.19 the loop-head point goes before the loop; §5.20 inline index che
 Rev 49: §6.5 collector settings (P6.4).
 Rev 50: §5.22 conditions with `&&` and `||`; §5.24 counted loops (P6.S5).
 Rev 51: §5.20 the index test runs before the table access (UBSan, P6 close).
+Rev 52: §5.25 native remainder from integer facts (P6.S6).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -752,6 +753,91 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     iteration (§5.19). Measured before the rule (P6.S4 measurement):
     the counted loop is 15.6% of the particles overhead, 14.4% of
     collect, 11.5% of queen.
+
+25. **Native remainder (P6.S6).** `a % b` and `x %= b` emit the
+    native Luau `%` when the integer facts below prove both operand
+    conditions. Otherwise they keep `__ulua_fmod` (C4.3).
+    - The pinned VM computes `a % b` as `a - floor(a / b) * b`
+      (`VM/src/lnumutils.h`, `luai_nummod`). The result equals
+      `math.fmod(a, b)` when `a` is `+0` or an integer in
+      `[1, 2^53]` and `b` is a finite integer `>= 1`. Proof:
+      `floor(a / b)` is one too large only if the rounded quotient
+      reaches the next integer; that needs `a > 2^53`. Then
+      `floor(a / b) * b <= a` and the subtraction are exact.
+    - Measured at the pin, `luau` CLI (P6.S6 contract): 21,758,284
+      pairs with `a` in `[2^53 - 2^16, 2^53]` and `b` in `1..300`,
+      `2^53 - 30..2^53`, and `2^55 + 4`: no difference from
+      `math.fmod` (sign of zero included). Outside the conditions:
+      `-0 % 5` gives `+0` native and `-0` with `fmod`; `7 % 0.1`
+      gives `-3.9e-16` native and `0.09999999999999962` with `fmod`;
+      `1 % math.huge` gives NaN native and `1` with `fmod`.
+    - **Fact.** A fact of an expression is an integer interval
+      `[lo, hi]` with `0 <= lo <= hi <= 2^53`. It states that each
+      value of the expression is `+0` or an integer in `[lo, hi]`,
+      never `-0`. The compiler computes the bounds in exact integer
+      arithmetic, never in floating point.
+    - **Expression facts.** Only these forms have a fact:
+      1. An integer literal `k` with `0 <= k <= 2^53`: `[k, k]`.
+      2. A read of a binding that has a binding fact: that fact.
+      3. `a + 1` or `1 + a` (the literal `1`):
+         `[min(lo + 1, 2^53), min(hi + 1, 2^53)]`. At `2^53` the
+         rounded sum stays `2^53`.
+      4. Any other `a + b`: `[lo_a + lo_b, hi_a + hi_b]` when
+         `hi_a + hi_b <= 2^53`.
+      5. `a - b`: `[lo_a - hi_b, hi_a - lo_b]` when `lo_a >= hi_b`.
+         An equal pair gives `+0`.
+      6. `a * b`: `[lo_a * lo_b, hi_a * hi_b]` when
+         `hi_a * hi_b <= 2^53`.
+      7. `a % b` when `lo_b >= 1`: `[0, min(hi_a, hi_b - 1)]`. This
+         `%` is native.
+      8. A parenthesized expression: the fact of its content.
+      Every other form has no fact: a parameter, a field, an element,
+      a call result, `/`, unary `-`, a conditional, a non-integer or
+      negative literal.
+    - **Binding facts.** A `let` or `const` binding that a function
+      body declares (a loop head included) can have a binding fact. A
+      parameter and a module-level binding have none. The writes of
+      the binding are its initializer, each assignment `x = e`, each
+      compound assignment `x op= e` (as `x = x op e`), and each update
+      `x++` and `x--` (as `x = x + 1` and `x = x - 1`), in the
+      function and in each closure inside it. The binding fact is the
+      join of the facts of all its writes. A write that has no fact
+      gives the binding no fact. A binding without an initializer has
+      no fact. A binding that `for…of`, `catch`, or a pattern declares
+      has no fact.
+    - **Fixed point.** The binding facts of one outermost function
+      form one system. At the start each binding is unset. Each round
+      computes every write from the facts of the round before. A write
+      that reads an unset binding adds nothing to the join of that
+      round. When the `hi` of a binding grows,
+      it takes the smallest threshold at or above the new value. The
+      thresholds are `hi_b - 1` of each `%` in the system with a
+      literal divisor `b >= 1`, and `2^53`. When the `lo` of a binding
+      falls, it takes `0`. The system ends when a round changes no
+      fact. A binding that is still unset at the end has no fact. If
+      the system does not end within `FACT_ROUNDS` (8) rounds, no
+      binding of the system has a fact. The compiler stores the result
+      in the IR: each `%` node carries its form, native or `fmod`
+      (principle 8); the emitter reads the flag and computes no fact.
+    - Each round costs time linear in the size of the function, so the
+      pass is linear in the source size (§3.10). The growth test
+      includes a shape that reaches `FACT_ROUNDS`. The tracking note
+      records the largest round count of the corpus and the benchmark
+      workloads.
+    - **Shadow check.** A test-only compile option emits, at each
+      native `%`, a comparison with `math.fmod` that stops the run as
+      `internal` on a difference (sign of zero included). It is not
+      in the public API. The corpus, the benchmark workloads, and the
+      differential program generator run under it with no stop.
+    - Native `%` is the `MOD` instruction; the `fmod` alias is a
+      `FASTCALL`. Neither ends the statement count of §5.19.
+    - Measured before the rule (after P6.S3, each `%` hand-edited to
+      native): `%` through `fmod` is 49.9% of the primes overhead,
+      51.0% of callbacks, 8.8% of collect, 6.2% of sort. The facts
+      reach `n % d` and the counter in primes, `i % 40` in fib-loop,
+      the index remainders of particles and collect, and the LCG of
+      sort and callbacks. They do not reach a callback parameter
+      (callbacks `map`, `filter`, `reduce`) or a field.
 
 ## 6. Limits
 

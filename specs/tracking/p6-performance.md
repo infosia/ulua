@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S6 OPEN 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -22,6 +22,7 @@ the gate bound comes from the record after the shrinks.
 | P6.S4 | Loop-head interrupt point, inline index check, native equality (`pipeline.md` §5.19, §5.20, §5.23) | The corpus and goldens are unchanged; the C6 trap entries pass; tests at each index trap edge equal the helper; the §5.19 tests pass; a new full record |
 | P6.S5 | Conditions with `&&` and `||`; counted loops (`pipeline.md` §5.22, §5.24) | The corpus and goldens are unchanged; `a67` pins the counted-loop edges; the §5.19 and analyzer tests pass; a new full record |
 | P6.S3 | Expression form (`pipeline.md` §5.22) | The corpus and goldens are unchanged; C12 entries (`a18`, `a31`, `a50`, `a66`) pass; the §5.19 tests and the analyzer stress gate pass; a new full record |
+| P6.S6 | Native remainder (`pipeline.md` §5.25, C4.3) | The corpus and goldens are unchanged; `a68` pins the fact edges; a unit test for each fact rule and each no-fact form checks the emitted form; the shadow check gives no stop over the corpus, the workloads, and the differential generator; the growth test includes a `FACT_ROUNDS` shape; the §5.19, analyzer, and P6.3 tests pass; a new full record in which primes falls and no workload rises outside the noise gate |
 
 ## Carry-over into P6
 
@@ -298,6 +299,56 @@ Final record at 7cca876 (clean tree), `ulua / luau`: mandelbrot 1.16,
 fib-recursive 1.75, collect 2.08, fib-loop 2.31, tree 2.32, queen
 3.07, callbacks 3.16, primes 3.40, particles 3.51, sort 3.69 (P6.1
 start: 2.00 to 8.29).
+
+## Measurements: roblox-ts comparison (after P6 close)
+
+Measurement only; no production change; `git status` clean after the
+run. Subject: [roblox-ts](https://github.com/roblox-ts/roblox-ts)
+v3.0.0 at commit `68648b0c`, built locally, `--type model`. Its output
+of the ten Ulua workloads replaced `workloads/luau/*.luau` for one
+`bench --only` run per workload, then `git checkout` restored them.
+The `bench` binary is the build of 7cca876 (the crates of HEAD differ
+only in the record files). Same machine and session as the hand
+baseline below; checksums equal; no cell withheld.
+
+Source changes for roblox-ts, mechanical: `null` to `undefined` (tree,
+collect; roblox-ts rejects `null`); `.length` to `.size()` (collect);
+a local named `next` to `nxt` (collect, fib-loop, mandelbrot; a
+reserved identifier in roblox-ts). The output keeps the module table;
+a wrapper returns `main`, outside the timed region.
+
+| Workload | hand Luau ms | roblox-ts ms | Ulua ms | roblox-ts / hand | Ulua / hand | Ulua / roblox-ts |
+|---|---:|---:|---:|---:|---:|---:|
+| fib-recursive | 61.0 | 61.3 | 106.9 | 1.01 | 1.75 | 1.74 |
+| fib-loop | 115.4 | 196.7 | 260.5 | 1.71 | 2.26 | 1.32 |
+| mandelbrot | 481.6 | 481.4 | 573.6 | 1.00 | 1.19 | 1.19 |
+| primes | 84.7 | 97.1 | 262.7 | 1.15 | 3.10 | 2.71 |
+| sort | 59.8 | 59.5 | 217.7 | 0.99 | 3.64 | 3.66 |
+| tree | 31.5 | 58.9 | 73.5 | 1.87 | 2.33 | 1.25 |
+| queen | 421.8 | 486.1 | 1331.7 | 1.15 | 3.16 | 2.74 |
+| particles | 83.2 | 96.2 | 287.8 | 1.16 | 3.46 | 2.99 |
+| callbacks | 100.1 | 133.1 | 319.1 | 1.33 | 3.19 | 2.40 |
+| collect | 127.0 | 172.1 | 266.5 | 1.36 | 2.10 | 1.55 |
+
+The emitted forms of roblox-ts, read from its output:
+
+- `%` is the native Luau `%`. It differs from `node` for a negative
+  operand (C4.3).
+- An element access is `a[i + 1]` with no index check.
+- No interrupt point and no step or allocation charge.
+- A `for` loop is a numeric `for` only for an integer literal start
+  and an integer literal bound. Otherwise it is `while true` with a
+  `_shouldIncrement` flag (fib-loop, primes, collect: slower than
+  hand Luau).
+- A class constructs through `Class.new(...)`, `setmetatable`, and
+  `self:constructor(...) or self` (tree: 1.87 against hand Luau).
+- `map`, `filter`, and `reduce` expand inline to loops; each element
+  still calls the callback.
+
+Consequence: the gap of Ulua to roblox-ts on sort, particles, and
+queen is the index check and the interrupt cost (invariant 2). On
+primes and callbacks the largest part is `%` through `fmod` (the
+remaining-overhead table above: 49.9% and 51.0%). Next: P6.S6.
 
 ## Exit checklist (P6.1)
 

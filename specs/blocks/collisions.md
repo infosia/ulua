@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -151,6 +151,9 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    `!(a < b)` as `a >= b`.
 3. `%` lowers to `math.fmod`. Luau `%` floors and disagrees with
    JavaScript on 5 of 8 measured rows; `math.fmod` agrees on all 8.
+   Where integer facts prove a dividend of `+0` or an integer up to
+   `2^53` and a finite integer divisor `>= 1`, `%` lowers to the
+   native Luau `%`, which gives the same value (`pipeline.md` §5.25).
 4. `**` and `Math.pow` are rejected. Luau `^` follows C `pow` and gives
    `1` where JavaScript gives `NaN` for a base of ±1 with a NaN or
    infinite exponent. No lowering is decided.
@@ -174,7 +177,7 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    an object as `[object Object]`, and an array by its elements. Luau
    `tostring` gives `nil` and a table address.
 
-Accept: `a02`, `a03`, `a04`, `a10`, `a37`. Reject: `r15`, `r22`, `r44`, `r57`,
+Accept: `a02`, `a03`, `a04`, `a10`, `a37`, `a68`. Reject: `r15`, `r22`, `r44`, `r57`,
 `r58`. Retired by P2.4: `retired:r21-string-plus-number`,
 `retired:r38-string-plus-assign-number`.
 
