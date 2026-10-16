@@ -20,6 +20,7 @@ the gate bound comes from the record after the shrinks.
 |---|---|---|
 | P6.S1 | Builtin aliases and the index check (`pipeline.md` §5.20) | Each builtin alias compiles to `FASTCALL`; the trap set of the array helpers is unchanged (tests at each trap edge); the §5.19 tests pass; a new full record |
 | P6.S2 | Loop form (`pipeline.md` §5.21, C9.2) | The corpus and goldens are unchanged; C9 entries (`a07`, `a09`, `a17`, `a65`) pass; the §5.19 tests pass; a new full record |
+| P6.S4 | Loop-head interrupt point, inline index check, native equality (`pipeline.md` §5.19, §5.20, §5.23) | The corpus and goldens are unchanged; the C6 trap entries pass; tests at each index trap edge equal the helper; the §5.19 tests pass; a new full record |
 | P6.S3 | Expression form (`pipeline.md` §5.22) | The corpus and goldens are unchanged; C12 entries (`a18`, `a31`, `a50`, `a66`) pass; the §5.19 tests and the analyzer stress gate pass; a new full record |
 
 ## Carry-over into P6
@@ -176,6 +177,31 @@ per call (hand-written Luau 6.5); fib-loop 22.0 to 8.0 per inner
 iteration (4.5). Largest statement 36 (bound 36); largest gap 49
 (bound 579); largest ratio 5.80 (bound 6). `gate.sh full` 140 s,
 `gate.sh timing` 366 s.
+
+## Measurements: remaining overhead (after P6.S3)
+
+Measurement only, at ca14d54 (hand-edited variants, checksums equal).
+Share of the difference to hand-written Luau, each layer alone:
+
+| Layer | primes | particles | sort | callbacks | queen | tree | collect |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Interrupt callback and charges | 15.8% | 18.6% | 10.0% | 6.7% | 11.4% | 25.3% | 17.1% |
+| `__ulua_interrupt()` calls | 13.7% | 31.1% | 0 | 1.2% | 0 | 12.7% | 27.3% |
+| of which the loop-head point | 11.3% | 16.2% | 0 | 2.0% | 1.6% | | 20.4% |
+| `%` through `fmod` | 49.9% | 0 | 6.2% | 51.0% | 0 | 1.4% | 8.8% |
+| `__ulua_equal` | 32.4% | | | 11.9% | 0 | 23.0% | 2.9% |
+| Index check (no check: an upper bound) | | 46.9% | 85.1% | | 76.6% | | 12.2% |
+| Index check inline as nil and floor tests | | 25.1% | 42.1% | | 39.8% | | 10.6% |
+| Callback length check | | | | 12.5% | | | |
+| Closure call per element | | | | 29.7% | | | |
+| Slot residue | 5.3% | 10.0% | 4.0% | 5.4% | 6.7% | 34.5% | 16.4% |
+| Counted loop as a numeric `for` | 0 | 15.6% | 0 | 0 | 11.5% | 0 | 14.4% |
+
+Native `%` is valid only with a proof that the dividend is a
+non-negative integer below 2^52 and the divisor a positive integer; a
+runtime guard is slower (primes -45.8%). Next after P6.S4: condition
+`||` and `&&` (queen reaches hand speed), counted loops as numeric
+`for`, the receiver copies of the slot residue.
 
 ## Exit checklist (P6.1)
 

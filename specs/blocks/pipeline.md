@@ -49,6 +49,7 @@ Rev 44: §5.14.5a `CAPTURE_LOCALS`; §5.19 helper bodies, uncounted lines, the r
 Rev 45: §5.20 builtin aliases and the index check (P6.S1).
 Rev 46: §5.21 loop form; `collisions.md` C9.2 copies only captured bindings (P6.S2).
 Rev 47: §5.22 expression form (P6.S3).
+Rev 48: §5.19 the loop-head point goes before the loop; §5.20 inline index check; §5.23 native equality (P6.S4).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -521,7 +522,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       on each forward path since the last interrupt. A statement that
       always makes a Luau call ends the count.
     - At a join after branches, the count is the largest count of the
-      branches. A loop body starts with the count before the loop. The
+      branches. A loop body starts with the count before the loop. An
+      interrupt point that the count needs at the start of a loop body
+      is emitted before the loop: the back-edge interrupts each later
+      pass, so only the first pass starts with the entry count (P6.S4;
+      the point at the head ran on each pass, 11 to 20% of the
+      overhead of primes, particles, collect). The
       count after the loop is the largest count of the loop entry, of
       the body end, and of each forward exit of the loop: each
       `break`, each `continue` lowered to an exit, and the exit of the
@@ -604,6 +610,20 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       stays the same: a negative index, an index at or above `#a`
       (`#a + 1` for a write), a non-integer, and NaN trap; an
       infinite index fails the bounds test first; `-0` reads slot 1.
+    - An element read or write outside an optional chain is emitted
+      inline (P6.S4), with no helper call. C6.5 keeps every element
+      non-nil, so a missing slot is the out-of-range case:
+      - read: `v = a[i + 1]`, then a trap when `v == nil` or
+        `floor(i) ~= i`;
+      - write: a trap when `floor(i) ~= i`, or when `a[i + 1] == nil`
+        and `i ~= #a`; then the store.
+      The trap set is the set above: a negative index, NaN, and an
+      infinite index read nil; `0.9999999999999999` fails the floor
+      test. The C12 order holds: a write checks after the right side.
+      The deferred read of an optional chain keeps `__ulua_get`.
+      Measured before the rule (P6.S4 measurement): the index check is
+      85% of the sort overhead, 77% of queen, 47% of particles; the
+      inline nil-and-floor form recovers 40 to 42% of it.
     - A successful `FASTCALL` skips the `CALL` and fires no interrupt.
       A statement that calls a builtin alias does not end the count of
       §5.19. A statement that calls `__ulua_tostring` counts 2
@@ -665,6 +685,17 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     fib-recursive 54%, fib-loop 43%, primes 23%, particles 13%,
     queen 10% of the overhead; fib-recursive 24.5 to 8.0 instructions
     per call (hand-written Luau 6.5).
+
+23. **Native equality (P6.S4).** `===`, `==`, `!==`, and `!=` emit the
+    native Luau `==` or `~=` when both operands lower to the same
+    primitive Luau type (`number`, `string`, `boolean`), or when one
+    operand is `null` and the other is `T | null`. Each other accepted
+    pair (C7: arrays, records, class instances by identity) keeps
+    `__ulua_equal`. In a condition, the comparison is written into the
+    condition (§5.22). Measured before the rule (P6.S4 measurement):
+    the helper is 32% of the primes overhead, 23% of tree, 12% of
+    callbacks; native equality gives the same results as `node` for
+    number (NaN, `-0`, infinities), string, boolean, and null.
 
 ## 6. Limits
 
