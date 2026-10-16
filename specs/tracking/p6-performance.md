@@ -9,7 +9,7 @@ Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3 COMPLETE 2026-10-16. Contract: `bl
 | P6.1 | Luau and Ulua suite (`benchmarks.md` §1 to §4) | Both subjects give the same checksum on all ten workloads; the noise gate passes or withholds; `results.json` and the README table are written by one full run |
 | P6.2 | Boundary price (§5) | ns per call for both boundaries, each layer's share, a named shrink candidate or "the floor"; no production change |
 | P6.3 | Performance gate (§6) | A ratio test in `gate.sh timing` with a bound from the P6.1 record; Red with a seeded slowdown |
-| P6.4 | GC pacing against `max_memory_bytes` (P5 carry-over) | A measured rule: either the instance sets the GC goal, or `pipeline.md` §6.5 names the bound with the measured worst case |
+| P6.4 | GC pacing against `max_memory_bytes` (P5 carry-over) | `pipeline.md` §6.5 settings; the 18-frame spill loop ends with `limit:steps` at 4 and 16 MiB; the §5.19 ratio tests pass |
 | P6.5 | Reload | Contract first, at the slice start |
 
 Shrink slices follow the `ulua / luau` column of P6.1, each with a
@@ -202,6 +202,29 @@ non-negative integer below 2^52 and the divisor a positive integer; a
 runtime guard is slower (primes -45.8%). Next after P6.S4: condition
 `||` and `&&` (queen reaches hand speed), counted loops as numeric
 `for`, the receiver copies of the slot residue.
+
+## Measurements (P6.4, measurement round)
+
+Codex prototype, all production changes reverted (git status clean).
+Cause: with step multiplier 200 the remark phase does not drain; the
+spill-table barrier re-grays a new closure each iteration (traversal
+2,816 to 2,928 bytes against a 2,048-byte work unit). The allocator
+step charge does not repay GC debt; a refusal does not update
+`totalbytes`. Candidates over 54 conditions:
+
+| goal / step mul / step size | `limit:memory` of 54 | Largest peak | Largest §5.19 ratio | collect / tree ms |
+|---|---:|---:|---:|---|
+| 200 / 200 / 1 KiB (default) | 6 | 67,107,964 | 5.79 | 288.6 / 90.3 |
+| 200 / 400 / 1 KiB | 0 | 1,137,356 | 5.75 | 289.7 / 92.3 |
+| 400 / 400 / 1 KiB | 0 | 1,714,880 | 5.78 | 285.8 / 89.3 |
+| 100 / 400 / 1 KiB | 0 | 975,212 | 7.84 | 297.4 / 99.5 |
+| a full collection in the allocator before a refusal | 0 | 67,107,964 | 5.59 | 291.5 / 92.6 |
+| goal 1000 | 18 | 67,107,964 | 5.95 | 275.9 / 84.0 |
+
+Rule: goal 200, step multiplier 400, step size 1 KiB (`pipeline.md`
+§6.5). The S3 fixture that doubles a string 25 times to reach
+`limit:memory` peaks at 66,135,143 bytes under the rule and passes;
+26 doublings reach the limit.
 
 ## Exit checklist (P6.1)
 

@@ -50,6 +50,7 @@ Rev 45: §5.20 builtin aliases and the index check (P6.S1).
 Rev 46: §5.21 loop form; `collisions.md` C9.2 copies only captured bindings (P6.S2).
 Rev 47: §5.22 expression form (P6.S3).
 Rev 48: §5.19 the loop-head point goes before the loop; §5.20 inline index check; §5.23 native equality (P6.S4).
+Rev 49: §6.5 collector settings (P6.4).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -776,7 +777,24 @@ necessary and that this table does not name is a contract question.
      largest peak per output byte; it follows `OUTPUT_FACTOR`
      (§3.10).
 5. `max_memory_bytes` counts allocated bytes, garbage included. A
-   collection runs only when Luau starts it.
+   collection runs only when Luau starts it. Each instance sets the
+   Luau collector to goal 200, step multiplier 400, and step size 1
+   KiB (`lua_gc` `LUA_GCSETGOAL`, `LUA_GCSETSTEPMUL`,
+   `LUA_GCSETSTEPSIZE`) (P6.4). With the defaults (step multiplier
+   200), the remark phase never ended in a loop that writes a new
+   closure into a spill table: the forward barrier puts the closure
+   on the gray queue on each iteration, a closure costs 2,816 to
+   2,928 bytes of traversal against a work unit of 2,048, so each
+   assist takes the new closure and leaves the queue non-empty. At 16
+   MiB that loop stopped with `limit:memory` after 96,117 steps with
+   no completed cycle. Measured over 54 conditions (6 garbage-heavy
+   loops and the collect workload, 4, 16, and 64 MiB, 10^7 and 10^8
+   steps): the defaults fail 6 with `limit:memory`; goal 200 and step
+   multiplier 400 fail none, largest peak 1,137,356 bytes, largest
+   §5.19 ratio 5.75 (bound 6), collect and tree within 2% of the
+   defaults. A test runs the 18-frame spill loop at 4 and 16 MiB and
+   asserts `limit:steps` and a peak below 4 MiB (a byte count, not a
+   time).
 
 ## 7. Measurements of P1
 
