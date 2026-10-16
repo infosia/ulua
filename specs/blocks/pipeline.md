@@ -51,6 +51,7 @@ Rev 46: §5.21 loop form; `collisions.md` C9.2 copies only captured bindings (P6
 Rev 47: §5.22 expression form (P6.S3).
 Rev 48: §5.19 the loop-head point goes before the loop; §5.20 inline index check; §5.23 native equality (P6.S4).
 Rev 49: §6.5 collector settings (P6.4).
+Rev 50: §5.22 conditions with `&&` and `||`; §5.24 counted loops (P6.S5).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -669,7 +670,18 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       temporary (C12.1, `n + inc()`).
     - A comparison that is the whole condition of an `if`, `while`,
       or `for`, written into the condition (`if a < b then`), with
-      its operands under the two rules above.
+      its operands under the two rules above. A chain of `&&` and
+      `||` over such comparisons and boolean operands is written into
+      the condition with Luau `and` and `or`, which keep the
+      short-circuit order of C12 (P6.S5). An operand that needs a
+      statement of its own (an element read with its check, a call
+      that is not the last operand) ends the inline part: the rest of
+      the chain keeps the value form. The chain has at most
+      `CONDITION_NODES` nodes, measured against `luau-analyze` (the
+      value form failed with "Code is too complex to typecheck" on
+      long chains, §5.19). Measured before the rule (P6.S4
+      measurement): queen reaches hand-written Luau speed with the
+      condition form (448.6 against 444.2 ms).
     - The value of a declaration or an assignment to a binding that
       is a Luau local: the last operation writes the binding
       directly, with the typed write of §5.10 (`b = (x + y) :: T`).
@@ -700,6 +712,32 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     the helper is 32% of the primes overhead, 23% of tree, 12% of
     callbacks; native equality gives the same results as `node` for
     number (NaN, `-0`, infinities), string, boolean, and null.
+
+24. **Counted loops (P6.S5).** A `for` loop lowers to a Luau numeric
+    `for` when all of these hold; otherwise it keeps the `while` form
+    of §5.21:
+    - the head declares one counter with an integer literal start;
+    - the update is `i++`, `i--`, `i += k`, or `i -= k` with a
+      positive integer literal `k`;
+    - the test is `i < b`, `i <= b`, `i > b`, or `i >= b` in the
+      direction of the step, and `b` is a number literal or a binding
+      that is a Luau local, that the body does not write, and that no
+      closure captures;
+    - the body does not write the counter, no closure captures it,
+      and the body has no `continue` of the loop.
+    The counter takes only integer values, and for an integer `i`
+    each test equals a test against an integer limit `L`: `i < b` is
+    `i <= ceil(b) - 1`, `i <= b` is `i <= floor(b)`, `i > b` is
+    `i >= floor(b) + 1`, and `i >= b` is `i >= ceil(b)`. The emitter
+    computes `L` once before the loop through builtin aliases (§5.20)
+    and writes `for i = start, L, step`. A NaN `b` runs no iteration in
+    both; an infinite `b` runs until the step limit in both; above
+    2^53 the counter stops growing in both. JavaScript evaluates `b`
+    on each test; `b` does not change in the loop, so one evaluation
+    gives the same values. `FORNLOOP` fires the interrupt on each
+    iteration (§5.19). Measured before the rule (P6.S4 measurement):
+    the counted loop is 15.6% of the particles overhead, 14.4% of
+    collect, 11.5% of queen.
 
 ## 6. Limits
 

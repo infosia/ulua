@@ -21,6 +21,7 @@ the gate bound comes from the record after the shrinks.
 | P6.S1 | Builtin aliases and the index check (`pipeline.md` §5.20) | Each builtin alias compiles to `FASTCALL`; the trap set of the array helpers is unchanged (tests at each trap edge); the §5.19 tests pass; a new full record |
 | P6.S2 | Loop form (`pipeline.md` §5.21, C9.2) | The corpus and goldens are unchanged; C9 entries (`a07`, `a09`, `a17`, `a65`) pass; the §5.19 tests pass; a new full record |
 | P6.S4 | Loop-head interrupt point, inline index check, native equality (`pipeline.md` §5.19, §5.20, §5.23) | The corpus and goldens are unchanged; the C6 trap entries pass; tests at each index trap edge equal the helper; the §5.19 tests pass; a new full record |
+| P6.S5 | Conditions with `&&` and `||`; counted loops (`pipeline.md` §5.22, §5.24) | The corpus and goldens are unchanged; `a67` pins the counted-loop edges; the §5.19 and analyzer tests pass; a new full record |
 | P6.S3 | Expression form (`pipeline.md` §5.22) | The corpus and goldens are unchanged; C12 entries (`a18`, `a31`, `a50`, `a66`) pass; the §5.19 tests and the analyzer stress gate pass; a new full record |
 
 ## Carry-over into P6
