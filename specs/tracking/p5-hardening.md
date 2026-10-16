@@ -87,9 +87,10 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15; P5.6 COMPLETE 2026-10-16; the P5
 - macOS arm64 `gate.sh sanitize` after the probe change (00867ca):
   PASS. `cargo-test` 245 s, `luau-witnesses` 164 s, `fuzz-smoke` 67 s,
   `fault-sweep` 105 s; total 585 s.
-- Gaps: Linux `gate.sh timing` is not run. A clang-built probe on Linux hangs
-  in llvm-symbolizer with default symbolization (old and new probe);
-  the Linux gate uses gcc.
+- Linux `gate.sh timing` at e7a23a3: PASS. 9 passed, 2 ignored; the
+  `witnesses` test binary 330 s, the step 367 s.
+- Gap: a clang-built probe on Linux hangs in llvm-symbolizer with
+  default symbolization (old and new probe); the Linux gate uses gcc.
 
 ## Exit checklist (P5.5)
 
