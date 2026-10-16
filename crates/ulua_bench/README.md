@@ -83,11 +83,11 @@ A record with `worktree_dirty: true` predates the clean-crates policy. Re-run fr
 
 <!-- results:start -->
 
-Session: 2026-10-16T05:01:15Z. Host ID: `host-7a4047f4a0ca82c1` (FNV-1a 64-bit hostname hash).
+Session: 2026-10-16T05:47:38Z. Host ID: `host-7a4047f4a0ca82c1` (FNV-1a 64-bit hostname hash).
 
 Machine: Darwin 27.0.0 arm64; MacBook Air. CPU: Apple M2; 8 (4 Performance and 4 Efficiency) cores. Power: Now drawing from 'AC Power'.
 
-Luau: `c54f558b4d5748ab0658610b8ce0c432053e41eb`. Ulua: `e1700685f95643a5259f70302193490ddc4ea7ba`; worktree dirty: false.
+Luau: `c54f558b4d5748ab0658610b8ce0c432053e41eb`. Ulua: `4f6f4a453bf339fa408336648a291beeae1f0cb2`; worktree dirty: false.
 
 Rust: rustc 1.95.0 (59807616e 2026-04-14). Profile: Release. Luau: O1, no interrupt callback.
 
@@ -95,39 +95,39 @@ Ulua limits: max_steps = 10000000000; max_memory_bytes = 1073741824; max_open_re
 
 | Workload | Checksum | luau ms (baseline) | ulua ms | ulua / luau |
 |---|---:|---:|---:|---:|
-| fib-recursive | 1346269 | 60.987 (1.00×) | 187.348 | 3.072× |
-| fib-loop | 3449993952 | 113.598 (1.00×) | 758.892 | 6.681× |
-| mandelbrot | 11189274 | 496.275 (1.00×) | 956.052 | 1.926× |
-| primes | 17984 | 85.197 (1.00×) | 637.870 | 7.487× |
-| sort | 3135319498 | 60.995 (1.00×) | 253.818 | 4.161× |
-| tree | 393204 | 31.881 (1.00×) | 105.826 | 3.319× |
-| queen | 2680 | 435.395 (1.00×) | 1524.240 | 3.501× |
-| particles | 77504288 | 83.611 (1.00×) | 420.802 | 5.033× |
-| callbacks (Ulua methods; Luau loops) | 3403969141 | 99.543 (1.00×) | 384.786 | 3.866× |
-| collect | 1011185172 | 129.816 (1.00×) | 314.513 | 2.423× |
+| fib-recursive | 1346269 | 61.042 (1.00×) | 107.051 | 1.754× |
+| fib-loop | 3449993952 | 114.784 (1.00×) | 333.724 | 2.907× |
+| mandelbrot | 11189274 | 496.339 (1.00×) | 736.940 | 1.485× |
+| primes | 17984 | 85.082 (1.00×) | 462.966 | 5.441× |
+| sort | 3135319498 | 61.060 (1.00×) | 225.722 | 3.697× |
+| tree | 393204 | 32.108 (1.00×) | 90.665 | 2.824× |
+| queen | 2680 | 435.328 (1.00×) | 1450.467 | 3.332× |
+| particles | 77504288 | 83.492 (1.00×) | 379.451 | 4.545× |
+| callbacks (Ulua methods; Luau loops) | 3403969141 | 99.859 (1.00×) | 342.870 | 3.434× |
+| collect | 1011185172 | 127.963 (1.00×) | 282.635 | 2.209× |
 
 Warm-up and noise (IQR / median; a withheld cell has no published timing):
 
-- fib-recursive / luau: warm-up 243.755 ms, 4 iterations; IQR 0.124 ms (0.20%); ok.
-- fib-recursive / ulua: warm-up 562.338 ms, 3 iterations; IQR 0.297 ms (0.16%); ok.
-- fib-loop / luau: warm-up 345.159 ms, 3 iterations; IQR 0.427 ms (0.38%); ok.
-- fib-loop / ulua: warm-up 2277.310 ms, 3 iterations; IQR 0.370 ms (0.05%); ok.
-- mandelbrot / luau: warm-up 1489.383 ms, 3 iterations; IQR 0.617 ms (0.12%); ok.
-- mandelbrot / ulua: warm-up 2864.819 ms, 3 iterations; IQR 4.652 ms (0.49%); ok.
-- primes / luau: warm-up 256.643 ms, 3 iterations; IQR 0.202 ms (0.24%); ok.
-- primes / ulua: warm-up 1917.297 ms, 3 iterations; IQR 1.918 ms (0.30%); ok.
-- sort / luau: warm-up 244.311 ms, 4 iterations; IQR 0.093 ms (0.15%); ok.
-- sort / ulua: warm-up 761.204 ms, 3 iterations; IQR 0.694 ms (0.27%); ok.
-- tree / luau: warm-up 223.984 ms, 7 iterations; IQR 0.196 ms (0.61%); ok.
-- tree / ulua: warm-up 317.398 ms, 3 iterations; IQR 1.166 ms (1.10%); ok.
-- queen / luau: warm-up 1305.335 ms, 3 iterations; IQR 0.656 ms (0.15%); ok.
-- queen / ulua: warm-up 4569.297 ms, 3 iterations; IQR 0.793 ms (0.05%); ok.
-- particles / luau: warm-up 250.443 ms, 3 iterations; IQR 0.919 ms (1.10%); ok.
-- particles / ulua: warm-up 1280.234 ms, 3 iterations; IQR 0.970 ms (0.23%); ok.
-- callbacks / luau: warm-up 300.715 ms, 3 iterations; IQR 0.256 ms (0.26%); ok.
-- callbacks / ulua: warm-up 1155.992 ms, 3 iterations; IQR 1.115 ms (0.29%); ok.
-- collect / luau: warm-up 391.609 ms, 3 iterations; IQR 3.201 ms (2.47%); ok.
-- collect / ulua: warm-up 945.604 ms, 3 iterations; IQR 4.764 ms (1.51%); ok.
+- fib-recursive / luau: warm-up 244.447 ms, 4 iterations; IQR 0.066 ms (0.11%); ok.
+- fib-recursive / ulua: warm-up 322.110 ms, 3 iterations; IQR 0.166 ms (0.15%); ok.
+- fib-loop / luau: warm-up 338.528 ms, 3 iterations; IQR 2.649 ms (2.31%); ok.
+- fib-loop / ulua: warm-up 1001.140 ms, 3 iterations; IQR 0.335 ms (0.10%); ok.
+- mandelbrot / luau: warm-up 1488.658 ms, 3 iterations; IQR 0.498 ms (0.10%); ok.
+- mandelbrot / ulua: warm-up 2212.228 ms, 3 iterations; IQR 0.977 ms (0.13%); ok.
+- primes / luau: warm-up 255.708 ms, 3 iterations; IQR 0.070 ms (0.08%); ok.
+- primes / ulua: warm-up 1399.329 ms, 3 iterations; IQR 0.525 ms (0.11%); ok.
+- sort / luau: warm-up 245.164 ms, 4 iterations; IQR 0.165 ms (0.27%); ok.
+- sort / ulua: warm-up 676.533 ms, 3 iterations; IQR 0.594 ms (0.26%); ok.
+- tree / luau: warm-up 225.456 ms, 7 iterations; IQR 0.488 ms (1.52%); ok.
+- tree / ulua: warm-up 271.669 ms, 3 iterations; IQR 1.479 ms (1.63%); ok.
+- queen / luau: warm-up 1305.962 ms, 3 iterations; IQR 0.422 ms (0.10%); ok.
+- queen / ulua: warm-up 4355.631 ms, 3 iterations; IQR 9.314 ms (0.64%); ok.
+- particles / luau: warm-up 250.342 ms, 3 iterations; IQR 0.300 ms (0.36%); ok.
+- particles / ulua: warm-up 1138.111 ms, 3 iterations; IQR 0.751 ms (0.20%); ok.
+- callbacks / luau: warm-up 302.637 ms, 3 iterations; IQR 1.888 ms (1.89%); ok.
+- callbacks / ulua: warm-up 1033.482 ms, 3 iterations; IQR 3.078 ms (0.90%); ok.
+- collect / luau: warm-up 386.680 ms, 3 iterations; IQR 0.855 ms (0.67%); ok.
+- collect / ulua: warm-up 849.850 ms, 3 iterations; IQR 3.350 ms (1.19%); ok.
 
 <!-- results:end -->
 
