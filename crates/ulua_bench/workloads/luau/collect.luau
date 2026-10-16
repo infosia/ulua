@@ -1,9 +1,10 @@
 local Cell = {}
-Cell.__index = Cell
 function Cell.new(i, next)
-    local cell = setmetatable({id = i, text = "", values = {}, next = next}, Cell)
-    for j = 1, 1 + i % 31 do cell.text = cell.text .. "x" end
-    for j = 0, i % 7 do cell.values[j + 1] = i + j end
+    local cell = {id = i, text = "", values = {}, next = next}
+    local textLength = 1 + i % 31
+    for j = 1, textLength do cell.text = cell.text .. "x" end
+    local valueLength = 1 + i % 7
+    for j = 0, valueLength - 1 do cell.values[j + 1] = i + j end
     return cell
 end
 local function main()

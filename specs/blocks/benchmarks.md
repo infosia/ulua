@@ -1,6 +1,6 @@
 # Benchmarks — contract
 
-Status: Rev 1, 2026-10-16 (P6). Rev 1: the subjects are Luau and
+Status: Rev 2, 2026-10-16 (P6). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
 Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
 contract follows the benchmark contract of the owner's prior project:
 its timing method, its workload set, and its boundary-price
@@ -64,7 +64,9 @@ of §6 is the gate. The code lives in `crates/ulua_bench`.
    writes `results.json` and the README table. `--only` gives the same
    figure as the full run for the same cell.
 7. One machine, one session. The record names the machine (host, CPU,
-   power source), the Luau revision, and the Ulua commit.
+   power source), the Luau revision, and the Ulua commit. A full run
+   from a working tree with changes under `crates/` writes no record:
+   the commit must name the measured code.
 
 ## 4. Workloads
 
@@ -92,6 +94,15 @@ stays below 2^53.
 - The implementer pins N, M, K, and each checksum formula, the same in
   both subjects, and records them in the README of the crate. The
   `luau` subject runs in about 10 to 500 ms per iteration (a target).
+- The two workloads of a pair do the same operations. The Luau
+  workload can use the idiomatic Luau loop form (a numeric `for`), but
+  it uses no library function and no operation that the Ulua workload
+  does not use (Ulua has no `Math`). A loop bound that JavaScript
+  evaluates on each iteration is hoisted in the Ulua workload, so the
+  numeric `for` of Luau does the same work. Before this rule, fib-loop
+  evaluated `i % 40` 20.5M times in Ulua and 1M times in Luau (16.0
+  published against 5.1 for the same work), and queen used
+  `math.abs` in Luau (6.2 against 5.0) (P6.1 review).
 - `tree` and `collect` allocate through the Luau memory manager. No
   subject forces a collection: Ulua has no collection API.
 - `callbacks` measures the idiomatic callback spelling against a

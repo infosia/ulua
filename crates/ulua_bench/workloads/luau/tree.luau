@@ -1,7 +1,6 @@
 local Tree = {}
-Tree.__index = Tree
 function Tree.new(depth)
-    local node = setmetatable({}, Tree)
+    local node = {left = nil, right = nil}
     if depth > 0 then node.left = Tree.new(depth - 1); node.right = Tree.new(depth - 1) end
     return node
 end

@@ -4,7 +4,7 @@ use std::time::Instant;
 #[path = "../../ulua/tests/support/tsc.rs"]
 mod tsc;
 
-// Cost: 0.201170 s, Debug, measured locally; ten ABI compiles and one tsc process, no execution.
+// Cost: 0.225657 s, Debug, measured locally; ten ABI compiles and one tsc process, no execution.
 #[test]
 fn all_ulua_workloads_compile_and_typecheck() {
     let start = Instant::now();
@@ -45,7 +45,7 @@ fn all_ulua_workloads_compile_and_typecheck() {
     );
 }
 
-// Cost: 0.000657 s, Debug, measured locally; temporary record files only, no benchmark execution.
+// Cost: 0.000460 s, Debug, measured locally; temporary record files only, no benchmark execution.
 #[test]
 fn only_prints_without_writes() {
     let start = Instant::now();
@@ -74,6 +74,101 @@ fn only_prints_without_writes() {
     assert!(Mode::parse(&["--only".into()]).is_err());
     eprintln!(
         "only_prints_without_writes cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+// Cost: 0.120270 s, Debug, measured locally; a temporary Git index and synthetic records, no commits or workload execution.
+#[test]
+fn changed_crates_prevent_full_run_records() {
+    let start = Instant::now();
+    let directory = std::env::temp_dir().join(format!("ulua-bench-dirty-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    let git = |args: &[&str]| {
+        let output = Command::new("git")
+            .current_dir(&directory)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    git(&["init", "--quiet", "--template="]);
+    std::fs::write(
+        directory.join("README.md"),
+        "<!-- results:start --><!-- results:end -->",
+    )
+    .unwrap();
+    // Untracked files outside crates/ do not block a record.
+    assert!(report::publish(&directory, None, "committed-code record", "table").unwrap());
+    let old_readme = std::fs::read(directory.join("README.md")).unwrap();
+    let old_record = std::fs::read(directory.join("results.json")).unwrap();
+    std::fs::create_dir_all(directory.join("crates/fixture")).unwrap();
+    let source = directory.join("crates/fixture/workload.ts");
+    std::fs::write(&source, "untracked source").unwrap();
+    let mode = Mode::parse(&[]).unwrap();
+    assert_eq!(mode, Mode::Full);
+    let reject = || {
+        let error = report::publish(
+            &directory,
+            mode.only(),
+            "changed-code record",
+            "changed table",
+        )
+        .unwrap_err();
+        assert!(error.contains("no file is written"));
+        assert_eq!(
+            std::fs::read(directory.join("README.md")).unwrap(),
+            old_readme
+        );
+        assert_eq!(
+            std::fs::read(directory.join("results.json")).unwrap(),
+            old_record
+        );
+        // The root pathspec also works from the runner's nested crate directory.
+        assert!(report::require_committed_crates(&directory.join("crates/fixture")).is_err());
+    };
+    reject();
+    git(&["add", "--", "crates/fixture/workload.ts"]);
+    reject();
+    std::fs::write(&source, "unstaged source").unwrap();
+    reject();
+    // Move the indexed source outside crates/. Its deletion still blocks publication.
+    std::fs::rename(&source, directory.join("moved.ts")).unwrap();
+    reject();
+    git(&[
+        "rm",
+        "--cached",
+        "--force",
+        "--",
+        "crates/fixture/workload.ts",
+    ]);
+    assert!(report::publish(&directory, None, "outside-crates changes", "table").unwrap());
+    std::fs::remove_dir_all(&directory).unwrap();
+    eprintln!(
+        "changed_crates_prevent_full_run_records cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+// Cost: 0.002310 s, Debug, measured locally; ten Luau module compiles, no workload execution.
+#[test]
+fn all_luau_workloads_compile() {
+    let start = Instant::now();
+    for id in IDS {
+        let source = std::fs::read(
+            directory()
+                .join("workloads/luau")
+                .join(format!("{id}.luau")),
+        )
+        .unwrap();
+        let _vm = subjects::Luau::new(&source).unwrap_or_else(|error| panic!("{id}: {error}"));
+    }
+    eprintln!(
+        "all_luau_workloads_compile cost={:.6}s",
         start.elapsed().as_secs_f64()
     );
 }

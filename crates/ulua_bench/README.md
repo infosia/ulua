@@ -15,7 +15,10 @@ CARGO_NET_OFFLINE=true cargo run --release -p ulua_bench --bin bench
 CARGO_NET_OFFLINE=true cargo run --release -p ulua_bench --bin bench -- --only sort
 ```
 
-Only a full run writes `results.json` and the marked table below.
+Only a full run with no Git changes under `crates/` writes `results.json` and the marked table below.
+The runner checks staged, unstaged, and untracked files before measurement and before publication.
+If the check fails, the runner reports that it wrote no file.
+Changes outside `crates/` do not block publication.
 `--only` prints the table and all raw observations to stdout. It writes no file.
 The parent starts a fresh child process for each workload and subject, in sequence.
 Compilation, instance creation, function preparation, result checks, and output stay outside each timed region.
@@ -32,7 +35,8 @@ The noise threshold is IQR greater than 15% of the median.
 Quartiles use linear interpolation at `(n - 1) * p`.
 The record retains every sample, min, median, max, quartiles, IQR, and measured warm-up.
 `median_seconds: null` means that the published cell is withheld. `observed` retains the evidence.
-The host ID is a stable hostname hash. The record omits personal machine names and paths.
+New host IDs use FNV-1a, 64 bits, over the hostname bytes.
+The metadata field `host_hash` names this fixed hash. The record omits personal machine names and paths.
 
 ## Fixed parameters and checksum formulas
 
@@ -58,16 +62,24 @@ No subject uses bitwise operators or i32 wrapping.
 All particles use exact binary fractions. Quantization has no floating point boundary ambiguity.
 Quicksort keeps equal values and uses the same partition swaps in both subjects.
 The collect graph retains the even chain. Odd cells become unreachable before the checksum walk.
-The native Luau workloads use class tables for the same record and tree shapes.
+The native Luau constructors return plain tables with the same record and tree fields.
+The workloads use no method dispatch or runtime library calls.
+Both languages use the same arithmetic and hoist loop bounds that contain arithmetic or length reads.
+Luau uses numeric loops and adds one at zero-based array accesses.
 
 ## Verification and cost
 
 `cargo test -p ulua_bench` checks statistics, mismatch suppression, warm-up rejection, record suppression, and all accepted sources.
 The source test reuses `crates/ulua/tests/support/tsc.rs` for stock TypeScript with the Ulua prelude.
 It also compiles every source through the product C ABI at default compile limits.
+The Luau source test compiles and loads each module without a workload call.
+The measurement test supplies a fake workload and clock; it tests both warm-up conditions without real-time assertions.
+The publication test uses a temporary Git index. It makes no commit.
 Test headers state the measured costs. No test runs a benchmark workload.
 
 ## Captured results
+
+A record with `worktree_dirty: true` predates the clean-crates policy. Re-run from committed workload code before use.
 
 <!-- results:start -->
 

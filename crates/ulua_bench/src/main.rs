@@ -76,8 +76,8 @@ fn cell(directory: &Path, id: &str, subject: &str) -> Result<Measurement, String
     )
     .map_err(|e| e.to_string())?;
     match subject {
-        "ulua" => subjects::measure(&mut subjects::Ulua::new(&source)?),
-        "luau" => subjects::measure(&mut subjects::Luau::new(&source)?),
+        "ulua" => subjects::measure(&mut subjects::Ulua::new(&source)?, &mut subjects::Monotonic),
+        "luau" => subjects::measure(&mut subjects::Luau::new(&source)?, &mut subjects::Monotonic),
         _ => Err("Unknown subject".into()),
     }
 }
@@ -133,6 +133,9 @@ fn run() -> Result<(), String> {
     }
     if mode.only().is_some() {
         eprintln!("--only: report goes to stdout; no file is written.");
+    } else {
+        // Reject changed inputs before the full measurement, then check again before publication.
+        report::require_committed_crates(&directory)?;
     }
     let metadata = Metadata::read(&directory.join("../.."))?;
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;

@@ -46,6 +46,45 @@ Parameters: `crates/ulua_bench/README.md`. The Luau workloads use
 idiomatic Luau (numeric `for`, the native `%`). Test cost: 6 unit tests
 0.23 s (10 compiles and `tsc` 0.20 s). `gate.sh full` passes, 163 s.
 
+## P6.1 Phase Review round 1
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| fib-loop: Ulua evaluates `j < i % 40` on each inner iteration (20.5M), the Luau numeric `for` once per outer iteration (1M); Luau with the same work 348 ms against 112 ms; 16.0 published, 5.1 for the same work | MAJOR | `benchmarks.md` Rev 2: a pair does the same operations; the bound is hoisted |
+| queen, particles, sort: the Luau baselines use `math.abs` and `math.floor`, which Ulua lacks; queen with the Ulua operations 421 ms against 326 ms | MINOR | Rev 2: no library function in the Luau workload |
+| `results.json` names the parent commit with `worktree_dirty: true` | MINOR | Rev 2: a full run from a changed tree writes no record |
+| The host identity uses `DefaultHasher`, which is not stable across Rust releases *(docs)* | MINOR | a fixed hash |
+| `subjects::measure` (warm-up loop, sample count) has no direct test | MINOR | a direct test |
+
+Decomposition of `ulua / luau` (reviewer, measurement only, layers
+removed in order, shares of the difference):
+
+| Layer | fib-loop | fib-recursive | primes | sort | queen |
+|---|---:|---:|---:|---:|---:|
+| Different work in the pair | 14.1% | 0 | 0 | 2.9% | 8.8% |
+| Interrupt callback and charges | 13.0% | 15.0% | 8.7% | 6.4% | 11.6% |
+| `__ulua_interrupt()` calls | 14.3% | 23.2% | 5.3% | 2.4% | 1.5% |
+| `%` through the cast `fmod` alias (not a builtin) | 9.6% | 2.1% | 9.7% | 0 | 0 |
+| `math.fmod` builtin against native `%` | 27.5% | | 28.7% | | |
+| Array helpers: integer check `__ulua_fmod(i, 1) == 0` | 0 | 0 | 0 | 52.7% | 36.9% |
+| Array helpers: bounds compare and call | 0 | 0 | 0 | 26.2% | 27.7% |
+| Comparison stored in a boolean | 3.6% | 5.2% | 8.8% | 3.7% | 3.0% |
+| Slot form (entry temporaries, constants in registers, argument moves) | 17.2% | 56.9% | 39.6% | 5.9% | 14.8% |
+
+Native `%` differs from JavaScript for negative operands, an infinite
+divisor, `-0`, non-integers, and values above 2^53 (`-7 % 2`: Luau 1,
+JavaScript -1), so it is correct only where both operands are proven
+non-negative integers below 2^53. A builtin call (FASTCALL) fires no
+interrupt; a shrink that makes a helper call a builtin must update
+the §5.19 rule "a statement that always makes a Luau call ends the
+count".
+
+Shrink candidates, in order of measured share: (1) the integer check
+of the array helpers (`math.floor(i) == i`: sort 378 to 229 ms, queen
+1,902 to 1,417 ms); (2) the cast on the prelude aliases that blocks
+FASTCALL (`typeof(math.fmod)` passes `luau-analyze` strict; fib-loop
+1,331 to 1,199 ms); (3) the slot form; (4) cheaper interrupt points.
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten

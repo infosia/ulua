@@ -3,13 +3,7 @@ use crate::{
     stats::{Measurement, Statistics, checksums_match},
     subjects::{MAX_MEMORY_BYTES, MAX_STEPS},
 };
-use std::{
-    collections::hash_map::DefaultHasher,
-    fmt::Write,
-    hash::{Hash, Hasher},
-    path::Path,
-    process::Command,
-};
+use std::{fmt::Write, path::Path, process::Command};
 
 pub(crate) struct Cell {
     pub subject: &'static str,
@@ -86,9 +80,37 @@ fn command(program: &str, arguments: &[&str], root: &Path) -> Result<String, Str
         .output()
         .map_err(|e| e.to_string())?;
     if !output.status.success() {
-        return Err(format!("Machine metadata command failed: {program}"));
+        return Err(format!("Command failed: {program}"));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+// FNV-1a over the hostname bytes gives the same identity across Rust releases.
+fn host_identity(hostname: &[u8]) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in hostname {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("host-{hash:016x}")
+}
+
+pub(crate) fn require_committed_crates(directory: &Path) -> Result<(), String> {
+    let status = command(
+        "git",
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            ":(top)crates/",
+        ],
+        directory,
+    )?;
+    if !status.is_empty() {
+        return Err("Changes under crates/: no file is written. Commit the measured code before a full run.".into());
+    }
+    Ok(())
 }
 pub(crate) struct Metadata {
     pub timestamp: String,
@@ -103,10 +125,8 @@ pub(crate) struct Metadata {
 }
 impl Metadata {
     pub fn read(root: &Path) -> Result<Self, String> {
-        let mut hash = DefaultHasher::new();
-        command("hostname", &[], root)?.hash(&mut hash);
         // Keep a stable host identity without recording a user or device name.
-        let host = format!("host-{:016x}", hash.finish());
+        let host = host_identity(command("hostname", &[], root)?.as_bytes());
         let power = command("pmset", &["-g", "batt"], root)?
             .lines()
             .next()
@@ -143,7 +163,7 @@ impl Metadata {
     }
     fn json(&self) -> String {
         format!(
-            "{{\"timestamp_utc\":{},\"host_id\":{},\"machine\":{},\"cpu\":{},\"power\":{},\"luau_revision\":{},\"ulua_commit\":{},\"worktree_dirty\":{},\"rustc\":{}}}",
+            "{{\"timestamp_utc\":{},\"host_id\":{},\"host_hash\":\"fnv1a-64\",\"machine\":{},\"cpu\":{},\"power\":{},\"luau_revision\":{},\"ulua_commit\":{},\"worktree_dirty\":{},\"rustc\":{}}}",
             quote(&self.timestamp),
             quote(&self.host),
             quote(&self.machine),
@@ -165,7 +185,7 @@ pub(crate) fn json(metadata: &Metadata, rows: &[Row]) -> String {
 }
 pub(crate) fn table(metadata: &Metadata, rows: &[Row]) -> String {
     let mut out = format!(
-        "Session: {}. Host ID: `{}` (hostname hash).\n\nMachine: {}. CPU: {}. Power: {}.\n\nLuau: `{}`. Ulua: `{}`; worktree dirty: {}.\n\nRust: {}. Profile: Release. Luau: O1, no interrupt callback.\n\nUlua limits: max_steps = {MAX_STEPS}; max_memory_bytes = {MAX_MEMORY_BYTES}; max_open_requests = 256.\n\n| Workload | Checksum | luau ms (baseline) | ulua ms | ulua / luau |\n|---|---:|---:|---:|---:|\n",
+        "Session: {}. Host ID: `{}` (FNV-1a 64-bit hostname hash).\n\nMachine: {}. CPU: {}. Power: {}.\n\nLuau: `{}`. Ulua: `{}`; worktree dirty: {}.\n\nRust: {}. Profile: Release. Luau: O1, no interrupt callback.\n\nUlua limits: max_steps = {MAX_STEPS}; max_memory_bytes = {MAX_MEMORY_BYTES}; max_open_requests = 256.\n\n| Workload | Checksum | luau ms (baseline) | ulua ms | ulua / luau |\n|---|---:|---:|---:|---:|\n",
         metadata.timestamp,
         metadata.host,
         metadata.machine,
@@ -241,6 +261,8 @@ pub(crate) fn publish(
     if only.is_some() {
         return Ok(false);
     }
+    // Check again at publication, so changes during a measurement also prevent a record.
+    require_committed_crates(directory)?;
     let readme = directory.join("README.md");
     let original = std::fs::read_to_string(&readme).map_err(|e| e.to_string())?;
     let start = original
@@ -261,7 +283,19 @@ pub(crate) fn publish(
 mod tests {
     use super::*;
     use crate::stats::Sample;
-    // Cost: 0.000079 s, Debug, measured locally; synthetic observations, no benchmark execution.
+
+    // Cost: 0.000150 s, Debug, measured locally; two fixed FNV-1a vectors, no machine metadata commands.
+    #[test]
+    fn host_identity_uses_fixed_fnv1a() {
+        let start = std::time::Instant::now();
+        assert_eq!(host_identity(b""), "host-cbf29ce484222325");
+        assert_eq!(host_identity(b"hello"), "host-a430d84680aabd0b");
+        eprintln!(
+            "host_identity_uses_fixed_fnv1a cost={:.6}s",
+            start.elapsed().as_secs_f64()
+        );
+    }
+    // Cost: 0.000653 s, Debug, measured locally; synthetic observations, no benchmark execution.
     #[test]
     fn report_withholds_noisy_cell_and_mismatched_row() {
         let start = std::time::Instant::now();

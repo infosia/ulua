@@ -2,8 +2,10 @@ class Cell {
   id: number; text: string; values: number[]; next: Cell | null;
   constructor(i: number, next: Cell | null) {
     this.id = i; this.text = ""; this.values = []; this.next = next;
-    for (let j = 0; j < 1 + i % 31; j++) { this.text += "x"; }
-    for (let j = 0; j < 1 + i % 7; j++) { this.values.push(i + j); }
+    const textLength = 1 + i % 31;
+    for (let j = 0; j < textLength; j++) { this.text += "x"; }
+    const valueLength = 1 + i % 7;
+    for (let j = 0; j < valueLength; j++) { this.values.push(i + j); }
   }
 }
 export function main(): number {
@@ -16,11 +18,13 @@ export function main(): number {
     }
     for (let i = 0; i < 40000; i += 2) { kept.push(all[i]); }
     all = [];
-    for (let i = 0; i < kept.length; i++) {
+    const keptLength = kept.length;
+    for (let i = 0; i < keptLength; i++) {
       const cell = kept[i]; const next = cell.next;
       sum = (sum + cell.id + cell.text.length) % 4294967296;
       if (next !== null) { sum = (sum + next.id) % 4294967296; }
-      for (let j = 0; j < cell.values.length; j++) { sum = (sum + cell.values[j]) % 4294967296; }
+      const valueLength = cell.values.length;
+      for (let j = 0; j < valueLength; j++) { sum = (sum + cell.values[j]) % 4294967296; }
     }
   }
   return sum;
