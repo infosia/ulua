@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1, P6.S1, P6.2 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -115,6 +115,21 @@ after: fib-recursive 3.13 to 3.04, fib-loop 7.68 to 7.55, mandelbrot
 3.84, collect 2.80 to 2.60. 33 index trap edges equal the output and
 trap kind before the change. The FASTCALL test is Red at d7e542f.
 `gate.sh full` 173 s, `gate.sh timing` 378 s.
+
+## Measurements (P6.2)
+
+Record at a65b01d (clean tree), clock quantum 41 ns, every variant in
+its noise gate. ns per call:
+
+| Boundary | Floor | Ulua | Largest layer |
+|---|---:|---:|---|
+| host into script (`ulua_call`) | 24.6 | 110.3 | protected wrapper and export lookup, 41.4 ns (37.6%); Rust ABI, guards, and setup 38.6 ns (35.0%) |
+| script into host (granted function) | 27.7 | 56.9 | Rust ABI, guards, and setup 23.9 ns (42.0%); host trampoline and call charge 9.3 ns (16.4%) |
+
+The step and allocation charge is 2.2 ns of `ulua_call`. Shrink
+candidates: the protected wrapper and export lookup of `ulua_call`,
+and the Rust-side work of a host call. P6.2 changes no production
+code; a shrink is a later slice.
 
 ## Exit checklist (P6.1)
 
