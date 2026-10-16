@@ -106,6 +106,16 @@ cell withheld.
 | callbacks | 100.5 | 452.1 | 4.50 |
 | collect | 127.3 | 357.0 | 2.80 |
 
+## Measurements (P6.S1)
+
+Record at 5c314e2 (clean tree). `ulua / luau` before (40da51b) and
+after: fib-recursive 3.13 to 3.04, fib-loop 7.68 to 7.55, mandelbrot
+2.00 to 1.92, primes 8.29 to 7.61, sort 6.95 to 4.22, tree 3.42 to
+3.26, queen 4.83 to 3.63, particles 7.26 to 5.44, callbacks 4.50 to
+3.84, collect 2.80 to 2.60. 33 index trap edges equal the output and
+trap kind before the change. The FASTCALL test is Red at d7e542f.
+`gate.sh full` 173 s, `gate.sh timing` 378 s.
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten
