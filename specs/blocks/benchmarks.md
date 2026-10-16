@@ -1,6 +1,6 @@
 # Benchmarks — contract
 
-Status: Rev 2, 2026-10-16 (P6). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
+Status: Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
 Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
 contract follows the benchmark contract of the owner's prior project:
 its timing method, its workload set, and its boundary-price
@@ -135,11 +135,22 @@ decomposed:
 
 ## 6. Performance gate (P6.3)
 
-A test in `gate.sh timing` asserts the ratio `ulua / luau` of a fixed
-set of workloads at reduced sizes against a bound from the P6.1
-measurement (the measured ratio times 1.25). It asserts ratios, not
-budgets (principle 15). The set and the bound are fixed at P6.3 from
-the P6.1 record.
+A test in `gate.sh timing` (feature `timing`, under the timing lock)
+runs the ten workloads of §4 at reduced sizes in both subjects and
+asserts, for each workload, `ulua / luau` at most its bound. It asserts
+ratios, not budgets (principle 15).
+
+- Reduced sizes: each Luau run takes about 5 to 20 ms in Release;
+  the implementer pins them in the test. The test runs in the build
+  profile of `gate.sh timing` and states its cost.
+- Samples: a warm-up of at least 3 runs and 50 ms per subject, then
+  the median of 7 runs for each subject; the two subjects alternate,
+  so a load change hits both.
+- Bound per workload: the ratio measured at the slice close in the
+  gate's profile, times 1.25, rounded up to two decimals. The test
+  prints each ratio and its bound.
+- The test is Red against a build without P6.S3 (a measurement at the
+  slice close, not a committed test).
 
 ## 7. Layout
 
