@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -85,15 +85,31 @@ of the array helpers (`math.floor(i) == i`: sort 378 to 229 ms, queen
 FASTCALL (`typeof(math.fmod)` passes `luau-analyze` strict; fib-loop
 1,331 to 1,199 ms); (3) the slot form; (4) cheaper interrupt points.
 
+Round 1 record (40da51b, clean tree, 117 s for the full run): no
+cell withheld.
+
+| Workload | luau ms | ulua ms | ulua / luau |
+|---|---:|---:|---:|
+| fib-recursive | 59.2 | 185.0 | 3.13 |
+| fib-loop | 112.4 | 863.4 | 7.68 |
+| mandelbrot | 480.3 | 962.5 | 2.00 |
+| primes | 84.5 | 700.6 | 8.29 |
+| sort | 59.1 | 410.7 | 6.95 |
+| tree | 31.5 | 107.9 | 3.42 |
+| queen | 421.5 | 2036.0 | 4.83 |
+| particles | 83.0 | 602.4 | 7.26 |
+| callbacks | 100.5 | 452.1 | 4.50 |
+| collect | 127.3 | 357.0 | 2.80 |
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten
   workloads in Ulua and Luau, the parameters in its README.
 - [x] Checksums equal in both subjects.
-- [ ] The timing method of §3: samples, the IQR noise gate, the
+- [x] The timing method of §3: samples, the IQR noise gate, the
   warm-up floor with reported warm-up, a fresh process per cell,
   `--only` writes no record.
 - [x] One full run on macOS arm64 writes `results.json` and the table.
-- [ ] Workspace gates stay green; the crate is not in `gate.sh full`
+- [x] Workspace gates stay green; the crate is not in `gate.sh full`
   except a build and a unit test of the runner's statistics.
-- [ ] Phase Review of the slice.
+- [x] Phase Review of the slice.
