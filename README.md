@@ -160,10 +160,10 @@ sh tools/hygiene.sh
 
 P0 to P4 are complete: the language core, arrays, strings, nullable
 values, records, classes, exceptions, host interop with capabilities,
-and async with host requests. P5 (hardening) is open: sanitizers,
-fuzzing, fault injection, and the compiler memory bound are complete,
-and `gate.sh full` passes on macOS arm64, Linux x86_64, and Windows
-(MSVC). P6 (performance) is next. The ABI has no compatibility
+and async with host requests. P5 (hardening) is complete:
+sanitizers, fuzzing, fault injection, the compiler memory bound, a
+run-time bound on the work of one step, and `gate.sh full` on macOS
+arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is next. The ABI has no compatibility
 promise yet.
 
 Design and phase records live in [`specs/`](specs/): `specs/plan.md`
