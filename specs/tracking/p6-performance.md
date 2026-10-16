@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -225,6 +225,20 @@ Rule: goal 200, step multiplier 400, step size 1 KiB (`pipeline.md`
 §6.5). The S3 fixture that doubles a string 25 times to reach
 `limit:memory` peaks at 66,135,143 bytes under the rule and passes;
 26 doublings reach the limit.
+
+## Measurements (P6.4, P6.S4)
+
+Record at ab0ab67 (clean tree). `ulua / luau` after P6.S3 and after
+P6.S4: primes 5.44 to 4.04, sort 3.70 to 3.12, tree 2.82 to 2.34,
+queen 3.33 to 2.70, particles 4.55 to 3.90, callbacks 3.43 to 3.18,
+collect 2.21 to 2.11; fib-recursive 1.75 and fib-loop 2.93 hold;
+mandelbrot 1.49 to 1.58 (737 to 781 ms), a regression to explain.
+P6.4: the 18-frame spill loop ends with `limit:steps` at 4 and 16 MiB
+(`limit:memory` at ab0ab67's parent), peak 1,137,356 bytes, 709
+cycles. Limit fixtures rebuilt: string doubling 25 passes and 26
+reaches `limit:memory`; recursion 19,997 passes and 19,998 reaches
+`limit:stack` (native equality removes a helper frame). `gate.sh
+full` 155 s, `gate.sh timing` 370 s.
 
 ## Exit checklist (P6.1)
 
