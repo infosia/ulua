@@ -654,6 +654,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ulua_bench"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "ulua",
+]
+
+[[package]]
 name = "ulua_compiler"
 version = "0.1.0"
 dependencies = [

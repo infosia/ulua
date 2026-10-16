@@ -23,15 +23,38 @@ with a stated problem and evidence (principle 13).
 - P5 Phase Review: on Windows a fuzz crash is keyed by the panic
   message, not the signal (tool only).
 
+## Measurements (P6.1)
+
+MacBook Air, Apple M2, AC power, Release; `max_steps` 10^10,
+`max_memory_bytes` 1 GiB. Checksums equal in both subjects; no cell
+withheld; largest IQR 1.69% of the median.
+
+| Workload | Checksum | luau ms (1.00×) | ulua ms | ulua / luau |
+|---|---:|---:|---:|---:|
+| fib-recursive | 1346269 | 61.0 | 186.9 | 3.06 |
+| fib-loop | 3449993952 | 113.8 | 1825.7 | 16.04 |
+| mandelbrot | 11189274 | 504.0 | 981.9 | 1.95 |
+| primes | 17984 | 80.8 | 704.4 | 8.72 |
+| sort | 3135319498 | 52.3 | 406.8 | 7.79 |
+| tree | 393204 | 35.7 | 108.7 | 3.05 |
+| queen | 2680 | 327.0 | 2035.1 | 6.22 |
+| particles | 77504288 | 84.1 | 611.7 | 7.27 |
+| callbacks (Ulua methods, Luau loops) | 3403969141 | 102.2 | 458.2 | 4.48 |
+| collect | 1011185172 | 127.7 | 571.1 | 4.47 |
+
+Parameters: `crates/ulua_bench/README.md`. The Luau workloads use
+idiomatic Luau (numeric `for`, the native `%`). Test cost: 6 unit tests
+0.23 s (10 compiles and `tsc` 0.20 s). `gate.sh full` passes, 163 s.
+
 ## Exit checklist (P6.1)
 
-- [ ] `crates/ulua_bench`: the runner, the two subjects, the ten
+- [x] `crates/ulua_bench`: the runner, the two subjects, the ten
   workloads in Ulua and Luau, the parameters in its README.
-- [ ] Checksums equal in both subjects.
+- [x] Checksums equal in both subjects.
 - [ ] The timing method of §3: samples, the IQR noise gate, the
   warm-up floor with reported warm-up, a fresh process per cell,
   `--only` writes no record.
-- [ ] One full run on macOS arm64 writes `results.json` and the table.
+- [x] One full run on macOS arm64 writes `results.json` and the table.
 - [ ] Workspace gates stay green; the crate is not in `gate.sh full`
   except a build and a unit test of the runner's statistics.
 - [ ] Phase Review of the slice.
