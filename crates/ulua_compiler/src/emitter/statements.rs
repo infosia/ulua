@@ -193,13 +193,23 @@ impl Emitter<'_> {
                 self.indent += 1;
                 self.statements(init, depth)?;
                 self.offset = self.statement_offset;
-                let tail = self.generated()?;
-                self.line(format!("local {tail}: boolean = true"));
+                let tail = if ir::loop_continue(body) {
+                    let name = self.generated()?;
+                    self.line(format!("local {name}: boolean = true"));
+                    Some(name)
+                } else {
+                    None
+                };
+                let ids: Vec<_> = ids
+                    .iter()
+                    .copied()
+                    .filter(|id| self.module.captured[*id])
+                    .collect();
                 let mut copies = vec![];
                 let mut previous = vec![];
                 let mut spill: Option<String> = None;
                 let mut fields = vec![];
-                for id in ids {
+                for id in &ids {
                     let ty = self.module.bindings[*id]
                         .ty
                         .as_ref()
@@ -260,18 +270,20 @@ impl Emitter<'_> {
                 for (id, (_, local, _)) in ids.iter().zip(&copies) {
                     self.copies.insert(*id, local.clone());
                 }
-                self.write(&tail, "true", "boolean");
-                self.line("repeat");
-                self.indent += 1;
-                self.loops.push(Loop {
-                    tail: Some(tail.clone()),
-                });
+                if let Some(tail) = &tail {
+                    self.write(tail, "true", "boolean");
+                    self.line("repeat");
+                    self.indent += 1;
+                }
+                self.loops.push(Loop { tail: tail.clone() });
                 self.statement(body, depth)?;
                 self.loops.pop();
-                self.indent -= 1;
-                self.line("until true");
-                if ir::loop_break(body) {
-                    self.line(format!("if not {tail} then break end"));
+                if let Some(tail) = &tail {
+                    self.indent -= 1;
+                    self.line("until true");
+                    if ir::loop_break(body) {
+                        self.line(format!("if not {tail} then break end"));
+                    }
                 }
                 for (head, local, ty) in &copies {
                     self.write(head, local, ty);

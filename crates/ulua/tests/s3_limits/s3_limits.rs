@@ -1,4 +1,4 @@
-//! S3 ABI boundary gate. Measured Debug cost: 0.53 seconds.
+//! S3 ABI boundary gate. Measured Debug cost: 0.78 seconds.
 //! Reproduce: cargo test --offline -p ulua --test s3_limits -- --nocapture.
 //! Large cases: 64 KiB sources, one million interrupts, and 24 string doublings.
 // This target uses peak counts; the live count serves the heap sampler only.
@@ -251,33 +251,47 @@ fn compiler_bounds() {
         inputs::template(TEMPLATE_PART_BOUND.div_ceil(2)),
         "limit:template-parts",
     );
-    // Ended loops release generated locals. Nested loops retain their live copies.
-    Script::new(&inputs::loops(200));
+    // Ended loops release their tail flags. A continue makes each tail necessary.
+    Script::new(&inputs::loops(200).replace("{}", "{continue;}"));
     let head = (0..32)
         .map(|i| format!("i{i}=0"))
         .collect::<Vec<_>>()
         .join(",");
+    let params = (0..32)
+        .map(|i| format!("p{i}:number"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let helper = format!("function wide({params}):number{{return p0;}}");
     let nested = |heads: usize, tails: usize| {
+        // Each outer call retains its result slot, callee, and 31 arguments.
+        let mut call = format!("wide({})", vec!["1"; 32].join(","));
+        for _ in 1..heads {
+            call = format!("wide({},{call})", vec!["1"; 31].join(","));
+        }
         format!(
-            "{}{}{}",
+            "{call};{}{}{}{}",
             format!("for(let {head};false;){{").repeat(heads),
             "for(;false;){".repeat(tails),
-            "}".repeat(heads + tails)
+            "continue;}".repeat(tails),
+            "}".repeat(heads)
         )
     };
-    let module = |body| format!("export function main():void{{{body}}}");
-    // 132 generated locals, two shared slots, and two tails reach 136.
+    let module = |body| format!("{helper}export function main():void{{{body}}}");
+    // Four calls need 133 slots. One boolean slot and two loop tails reach 136.
     pair(
         module(nested(4, 2)),
         module(nested(4, 3)),
         "limit:temporaries",
     );
-    // Defaults add 32 copies. Three heads and three tails reach the same bound.
+    // Defaults add 32 copies. Three calls need 100 slots; one boolean and three tails reach 136.
     let defaults = |tails| {
-        inputs::parameters(PARAMETER_BOUND, true, false).replacen(
-            ":void {}",
-            &format!(":void {{{}}}", nested(3, tails)),
-            1,
+        format!(
+            "{helper}{}",
+            inputs::parameters(PARAMETER_BOUND, true, false).replacen(
+                ":void {}",
+                &format!(":void {{{}}}", nested(3, tails)),
+                1,
+            )
         )
     };
     pair(defaults(3), defaults(4), "limit:temporaries");

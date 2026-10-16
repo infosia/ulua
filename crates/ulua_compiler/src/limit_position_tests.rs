@@ -19,6 +19,11 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .map(|i| format!("i{i}=0"))
         .collect::<Vec<_>>()
         .join(",");
+    let params = (0..32)
+        .map(|i| format!("p{i}:number"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let helper = format!("function wide({params}):number{{return p0;}}");
     for (prefix, heads, tails, suffix) in [
         ("export function main():void{".into(), 4, 2, "}"),
         (
@@ -34,11 +39,17 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
             "}export function main():void{}",
         ),
     ] {
+        // Calls retain operand slots. Only loops with their own continue retain a tail.
+        let mut call = format!("wide({})", vec!["1"; 32].join(","));
+        for _ in 0..heads - 1 {
+            call = format!("wide({},{call})", vec!["1"; 31].join(","));
+        }
         let source = format!(
-            "{prefix}{}{}for(;false;){{print('later');}}{}{suffix}",
+            "{helper}{prefix}{call};{}{}for(;false;){{print('later');continue;}}{}{}{suffix}",
             format!("for(let {head};false;){{").repeat(heads),
             "for(;false;){".repeat(tails),
-            "}".repeat(heads + tails)
+            "continue;}".repeat(tails),
+            "}".repeat(heads)
         );
         position(
             &source,

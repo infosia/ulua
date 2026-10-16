@@ -251,7 +251,7 @@ fn depth_checks_cover_defaults_and_assignment_operands() {
 #[test]
 fn c9_loop_copies_cover_continue_before_update() {
     let c = accept(&body(
-        "for (let i = 0; i < 5; i++) { i++; if (i === 1) { continue; } }",
+        "for (let i = 0; i < 5; i++) { const read = () => i; i++; if (i === 1) { continue; } }",
     ));
     let copy_back = c.luau.find("__ulua_b1 = (__ulua_g1_1) :: number").unwrap();
     let update = c.luau.rfind("__ulua_b1 = (").unwrap();

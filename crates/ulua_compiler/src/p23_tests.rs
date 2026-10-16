@@ -175,15 +175,28 @@ fn nested_loop_local_boundary_counts_the_live_maximum() {
         .map(|i| format!("i{i}=0"))
         .collect::<Vec<_>>()
         .join(",");
+    let params = (0..32)
+        .map(|i| format!("p{i}:number{}", if i >= 28 { "=1" } else { "" }))
+        .collect::<Vec<_>>()
+        .join(",");
+    let helper = format!("function f({params}):number{{return p0;}}");
+    let mut call = format!("f({})", vec!["1"; 28].join(","));
+    for _ in 0..3 {
+        call = format!("f({},{call})", vec!["1"; 31].join(","));
+    }
     for tails in [0, 1, 2, 3] {
-        // Four heads need 132 locals. Number and boolean slots need two more.
+        // The call needs 129 slots, and the condition needs one boolean slot.
+        // Four loop tails fill 134 locals. Two more tails reach the bound of 136.
         let body = format!(
-            "{}{}{}",
+            "{}{}{call};{}",
             format!("for(let {head};false;){{").repeat(4),
             "for(;false;){".repeat(tails),
-            "}".repeat(4 + tails)
+            "continue;}".repeat(4 + tails)
         );
-        let result = compile(module(&body).as_bytes(), Limits::default());
+        let result = compile(
+            (helper.clone() + &module(&body)).as_bytes(),
+            Limits::default(),
+        );
         if tails <= 2 {
             result.unwrap();
         } else {

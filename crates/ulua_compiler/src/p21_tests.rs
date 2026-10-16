@@ -370,8 +370,20 @@ fn each_nested_body_has_its_own_temporary_budget() {
         format!("for(let {head};false;){{").repeat(5),
         "}".repeat(5)
     );
+    // Uncaptured heads no longer reserve per-iteration copies.
+    accept(&body(&format!("const g=():void=>{{{loops}}};g();")));
+    let params = (0..32)
+        .map(|i| format!("p{i}:number"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut call = format!("f({})", vec!["1"; 32].join(","));
+    for _ in 0..4 {
+        call = format!("f({},{call})", vec!["1"; 31].join(","));
+    }
     reject(
-        &body(&format!("const g=():void=>{{{loops}}};g();")),
+        &body(&format!(
+            "function f({params}):number{{return p0;}}const g=():void=>{{{call};}};g();"
+        )),
         "limit:temporaries",
     );
 }

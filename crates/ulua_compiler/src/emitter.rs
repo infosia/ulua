@@ -8,6 +8,8 @@ mod expressions;
 mod functions;
 mod interrupts;
 mod joins;
+#[cfg(test)]
+mod loop_tests;
 pub(crate) mod methods;
 mod output;
 mod prelude;
