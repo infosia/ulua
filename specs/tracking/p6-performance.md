@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1, P6.S1, P6.2 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1, P6.S1, P6.2, P6.S2 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -156,6 +156,14 @@ check). Order of slices: the loop form (small change), then the
 expression form (largest share). The entry form adds little after
 the expression form and changes the slot allocator; it is not
 planned.
+
+## Measurements (P6.S2)
+
+Record at 529e818 (clean tree). `ulua / luau` after P6.S1 and after
+P6.S2: fib-loop 7.55 to 6.68, primes 7.61 to 7.49, queen 3.63 to
+3.50, particles 5.44 to 5.03, collect 2.60 to 2.42; the others hold
+(fib-recursive 3.07, mandelbrot 1.93, sort 4.16, tree 3.32,
+callbacks 3.87). `gate.sh full` 134 s, `gate.sh timing` 377 s.
 
 ## Exit checklist (P6.1)
 
