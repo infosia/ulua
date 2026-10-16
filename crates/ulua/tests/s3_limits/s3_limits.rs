@@ -261,12 +261,13 @@ fn compiler_bounds() {
         .map(|i| format!("p{i}:number"))
         .collect::<Vec<_>>()
         .join(",");
-    let helper = format!("function wide({params}):number{{return p0;}}");
+    let helper =
+        format!("function one():number{{return 1;}}function wide({params}):number{{return p0;}}");
     let nested = |heads: usize, tails: usize| {
         // Each outer call retains its result slot, callee, and 31 arguments.
-        let mut call = format!("wide({})", vec!["1"; 32].join(","));
+        let mut call = format!("wide({})", vec!["one()"; 32].join(","));
         for _ in 1..heads {
-            call = format!("wide({},{call})", vec!["1"; 31].join(","));
+            call = format!("wide({},{call})", vec!["one()"; 31].join(","));
         }
         format!(
             "{call};{}{}{}{}",
@@ -277,13 +278,13 @@ fn compiler_bounds() {
         )
     };
     let module = |body| format!("{helper}export function main():void{{{body}}}");
-    // Four calls need 133 slots. One boolean slot and two loop tails reach 136.
+    // Four calls retain 133 slots. Three loop tails reach 136.
     pair(
-        module(nested(4, 2)),
         module(nested(4, 3)),
+        module(nested(4, 4)),
         "limit:temporaries",
     );
-    // Defaults add 32 copies. Three calls need 100 slots; one boolean and three tails reach 136.
+    // Defaults add 32 copies. Three calls retain 100 slots; four tails reach 136.
     let defaults = |tails| {
         format!(
             "{helper}{}",
@@ -294,9 +295,9 @@ fn compiler_bounds() {
             )
         )
     };
-    pair(defaults(3), defaults(4), "limit:temporaries");
-    let at = inputs::bindings(LOCAL_BUDGET - 1);
-    let past = inputs::bindings(LOCAL_BUDGET);
+    pair(defaults(4), defaults(5), "limit:temporaries");
+    let at = inputs::bindings(LOCAL_BUDGET);
+    let past = inputs::bindings(LOCAL_BUDGET + 1);
     // Both sides compile through luau_compile. The next binding uses a typed spill table.
     Script::new(&at);
     Script::new(&past);

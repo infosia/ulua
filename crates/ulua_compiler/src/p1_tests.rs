@@ -226,7 +226,7 @@ fn c15_small_functions_avoid_spill_and_nested_bindings_share_one_table() {
     assert_eq!(large.luau.matches("local __ulua_spill").count(), 1);
     assert!(large.luau.contains("__ulua_spill1.__ulua_b"));
     assert!(large.luau.contains(" = ({} :: any) :: { __ulua_b"));
-    // Two temporary slots and one table leave 173 local bindings. The remaining 47 fields start at zero.
+    // One temporary slot and one table leave 174 local bindings. The remaining 46 fields start at zero.
     let defaults = large
         .luau
         .lines()
@@ -235,7 +235,7 @@ fn c15_small_functions_avoid_spill_and_nested_bindings_share_one_table() {
                 && line.ends_with(" = (0) :: number")
         })
         .count();
-    assert_eq!(defaults, 47);
+    assert_eq!(defaults, 46);
 }
 #[test]
 fn depth_checks_cover_defaults_and_assignment_operands() {
@@ -270,7 +270,7 @@ fn c12_binary_call_and_compound_reads_precede_a_mutating_call() {
         let read = main
             .find("= (__ulua_access0(false, (0) :: number)) :: number\n")
             .unwrap();
-        let call = main.find("= (__ulua_b1) :: ").unwrap();
+        let call = main.find("= (__ulua_b1()) :: number").unwrap();
         assert!(read < call, "{effect}");
     }
 }
@@ -347,6 +347,6 @@ fn demanded_join_precedes_the_next_branch() {
         .luau
         .find("__ulua_b1 = (__ulua_b1) :: number")
         .unwrap();
-    let last_branch = compiled.luau.rfind("if __ulua_t").unwrap();
+    let last_branch = compiled.luau.rfind("if __ulua_b2 then").unwrap();
     assert!(reset < last_branch);
 }

@@ -61,6 +61,10 @@ pub(super) fn declaration(id: usize, location: &str, ty: &str) -> String {
 
 impl Emitter<'_> {
     pub(super) fn uses_accessor(&self, id: usize) -> bool {
-        self.context.is_some_and(|context| context.accessors[id]) && !self.copies.contains_key(&id)
+        self.context
+            .map(|context| context.accessors.as_slice())
+            .or(self.probe_accessors)
+            .is_some_and(|accessors| accessors[id])
+            && !self.copies.contains_key(&id)
     }
 }

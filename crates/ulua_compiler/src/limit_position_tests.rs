@@ -23,9 +23,11 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .map(|i| format!("p{i}:number"))
         .collect::<Vec<_>>()
         .join(",");
-    let helper = format!("function wide({params}):number{{return p0;}}");
+    let helper = format!(
+        "function one(n:number=1):number{{return n;}}function wide({params}):number{{return p0;}}"
+    );
     for (prefix, heads, tails, suffix) in [
-        ("export function main():void{".into(), 4, 2, "}"),
+        ("export function main():void{".into(), 4, 3, "}"),
         (
             format!(
                 "function f({}):void{{",
@@ -35,14 +37,14 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
                     .join(",")
             ),
             3,
-            3,
+            4,
             "}export function main():void{}",
         ),
     ] {
         // Calls retain operand slots. Only loops with their own continue retain a tail.
-        let mut call = format!("wide({})", vec!["1"; 32].join(","));
+        let mut call = format!("wide({})", vec!["one()"; 32].join(","));
         for _ in 0..heads - 1 {
-            call = format!("wide({},{call})", vec!["1"; 31].join(","));
+            call = format!("wide({},{call})", vec!["one()"; 31].join(","));
         }
         let source = format!(
             "{helper}{prefix}{call};{}{}for(;false;){{print('later');continue;}}{}{}{suffix}",
@@ -62,19 +64,19 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .map(|i| format!("p{i}:number"))
         .collect::<Vec<_>>()
         .join(",");
-    let mut args = vec!["1"; 32];
+    let mut args = vec!["one()"; 32];
     // The floor alias reserves one more module local before this nested call.
-    args[19] = "987654321";
+    args[20] = "one(987654321)";
     let mut value = format!("f({})", args.join(","));
     for _ in 0..3 {
-        value = format!("f({},{value})", vec!["1"; 31].join(","));
+        value = format!("f({},{value})", vec!["one()"; 31].join(","));
     }
     let source = format!(
-        "function f({params}):number{{return p0;}}\nconst xs={value};\nexport function main():void{{print('later');}}"
+        "function one(n:number=1):number{{return n;}}function f({params}):number{{return p0;}}\nconst xs={value};\nexport function main():void{{print('later');}}"
     );
     position(
         &source,
-        "987654321",
+        "one(987654321)",
         "limit:temporaries",
         compile(source.as_bytes(), Limits::default()).unwrap_err(),
     );

@@ -104,7 +104,12 @@ extern "C" int ulua_internal_test_request_memory_stage(ulua_vm* vm) {
 struct PromiseStats { ulua_vm* vm; size_t promises; };
 static int promise_stats(lua_State* state) {
     PromiseStats* stats = static_cast<PromiseStats*>(lua_tolightuserdata(state, 1));
-    lua_gc(state, LUA_GCCOLLECT, 0);
+    // A full collection can halve a VM stack. Normalize capacity before the retained-byte comparison.
+    size_t before;
+    do {
+        before = stats->vm->used;
+        lua_gc(state, LUA_GCCOLLECT, 0);
+    } while (stats->vm->used < before);
     lua_getref(state, stats->vm->promises);
     lua_pushnil(state);
     while (lua_next(state, -2)) { ++stats->promises; lua_pop(state, 1); }

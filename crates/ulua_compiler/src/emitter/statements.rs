@@ -73,15 +73,13 @@ impl Emitter<'_> {
             }
             S::Function(id) => {
                 let value = self.closure(*id, depth)?;
-                self.write_binding(*id, value)?;
+                self.write_binding_weighted(*id, value.text, value.cost)?;
             }
             S::Located(_, _) => {
                 return Err(self.limit("internal", "Nested source location wrapper"));
             }
             S::Declare(id, e) => {
-                let v = self.expression(e, depth)?;
-                self.write_binding_slot(*id, v)?;
-                self.release(v);
+                self.binding_expression(*id, e, depth, true)?;
             }
             S::Assign(id, op, e) => {
                 let old = if op.is_some() {
@@ -96,18 +94,24 @@ impl Emitter<'_> {
                 } else {
                     None
                 };
-                let v = self.expression(e, depth)?;
+                if op.is_none() {
+                    self.binding_expression(*id, e, depth, false)?;
+                    self.joins.assigned(*id);
+                    self.statement_offset = parent_offset;
+                    return self.output_check();
+                }
+                let v = self.operand(e, depth, false, 1)?;
                 let value = if let (Some(op), Some(old)) = (op, old) {
                     if *op == "%" {
                         self.capture("__ulua_fmod");
                     }
-                    self.binary(op, &self.temp(old), &self.temp(v))
+                    self.binary(op, &self.temp(old), &self.operand_text(&v))
                 } else {
-                    self.temp(v)
+                    self.operand_text(&v)
                 };
                 self.write_binding(*id, value)?;
                 self.joins.assigned(*id);
-                self.release(v);
+                self.release_operand(v);
                 if let Some(v) = old {
                     self.release(v);
                 }
@@ -155,9 +159,12 @@ impl Emitter<'_> {
             }
             S::If(e, a, b) => {
                 self.joins.enter();
-                let t = self.expression(e, depth)?;
-                self.line(format!("if {} then", self.temp(t)));
-                self.release(t);
+                let t = self.condition(e, depth)?;
+                self.line_weighted(
+                    format!("if {} then", self.operand_text(&t)),
+                    self.operand_cost(&t),
+                );
+                self.release_operand(t);
                 self.indent += 1;
                 self.statement(a, depth)?;
                 self.indent -= 1;
@@ -175,9 +182,12 @@ impl Emitter<'_> {
                 self.line("while true do");
                 self.indent += 1;
                 if !matches!(e.kind, ir::ExprKind::Boolean(true)) {
-                    let t = self.expression(e, depth)?;
-                    self.line(format!("if not {} then break end", self.temp(t)));
-                    self.release(t);
+                    let t = self.condition(e, depth)?;
+                    self.line_weighted(
+                        format!("if not {} then break end", self.operand_text(&t)),
+                        self.operand_cost(&t),
+                    );
+                    self.release_operand(t);
                 }
                 self.loops.push(Loop { tail: None });
                 self.statement(b, depth)?;
@@ -245,9 +255,12 @@ impl Emitter<'_> {
                 if let Some(e) = test
                     && !matches!(e.kind, ir::ExprKind::Boolean(true))
                 {
-                    let t = self.expression(e, depth)?;
-                    self.line(format!("if not {} then break end", self.temp(t)));
-                    self.release(t);
+                    let t = self.condition(e, depth)?;
+                    self.line_weighted(
+                        format!("if not {} then break end", self.operand_text(&t)),
+                        self.operand_cost(&t),
+                    );
+                    self.release_operand(t);
                 }
                 if let Some(name) = &spill {
                     let (ty, _) = types::spill_constructor(&fields);
@@ -371,13 +384,13 @@ impl Emitter<'_> {
             }
             S::Return(value) => {
                 if let Some(e) = value {
-                    let v = self.expression(e, depth)?;
+                    let v = self.operand(e, depth, false, 1)?;
                     if self.protected.is_empty() {
-                        self.line(format!("do return {} end", self.temp(v)));
+                        self.line(format!("do return {} end", self.operand_text(&v)));
                     } else {
-                        self.line(format!("do return 1, {}, 0 end", self.temp(v)));
+                        self.line(format!("do return 1, {}, 0 end", self.operand_text(&v)));
                     }
-                    self.release(v);
+                    self.release_operand(v);
                 } else {
                     if self.protected.is_empty() {
                         self.line(if self.async_void {

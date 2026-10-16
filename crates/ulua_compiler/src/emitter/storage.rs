@@ -137,6 +137,7 @@ impl Emitter<'_> {
                 );
                 self.locations.insert(id, name);
             } else {
+                self.spilled.insert(id);
                 field_ids.insert(name.clone(), id);
                 let index = counts.entry(key).or_default();
                 tables

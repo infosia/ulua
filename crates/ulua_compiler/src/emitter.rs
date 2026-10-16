@@ -4,6 +4,8 @@ mod arrays;
 mod asynchronous;
 mod constants;
 mod exceptions;
+#[cfg(test)]
+mod expression_tests;
 mod expressions;
 mod functions;
 mod interrupts;
@@ -11,6 +13,7 @@ mod joins;
 #[cfg(test)]
 mod loop_tests;
 pub(crate) mod methods;
+mod operands;
 mod output;
 mod prelude;
 mod statements;
@@ -75,6 +78,10 @@ struct Emitter<'a> {
     interrupts: interrupts::Interrupts,
     slots: Vec<Slot>,
     locations: HashMap<usize, String>,
+    spilled: std::collections::HashSet<usize>,
+    inline_enabled: bool,
+    probe_accessors: Option<&'a [bool]>,
+    probe_spills: Option<&'a std::collections::HashSet<usize>>,
     module_locations: &'a HashMap<usize, String>,
     binding_ids: &'a [usize],
     offset: usize,
@@ -124,6 +131,10 @@ impl<'a> Emitter<'a> {
             interrupts: Default::default(),
             slots: vec![],
             locations: HashMap::new(),
+            spilled: Default::default(),
+            inline_enabled: false,
+            probe_accessors: None,
+            probe_spills: None,
             module_locations,
             binding_ids,
             offset: 0,
@@ -165,12 +176,15 @@ impl<'a> Emitter<'a> {
         Diagnostic::at(&self.module.source, self.offset, code, message)
     }
     fn line(&mut self, text: impl AsRef<str>) {
+        self.line_weighted(text, 1);
+    }
+    fn line_weighted(&mut self, text: impl AsRef<str>, cost: usize) {
         // The storage probe needs slots and joins, but it discards emitted text.
         if self.context.is_none() {
             return;
         }
         let text = text.as_ref();
-        if self.interrupts.before(text) {
+        if self.interrupts.before(text, cost) {
             let credited = std::mem::take(&mut self.credited);
             // A shared empty function avoids an analyzer loop join at each checkpoint.
             // Production O1 retains its CALL and RETURN interrupts.
@@ -209,7 +223,10 @@ impl<'a> Emitter<'a> {
             .map_or_else(|| Ok(format!("__ulua_b{id}")), Ok)
     }
     fn write(&mut self, name: &str, value: impl AsRef<str>, ty: &str) {
-        self.line(format!("{name} = ({}) :: {ty}", value.as_ref()));
+        self.write_weighted(name, value, ty, 1);
+    }
+    fn write_weighted(&mut self, name: &str, value: impl AsRef<str>, ty: &str, cost: usize) {
+        self.line_weighted(format!("{name} = ({}) :: {ty}", value.as_ref()), cost);
     }
     fn write_slot(&mut self, slot: usize, value: impl AsRef<str>) {
         let ty = self.function_types.luau(&self.slots[slot].ty);
@@ -239,6 +256,14 @@ impl<'a> Emitter<'a> {
         Ok(location)
     }
     fn write_binding(&mut self, id: usize, value: impl AsRef<str>) -> Result<(), Diagnostic> {
+        self.write_binding_weighted(id, value, 1)
+    }
+    fn write_binding_weighted(
+        &mut self,
+        id: usize,
+        value: impl AsRef<str>,
+        cost: usize,
+    ) -> Result<(), Diagnostic> {
         let ty = self.function_types.luau(
             self.module.bindings[id]
                 .ty
@@ -249,12 +274,12 @@ impl<'a> Emitter<'a> {
         if self.uses_accessor(id) {
             let name = accessors::name(id);
             self.capture(&name);
-            self.line(format!("{name}(true, ({}) :: {ty})", value.as_ref()));
+            self.line_weighted(format!("{name}(true, ({}) :: {ty})", value.as_ref()), cost);
             return Ok(());
         }
         let location = self.location(id)?;
         self.capture(&location);
-        self.write(&location, value, &ty);
+        self.write_weighted(&location, value, &ty, cost);
         Ok(())
     }
     fn write_binding_slot(&mut self, id: usize, slot: usize) -> Result<(), Diagnostic> {
@@ -367,7 +392,7 @@ impl<'a> Emitter<'a> {
         let mut out = String::new();
         let indent = if self.indent == 0 { "" } else { "    " };
         for text in declarations.lines() {
-            if self.interrupts.before(text) {
+            if self.interrupts.before(text, 1) {
                 self.capture("__ulua_interrupt");
                 let _ = writeln!(out, "{indent}__ulua_interrupt()");
             }

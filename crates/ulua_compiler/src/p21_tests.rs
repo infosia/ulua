@@ -376,13 +376,13 @@ fn each_nested_body_has_its_own_temporary_budget() {
         .map(|i| format!("p{i}:number"))
         .collect::<Vec<_>>()
         .join(",");
-    let mut call = format!("f({})", vec!["1"; 32].join(","));
+    let mut call = format!("f({})", vec!["one()"; 32].join(","));
     for _ in 0..4 {
-        call = format!("f({},{call})", vec!["1"; 31].join(","));
+        call = format!("f({},{call})", vec!["one()"; 31].join(","));
     }
     reject(
         &body(&format!(
-            "function f({params}):number{{return p0;}}const g=():void=>{{{call};}};g();"
+            "function one():number{{return 1;}}function f({params}):number{{return p0;}}const g=():void=>{{{call};}};g();"
         )),
         "limit:temporaries",
     );

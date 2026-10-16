@@ -4,7 +4,7 @@ use crate::ir::{Expr, ExprKind as E};
 
 // Fixed pure-expression work also keeps short-circuit analyzer graphs small.
 // Three nodes permit one binary operation. Larger trees use interruptible slot statements.
-const PURE_EXPRESSION_NODES: usize = 3;
+pub(super) const PURE_EXPRESSION_NODES: usize = 3;
 impl Emitter<'_> {
     pub(super) fn expression(&mut self, expr: &Expr, depth: u32) -> Result<usize, Diagnostic> {
         self.offset = expr.start as usize;
@@ -15,6 +15,17 @@ impl Emitter<'_> {
             &expr.ty
         })?;
         let target = self.temp(dest);
+        if self.inline_enabled
+            && let Some(value) = self.last_value(expr, depth)?
+        {
+            if expr.ty == Type::Void {
+                self.line_weighted(value.text, value.cost);
+            } else {
+                let ty = self.function_types.luau(&self.slots[dest].ty);
+                self.write_weighted(&target, value.text, &ty, value.cost);
+            }
+            return Ok(dest);
+        }
         match &expr.kind {
             E::Await(value) => {
                 self.capture("__ulua_await");
@@ -213,7 +224,8 @@ impl Emitter<'_> {
             }
             E::Closure(id) => {
                 let value = self.closure(*id, depth)?;
-                self.write_slot(dest, value);
+                let ty = self.function_types.luau(&self.slots[dest].ty);
+                self.write_weighted(&target, value.text, &ty, value.cost);
             }
             E::Builtin(name) => {
                 self.capture(name);
@@ -476,7 +488,9 @@ impl Emitter<'_> {
                     } else {
                         // Conversion also occurs before the next source expression.
                         let frozen = self.slot(&Type::String)?;
-                        self.write_slot(frozen, converted);
+                        let ty = self.function_types.luau(&self.slots[frozen].ty);
+                        let cost = if part.ty == Type::Boolean { 4 } else { 1 };
+                        self.write_weighted(&self.temp(frozen), converted, &ty, cost);
                         self.release(value);
                         values.push(frozen);
                     }
@@ -538,6 +552,11 @@ impl Emitter<'_> {
             E::Unary(op, a) => self
                 .pure_bounded(a, depth)?
                 .map(|a| format!("({op} ({a}))")),
+            E::Logical(_, a, b) if matches!((&a.kind, &b.kind), (E::Read(a), E::Read(b)) if a == b) =>
+            {
+                // Boolean reads have no effects. One read also avoids a duplicate-condition lint after a direct literal write.
+                self.pure_bounded(a, depth)?
+            }
             E::Logical(and, a, b) => {
                 match (self.pure_bounded(a, depth)?, self.pure_bounded(b, depth)?) {
                     (Some(a), Some(b)) => {
@@ -566,7 +585,7 @@ impl Emitter<'_> {
             _ => format!("({a} {op} {b})"),
         }
     }
-    fn capture_binary(&mut self, op: &str) {
+    pub(super) fn capture_binary(&mut self, op: &str) {
         match op {
             "%" => self.capture("__ulua_fmod"),
             "==" => self.capture("__ulua_equal"),

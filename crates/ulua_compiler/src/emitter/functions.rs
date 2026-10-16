@@ -26,6 +26,7 @@ pub(super) struct Emission {
     functions: Vec<Option<usize>>,
     pub(super) locals: Vec<std::collections::HashSet<String>>,
     pub(super) accessors: Vec<bool>,
+    pub(super) spilled: std::collections::HashSet<usize>,
     numeric_arrows: constants::NumericArrows,
 }
 
@@ -63,6 +64,7 @@ fn emit_with_exports(
         functions: vec![None; size],
         locals: vec![std::collections::HashSet::new(); size],
         accessors: accessors::select(module),
+        spilled: Default::default(),
         numeric_arrows,
     };
     for (i, f) in module.functions.iter().enumerate() {
@@ -134,38 +136,63 @@ fn emit_with_exports(
     }
     let mut locations = HashMap::new();
     let empty = HashMap::new();
-    for owner in std::iter::once(0).chain(module.functions.iter().map(|f| f.binding + 1)) {
+    // Plan declaring frames before their closures. A closure needs its ancestors' spill facts.
+    let mut children = HashMap::<usize, Vec<usize>>::new();
+    for f in &module.functions {
+        children
+            .entry(module.bindings[f.binding].owner)
+            .or_default()
+            .push(f.binding + 1);
+    }
+    let mut pending = std::collections::VecDeque::from([0]);
+    while let Some(owner) = pending.pop_front() {
+        if let Some(children) = children.remove(&owner) {
+            pending.extend(children);
+        }
         let accessor_count = owners[owner]
             .iter()
             .filter(|id| context.accessors[**id])
             .count();
-        let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
-        probe.overhead = accessor_count
-            + if owner == 0 {
-                library_locals + method_locals
-            } else {
-                0
-            };
-        let (parameters, overhead) = if owner == 0 {
-            probe.statements(&module.body, 0)?;
-            (vec![], accessor_count + library_locals + method_locals)
+        let f = if owner == 0 {
+            None
         } else {
-            let i = context.functions[owner - 1]
-                .ok_or_else(|| probe.limit("internal", "Missing function identity"))?;
-            let f = &module.functions[i];
-            probe.overhead =
-                accessor_count + f.parameters.iter().filter(|(_, d)| d.is_some()).count();
-            probe.statements(&f.initializers, 0)?;
-            probe.defaults(f)?;
-            probe.statements(&f.body, 0)?;
-            (
-                f.parameters.iter().map(|(id, _)| *id).collect(),
-                accessor_count + f.parameters.iter().filter(|(_, d)| d.is_some()).count(),
+            Some(
+                &module.functions[context.functions[owner - 1].ok_or_else(|| {
+                    Diagnostic::at(&module.source, 0, "internal", "Missing function identity")
+                })?],
             )
         };
-        // A protected catch closure can capture its own parameter beside these block bindings.
+        let parameters: Vec<_> = f.map_or_else(Vec::new, |f| {
+            f.parameters.iter().map(|(id, _)| *id).collect()
+        });
+        let overhead = accessor_count
+            + f.map_or(library_locals + method_locals, |f| {
+                f.parameters.iter().filter(|(_, d)| d.is_some()).count()
+            });
         let reserve = usize::from(captured_catches.contains(&owner));
-        let mut layout = probe.plan(&parameters, overhead, &groups, reserve)?;
+        let mut spills = std::collections::HashSet::new();
+        let (probe, mut layout) = loop {
+            let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
+            probe.inline_enabled = true;
+            probe.probe_accessors = Some(&context.accessors);
+            probe.probe_spills = Some(&context.spilled);
+            probe.spilled = spills.clone();
+            probe.overhead = overhead;
+            if let Some(f) = f {
+                probe.statements(&f.initializers, 0)?;
+                probe.defaults(f)?;
+                probe.statements(&f.body, 0)?;
+            } else {
+                probe.statements(&module.body, 0)?;
+            }
+            probe.spilled.clear();
+            let layout = probe.plan(&parameters, overhead, &groups, reserve)?;
+            if probe.spilled == spills {
+                break (probe, layout);
+            }
+            // Each new spill can only add slot demand. Loop-copy locals retain their conservative reservation.
+            spills = probe.spilled.clone();
+        };
         for id in owners[owner]
             .iter()
             .copied()
@@ -190,8 +217,22 @@ fn emit_with_exports(
                 .insert(accessors::name(id));
             context.locals[owner].insert(accessors::name(id));
         }
-        locations.extend(probe.locations);
+        let Emitter {
+            spilled,
+            locations: binding_locations,
+            ..
+        } = probe;
+        context.spilled.extend(spilled);
+        locations.extend(binding_locations);
         context.layouts[owner] = Some(layout);
+    }
+    if !children.is_empty() {
+        return Err(Diagnostic::at(
+            &module.source,
+            0,
+            "internal",
+            "Invalid function owner tree",
+        ));
     }
     for (&id, location) in &locations {
         context.locals[module.bindings[id].owner]
@@ -254,6 +295,7 @@ fn emit_with_exports(
     }
     let mut chunk = Emitter::new(module, 0, &locations, &owners[0], &types);
     chunk.context = Some(&context);
+    chunk.inline_enabled = true;
     chunk.overhead = context.layouts[0].as_ref().map_or(0, |l| l.overhead);
     chunk.indent = 0;
     chunk.slots = context.layouts[0]
@@ -360,13 +402,23 @@ impl Emitter<'_> {
         }
         Ok(())
     }
-    pub(super) fn closure(&mut self, id: usize, depth: u32) -> Result<String, Diagnostic> {
+    pub(super) fn closure(
+        &mut self,
+        id: usize,
+        depth: u32,
+    ) -> Result<operands::Operation, Diagnostic> {
         let Some(context) = self.context else {
-            return Ok("nil :: any".into());
+            return Ok(operands::Operation {
+                text: "nil :: any".into(),
+                cost: 1,
+            });
         };
         if let Some(name) = context.numeric_arrows.names.get(&id) {
             self.capture(name);
-            return Ok(name.clone());
+            return Ok(operands::Operation {
+                text: name.clone(),
+                cost: 1,
+            });
         }
         let i = context.functions[id]
             .ok_or_else(|| self.limit("internal", "Missing closure identity"))?;
@@ -382,6 +434,7 @@ impl Emitter<'_> {
             self.function_types,
         );
         child.context = Some(context);
+        child.inline_enabled = true;
         child.async_void =
             f.asynchronous && self.module.types.promise_value(f.result) == Some(Type::Void);
         if f.asynchronous {
@@ -501,6 +554,9 @@ impl Emitter<'_> {
         let value = format!("{prefix}{}{suffix}", child.out);
         // Child writes already use the module budget. The enclosing line counts only its own bytes.
         self.credited += value.len();
-        Ok(value)
+        Ok(operands::Operation {
+            text: value,
+            cost: 1 + child.upvalues.len(),
+        })
     }
 }

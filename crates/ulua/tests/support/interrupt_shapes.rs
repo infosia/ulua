@@ -216,14 +216,18 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
         .collect::<Vec<_>>()
         .join(",");
     // Nested argument lists crowd the local budget without a source-ceiling body.
-    let inner = format!("{},{}", vec!["x"; 31].join(","), vec!["x"; 36].join("+"));
+    let inner = format!(
+        "{},{}",
+        vec!["one()"; 31].join(","),
+        vec!["x"; 36].join("+")
+    );
     let arguments = if ceiling {
         vec![vec!["x"; 40].join("+"); 32].join(",")
     } else {
-        format!("{},g({inner})", vec!["x"; 31].join(","))
+        format!("{},g({inner})", vec!["one()"; 31].join(","))
     };
     let prefix = format!(
-        "function g({parameters}):number{{return p0;}}function f({parameters}):void{{let x=1;"
+        "function one():number{{return 1;}}function g({parameters}):number{{return p0;}}function f({parameters}):void{{let x=1;"
     );
     let suffix = format!("g({arguments});}}export function main(b:boolean):void{{f();}}");
     let mut source = prefix;

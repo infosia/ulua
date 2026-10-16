@@ -32,7 +32,7 @@ enum Kind {
 impl Interrupts {
     // This classifies fixed emitter delimiters, never user source or expression contents.
     // Execution lines count as statements. Closure arguments belong to their enclosing call.
-    pub(super) fn before(&mut self, text: &str) -> bool {
+    pub(super) fn before(&mut self, text: &str, minimum_cost: usize) -> bool {
         let text = text.trim();
         if text == "else" {
             if let Some(frame) = self.frames.last_mut() {
@@ -88,6 +88,7 @@ impl Interrupts {
         };
         let cost = (base + value.matches(".__ulua_").count())
             .max(weight)
+            .max(minimum_cost)
             .min(INTERRUPT_STATEMENTS);
         if !block && !repeat && !argument_function {
             if self.flow.count + cost > INTERRUPT_STATEMENTS {
@@ -184,13 +185,25 @@ mod tests {
             for statement in [call.to_owned(), format!("__ulua_t0 = ({call}) :: number")] {
                 let mut counter = Interrupts::default();
                 for _ in 0..count {
-                    assert!(!counter.before(&statement), "{statement}");
+                    assert!(!counter.before(&statement, 1), "{statement}");
                 }
                 assert!(
-                    counter.before("local next = 1"),
+                    counter.before("local next = 1", 1),
                     "{statement} erased the count"
                 );
             }
+        }
+    }
+
+    // Cost: 17 fixed classifications. The text carries no operator or closure clues.
+    #[test]
+    fn explicit_operation_cost_limits_plain_statement_runs() {
+        for cost in [2, 3, 11] {
+            let mut counter = Interrupts::default();
+            for _ in 0..INTERRUPT_STATEMENTS / cost {
+                assert!(!counter.before("local value = 0", cost));
+            }
+            assert!(counter.before("local value = 0", cost));
         }
     }
 
