@@ -70,8 +70,24 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15. Decisions: D28, D29 (`plan.md` Â
   `-Wbidi-chars` and `-Wnonnull` warnings in the pinned Luau sources
   (`Ast/src/Confusables.cpp`, `CodeGen/src/CodeGenLower.h`); the build
   does not fail on them.
-- Linux: `gate.sh sanitize` and `gate.sh timing` are not run. The gcc
-  sanitizer link path (P5.1 review, MINOR) is not measured.
+- Linux `gate.sh sanitize`, gcc 15.2.0, before the fix: `cargo-test`
+  fails `sanitize::heap_write_reports_asan`. gcc's UBSan object-size
+  check reports the seeded write at `sanitize.cpp:12` ("store to
+  address ... with insufficient space") and exits 1 before ASan
+  reports. With that test skipped, the other steps pass with zero
+  sanitizer reports.
+- Fix: the probe's pointer object is volatile, not its pointee. Two
+  separate volatile loads hide the allocation from object-size and
+  keep the store live. Reviewer measurement: g++ 15.2.0 and clang++
+  21.1.8 give ASan `heap-buffer-overflow` at `sanitize.cpp:12` at -O1,
+  -O2, and -O3; the overflow probe reports at `sanitize.cpp:16`.
+- Linux `gate.sh sanitize` after the fix: PASS. `cargo-test` 166 s,
+  `luau-witnesses` 108 s, `fuzz-smoke` 125 s, `fault-sweep` 57 s. The
+  gcc sanitizer link path (P5.1 review, MINOR) works.
+- Gaps: Linux `gate.sh timing` is not run. macOS `gate.sh sanitize` is
+  not rerun after the probe change. A clang-built probe on Linux hangs
+  in llvm-symbolizer with default symbolization (old and new probe);
+  the Linux gate uses gcc.
 
 ## Exit checklist (P5.5)
 
