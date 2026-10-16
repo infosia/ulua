@@ -96,7 +96,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 - **P6 — performance and reload.** Workload measurements. The
   benchmark contract follows the owner's prior project: its subjects,
   its timing method, its workload set, and its boundary-price
-  measurement, changed where an Ulua rule forces it.
+  measurement, changed where an Ulua rule forces it. Contract:
+  `specs/blocks/benchmarks.md`; slices in `specs/tracking/p6-performance.md`.
 
 ## 7. Measurement items (P0.5)
 
