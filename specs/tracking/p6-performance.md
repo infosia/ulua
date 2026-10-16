@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -245,6 +245,16 @@ cycles. Limit fixtures rebuilt: string doubling 25 passes and 26
 reaches `limit:memory`; recursion 19,997 passes and 19,998 reaches
 `limit:stack` (native equality removes a helper frame). `gate.sh
 full` 155 s, `gate.sh timing` 370 s.
+
+## Measurements (P6.S5)
+
+Record at f83f4c9 (clean tree). `ulua / luau` after the P6.S4 fix
+and after P6.S5: mandelbrot 1.48 to 1.16, fib-loop 2.89 to 2.24,
+primes 4.27 to 3.26, particles 3.69 to 2.80, queen 2.66 to 2.44, sort
+3.17 to 3.00, collect 2.11 to 2.04; fib-recursive 1.75, tree 2.34,
+callbacks 3.15 hold. `CONDITION_NODES` 15. Largest gap 49, statement
+36, ratio 5.85, capture ratio 3.54, analyzer ratio 11.26. `gate.sh
+full` 149 s; timing witnesses 394 s.
 
 ## Exit checklist (P6.1)
 
