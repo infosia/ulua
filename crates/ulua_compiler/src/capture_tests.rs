@@ -1,4 +1,5 @@
 //! Source counts independently constrain the emitted local declarations.
+//! Measured macOS Debug cost: one test, six compiler calls, 0.04 seconds; no native compiler or external witness.
 use crate::{CAPTURE_LOCALS, Limits, compile};
 
 #[test]

@@ -1,7 +1,9 @@
 //! P5.3: native allocation sweeps. Baselines count each creation, call, completion, and settle.
 //! Each selected index uses a fresh instance. No external witness or measurement process runs.
-//! Sanitizer sweep: 26 programs, 182 baseline runs, 1,257 injection trials; measured cost 0.37 seconds.
-//! Replay and recovery bring the ABI run count to 3,967. Each source adds a recovery export and handler markers.
+//! Previous sanitizer sweep: 26 programs, 182 baseline runs, 1,257 injection trials; measured cost 0.37 seconds.
+//! That sweep used 3,967 ABI runs with replay and recovery. Each source adds a recovery export and handler markers.
+//! Normal Debug with both spills: 28 programs, 192 baseline runs, 1,352 allocation indices and injection trials, 0.140 seconds.
+//! This spill sweep uses 4,262 ABI runs, including replay and recovery.
 //! One rejected example has no native runtime allocation. The total ABI run count includes replay and recovery.
 //! Programs above 20,000 indices use stride ceil(n/20,000), plus 64 indices beside every phase boundary.
 //! The summary prints baseline and injection runs, eligible allocations, and cost. No time assertion applies.

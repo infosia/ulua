@@ -692,7 +692,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
-| `OUTPUT_FACTOR` | 80, prelude 1,222 B | largest measured ratio 71.69 (a fresh arrow per array literal over spilled bindings, P2.2 review 2); the growth test tracks the densest shape of 97 constructs (63.14) |
+| `OUTPUT_FACTOR` | 80, prelude 2,086 B (1,222 B at P1) | largest measured ratio 71.69 (a fresh arrow per array literal over spilled bindings, P2.2 review 2); the growth test tracks the densest shape of 97 constructs (63.14) |
 | `ALLOCATION_STEP_BYTES` | 256 | 1,000,000 charged steps of the slowest measured input take about 2.0 s in Release |
 
 ## 8. Corpus runner

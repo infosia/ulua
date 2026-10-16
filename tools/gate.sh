@@ -13,7 +13,7 @@
 #   witness. sanitize skips fmt and clippy (the normal gate runs them).
 #   Each shape needs LUAU_SOURCE_DIR. Measured cost on macOS arm64,
 #   warm build: full about 2 to 3 minutes, timing about 6 minutes,
-#   sanitize about 4 minutes (tracking/p5-hardening.md).
+#   sanitize about 8 to 10 minutes (tracking/p5-hardening.md).
 set -eu
 case "${1:-}" in
     quick|full|sanitize|timing) shape=$1 ;;
@@ -65,7 +65,7 @@ fi
 step corpus-witnesses "$NODE" tools/witness/corpus.mjs
 if [ -f Cargo.toml ]; then
     step cargo-fmt cargo fmt --all --check
-    step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing -- -D warnings
+    step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing,ulua/fault-injection -- -D warnings
     step luau-tools sh tools/luau-tools.sh
     step cargo-test cargo test --quiet --workspace
     step luau-witnesses "$NODE" tools/witness/luau.mjs

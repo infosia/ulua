@@ -2,6 +2,7 @@
 //! (pipeline.md §2.6) before its fix: a weak-table lookup keyed by a number outside the
 //! `int` range runs the float-to-int conversion of the Luau array fast path
 //! (`VM/src/lvmexecute.cpp` of the pin), which UBSan reports. The normal build cannot see it.
+//! Measured macOS normal Debug cost: four tests, 0.01 seconds total; no external witness process.
 #[allow(dead_code)]
 #[path = "../support/requests.rs"]
 mod requests;

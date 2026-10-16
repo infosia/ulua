@@ -1,4 +1,4 @@
-//! One entry for each P1-P4 family, all example scripts, and string request completions.
+//! P1-P4 families, example scripts, string completions, and capture and local-budget spills.
 pub struct Program {
     pub name: &'static str,
     pub source: String,
@@ -77,5 +77,36 @@ pub fn programs() -> Vec<Program> {
         source: "export function main(): number { try { print(\"__fault_try\"); const text: string = \"x\".repeat(8192); return text.length; } catch (e) { print(\"catch\"); return 0; } finally { print(\"finally\"); } }".into(),
         grants: vec![], rejected: false,
     });
+    result.push(spill_program("capture-spill", 11, true));
+    result.push(spill_program("local-budget-spill", 177, false));
     result
+}
+
+fn spill_program(name: &'static str, count: usize, captured: bool) -> Program {
+    // These source counts exceed CAPTURE_LOCALS (10) and LOCAL_BUDGET (176) independently.
+    let mut source = String::from("export function main(): number {");
+    for i in 0..count {
+        source.push_str(&format!("const v{i} = {i};"));
+    }
+    if captured {
+        source.push_str("function get(): number {");
+    }
+    source.push_str("let sum = 0;");
+    for i in 0..count {
+        source.push_str(&format!("sum += v{i};"));
+    }
+    source.push_str("return sum;");
+    if captured {
+        source.push_str("} return get();");
+    }
+    source.push('}');
+    let compiled =
+        ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default()).unwrap();
+    assert!(compiled.luau.contains("__ulua_spill"), "{name}");
+    Program {
+        name,
+        source,
+        grants: vec![],
+        rejected: false,
+    }
 }

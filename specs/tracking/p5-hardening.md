@@ -1,6 +1,6 @@
 # P5 hardening
 
-Status: open; P5.1 to P5.5 COMPLETE 2026-10-15; P5.6 COMPLETE 2026-10-16; the P5 Phase Review is next. Decisions: D28, D29 (`plan.md` §8).
+Status: COMPLETE 2026-10-16 (P5.1 to P5.6, Phase Review). Decisions: D28, D29 (`plan.md` §8).
 
 ## Slices
 
@@ -91,6 +91,29 @@ Status: open; P5.1 to P5.5 COMPLETE 2026-10-15; P5.6 COMPLETE 2026-10-16; the P5
   `witnesses` test binary 330 s, the step 367 s.
 - Gap: a clang-built probe on Linux hangs in llvm-symbolizer with
   default symbolization (old and new probe); the Linux gate uses gcc.
+
+## P5 Phase Review
+
+Cross-slice review of fb96851..HEAD: 0 CRITICAL, 0 MAJOR, 7 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| `COMPILE_MEMORY_BASE` 85,022 is below its derivation after P5.5: small peak 68,277, derived 85,347; the test never asserts derived <= constant | MINOR | `COMPILE_MEMORY_BASE` 85,347; the test asserts each derived value <= its constant |
+| The fault sweep set has no program with a spill table (13 entries, none with `__ulua_spill`) | MINOR | two programs join the sweep: 11 captured bindings (38 allocation indices) and 177 locals (39); the sweep checks `__ulua_spill` in each; 1,352 indices, 0.14 s |
+| The `gate.sh` header states sanitize about 4 minutes; measured 585 s (macOS), about 456 s (Linux) | MINOR | header: 8 to 10 minutes |
+| No gate lints the fault-injection code | MINOR | gate full clippy adds `ulua/fault-injection` |
+| On Windows a fuzz crash is keyed by the panic message, not the signal | MINOR | open (tool only; not measured on Windows here) |
+| pipeline.md §7 records prelude 1,222 B; it is 2,086 B | MINOR | §7 updated |
+| `sanitize.rs`, `p52_findings.rs`, `capture_tests.rs` state no measured cost | MINOR | headers state the cost |
+
+The reviewer's fuzz run (§9.5, sanitizer build, seed 1016531, 60 s
+per target): 0 failures.
+
+P5 close (macOS arm64): `gate.sh full` 165 s, `gate.sh timing` 380 s,
+`gate.sh sanitize` 303 s (`fault-sweep` 37 s), hygiene passes. Open:
+the Windows fuzz crash key (MINOR, tool only). Running tasks at the
+close: none. End to end through the C ABI: limit:steps,
+limit:memory, and the source ceiling stop as the contract states.
 
 ## Exit checklist (P5.5)
 

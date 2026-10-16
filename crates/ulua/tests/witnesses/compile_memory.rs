@@ -303,19 +303,29 @@ fn compile_memory_bound() {
         costs.native.as_secs_f64(),
         costs.capture.as_secs_f64()
     );
+    let derived_factor = (largest.3 * 5).div_ceil(largest.2 * 4);
+    let derived_base = (small_largest.0 * 5).div_ceil(4);
     eprintln!(
         "P5.4 largest={:.6} shape={} bytes={} peak={} derived-factor={} small-peak={} small-source={:?} derived-base={} shapes={} small-sources={} Rust/input cost={:.3}s",
         largest.0,
         largest.1,
         largest.2,
         largest.3,
-        (largest.3 * 5).div_ceil(largest.2 * 4),
+        derived_factor,
         small_largest.0,
         small_largest.1,
-        (small_largest.0 * 5).div_ceil(4),
+        derived_base,
         growth.len(),
         sources.len(),
         start.elapsed().as_secs_f64()
+    );
+    assert!(
+        derived_factor <= COMPILE_MEMORY_FACTOR,
+        "derived factor {derived_factor} exceeds {COMPILE_MEMORY_FACTOR}"
+    );
+    assert!(
+        derived_base <= COMPILE_MEMORY_BASE,
+        "derived base {derived_base} exceeds {COMPILE_MEMORY_BASE}"
     );
     native_probe(&paths);
     std::fs::remove_dir_all(directory).unwrap();
