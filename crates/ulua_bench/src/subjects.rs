@@ -1,5 +1,5 @@
 //! The benchmark calls the product C ABI and the pinned VM directly.
-pub(crate) use crate::measurement::{Monotonic, Workload, measure};
+pub(crate) use super::measurement::{Monotonic, Workload, measure};
 use std::{
     ffi::{CStr, c_char, c_void},
     ptr,

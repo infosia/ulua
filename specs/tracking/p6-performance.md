@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -255,6 +255,16 @@ primes 4.27 to 3.26, particles 3.69 to 2.80, queen 2.66 to 2.44, sort
 callbacks 3.15 hold. `CONDITION_NODES` 15. Largest gap 49, statement
 36, ratio 5.85, capture ratio 3.54, analyzer ratio 11.26. `gate.sh
 full` 149 s; timing witnesses 394 s.
+
+## Measurements (P6.3)
+
+`crates/ulua/tests/witnesses/p63_performance.rs` (gate timing, Debug
+Rust, native O3): ten workloads at reduced sizes (Luau medians 7.9 to
+17.2 ms), three runs, bound = largest ratio × 1.25: fib-recursive
+2.19, fib-loop 2.88, mandelbrot 1.46, primes 3.44, sort 3.66, tree
+2.98, queen 3.07, particles 3.52, callbacks 3.97, collect 2.56. Red
+against a build with the compiler of 84b6118 (before P6.S3): 8 of 10
+fail (callbacks and collect pass). Cost 4.7 s. `gate.sh timing` 375 s.
 
 ## Exit checklist (P6.1)
 

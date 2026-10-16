@@ -1,5 +1,5 @@
 //! Shared region timing. Preparation and validation stay outside the clock.
-use crate::stats::{Measurement, SAMPLES, Sample, WARMUP_ITERATIONS, WARMUP_SECONDS};
+use super::stats::{Measurement, SAMPLES, Sample, WARMUP_ITERATIONS, WARMUP_SECONDS};
 use std::time::Instant;
 
 pub(crate) trait Workload {
@@ -23,7 +23,10 @@ impl Clock for Monotonic {
         start.elapsed().as_secs_f64()
     }
 }
-fn iteration(subject: &mut impl Workload, clock: &mut impl Clock) -> Result<Sample, String> {
+pub(crate) fn iteration(
+    subject: &mut impl Workload,
+    clock: &mut impl Clock,
+) -> Result<Sample, String> {
     subject.prepare();
     let start = clock.start();
     let status = subject.call();

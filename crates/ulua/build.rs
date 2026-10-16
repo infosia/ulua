@@ -131,6 +131,11 @@ fn run() -> Result<(), String> {
         .try_compile("ulua_test_layout")
         .map_err(|e| e.to_string())?;
     let mut probes = configure();
+    if env::var_os("CARGO_FEATURE_TIMING").is_some() {
+        let host = root.join("crates/ulua_bench/luau_host.cpp");
+        println!("cargo:rerun-if-changed={}", host.display());
+        probes.file(host);
+    }
     probes
         .cargo_metadata(false)
         .file(root.join("native/probes/allocator.cpp"))
