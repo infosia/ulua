@@ -9,6 +9,10 @@ license.workspace = true
 name = "bench"
 path = "src/main.rs"
 
+[[bin]]
+name = "boundary"
+path = "src/boundary/main.rs"
+
 [dependencies]
 ulua = { path = "../ulua" }
 

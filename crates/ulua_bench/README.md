@@ -6,7 +6,7 @@ No product crate depends on this crate.
 
 Source: [Luau](https://luau.org), [upstream repository](https://github.com/luau-lang/luau).
 The captured record below states the revision from `luau-revision.txt`.
-The `boundary` binary belongs to P6.2. This slice supplies the `bench` binary only.
+The `bench` binary measures workloads. The `boundary` binary measures the two C ABI boundaries.
 
 Set `LUAU_SOURCE_DIR` to the pinned checkout. Run from the repository root:
 
@@ -130,3 +130,72 @@ Warm-up and noise (IQR / median; a withheld cell has no published timing):
 - collect / ulua: warm-up 993.879 ms, 3 iterations; IQR 2.498 ms (0.76%); ok.
 
 <!-- results:end -->
+
+## Boundary price
+
+Set `LUAU_SOURCE_DIR` to the pinned checkout. Run from the repository root:
+
+```sh
+CARGO_NET_OFFLINE=true cargo run --release -p ulua_bench --bin boundary -- --stdout
+CARGO_NET_OFFLINE=true cargo run --release -p ulua_bench --bin boundary -- --only host-into-script
+CARGO_NET_OFFLINE=true cargo run --release -p ulua_bench --bin boundary -- --only script-into-host
+```
+
+The default command, without arguments, records both boundaries after a clean-crates check.
+It writes `boundary.json` and the marked section below. It uses the same publication policy as `bench`.
+`--stdout` and `--only` write no files. Both print the table and all observations.
+A default run checks staged, unstaged, and untracked crate files before measurement and publication.
+Commit the measured crate code before that run.
+
+Each variant runs in a fresh child process, in sequence. Each region contains exactly 1,000 boundary calls.
+The host region calls `f(a, b)` with `(i, 1)` for `i` from zero through 999.
+The script region calls one export. Its loop calls the granted `hostAdd(i, 1)` 1,000 times.
+Both regions return the checksum 500500. Each warm-up and sample must match this independent expected value.
+The Luau floor uses the same addition function and while loop on the pinned VM.
+The product uses the public C ABI and an explicit capability grant.
+No measurement replaces a product object or changes product source.
+
+The timer surrounds the region only. Compilation, setup, clock probes, output, and final checksum validation stay outside.
+Stack operations, per-call result reads, and sum accumulation stay inside both region timers.
+The policy requires 11 samples, a median, the 15% IQR gate, and 200 ms plus three warm-up iterations.
+Each child measures 100,000 consecutive `Instant` pairs before setup.
+It records the smallest positive difference as its quantum.
+If no positive difference exists, or quantum exceeds 1% of the median region span, the report withholds that variant.
+The report also withholds layers that depend on an invalid endpoint.
+
+| Variant | Added layer |
+|---|---|
+| floor | Direct `lua_pcall`; script calls a plain `lua_CFunction`. No interrupt callback. |
+| accounting | The product charging allocator and a matching step interrupt callback. |
+| protected | A `lua_cpcall` wrapper, export table lookup, and the inner `lua_pcall`, as in the shim. |
+| conversion | Numeric value tags, conversion, and result checks. The script variant also calls the typed Rust callback directly. |
+| trampoline | Script boundary only: fixed argument array, revocation check, step charge, and descriptor dispatch to the Rust host callback. |
+| shim | The real native shim, with the same hand-written Luau and a direct host callback. |
+| ulua | The complete public ABI, compiled product source, and granted host callback. |
+
+Layers use signed differences between adjacent medians. Shares divide each difference by the complete product median.
+The floor share plus the layer shares totals 100% when all variants pass.
+Negative differences retain noise and interactions. The IQR gate does not establish significance for differences.
+The native intermediate variants are probes of the named layers. They are not product configurations.
+The script conversion probe crosses the typed host ABI directly, so its price includes that direct call.
+The trampoline probe then adds descriptor dispatch, revocation, and the host-call step charge.
+The `protected` difference includes export lookup. It does not isolate protection from lookup.
+The accounting difference combines the interrupt callback and allocator. These allocation-free regions do not price allocation-heavy workloads.
+The native shim retains its full checks. Its delta includes work absent from the smaller probes.
+
+`native/shim/ulua_shim.cpp` names `call`, `host_call`, `begin_run`, and the protected shim entry.
+`crates/ulua/src/abi.rs` names `call_entry`, argument validation, `CString` export names, and the context guard.
+`crates/ulua/src/capabilities.rs` adds callback panic protection and result validation.
+The final residual combines the Rust ABI with product initialization and generated helper paths, including the post-call drain.
+The shim probe uses hand-written Luau. Thus, the residual does not isolate Rust alone.
+The report selects the largest positive non-floor layer as a shrink candidate and states its measured share.
+A withheld layer prevents candidate selection. If no layer has a positive price, the report states that the call is the floor.
+
+The quantum unit test uses fixed durations. It tests zeros, missing positives, the exact 1% boundary, fractional medians, and invalid spans.
+Its header states its measured cost. No test runs the 100,000-pair probe or a timed boundary workload.
+
+<!-- boundary:start -->
+
+No committed boundary record. Run the default command after the measured crate code is committed.
+
+<!-- boundary:end -->
