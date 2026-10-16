@@ -12,8 +12,13 @@ Status: open; P6.1 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (
 | P6.4 | GC pacing against `max_memory_bytes` (P5 carry-over) | A measured rule: either the instance sets the GC goal, or `pipeline.md` §6.5 names the bound with the measured worst case |
 | P6.5 | Reload | Contract first, at the slice start |
 
-Shrink slices follow P6.2 and the `ulua / luau` column of P6.1, each
-with a stated problem and evidence (principle 13).
+Shrink slices follow the `ulua / luau` column of P6.1, each with a
+stated problem and evidence (principle 13). They run before P6.3, so
+the gate bound comes from the record after the shrinks.
+
+| Slice | Family | Exit |
+|---|---|---|
+| P6.S1 | Builtin aliases and the index check (`pipeline.md` §5.20) | Each builtin alias compiles to `FASTCALL`; the trap set of the array helpers is unchanged (tests at each trap edge); the §5.19 tests pass; a new full record |
 
 ## Carry-over into P6
 

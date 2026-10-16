@@ -46,6 +46,7 @@ Rev 41: §6.4 the test calls `ulua_compile`; a small-source base; native memory 
 Rev 42: §5.19 interrupt points, §6.3 the instruction bound and GC steps (P5.5).
 Rev 43: §5.19 loop exits, a derived instruction bound, the prelude, async shapes (P5.5 review 2).
 Rev 44: §5.14.5a `CAPTURE_LOCALS`; §5.19 helper bodies, uncounted lines, the ratio bound 6 (P5.5 review 3).
+Rev 45: §5.20 builtin aliases and the index check (P6.S1).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -584,6 +585,31 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       `while (true) { i++ }` (gate timing).
     - The production compile options stay at O1. A change of the
       options reruns that test: O2 can unroll the loop form.
+
+20. **Builtin aliases and the index check (P6.S1).** The Luau
+    compiler emits `FASTCALL` for a call through a local that holds a
+    builtin library function, when the local's initializer is the
+    plain library field (`Compiler/src/Builtins.cpp`). A type
+    assertion on the initializer hides the builtin: `(math.fmod) ::
+    typeof(math.fmod)` compiles to a full `CALL` into C.
+    - Each prelude alias of a library function has the form
+      `local __ulua_x: typeof(lib.f) = lib.f`, with no type assertion
+      on the initializer. A test compiles the prelude with the
+      production options and checks that each call of a builtin
+      alias compiles to a `FASTCALL` instruction.
+    - The array helpers test an integer index with `math.floor(i) ==
+      i` through a builtin alias, after the bounds test. The trap set
+      stays the same: a negative index, an index at or above `#a`
+      (`#a + 1` for a write), a non-integer, and NaN trap; an
+      infinite index fails the bounds test first; `-0` reads slot 1.
+    - A successful `FASTCALL` skips the `CALL` and fires no interrupt.
+      A statement that calls a builtin alias does not end the count of
+      §5.19.
+    - Measured before the rule (P6.1 review, Release): the index
+      check `__ulua_fmod(i, 1) == 0` is 52.7% of the sort overhead
+      and 36.9% of the queen overhead; `math.floor(i) == i` gives
+      sort 378 to 229 ms and queen 1,902 to 1,417 ms; an alias
+      without the assertion gives fib-loop 1,331 to 1,199 ms.
 
 ## 6. Limits
 
