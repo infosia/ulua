@@ -16,7 +16,7 @@ fn literals_and_local_operations_target_bindings() {
         "{code}"
     );
     assert!(
-        code.contains("if not (__ulua_b4 < 1.0) then break end"),
+        code.contains("for __ulua_g1_1 = 0.0, __ulua_g1_0, 1.0 do"),
         "{code}"
     );
 }

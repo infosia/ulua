@@ -65,8 +65,8 @@ fn temporaries_point_at_the_crossing_form_with_module_and_default_overhead() {
         .collect::<Vec<_>>()
         .join(",");
     let mut args = vec!["one()"; 32];
-    // The floor alias reserves one more module local before this nested call.
-    args[20] = "one(987654321)";
+    // The floor and ceil aliases each reserve one module local before this nested call.
+    args[19] = "one(987654321)";
     let mut value = format!("f({})", args.join(","));
     for _ in 0..3 {
         value = format!("f({},{value})", vec!["one()"; 31].join(","));

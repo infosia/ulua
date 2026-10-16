@@ -70,7 +70,7 @@ impl Emitter<'_> {
     }
 
     // None explicitly requires a temporary. No decision depends on generated source text.
-    fn inline_tree(&self, expr: &Expr, later_call: bool, nodes: usize) -> Option<usize> {
+    pub(super) fn inline_tree(&self, expr: &Expr, later_call: bool, nodes: usize) -> Option<usize> {
         let remaining = nodes.checked_sub(1)?;
         match &expr.kind {
             E::Null | E::Number(_) | E::Boolean(_) | E::String(_) | E::Builtin(_) => {
@@ -94,7 +94,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn pure_operand(&mut self, expr: &Expr) -> Result<String, Diagnostic> {
+    pub(super) fn pure_operand(&mut self, expr: &Expr) -> Result<String, Diagnostic> {
         Ok(match &expr.kind {
             E::Null => "nil".into(),
             E::Number(n) => {
@@ -285,7 +285,7 @@ impl Emitter<'_> {
         }
     }
 
-    pub(super) fn condition(&mut self, expr: &Expr, depth: u32) -> Result<Operand, Diagnostic> {
+    pub(super) fn comparison(&mut self, expr: &Expr, depth: u32) -> Result<Operand, Diagnostic> {
         if self.inline_enabled
             && matches!(
                 expr.kind,

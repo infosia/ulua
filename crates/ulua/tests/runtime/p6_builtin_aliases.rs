@@ -54,6 +54,7 @@ fn builtin_alias_calls_use_fastcall_with_production_options() {
 local function alias_witness(x: number): ()
     __ulua_print(x)
     local f = __ulua_floor(x)
+    local c = __ulua_ceil(x)
     local n = __ulua_fmod(f, 3)
     local s = __ulua_tostring(n)
     __ulua_gsub(s, "x", "y")
@@ -66,6 +67,7 @@ return {{module = {exports}, witness = alias_witness}}
         ("fmod", 1),
         ("tostring", 2),
         ("floor", 4),
+        ("ceil", 8),
         ("print", 0),
         ("gsub", 0),
     ];
@@ -104,6 +106,7 @@ return {{module = {exports}, witness = alias_witness}}
         ("fmod", "math.fmod"),
         ("tostring", "tostring"),
         ("floor", "math.floor"),
+        ("ceil", "math.ceil"),
     ] {
         cast = cast.replace(
             &format!("local __ulua_{alias}: typeof({library}) = {library}"),
@@ -111,7 +114,7 @@ return {{module = {exports}, witness = alias_witness}}
         );
     }
     let (cast_fastcalls, _) = inspect(&cast);
-    assert!(cast_fastcalls.iter().all(|bits| bits & 7 == 0));
+    assert!(cast_fastcalls.iter().all(|bits| bits & 15 == 0));
     eprintln!(
         "builtin alias test cost={:.3}s",
         start.elapsed().as_secs_f64()

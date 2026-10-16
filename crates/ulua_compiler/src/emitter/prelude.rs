@@ -56,6 +56,7 @@ end
 local __ulua_print: typeof(print) = print
 local __ulua_fmod: typeof(math.fmod) = math.fmod
 local __ulua_floor: typeof(math.floor) = math.floor
+local __ulua_ceil: typeof(math.ceil) = math.ceil
 local __ulua_tostring: typeof(tostring) = tostring
 local __ulua_gsub: typeof(string.gsub) = string.gsub
 local __ulua_huge: typeof(math.huge) = math.huge
@@ -74,6 +75,7 @@ local function __ulua_get<T>(a: {T}, i: number, deferred: boolean?): T
     end
     return a[i + 1]
 end
+__ulua_interrupt()
 local function __ulua_receiver(value: unknown): ()
     if value == nil then __ulua_trap(1) end
 end

@@ -197,8 +197,20 @@ impl Emitter<'_> {
                 self.joins.leave();
             }
             S::For(init, test, update, body, ids) => {
+                let counted = self.counted_loop(init, test.as_ref(), update.as_deref(), body);
+                let reserve_counted = counted.is_some();
+                if let Some(form) = counted.filter(|form| self.counted_bound_local(form)) {
+                    self.emit_counted(form, body, depth)?;
+                    self.statement_offset = parent_offset;
+                    return self.output_check();
+                }
                 self.joins.enter();
                 let generated_before = self.generated_live;
+                if reserve_counted {
+                    // A spilled bound keeps while. Retain numeric reservations so storage stays monotone.
+                    self.generated()?;
+                    self.reserve_counted()?;
+                }
                 self.line("do");
                 self.indent += 1;
                 self.statements(init, depth)?;

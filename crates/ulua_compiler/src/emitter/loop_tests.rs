@@ -113,10 +113,10 @@ fn nested_continue_keeps_the_outer_for_plain() {
     let start = Instant::now();
     let source = "export function main():void{for(let i=0;i<3;i++){while(true){continue;}}}";
     let luau = compile(source.as_bytes(), Limits::default()).unwrap().luau;
-    assert_eq!(luau.matches("while true do\n").count(), 2, "{luau}");
+    assert_eq!(luau.matches("while true do\n").count(), 1, "{luau}");
+    assert!(luau.contains("for __ulua_g1_1 = 0.0,"), "{luau}");
     assert!(luau.contains("do continue end"), "{luau}");
     assert!(!luau.contains("repeat\n"), "{luau}");
-    assert!(!luau.contains("local __ulua_g1_"), "{luau}");
     eprintln!(
         "nested continue form cost={:.6}s",
         start.elapsed().as_secs_f64()

@@ -2,7 +2,13 @@
 mod accessors;
 mod arrays;
 mod asynchronous;
+#[cfg(test)]
+mod condition_tests;
+mod conditions;
 mod constants;
+mod counted;
+#[cfg(test)]
+mod counted_tests;
 mod exceptions;
 #[cfg(test)]
 mod expression_tests;
@@ -31,7 +37,7 @@ use std::{collections::HashMap, fmt::Write};
 const SPILL_FIELDS: usize = 128;
 
 pub(crate) use prelude::LIBRARIES;
-const LIBRARY_LOCALS: usize = 16;
+const LIBRARY_LOCALS: usize = 17;
 
 pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");

@@ -8,6 +8,7 @@ mod p55_interrupts;
 mod p55_strict;
 mod p64_gc;
 mod p6_builtin_aliases;
+mod p6_conditions_loops;
 mod p6_expressions;
 mod p6_index_edges;
 mod p6_shrink;

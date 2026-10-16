@@ -114,7 +114,8 @@ impl Interrupts {
         let block = text == "do";
         let repeat = text == "repeat";
         let branch = text.starts_with("if ") && text.ends_with(" then");
-        let loop_head = text.starts_with("while ") && text.ends_with(" do");
+        let loop_head =
+            (text.starts_with("while ") || text.starts_with("for ")) && text.ends_with(" do");
         let mut insert = false;
         // Reserve work for inline branches and pure groups. Storage paths also need VM field reads.
         let value = text.split_once(" = (").map_or("", |(_, value)| value);
@@ -209,7 +210,12 @@ fn always_calls(text: &str) -> bool {
     (callee.starts_with("__ulua_") || callee == "error")
         && !matches!(
             callee,
-            "__ulua_fmod" | "__ulua_floor" | "__ulua_tostring" | "__ulua_gsub" | "__ulua_print"
+            "__ulua_fmod"
+                | "__ulua_floor"
+                | "__ulua_ceil"
+                | "__ulua_tostring"
+                | "__ulua_gsub"
+                | "__ulua_print"
         )
         && callee
             .bytes()
@@ -236,6 +242,7 @@ mod tests {
         for (call, count) in [
             ("__ulua_fmod(x, 3)", INTERRUPT_STATEMENTS),
             ("__ulua_floor(x)", INTERRUPT_STATEMENTS),
+            ("__ulua_ceil(x)", INTERRUPT_STATEMENTS),
             ("__ulua_tostring(x)", INTERRUPT_STATEMENTS / 2),
             ("__ulua_gsub(s, 'x', 'y')", INTERRUPT_STATEMENTS),
             ("__ulua_print(s)", INTERRUPT_STATEMENTS),
@@ -312,6 +319,23 @@ mod tests {
 #[cfg(test)]
 mod loop_head_tests {
     use super::Interrupts;
+
+    // Cost: 23 classifications per exit. Numeric zero-trip and early exits retain their forward work.
+    #[test]
+    fn numeric_loop_exits_join_the_header_and_early_body_paths() {
+        for exit in ["do break end", "if i == bound then break end"] {
+            let mut count = Interrupts::default();
+            for _ in 0..10 {
+                assert!(!count.before("local x = 0", 1));
+            }
+            assert!(!count.before_at("for i = 0, limit, 1 do", 4, 100));
+            assert!(!count.before(exit, 1));
+            assert!(!count.before("local first = 1", 1));
+            assert!(count.before("local later = 2", 1));
+            assert!(!count.before("end", 1));
+            assert!(count.before("local after = 3", 2));
+        }
+    }
 
     // Cost: 19 fixed classifications. Reserve the boundary before a split short-circuit condition.
     #[test]

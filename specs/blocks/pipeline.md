@@ -730,7 +730,11 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     `i <= ceil(b) - 1`, `i <= b` is `i <= floor(b)`, `i > b` is
     `i >= floor(b) + 1`, and `i >= b` is `i >= ceil(b)`. The emitter
     computes `L` once before the loop through builtin aliases (§5.20)
-    and writes `for i = start, L, step`. A NaN `b` runs no iteration in
+    and writes `for i = start, L, step`. For a strict test the body
+    starts with `if i == b then break end`: above 2^53, `ceil(b) - 1`
+    can round up to `b`, and the loop then reaches the excluded
+    endpoint. `CONDITION_NODES` is 15 (the stress shapes pass and the
+    largest growth analyzer ratio is 11.26 against 12). A NaN `b` runs no iteration in
     both; an infinite `b` runs until the step limit in both; above
     2^53 the counter stops growing in both. JavaScript evaluates `b`
     on each test; `b` does not change in the loop, so one evaluation

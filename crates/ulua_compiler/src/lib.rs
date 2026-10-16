@@ -57,6 +57,11 @@ pub const OUTPUT_ASYNC_PRELUDE_BYTES: usize = emitter::ASYNC_PRELUDE_BYTES;
 /// The O1 emitter calls a shared empty Luau function before the weighted count exceeds this limit.
 pub const INTERRUPT_STATEMENTS: usize = 16;
 
+/// Maximum IR nodes in one inline condition chain, including operands and operators.
+/// At fifteen nodes, all 14 analyzer stress shapes pass; alternating logical growth measures 6.60 against 12.
+/// This bound also keeps each condition below 36 VM instructions.
+pub const CONDITION_NODES: usize = 15;
+
 /// Maximum captured bindings that keep local storage in one generated function.
 /// Capture counts 10 and 11 measured ratios below 5 and above 5 in Debug and Release.
 /// Further bindings use the existing typed spill tables to bound reference-capture searches.

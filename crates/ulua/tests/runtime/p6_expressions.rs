@@ -19,7 +19,7 @@ unsafe extern "C" {
     ) -> i32;
 }
 
-fn instructions(source: &str, expected: f64) -> u64 {
+pub(super) fn instructions(source: &str, expected: f64) -> u64 {
     let (mut gap, mut interrupts, mut statement, mut total, mut run) = (0, 0, 0, 0, 0);
     let mut line = 0;
     let mut result = f64::NAN;

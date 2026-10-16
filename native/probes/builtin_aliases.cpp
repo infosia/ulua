@@ -19,7 +19,8 @@ static void inspect(Proto* proto, unsigned* fastcalls, unsigned* calls, size_t l
                 if (builtin == LBF_MATH_FMOD) fastcalls[line] |= 1;
                 else if (builtin == LBF_TOSTRING) fastcalls[line] |= 2;
                 else if (builtin == LBF_MATH_FLOOR) fastcalls[line] |= 4;
-                else fastcalls[line] |= 8;
+                else if (builtin == LBF_MATH_CEIL) fastcalls[line] |= 8;
+                else fastcalls[line] |= 16;
             }
             if (op == LOP_CALL) ++calls[line];
         }
