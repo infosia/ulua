@@ -138,8 +138,9 @@ impl Interrupts {
             .max(weight)
             .max(minimum_cost)
             .min(INTERRUPT_STATEMENTS);
-        // An unconditional while delimiter emits no forward instruction. Its condition is a separate statement.
-        let executable = !block && !repeat && !argument_function && text != "while true do";
+        // Reserve loop boundaries before split conditions. Constant true headers add no forward work.
+        let executable = !block && !repeat && !argument_function;
+        let forward = executable && text != "while true do";
         if executable {
             if self.flow.count + cost > INTERRUPT_STATEMENTS {
                 insert = true;
@@ -158,8 +159,7 @@ impl Interrupts {
                 entry: self.flow,
                 largest: Flow::default(),
                 has_else: false,
-                head: (loop_head || repeat)
-                    .then_some((position, if executable { cost } else { 0 })),
+                head: (loop_head || repeat).then_some((position, if forward { cost } else { 0 })),
                 kind: if function {
                     Kind::Function
                 } else if block {
@@ -313,11 +313,35 @@ mod tests {
 mod loop_head_tests {
     use super::Interrupts;
 
-    // Cost: 40 fixed classifications. No compiler, VM, or clock assertion.
+    // Cost: 19 fixed classifications. Reserve the boundary before a split short-circuit condition.
+    #[test]
+    fn loop_boundary_keeps_the_first_condition_point_before_the_loop() {
+        let mut count = Interrupts::default();
+        for _ in 0..15 {
+            assert!(!count.before("local x = 0", 1));
+        }
+        assert!(!count.before_at("while true do", 1, 100));
+        assert!(count.before("condition = ((n < 255)) :: boolean", 1));
+        assert_eq!(count.take_hoisted(), Some(100));
+        assert!(!count.before("do", 1));
+        assert!(!count.before("local fresh: boolean = condition", 1));
+    }
+
+    // Cost: three classifications. A reserved boundary adds no forward work to a hoisted point.
+    #[test]
+    fn a_full_weight_first_statement_still_hoists() {
+        let mut count = Interrupts::default();
+        assert!(!count.before("local x = 0", 1));
+        assert!(!count.before_at("while true do", 1, 100));
+        assert!(count.before("local closure = function() end", 16));
+        assert_eq!(count.take_hoisted(), Some(100));
+    }
+
+    // Cost: 38 fixed classifications. No compiler, VM, or clock assertion.
     #[test]
     fn first_body_point_precedes_pending_loop_wrappers() {
         let mut count = Interrupts::default();
-        for _ in 0..16 {
+        for _ in 0..15 {
             assert!(!count.before("local x = 0", 1));
         }
         assert!(!count.before_at("while true do", 1, 100));
@@ -334,7 +358,7 @@ mod loop_head_tests {
         assert!(count.before("local last = 0", 1));
     }
 
-    // Cost: 20 fixed classifications per exit. The earlier exit retains its full forward count.
+    // Cost: 19 fixed classifications per exit. The earlier exit retains its full forward count.
     #[test]
     fn later_body_point_keeps_each_earlier_exit() {
         for exit in [
@@ -343,7 +367,7 @@ mod loop_head_tests {
             "if not done then break end",
         ] {
             let mut count = Interrupts::default();
-            for _ in 0..14 {
+            for _ in 0..13 {
                 assert!(!count.before("local x = 0", 1));
             }
             assert!(!count.before_at("while true do", 1, 100));
