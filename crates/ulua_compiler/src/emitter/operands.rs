@@ -119,10 +119,10 @@ impl Emitter<'_> {
             }
             E::Unary(op, a) => format!("({op} ({}))", self.pure_operand(a)?),
             E::Binary(op, a, b) => {
+                let types = [a.ty, b.ty];
                 let a = self.pure_operand(a)?;
                 let b = self.pure_operand(b)?;
-                self.capture_binary(op);
-                self.binary(op, &a, &b)
+                self.expression_binary(op, types, &a, &b)
             }
             _ => return Err(self.limit("internal", "Invalid inline operand form")),
         })
@@ -155,10 +155,15 @@ impl Emitter<'_> {
                 Some(text)
             }
             E::Binary(op, a, b) => {
+                let types = [a.ty, b.ty];
                 let a = self.operand(a, depth, contains_call(b), 1)?;
                 let b = self.operand(b, depth, false, 1)?;
-                self.capture_binary(op);
-                let text = self.binary(op, &self.operand_text(&a), &self.operand_text(&b));
+                let text = self.expression_binary(
+                    op,
+                    types,
+                    &self.operand_text(&a),
+                    &self.operand_text(&b),
+                );
                 self.release_operand(a);
                 self.release_operand(b);
                 Some(text)
@@ -168,16 +173,6 @@ impl Emitter<'_> {
                 self.access_receiver_check(slot, deferred);
                 let value = format!("{}.__ulua_k{key}", self.temp(slot));
                 self.release(slot);
-                Some(value)
-            }
-            E::Index(receiver, index) => {
-                let (slot, deferred) = self.access_receiver(receiver, depth)?;
-                let index = self.expression(index, depth)?;
-                self.access_receiver_check(slot, deferred);
-                self.capture("__ulua_get");
-                let value = format!("__ulua_get({}, {})", self.temp(slot), self.temp(index));
-                self.release(slot);
-                self.release(index);
                 Some(value)
             }
             E::Length(receiver) => {
@@ -255,6 +250,25 @@ impl Emitter<'_> {
         depth: u32,
         declaration: bool,
     ) -> Result<(), Diagnostic> {
+        // The checked local value can target the binding without a reusable result slot.
+        if self.local_binding(id)
+            && let E::Index(a, i) = &expr.kind
+        {
+            self.offset = expr.start as usize;
+            let depth = self.guard(depth)?;
+            let (a, deferred) = self.access_receiver(a, depth)?;
+            let i = self.operand(i, depth, false, 1)?;
+            self.access_receiver_check(a, deferred);
+            self.element_read(
+                super::arrays::ElementTarget::Binding(id),
+                expr.ty,
+                a,
+                &self.operand_text(&i),
+            )?;
+            self.release(a);
+            self.release_operand(i);
+            return Ok(());
+        }
         if self.local_binding(id)
             && let Some(value) = self.last_value(expr, depth)?
         {

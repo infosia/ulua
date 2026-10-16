@@ -114,20 +114,25 @@ fn rejected_array_members_keep_c6() {
     }
 }
 #[test]
-fn array_function_types_use_shared_aliases_and_reads_check_before_addition() {
+fn array_function_types_use_shared_aliases_and_inline_reads_check_nil_and_floor() {
     let out = check(
         "const fs:(()=>number)[][]=[[()=>1]];const xs=[1];print(`${xs[0.9999999999999999]}`);",
     )
     .unwrap()
     .luau;
     assert!(out.contains("= {__ulua_fn"));
-    let guard = out.find("__ulua_floor(i) == i").unwrap();
-    let read = out[guard..].find(" + 1]").unwrap();
-    assert!(read > 0);
+    let guard = out.rfind(" == nil or __ulua_floor(").unwrap();
+    assert!(out[..guard].contains(" + 1]"));
+    assert!(
+        out[guard..]
+            .lines()
+            .next()
+            .unwrap()
+            .ends_with("then __ulua_trap(1) end")
+    );
     assert!(out.contains("local __ulua_trap: (number) -> () = (...)"));
     assert!(!out.contains("getfenv"));
-    assert!(out.contains("__ulua_get(__ulua_t"));
-    assert_eq!(out.matches("__ulua_trap(1)").count(), 3);
+    assert!(!out.contains("__ulua_get(__ulua_t"));
 }
 
 #[test]

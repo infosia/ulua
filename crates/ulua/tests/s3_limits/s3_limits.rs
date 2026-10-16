@@ -411,19 +411,19 @@ fn runtime() {
     let mut s = Script::new(inputs::recursion());
     let index = s.index("recurse");
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
-    // The equality helper uses one additional frame at the deepest comparison.
-    assert_eq!(s.call(index, &[number(19996)]).0, ULUA_OK);
-    let past = s.call(index, &[number(19997)]);
+    // Native equality leaves the final comparison in the recursive frame.
+    assert_eq!(s.call(index, &[number(19997)]).0, ULUA_OK);
+    let past = s.call(index, &[number(19998)]);
     assert_eq!((past.0, past.1), (ULUA_FAILED, "limit:stack".into()));
     assert_eq!(s.call(index, &[number(0)]).0, ULUA_OK);
     let source = "export function f(n:number):void {let text=\"x\";let i=0;while(i<n){text=`${text}${text}`;i++;}} export function main():void {}";
     let mut s = Script::new(source);
     let index = s.index("f");
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
-    assert_eq!(s.call(index, &[number(24)]).0, ULUA_OK);
+    assert_eq!(s.call(index, &[number(25)]).0, ULUA_OK);
     // Reset the VM so the allocation boundary does not depend on the previous GC schedule.
     assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
-    let past = s.call(index, &[number(25)]);
+    let past = s.call(index, &[number(26)]);
     assert_eq!((past.0, past.1), (ULUA_FAILED, "limit:memory".into()));
     assert_eq!(s.call(index, &[number(0)]).0, ULUA_OK);
     // Measure the allocator's exact byte threshold for VM creation and module initialization.

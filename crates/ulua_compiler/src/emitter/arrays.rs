@@ -1,6 +1,10 @@
 //! Checked element operations and live-length iteration preserve C12 order.
 use super::*;
 use crate::ir::{Expr, ExprKind as E, Statement};
+pub(super) enum ElementTarget {
+    Slot(usize),
+    Binding(usize),
+}
 impl Emitter<'_> {
     // An element that supplies an access object keeps its value until that access checks it.
     pub(super) fn access_receiver(
@@ -86,6 +90,44 @@ impl Emitter<'_> {
         }
         Ok(())
     }
+    pub(super) fn element_read(
+        &mut self,
+        dest: ElementTarget,
+        ty: Type,
+        array: usize,
+        index: &str,
+    ) -> Result<(), Diagnostic> {
+        self.capture("__ulua_floor");
+        self.capture("__ulua_trap");
+        // A fresh scoped local bounds analyzer growth across repeated element checks.
+        let read = self.generated()?;
+        let ty = self.function_types.luau(&ty);
+        self.line("do");
+        self.line(format!(
+            "local {read}: {ty} = {}[{index} + 1]",
+            self.temp(array)
+        ));
+        self.line_weighted(
+            format!("if {read} == nil or __ulua_floor({index}) ~= {index} then __ulua_trap(1) end"),
+            3,
+        );
+        match dest {
+            ElementTarget::Slot(dest) => self.write_slot(dest, read),
+            ElementTarget::Binding(id) => self.write_binding(id, read)?,
+        }
+        self.line("end");
+        self.generated_live -= 1;
+        Ok(())
+    }
+    fn element_check(&mut self, condition: String, cost: usize) -> Result<(), Diagnostic> {
+        let check = self.generated()?;
+        self.line("do");
+        self.line_weighted(format!("local {check}: boolean = {condition}"), cost);
+        self.line(format!("if {check} then __ulua_trap(1) end"));
+        self.line("end");
+        self.generated_live -= 1;
+        Ok(())
+    }
     pub(super) fn element(
         &mut self,
         a: &Expr,
@@ -98,12 +140,8 @@ impl Emitter<'_> {
         let i = self.expression(i, depth)?;
         let old = if op.is_some() {
             self.access_receiver_check(a, deferred);
-            self.capture("__ulua_get");
             let old = self.slot(&e.ty)?;
-            self.write_slot(
-                old,
-                format!("__ulua_get({}, {})", self.temp(a), self.temp(i)),
-            );
+            self.element_read(ElementTarget::Slot(old), e.ty, a, &self.temp(i))?;
             Some(old)
         } else {
             None
@@ -116,16 +154,28 @@ impl Emitter<'_> {
             if op == "%" {
                 self.capture("__ulua_fmod");
             }
-            self.binary(op, &self.temp(old), &self.temp(value))
+            let result = self.binary(op, &self.temp(old), &self.temp(value));
+            // Freeze concatenation and its allocation before the write checks.
+            self.write_slot(value, result);
+            self.temp(value)
         } else {
             self.temp(value)
         };
-        self.capture("__ulua_set");
-        self.line(format!(
-            "__ulua_set({}, {}, {result})",
-            self.temp(a),
-            self.temp(i)
-        ));
+        self.capture("__ulua_floor");
+        self.capture("__ulua_trap");
+        self.element_check(
+            format!(
+                "__ulua_floor({0}) ~= {0} or ({1}[{0} + 1] == nil and {0} ~= #{1})",
+                self.temp(i),
+                self.temp(a)
+            ),
+            4,
+        )?;
+        self.write(
+            &format!("{}[{} + 1]", self.temp(a), self.temp(i)),
+            result,
+            &self.function_types.luau(&e.ty),
+        );
         for slot in [Some(a), Some(i), Some(value), old].into_iter().flatten() {
             self.release(slot);
         }

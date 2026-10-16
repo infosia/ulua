@@ -528,7 +528,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       is emitted before the loop: the back-edge interrupts each later
       pass, so only the first pass starts with the entry count (P6.S4;
       the point at the head ran on each pass, 11 to 20% of the
-      overhead of primes, particles, collect). The
+      overhead of primes, particles, collect). A closure creation at
+      the start of a body keeps a point right after it: without it
+      the capture ratio of §5.14.5a rose to 6.84 against the bound 6
+      (3.48 with it). The
       count after the loop is the largest count of the loop entry, of
       the body end, and of each forward exit of the loop: each
       `break`, each `continue` lowered to an exit, and the exit of the

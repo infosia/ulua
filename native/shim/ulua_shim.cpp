@@ -428,6 +428,9 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
             ulua_internal_shim_free(vm);
             return code;
         }
+        lua_gc(vm->state, LUA_GCSETGOAL, 200);
+        lua_gc(vm->state, LUA_GCSETSTEPMUL, 400);
+        lua_gc(vm->state, LUA_GCSETSTEPSIZE, 1);
         lua_callbacks(vm->state)->userdata = vm;
         int status = lua_cpcall(vm->state, setup, vm);
         int code = finish(vm, vm->state, status, error);

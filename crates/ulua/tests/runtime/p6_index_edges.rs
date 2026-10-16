@@ -1,5 +1,5 @@
-//! HEAD observations pin output and trap kind. Cost: two small compiles and 33 short ABI calls.
-//! Measured Debug cost: 0.017 seconds, including compilation and all output comparisons.
+//! HEAD observations pin output and trap kind. Cost: two small compiles and 39 short ABI calls.
+//! Measured Release cost: 0.006 seconds, including compilation and all output comparisons.
 #[allow(dead_code)]
 #[path = "../support/script.rs"]
 mod support;
@@ -56,6 +56,8 @@ export function main():void{}
         ("#a", 2.0, None, Some("3:10:20:30")),
         ("#a+1", 3.0, None, None),
         ("0.5", 0.5, None, None),
+        ("below-one", 0.9999999999999999, None, None),
+        ("negative-epsilon", -1e-17, None, None),
         ("NaN", f64::NAN, None, None),
         ("Infinity", f64::INFINITY, None, None),
         ("-Infinity", f64::NEG_INFINITY, None, None),

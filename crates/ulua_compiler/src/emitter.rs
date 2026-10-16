@@ -16,6 +16,8 @@ pub(crate) mod methods;
 mod operands;
 mod output;
 mod prelude;
+#[cfg(test)]
+mod shrink_tests;
 mod statements;
 mod storage;
 mod strings;
@@ -184,15 +186,29 @@ impl<'a> Emitter<'a> {
             return;
         }
         let text = text.as_ref();
-        if self.interrupts.before(text, cost) {
+        let mut after = false;
+        if self.interrupts.before_at(text, cost, self.out.len()) {
             let credited = std::mem::take(&mut self.credited);
             // A shared empty function avoids an analyzer loop join at each checkpoint.
             // Production O1 retains its CALL and RETURN interrupts.
             self.capture("__ulua_interrupt");
+            let end = self.out.len();
             self.raw_line("__ulua_interrupt()");
+            if let Some(position) = self.interrupts.take_hoisted() {
+                let point = self.out.split_off(end);
+                self.out.insert_str(position, &point);
+                self.interrupts.shift_heads(position, point.len());
+                // A capture-heavy first statement still needs a charged point on each later pass.
+                // Moving its only point outside the loop raised the capture ratio to 6.84.
+                after = cost > crate::INTERRUPT_STATEMENTS / 2;
+            }
             self.credited = credited;
         }
         self.raw_line(text);
+        if after {
+            self.raw_line("__ulua_interrupt()");
+            self.interrupts.checkpoint();
+        }
     }
     fn raw_line(&mut self, text: &str) {
         let bytes = text.len() + if self.indent == 0 { 1 } else { 5 };

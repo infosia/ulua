@@ -237,10 +237,10 @@ impl Emitter<'_> {
                 self.release(a);
             }
             E::Binary(op, a, b) => {
+                let types = [a.ty, b.ty];
                 let a = self.expression(a, depth)?;
                 let b = self.expression(b, depth)?;
-                self.capture_binary(op);
-                let value = self.binary(op, &self.temp(a), &self.temp(b));
+                let value = self.expression_binary(op, types, &self.temp(a), &self.temp(b));
                 self.write_slot(dest, value);
                 self.release(a);
                 self.release(b);
@@ -429,11 +429,12 @@ impl Emitter<'_> {
                 let (a, deferred) = self.access_receiver(a, depth)?;
                 let i = self.expression(i, depth)?;
                 self.access_receiver_check(a, deferred);
-                self.capture("__ulua_get");
-                self.write_slot(
-                    dest,
-                    format!("__ulua_get({}, {})", self.temp(a), self.temp(i)),
-                );
+                self.element_read(
+                    super::arrays::ElementTarget::Slot(dest),
+                    expr.ty,
+                    a,
+                    &self.temp(i),
+                )?;
                 self.release(a);
                 self.release(i);
             }
@@ -566,16 +567,38 @@ impl Emitter<'_> {
                 }
             }
             E::Binary(op, a, b) => {
+                let types = [a.ty, b.ty];
                 match (self.pure_bounded(a, depth)?, self.pure_bounded(b, depth)?) {
-                    (Some(a), Some(b)) => {
-                        self.capture_binary(op);
-                        Some(self.binary(op, &a, &b))
-                    }
+                    (Some(a), Some(b)) => Some(self.expression_binary(op, types, &a, &b)),
                     _ => None,
                 }
             }
             _ => None,
         })
+    }
+    pub(super) fn expression_binary(
+        &mut self,
+        op: &str,
+        types: [Type; 2],
+        a: &str,
+        b: &str,
+    ) -> String {
+        // C2 validates a null operand before flow narrowing can remove the other's nullable type.
+        let native = (types[0] == types[1]
+            && matches!(types[0], Type::Number | Type::String | Type::Boolean))
+            || types.contains(&Type::Null);
+        if matches!(op, "==" | "~=") && native {
+            if types[0] == types[1] && matches!(types[0], Type::Boolean | Type::String) {
+                // Strict Luau rejects distinct singleton refinements; restore the checked primitive.
+                let ty = self.function_types.luau(&types[0]);
+                format!("((({a}) :: {ty}) {op} (({b}) :: {ty}))")
+            } else {
+                format!("({a} {op} {b})")
+            }
+        } else {
+            self.capture_binary(op);
+            self.binary(op, a, b)
+        }
     }
     pub(super) fn binary(&self, op: &str, a: &str, b: &str) -> String {
         match op {
