@@ -232,7 +232,12 @@ Record at ab0ab67 (clean tree). `ulua / luau` after P6.S3 and after
 P6.S4: primes 5.44 to 4.04, sort 3.70 to 3.12, tree 2.82 to 2.34,
 queen 3.33 to 2.70, particles 4.55 to 3.90, callbacks 3.43 to 3.18,
 collect 2.21 to 2.11; fib-recursive 1.75 and fib-loop 2.93 hold;
-mandelbrot 1.49 to 1.58 (737 to 781 ms), a regression to explain.
+mandelbrot 1.49 to 1.58 (737 to 781 ms): the moved loop-head point
+dropped the header's reserved count, so a point ran in the condition
+of each inner iteration (29 to 32 instructions); d3b1f0b restores the
+count, and the record at d3b1f0b gives mandelbrot 1.48 (731 ms),
+particles 3.69, queen 2.66, primes 4.27 (Luau 80.2 ms in this run),
+the others within 2%.
 P6.4: the 18-frame spill loop ends with `limit:steps` at 4 and 16 MiB
 (`limit:memory` at ab0ab67's parent), peak 1,137,356 bytes, 709
 cycles. Limit fixtures rebuilt: string doubling 25 passes and 26
