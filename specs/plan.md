@@ -94,9 +94,10 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 - **P5 — hardening.** Sanitizers, fuzzing, compiler memory bounds,
   Linux and Windows gates.
 - **P6 — performance and reload.** Workload measurements. The
-  benchmark contract follows the owner's prior project: its subjects,
-  its timing method, its workload set, and its boundary-price
-  measurement, changed where an Ulua rule forces it. Contract:
+  benchmark contract follows the owner's prior project: its timing
+  method, its workload set, and its boundary-price measurement,
+  changed where an Ulua rule forces it; the subjects are Luau and
+  Ulua (D30). Contract:
   `specs/blocks/benchmarks.md`; slices in `specs/tracking/p6-performance.md`.
 
 ## 7. Measurement items (P0.5)
@@ -149,6 +150,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D27 | A module exports zero or more functions; `main` is a corpus convention, not a language rule. A host calls any export | 2026-10-14 | `surface.md` Rev 26; owner decision while the examples were written |
 | D28 | The Linux and Windows gates run on the owner's machines. The build and the gate scripts work on macOS, Linux, and Windows; the owner runs them and records the results | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
 | D29 | Fuzzing is in-house: structured and byte-level mutation over the corpus and generated programs, time-boxed, under the sanitizer build. No coverage-guided tool (it needs a nightly toolchain) | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
+| D30 | The benchmarks compare Ulua with hand-written Luau on the pinned VM only; Luau is 1.00×. No C, LuaJIT, or JavaScript subject | 2026-10-16 | `benchmarks.md` Rev 1; owner decision at the P6 start |
 
 ## 9. Corrections and revisions
 

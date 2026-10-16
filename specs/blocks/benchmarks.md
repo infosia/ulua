@@ -1,10 +1,11 @@
 # Benchmarks — contract
 
-Status: Rev 0, 2026-10-16 (P6). The contract follows the benchmark
-contract of the owner's prior project: its subjects, its timing method,
-its workload set, and its boundary-price measurement (`plan.md` P6).
-Each change from that contract is stated with the Ulua rule that forces
-it.
+Status: Rev 1, 2026-10-16 (P6). Rev 1: the subjects are Luau and
+Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
+contract follows the benchmark contract of the owner's prior project:
+its timing method, its workload set, and its boundary-price
+measurement (`plan.md` P6). Each change from that contract is stated
+with the Ulua rule or the decision that forces it.
 
 The suite is a published comparison, not a gate. The performance gate
 of §6 is the gate. The code lives in `crates/ulua_bench`.
@@ -13,38 +14,34 @@ of §6 is the gate. The code lives in `crates/ulua_bench`.
 
 1. Report measured numbers, whatever they are. No subject is tuned to
    flatter Ulua. No baseline is weakened.
-2. The C baseline is 1.00×. Each other subject is reported as the ratio
-   of its median to the C median, and its absolute median.
+2. The `luau` baseline is 1.00×. The `ulua` subject is reported as the
+   ratio of its median to the `luau` median, and its absolute median.
+   The ratio prices the lowering and the limits (interrupt points, step
+   and allocation charges, the helpers) against the same VM.
 3. Every subject computes the same workload and gives the same integer
    checksum. The runner withholds the timings of a workload if any
    measured checksum differs.
-4. The suite names and cites only the runtimes that it compares, by
-   upstream URL (CLAUDE.md hygiene). The workloads are public
-   algorithms written fresh here.
+4. The suite cites Luau by its upstream URL and the pinned revision
+   (CLAUDE.md hygiene). The workloads are public algorithms written
+   fresh here.
 
 ## 2. Subjects
 
 | Subject | What it is | Timed by |
 |---|---|---|
-| C | hand-written C, `clang -O2 -fwrapv -ffp-contract=off` | itself (monotonic clock) |
+| luau | the algorithm written by hand in idiomatic Luau, on the pinned VM ([luau.org](https://luau.org), `luau-revision.txt`) with the production compile options (O1, `pipeline.md` §5.19), no interrupt callback | the runner, around `lua_pcall` of the workload function |
 | ulua | the Ulua workload through the product C ABI, Release library | the runner, around `ulua_call` of the exported workload function |
-| luau | the same algorithm written by hand in Luau, on the pinned VM with the production compile options (§5.19 of `pipeline.md`: O1), no interrupt callback | the runner, around `lua_pcall` |
-| LuaJIT | [luajit.org](https://luajit.org) 2.1 | itself (`os.clock`) |
-| V8 | Node.js ([nodejs.org](https://nodejs.org)) | itself |
-| JSC | JavaScriptCore ([webkit.org](https://webkit.org)), when present | itself |
 
-- Ulua has no clock primitive, so the runner times the `ulua` and
-  `luau` subjects from outside. The others time themselves and print
-  `<checksum> <median_seconds>` and every sample.
-- The `luau` subject is new in this contract. The ratio `ulua / luau`
-  prices the lowering and the limits (interrupt points, step and
-  allocation charges, the helpers) against the same VM. The `luau`
-  host links the pinned VM directly. It is a benchmark tool, not a
-  public API (invariant 6).
-- The `ulua` subject runs with `max_steps` and `max_memory_bytes` set by
-  the runner to values that no workload reaches. The record states the
-  values. The step and allocation charges stay in the measured time:
-  they are a cost of the product.
+- The prior contract compares C, its own two tiers, LuaJIT, and two
+  JavaScript runtimes. Ulua has one pipeline on the pinned VM
+  (invariant 6), so the owner keeps the one comparison that the
+  product can change: Ulua against Luau on the same VM.
+- The `luau` host links the pinned VM directly. It is a benchmark
+  tool, not a public API (invariant 6).
+- The `ulua` subject runs with `max_steps` and `max_memory_bytes` set
+  by the runner to values that no workload reaches. The record states
+  the values. The step and allocation charges stay in the measured
+  time: they are a cost of the product.
 
 ## 3. Timing method
 
@@ -55,11 +52,11 @@ of §6 is the gate. The code lives in `crates/ulua_bench`.
    subject. The quartile at `p` of sorted samples `x[0..n]` is at
    position `(n - 1) * p`, by linear interpolation.
 3. Warm-up is a time floor: at least 200 ms of measured warm-up
-   execution and at least 3 iterations. Each subject reports its
-   measured warm-up. The runner rejects a subject below the floor. A C
-   harness writes its warm-up result to a `volatile` sink, so the
-   optimizer cannot delete the warm-up loop.
+   execution and at least 3 iterations. The record states the measured
+   warm-up. The runner rejects a subject below the floor.
 4. Each `(workload, subject)` measurement runs in a fresh process.
+   Both subjects are timed by the runner from outside, with one clock
+   and one sample policy.
 5. Only the workload execution is timed: not process start, not
    compilation, not instance creation, not output.
 6. `--only <id>` prints the report to stdout and writes no record. It
@@ -67,16 +64,15 @@ of §6 is the gate. The code lives in `crates/ulua_bench`.
    writes `results.json` and the README table. `--only` gives the same
    figure as the full run for the same cell.
 7. One machine, one session. The record names the machine (host, CPU,
-   power source) and the version of each runtime. An absent runtime is
-   `-`, never zero, never a silent skip.
+   power source), the Luau revision, and the Ulua commit.
 
 ## 4. Workloads
 
 The ten workloads of the prior contract, with one change: Ulua rejects
 the bitwise operators (`collisions.md` C4 rule 7), so no subject uses
-i32 wrapping. Each checksum is an exact integer below 2^53 in every
-subject. A running sum is reduced with `% 4294967296` (unsigned 32-bit)
-in every subject; C uses `uint64_t` for it. The shared LCG is
+i32 wrapping. Each checksum is an exact integer below 2^53 in both
+subjects. A running sum is reduced with `% 4294967296` (unsigned 32-bit)
+in both subjects. The shared LCG is
 `state = (state * 1664525 + 1013904223) % 4294967296`; the product
 stays below 2^53.
 
@@ -94,16 +90,13 @@ stays below 2^53.
 | collect | build a graph of mixed-size records and strings, drop part, keep the rest | reduced checksum over the kept graph |
 
 - The implementer pins N, M, K, and each checksum formula, the same in
-  every subject, and records them in the README of the crate. The C
-  baseline runs in about 10 to 500 ms per iteration (a target).
-- `tree` and `collect` allocate through each runtime's own memory
-  manager. No subject forces a collection, and no subject frees by
-  hand except C. This changes the prior contract: Ulua has no
-  collection API and no explicit free.
+  both subjects, and records them in the README of the crate. The
+  `luau` subject runs in about 10 to 500 ms per iteration (a target).
+- `tree` and `collect` allocate through the Luau memory manager. No
+  subject forces a collection: Ulua has no collection API.
 - `callbacks` measures the idiomatic callback spelling against a
-  hand-written loop: C, Luau, and LuaJIT write loops; Ulua and the
-  JavaScript runtimes call the array methods. The published row says
-  this.
+  hand-written loop: Luau writes loops; Ulua calls the array methods.
+  The published row says this.
 - The Ulua workloads are accepted programs: they type-check under
   `tsc` with the prelude, and each one is compiled at the default
   compile limits.
@@ -140,12 +133,9 @@ the P6.1 record.
 ## 7. Layout
 
 ```
-crates/ulua_bench/              the benchmark crate (bin `cross-language`, bin `boundary`)
+crates/ulua_bench/              the benchmark crate (bin `bench`, bin `boundary`)
   workloads/ulua/<id>.ts        one exported workload function that returns the checksum
   workloads/luau/<id>.luau      the hand-written Luau
-  workloads/c/<id>.c            baseline and self-timing harness
-  workloads/js/<id>.js          run under node and jsc
-  workloads/lua/<id>.lua        run under luajit
   results.json                  captured medians and samples
-  README.md                     the generated table (C = 1.00×), machine and versions
+  README.md                     the generated table (luau = 1.00×), machine and revisions
 ```
