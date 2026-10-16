@@ -93,7 +93,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 - **P4 — async.** Coroutines, tasks, requests.
 - **P5 — hardening.** Sanitizers, fuzzing, compiler memory bounds,
   Linux and Windows gates.
-- **P6 — performance and reload.** Workload measurements. The
+- **P6 — performance.** Workload measurements. The
   benchmark contract follows the owner's prior project: its timing
   method, its workload set, and its boundary-price measurement,
   changed where an Ulua rule forces it; the subjects are Luau and
@@ -151,6 +151,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D28 | The Linux and Windows gates run on the owner's machines. The build and the gate scripts work on macOS, Linux, and Windows; the owner runs them and records the results | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
 | D29 | Fuzzing is in-house: structured and byte-level mutation over the corpus and generated programs, time-boxed, under the sanitizer build. No coverage-guided tool (it needs a nightly toolchain) | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
 | D30 | The benchmarks compare Ulua with hand-written Luau on the pinned VM only; Luau is 1.00×. No C, LuaJIT, or JavaScript subject | 2026-10-16 | `benchmarks.md` Rev 1; owner decision at the P6 start |
+| D31 | Reload leaves P6; a later phase decides its meaning and contract | 2026-10-16 | `tracking/p6-performance.md`; owner decision |
 
 ## 9. Corrections and revisions
 

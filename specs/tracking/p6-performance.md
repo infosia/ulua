@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: open (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -10,7 +10,6 @@ Status: open; P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE
 | P6.2 | Boundary price (§5) | ns per call for both boundaries, each layer's share, a named shrink candidate or "the floor"; no production change |
 | P6.3 | Performance gate (§6) | A ratio test in `gate.sh timing` with a bound from the P6.1 record; Red with a seeded slowdown |
 | P6.4 | GC pacing against `max_memory_bytes` (P5 carry-over) | `pipeline.md` §6.5 settings; the 18-frame spill loop ends with `limit:steps` at 4 and 16 MiB; the §5.19 ratio tests pass |
-| P6.5 | Reload | Contract first, at the slice start |
 
 Shrink slices follow the `ulua / luau` column of P6.1, each with a
 stated problem and evidence (principle 13). They run before P6.3, so
