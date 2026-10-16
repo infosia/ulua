@@ -48,6 +48,7 @@ Rev 43: §5.19 loop exits, a derived instruction bound, the prelude, async shape
 Rev 44: §5.14.5a `CAPTURE_LOCALS`; §5.19 helper bodies, uncounted lines, the ratio bound 6 (P5.5 review 3).
 Rev 45: §5.20 builtin aliases and the index check (P6.S1).
 Rev 46: §5.21 loop form; `collisions.md` C9.2 copies only captured bindings (P6.S2).
+Rev 47: §5.22 expression form (P6.S3).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -624,6 +625,46 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     measurement, O1): the loop form is 4 to 13% of the overhead of
     the loop workloads and 3 to 4 instructions per iteration
     (fib-loop 25.2 to 21.9 per inner iteration).
+
+22. **Expression form (P6.S3).** The slot form of §5.8 writes each
+    operand into a temporary. A temporary is needed only where C12
+    needs it: where the plain Luau form reads a value later than
+    JavaScript does. The emitter writes an operand inline, without a
+    temporary, in these cases:
+    - A number or boolean literal, always (Luau emits `ADDK`,
+      `SUBK`, and the other constant forms).
+    - A read of a binding that is a Luau local (not spilled), when
+      the part of the expression that is evaluated after the read
+      cannot write that binding. An assignment and an update are
+      statements only (`surface.md`), so only a call can write a
+      binding inside an expression, and only a binding that a closure
+      captures or a module-level binding. So: a read of an uncaptured
+      local of the function is always inline; a read of a captured
+      or module-level binding is inline when the rest of the
+      expression contains no call. Otherwise the read keeps its
+      temporary (C12.1, `n + inc()`).
+    - A comparison that is the whole condition of an `if`, `while`,
+      or `for`, written into the condition (`if a < b then`), with
+      its operands under the two rules above.
+    - The value of a declaration or an assignment to a binding that
+      is a Luau local: the last operation writes the binding
+      directly, with the typed write of §5.10 (`b = (x + y) :: T`).
+      A compound assignment keeps C12.5: the old value is read before
+      the right side.
+    - The callee and each argument of a call, under the two first
+      rules; each such operand is one instruction, so
+      `STATEMENT_INSTRUCTIONS` (§5.19) holds.
+    - An inline operator expression has at most
+      `PURE_EXPRESSION_NODES` (3) nodes, as the logical and
+      conditional forms have; longer chains keep temporaries
+      (`luau-analyze` gave "Code is too complex to typecheck" on
+      longer `&&` chains, §5.19).
+    The §5.19 count counts the statements that the emitter writes;
+    fewer statements give fewer interrupt points. Measured before the
+    rule (P6.S2 measurement, O1, layers removed together):
+    fib-recursive 54%, fib-loop 43%, primes 23%, particles 13%,
+    queen 10% of the overhead; fib-recursive 24.5 to 8.0 instructions
+    per call (hand-written Luau 6.5).
 
 ## 6. Limits
 

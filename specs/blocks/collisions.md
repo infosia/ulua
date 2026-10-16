@@ -520,7 +520,7 @@ and 6 in `a31`:
    of `h` before the trap in both; `zs[i(0)][i(1)].f = h()` with
    `zs = []` evaluates `i(0)` and `i(1)` and throws before `h`.
 
-Accept: `a18`, `a31`, `a50`. Trap: `t07`.
+Accept: `a18`, `a31`, `a50`, `a66`. Trap: `t07`.
 
 ## C13. Construction
 
