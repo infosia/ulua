@@ -430,7 +430,7 @@ Reject: `r01`, `r11`, `r25`, `r26`, `r27`, `r28`.
    does not give.
 4. Each iteration of `for…of` gives its `const` binding a new binding.
 
-Accept: `a07`, `a09`, `a17`. Reject: `r42`, `r49`.
+Accept: `a07`, `a09`, `a17`, `a65`. Reject: `r42`, `r49`.
 
 ## C10. Declaration order
 
