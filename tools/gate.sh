@@ -1,7 +1,7 @@
 #!/bin/sh
 # Standing gate. Usage: sh tools/gate.sh <quick|full|sanitize|timing>
 #   quick: corpus witnesses (header, tsc, node).
-#   full:  quick, then the hygiene scan.
+#   full:  quick, then the remainder shadow checks and the hygiene scan.
 #   sanitize: the tests, the Luau witnesses, the examples, and the docs
 #   witness on the ASan and UBSan build (pipeline.md §2.6), in
 #   target/sanitize. Any sanitizer report fails it.
@@ -75,6 +75,10 @@ if [ -f Cargo.toml ]; then
     step docs-witness "$NODE" tools/witness/docs.mjs "${CARGO_TARGET_DIR:-target}/examples/docs-run" docs/tutorial-typescript.md
 fi
 if [ "$shape" = full ]; then
+    # pipeline.md §5.25: each native % against math.fmod, over the corpus
+    # and the benchmark workloads. Cost with the build: about 4 s and 9 s.
+    step remainder-shadow-corpus env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua --features remainder-shadow --test runtime p6_remainder::shadow_corpus_accept_and_trap -- --exact
+    step remainder-shadow-workloads env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua_bench --features remainder-shadow --bin bench tests::shadow_ten_workloads -- --exact
     step hygiene sh tools/hygiene.sh
 fi
 printf 'gate %s: PASS\n' "$shape"

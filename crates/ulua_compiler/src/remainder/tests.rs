@@ -98,7 +98,7 @@ fn cycle(count: usize) -> String {
 fn component_round_limit_preserves_independent_counter() {
     let body = format!("{}return x6%3;", cycle(7));
     let mut module = checked(&format!("export function main():number{{{body}}}"));
-    assert_eq!(analyze(&mut module).rounds, FACT_ROUNDS);
+    assert_eq!(analyze(&mut module).unwrap().rounds, FACT_ROUNDS);
     form(&body, 1, 0);
     let body = format!("{}let i=0;i++;return x7%3+i%40;", cycle(8));
     form(&body, 1, 1);
@@ -137,14 +137,14 @@ fn cycle_across_closure_write_shares_component_limit() {
 fn acyclic_chain_has_no_component_round_limit() {
     let body = chain(32);
     let mut module = checked(&format!("export function main():number{{{body}}}"));
-    assert_eq!(analyze(&mut module).rounds, 2);
+    assert_eq!(analyze(&mut module).unwrap().rounds, 2);
     form(&body, 1, 0);
 }
 #[test]
-fn widening_thresholds_come_from_other_components_of_the_function() {
+fn widening_thresholds_exclude_other_bindings() {
     let mut module =
         checked("export function main():number{let x=0;x++;const other=7%3;return x;}");
-    assert_eq!(analyze(&mut module).rounds, 4);
+    assert_eq!(analyze(&mut module).unwrap().rounds, 3);
 }
 #[test]
 fn nested_independent_component_keeps_its_fact() {
@@ -202,7 +202,7 @@ fn report_corpus_and_workload_facts() {
             let mut module =
                 crate::checker::check_with_grants(&parsed.program, source.as_bytes(), 128, &grants)
                     .unwrap();
-            let report = analyze(&mut module);
+            let report = analyze(&mut module).unwrap();
             largest = largest.max(report.rounds);
             directory_largest = directory_largest.max(report.rounds);
             let sites: Vec<_> = report
@@ -223,7 +223,7 @@ fn report_corpus_and_workload_facts() {
         eprintln!("largest fact round count for {directory}={directory_largest}");
     }
     eprintln!("largest fact round count={largest}");
-    assert_eq!(largest, FACT_ROUNDS);
+    assert!(largest <= FACT_ROUNDS);
 }
 
 #[path = "../../../ulua/tests/support/remainder_growth.rs"]
@@ -232,7 +232,7 @@ mod growth;
 fn growth_shape_reaches_eight_rounds() {
     for bytes in [4096, 16384, 65536] {
         let mut module = checked(&growth::source("fact-rounds", bytes));
-        let report = analyze(&mut module);
+        let report = analyze(&mut module).unwrap();
         assert_eq!(report.rounds, FACT_ROUNDS);
         assert!(!report.sites.is_empty());
         assert_eq!(report.components_at_limit, report.sites.len());
@@ -247,10 +247,11 @@ fn shadow_rejects_false_native_flags() {
     assert!(std::env::var_os("ULUA_REMAINDER_SHADOW").is_some());
     struct Force;
     impl Visitor for Force {
-        fn expression(&mut self, e: &mut Expr) {
+        fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
             if let E::Binary(op @ "%", _, _) = &mut e.kind {
                 *op = NATIVE_REMAINDER;
             }
+            Ok(())
         }
     }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -261,7 +262,7 @@ fn shadow_rejects_false_native_flags() {
         let mut module = checked(&format!(
             "export function main():number{{return {expression};}}"
         ));
-        visit_module(&mut module, &mut Force);
+        visit_module(&mut module, &mut Force).unwrap();
         let code = crate::emitter::emit(&module, crate::OUTPUT_FACTOR).unwrap();
         let path = directory.join(format!("case-{i}.luau"));
         std::fs::write(
@@ -289,15 +290,18 @@ fn unset_member_invalidates_the_whole_component() {
         checked("export function main():number{let x=7;let y=1;let z=1;x=y;return x%3+7%x;}");
     struct Declarations(Vec<usize>);
     impl Visitor for Declarations {
-        fn expression(&mut self, _: &mut Expr) {}
-        fn statement(&mut self, s: &mut S) {
+        fn expression(&mut self, _: &mut Expr) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+        fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
             if let S::Declare(id, _) = s {
                 self.0.push(*id);
             }
+            Ok(())
         }
     }
     let mut declarations = Declarations(vec![]);
-    visit_module(&mut module, &mut declarations);
+    visit_module(&mut module, &mut declarations).unwrap();
     assert_eq!(declarations.0.len(), 3);
     let [x, y, z] = declarations.0[..] else {
         unreachable!();
@@ -308,8 +312,10 @@ fn unset_member_invalidates_the_whole_component() {
         z: usize,
     }
     impl Visitor for Initializers {
-        fn expression(&mut self, _: &mut Expr) {}
-        fn statement(&mut self, s: &mut S) {
+        fn expression(&mut self, _: &mut Expr) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+        fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
             if let S::Declare(id, e) = s {
                 if *id == self.y {
                     e.kind = E::Read(self.z);
@@ -324,11 +330,12 @@ fn unset_member_invalidates_the_whole_component() {
                     e.kind = E::Binary("+", Box::new(read(self.x)), Box::new(read(self.y)));
                 }
             }
+            Ok(())
         }
     }
     // Build x=7; y=z; z=x+y; x=y. The y/z writes stay unset and x=y never joins.
-    visit_module(&mut module, &mut Initializers { x, y, z });
-    let report = analyze(&mut module);
+    visit_module(&mut module, &mut Initializers { x, y, z }).unwrap();
+    let report = analyze(&mut module).unwrap();
     assert_eq!(report.rounds, 2);
     let code = crate::emitter::emit(&module, crate::OUTPUT_FACTOR).unwrap();
     assert_eq!(code.matches("__ulua_fmod(").count(), 2, "{code}");
@@ -340,8 +347,10 @@ fn unset_member_invalidates_the_whole_component() {
 fn missing_initializer_and_unset_cycles_have_no_binding_fact() {
     struct RemoveInitializer;
     impl Visitor for RemoveInitializer {
-        fn expression(&mut self, _: &mut Expr) {}
-        fn statement(&mut self, s: &mut S) {
+        fn expression(&mut self, _: &mut Expr) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+        fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
             if let S::Declare(id, e) = s {
                 let id = *id;
                 let replacement = Expr {
@@ -354,25 +363,29 @@ fn missing_initializer_and_unset_cycles_have_no_binding_fact() {
                 let value = std::mem::replace(e, replacement);
                 *s = S::Assign(id, None, value);
             }
+            Ok(())
         }
     }
     let mut module = checked("export function main():number{let x=8;return x%3;}");
-    visit_module(&mut module, &mut RemoveInitializer);
-    assert!(analyze(&mut module).sites.is_empty());
+    visit_module(&mut module, &mut RemoveInitializer).unwrap();
+    assert!(analyze(&mut module).unwrap().sites.is_empty());
     let mut module = checked("export function main():number{let x=8;return x%3;}");
     let mut id = 0;
     struct Cycle<'a>(&'a mut usize);
     impl Visitor for Cycle<'_> {
-        fn expression(&mut self, _: &mut Expr) {}
-        fn statement(&mut self, s: &mut S) {
+        fn expression(&mut self, _: &mut Expr) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+        fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
             if let S::Declare(id, e) = s {
                 *self.0 = *id;
                 e.kind = E::Read(*id);
             }
+            Ok(())
         }
     }
-    visit_module(&mut module, &mut Cycle(&mut id));
-    let report = analyze(&mut module);
+    visit_module(&mut module, &mut Cycle(&mut id)).unwrap();
+    let report = analyze(&mut module).unwrap();
     assert_eq!(report.rounds, 1);
     assert!(report.sites.is_empty());
 }
@@ -405,4 +418,147 @@ fn native_remainder_reserves_the_fmod_checkpoint_weight() {
             fmod.matches("__ulua_interrupt()").count()
         );
     }
+}
+
+#[test]
+fn unrelated_remainders_do_not_delay_counter_widening() {
+    form(
+        "let s=0;for(let i=0;i<100;i++){s=s+i%2+i%3+i%4+i%5+i%6+i%7+i%8;}return s;",
+        7,
+        0,
+    );
+}
+
+#[test]
+fn missing_expression_node_returns_internal() {
+    let mut graph = Graph::default();
+    let mut eligible = [];
+    let mut build = Build {
+        source: &[],
+        graph: &mut graph,
+        indices: HashMap::new(),
+        starts: HashMap::new(),
+        stack: vec![],
+        owners: &[],
+        eligible: &mut eligible,
+    };
+    let mut expression = Expr {
+        flow: None,
+        bare_true: false,
+        start: 0,
+        ty: crate::ir::Type::Number,
+        kind: E::Number(1.0),
+    };
+    let child = Expr {
+        kind: E::Number(2.0),
+        ..expression
+    };
+    expression.kind = E::Binary(
+        "%",
+        Box::new(child),
+        Box::new(Expr {
+            kind: E::Number(3.0),
+            ..expression
+        }),
+    );
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build.expression(&mut expression)
+    }));
+    assert_eq!(result.unwrap().unwrap_err().code, "internal");
+    assert_eq!(build.index(&expression).unwrap_err().code, "internal");
+    assert_eq!(
+        build.lookup(&build.starts, &expression).unwrap_err().code,
+        "internal"
+    );
+}
+
+#[test]
+fn deep_ir_expression_returns_nesting_depth() {
+    let mut module = checked("export function main():number{return 7%3;}");
+    let expression = || Expr {
+        flow: None,
+        bare_true: false,
+        start: 37,
+        ty: crate::ir::Type::Number,
+        kind: E::Number(1.0),
+    };
+    let mut value = expression();
+    for _ in 0..module.depth {
+        value = Expr {
+            kind: E::Binary("+", Box::new(value), Box::new(expression())),
+            ..expression()
+        };
+    }
+    module.functions[0].body = vec![S::Return(Some(value))];
+    let error = analyze(&mut module).err().unwrap();
+    assert_eq!(error.code, "limit:nesting-depth");
+    assert_eq!(error.offset, 37);
+}
+
+#[test]
+fn deep_ir_statement_returns_nesting_depth() {
+    let mut module = checked("export function main():number{return 7%3;}");
+    let mut statement = S::Return(None);
+    for _ in 0..=module.depth {
+        statement = S::Block(vec![S::Located(37, Box::new(statement))]);
+    }
+    module.functions[0].body = vec![statement];
+    let error = analyze(&mut module).err().unwrap();
+    assert_eq!(error.code, "limit:nesting-depth");
+    assert_eq!(error.offset, 37);
+}
+
+#[test]
+fn removed_write_keys_return_internal() {
+    let mut graph = Graph::default();
+    let mut eligible = [false];
+    let mut build = Build {
+        source: &[],
+        graph: &mut graph,
+        indices: HashMap::new(),
+        starts: HashMap::new(),
+        stack: vec![],
+        owners: &[1],
+        eligible: &mut eligible,
+    };
+    let mut statement = S::Assign(
+        0,
+        None,
+        Expr {
+            flow: None,
+            bare_true: false,
+            start: 0,
+            ty: crate::ir::Type::Number,
+            kind: E::Number(1.0),
+        },
+    );
+    let S::Assign(_, _, e) = &mut statement else {
+        unreachable!()
+    };
+    build.enter_expression();
+    build.expression(e).unwrap();
+    let key = address(e);
+    let start = build.starts.remove(&key).unwrap();
+    assert_eq!(
+        build.statement(&mut statement).unwrap_err().code,
+        "internal"
+    );
+    build.starts.insert(key, start);
+    build.indices.remove(&key);
+    assert_eq!(
+        build.statement(&mut statement).unwrap_err().code,
+        "internal"
+    );
+}
+
+#[test]
+fn nested_for_of_storage_blocks_preserve_checked_depth() {
+    form(
+        &format!(
+            "const a=[1];let x=0;{}x++;return x%3;",
+            "for(const t of a)".repeat(38)
+        ),
+        1,
+        0,
+    );
 }

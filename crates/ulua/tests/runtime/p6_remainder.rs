@@ -8,10 +8,14 @@ mod requests;
 #[allow(dead_code)]
 #[path = "../../../ulua_bench/src/stats.rs"]
 mod stats;
-use std::{path::PathBuf, time::Instant};
+#[cfg(feature = "remainder-shadow")]
+use std::path::PathBuf;
+use std::time::Instant;
+#[cfg(feature = "remainder-shadow")]
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
+#[cfg(feature = "remainder-shadow")]
 fn shadow() {
     assert!(
         std::env::var_os("ULUA_REMAINDER_SHADOW").is_some(),
@@ -44,8 +48,9 @@ fn a68_remainder_edges_match_the_golden() {
         start.elapsed().as_secs_f64()
     );
 }
+// Cost: 0.194 s, Debug; 79 corpus entries, each compared with its golden.
 #[test]
-#[ignore = "Run with ULUA_REMAINDER_SHADOW=1; this option exists only in test builds"]
+#[cfg(feature = "remainder-shadow")]
 fn shadow_corpus_accept_and_trap() {
     shadow();
     let start = Instant::now();
@@ -86,6 +91,12 @@ fn shadow_corpus_accept_and_trap() {
 
 #[test]
 fn native_remainder_keeps_statement_instruction_bounds() {
+    // The shadow helper has test-only calls outside the production statement count.
+    #[cfg(feature = "remainder-shadow")]
+    if std::env::var_os("ULUA_REMAINDER_SHADOW").is_some() {
+        eprintln!("skip instruction bounds: test-only remainder shadow helper is active");
+        return;
+    }
     let _measurement = crate::measurement_lock();
     let start = Instant::now();
     let body = "x=(x*1664525+1013904223)%4294967296;x%=4294967296;".repeat(128);

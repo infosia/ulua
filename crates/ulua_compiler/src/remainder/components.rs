@@ -1,5 +1,5 @@
 //! Iterative component discovery and bounded, dependency-first fact rounds.
-use super::{FACT_ROUNDS, Fact, Node, System, evaluate_range, thresholds};
+use super::{FACT_ROUNDS, Fact, Graph, Node, evaluate_range, thresholds};
 use std::collections::HashMap;
 
 // Edges point from a binding to the bindings that its writes read.
@@ -58,19 +58,43 @@ fn components(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
     result
 }
 
-pub(super) fn solve(system: &mut System, bindings: &mut [Fact]) -> (usize, usize) {
-    thresholds(&mut system.thresholds);
-    let positions: HashMap<_, _> = system
+pub(super) fn solve(graph: &mut Graph, bindings: &mut [Fact]) -> (usize, usize) {
+    let positions: HashMap<_, _> = graph
         .bindings
         .iter()
         .enumerate()
         .map(|(i, id)| (*id, i))
         .collect();
+    // Sort once by value, then scatter. Seven radix passes cost O(writes + bindings).
+    let mut tagged: Vec<_> = (0..positions.len()).map(|pos| (pos, super::MAX)).collect();
+    for write in &graph.writes {
+        if let Some(&pos) = positions.get(&write.binding) {
+            let threshold = match graph.nodes[write.value] {
+                Node::Literal(k) => Some(k),
+                Node::Binary("%", _, b) => match graph.nodes[b] {
+                    Node::Literal(b) if b >= 1 => Some(b - 1),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(value) = threshold {
+                tagged.push((pos, value));
+            }
+        }
+    }
+    thresholds(&mut tagged);
+    let mut thresholds = vec![vec![]; positions.len()];
+    for (pos, value) in tagged {
+        thresholds[pos].push(value);
+    }
+    for values in &mut thresholds {
+        values.dedup();
+    }
     let mut edges = vec![vec![]; positions.len()];
-    for write in &system.writes {
+    for write in &graph.writes {
         if let Some(&pos) = positions.get(&write.binding) {
             // Each write owns one contiguous postorder range, including unsupported forms.
-            for node in &system.nodes[write.start..=write.value] {
+            for node in &graph.nodes[write.start..=write.value] {
                 if let Node::Read(id) = node
                     && let Some(&dependency) = positions.get(id)
                 {
@@ -87,12 +111,12 @@ pub(super) fn solve(system: &mut System, bindings: &mut [Fact]) -> (usize, usize
         }
     }
     let mut writes = vec![vec![]; components.len()];
-    for (index, write) in system.writes.iter().enumerate() {
+    for (index, write) in graph.writes.iter().enumerate() {
         if let Some(&pos) = positions.get(&write.binding) {
             writes[membership[pos]].push((index, pos));
         }
     }
-    let mut values = vec![Fact::Unset; system.nodes.len()];
+    let mut values = vec![Fact::Unset; graph.nodes.len()];
     let mut next = vec![Fact::Unset; positions.len()];
     let mut largest = 0;
     let mut at_limit = 0;
@@ -107,26 +131,26 @@ pub(super) fn solve(system: &mut System, bindings: &mut [Fact]) -> (usize, usize
                 next[member] = Fact::Unset;
             }
             for &(index, pos) in &writes[component] {
-                let write = &system.writes[index];
-                if system.nodes[write.start..=write.value]
+                let write = &graph.writes[index];
+                if graph.nodes[write.start..=write.value]
                     .iter()
                     .any(|node| matches!(node, Node::Read(id) if bindings[*id] == Fact::Unset))
                 {
                     continue;
                 }
-                evaluate_range(system, bindings, &mut values, write.start..=write.value);
+                evaluate_range(graph, bindings, &mut values, write.start..=write.value);
                 next[pos] = next[pos].join(values[write.value]);
             }
             let mut changed = false;
             for &member in members {
-                let id = system.bindings[member];
+                let id = graph.bindings[member];
                 let candidate = &mut next[member];
                 if let (Fact::Integer(lo, hi), Fact::Integer(old_lo, old_hi)) =
                     (*candidate, bindings[id])
                 {
                     // The fixed integer domain bounds this search to 54 comparisons.
                     let hi = if hi > old_hi {
-                        system.thresholds[system.thresholds.partition_point(|t| *t < hi)]
+                        thresholds[member][thresholds[member].partition_point(|t| *t < hi)]
                     } else {
                         old_hi
                     };
@@ -135,7 +159,7 @@ pub(super) fn solve(system: &mut System, bindings: &mut [Fact]) -> (usize, usize
                 changed |= bindings[id] != *candidate;
             }
             for &member in members {
-                bindings[system.bindings[member]] = next[member];
+                bindings[graph.bindings[member]] = next[member];
             }
             if !changed {
                 stable = true;
@@ -145,10 +169,10 @@ pub(super) fn solve(system: &mut System, bindings: &mut [Fact]) -> (usize, usize
         // An unset member leaves some writes out of the join of this component.
         let incomplete = members
             .iter()
-            .any(|&member| bindings[system.bindings[member]] == Fact::Unset);
+            .any(|&member| bindings[graph.bindings[member]] == Fact::Unset);
         if !stable || incomplete {
             for &member in members {
-                bindings[system.bindings[member]] = Fact::None;
+                bindings[graph.bindings[member]] = Fact::None;
             }
         }
     }

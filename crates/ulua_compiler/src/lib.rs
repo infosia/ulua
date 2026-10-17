@@ -423,7 +423,7 @@ fn compile_observed(
     let module = checker::check_with_grants(&parsed.program, source, max_depth, grants);
     observer("check", false);
     let mut module = module?;
-    remainder::analyze(&mut module);
+    remainder::analyze(&mut module)?;
     for f in module.functions.iter().filter(|f| f.exported) {
         if !matches!(
             module.types.promise_value(f.result).unwrap_or(f.result),

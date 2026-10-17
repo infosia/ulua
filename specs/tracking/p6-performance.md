@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S6 OPEN 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -389,6 +389,24 @@ and the constant fold at c54f558.
 | The shadow option is read from the environment in each `Emitter::new`; a change during one compile can omit the helper | MINOR | Rev 55: one compilation reads the option once |
 | Thresholds per function: `i % 2` to `i % 8` in one loop gave 0 native of 7 (a cost that the source of one `%` does not show) | MINOR | Rev 55: thresholds per binding |
 | "system" names the solved unit in the contract and the function graph in the code | MINOR | Rev 55: "component" in the contract; the code type is renamed |
+
+Close of the review (code of the fixes, `gate.sh` change): the walks
+take the depth counter of §3 item 4 (`limit:nesting-depth`; a missing
+node is `internal`); thresholds per binding (`i % 2` to `i % 8` in one
+loop: 7 of 7 native, 0 before); one compilation reads the shadow
+option once; the graph type is `Graph`. Native sites per workload are
+unchanged; largest round count: corpus 6 to 4, workloads 8 to 6.
+`cargo test -p ulua_compiler` 224 passed. `gate.sh full` PASS with the
+shadow steps (corpus 3 s, workloads 10 s). `gate.sh timing`: 14 of 15
+passed; `p25_witness_time` failed with `P22-array-wide-function-product`
+at 12.023 against 12 (a shape with no `%`: function types only); the
+test alone gave 11.588 (159 s). The same shape gave 11.196 and 11.662
+in the two earlier timing runs of this slice. Fact-rounds growth 4.469
+and 4.192; §5.19 largest 5.828; P6.3 within every bound.
+
+Open: the analyzer ratio of `P22-array-wide-function-product` moves
+from 11.2 to 12.0 between runs (its 4 KiB base is 22 ms), so the bound
+12 can fail on noise (MINOR, flake risk).
 
 ## Exit checklist (P6.1)
 

@@ -133,10 +133,11 @@ impl<'a> Emitter<'a> {
         module_locations: &'a HashMap<usize, String>,
         binding_ids: &'a [usize],
         function_types: &'a types::FunctionTypes,
+        #[cfg(feature = "remainder-shadow")] remainder_shadow: bool,
     ) -> Self {
         Self {
             #[cfg(feature = "remainder-shadow")]
-            remainder_shadow: std::env::var_os("ULUA_REMAINDER_SHADOW").is_some(),
+            remainder_shadow,
             module,
             function_types,
             owner,

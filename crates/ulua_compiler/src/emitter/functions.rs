@@ -60,6 +60,8 @@ pub(super) fn emit_with_plan_hook(
     repeat_exports: bool,
     #[cfg(test)] plan_hook: PlanHook<'_>,
 ) -> Result<String, Diagnostic> {
+    #[cfg(feature = "remainder-shadow")]
+    let remainder_shadow = std::env::var_os("ULUA_REMAINDER_SHADOW").is_some();
     let types = types::FunctionTypes::new(module)?;
     let numeric_arrows = constants::numeric_arrows(module, &types)?;
     let paged_exports = module.functions.iter().filter(|f| f.exported).count() > EXPORT_FIELDS;
@@ -194,7 +196,15 @@ pub(super) fn emit_with_plan_hook(
         let mut iterations = 0;
         let (probe, mut layout) = loop {
             iterations += 1;
-            let mut probe = Emitter::new(module, owner, &empty, &owners[owner], &types);
+            let mut probe = Emitter::new(
+                module,
+                owner,
+                &empty,
+                &owners[owner],
+                &types,
+                #[cfg(feature = "remainder-shadow")]
+                remainder_shadow,
+            );
             probe.inline_enabled = true;
             probe.probe_accessors = Some(&context.accessors);
             probe.probe_spills = Some(&context.spilled);
@@ -326,7 +336,15 @@ pub(super) fn emit_with_plan_hook(
     for &(method, arity) in &module.methods {
         context.locals[0].insert(methods::name(method, arity));
     }
-    let mut chunk = Emitter::new(module, 0, &locations, &owners[0], &types);
+    let mut chunk = Emitter::new(
+        module,
+        0,
+        &locations,
+        &owners[0],
+        &types,
+        #[cfg(feature = "remainder-shadow")]
+        remainder_shadow,
+    );
     chunk.context = Some(&context);
     chunk.inline_enabled = true;
     chunk.overhead = context.layouts[0].as_ref().map_or(0, |l| l.overhead);
@@ -469,6 +487,8 @@ impl Emitter<'_> {
             self.module_locations,
             &[],
             self.function_types,
+            #[cfg(feature = "remainder-shadow")]
+            self.remainder_shadow,
         );
         child.context = Some(context);
         child.inline_enabled = true;

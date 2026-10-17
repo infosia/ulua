@@ -3,6 +3,7 @@ mod components;
 #[cfg(test)]
 mod tests;
 mod walk;
+use crate::Diagnostic;
 use crate::ir::{Expr, ExprKind as E, Module, NATIVE_REMAINDER, Statement as S};
 use std::collections::{HashMap, HashSet};
 use walk::Visitor;
@@ -41,15 +42,15 @@ struct Write {
     start: usize,
 }
 #[derive(Default)]
-struct System {
+struct Graph {
     nodes: Vec<Node>,
     writes: Vec<Write>,
     bindings: Vec<usize>,
     sites: Vec<(usize, Site, u32)>,
-    thresholds: Vec<u64>,
 }
 struct Build<'a> {
-    system: &'a mut System,
+    source: &'a [u8],
+    graph: &'a mut Graph,
     indices: HashMap<usize, usize>,
     starts: HashMap<usize, usize>,
     stack: Vec<usize>,
@@ -84,64 +85,77 @@ fn integer(value: f64) -> Option<u64> {
 }
 impl Build<'_> {
     fn push(&mut self, node: Node) -> usize {
-        let id = self.system.nodes.len();
-        self.system.nodes.push(node);
+        let id = self.graph.nodes.len();
+        self.graph.nodes.push(node);
         id
     }
-    fn index(&self, e: &Expr) -> usize {
-        self.indices[&address(e)]
+    fn lookup(&self, map: &HashMap<usize, usize>, e: &Expr) -> Result<usize, Diagnostic> {
+        map.get(&address(e)).copied().ok_or_else(|| {
+            Diagnostic::at(
+                self.source,
+                e.start as usize,
+                "internal",
+                "Missing remainder expression node",
+            )
+        })
+    }
+    fn index(&self, e: &Expr) -> Result<usize, Diagnostic> {
+        self.lookup(&self.indices, e)
     }
     fn binary(&mut self, op: &'static str, a: usize, b: usize, key: Site, start: u32) -> usize {
         let id = self.push(Node::Binary(op, a, b));
         if op == "%" {
-            self.system.sites.push((id, key, start));
-            if let Node::Literal(b) = self.system.nodes[b]
-                && b >= 1
-            {
-                self.system.thresholds.push(b - 1);
-            }
+            self.graph.sites.push((id, key, start));
         }
         id
     }
 }
 impl Visitor for Build<'_> {
     fn enter_expression(&mut self) {
-        self.stack.push(self.system.nodes.len());
+        self.stack.push(self.graph.nodes.len());
     }
-    fn expression(&mut self, e: &mut Expr) {
+    fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
         let id = match &e.kind {
             E::Number(n) => self.push(integer(*n).map_or(Node::None, Node::Literal)),
             E::Read(id) => self.push(Node::Read(*id)),
             E::Binary(op, a, b) => self.binary(
                 op,
-                self.index(a),
-                self.index(b),
+                self.index(a)?,
+                self.index(b)?,
                 Site::Expression(address(e)),
                 e.start,
             ),
             _ => self.push(Node::None),
         };
         self.indices.insert(address(e), id);
-        self.starts
-            .insert(address(e), self.stack.pop().unwrap_or(id));
+        let start = self.stack.pop().ok_or_else(|| {
+            Diagnostic::at(
+                self.source,
+                e.start as usize,
+                "internal",
+                "Missing remainder expression start",
+            )
+        })?;
+        self.starts.insert(address(e), start);
+        Ok(())
     }
-    fn statement(&mut self, s: &mut S) {
+    fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
         let key = address(s);
         match s {
             S::Declare(id, e) => {
                 if self.owners[*id] != 0 {
                     self.eligible[*id] = true;
-                    self.system.bindings.push(*id);
+                    self.graph.bindings.push(*id);
                 }
-                self.system.writes.push(Write {
+                self.graph.writes.push(Write {
                     binding: *id,
-                    value: self.index(e),
-                    start: self.starts[&address(e)],
+                    value: self.index(e)?,
+                    start: self.lookup(&self.starts, e)?,
                 });
             }
             S::Assign(id, op, e) => {
-                let start = self.starts[&address(e)];
-                let value = self.index(e);
+                let start = self.lookup(&self.starts, e)?;
+                let value = self.index(e)?;
                 let value = if let Some(op) = op {
                     let read = self.push(Node::Read(*id));
                     self.binary(op, read, value, Site::Assignment(key), e.start)
@@ -149,7 +163,7 @@ impl Visitor for Build<'_> {
                     value
                 };
                 if let S::Assign(id, _, _) = s {
-                    self.system.writes.push(Write {
+                    self.graph.writes.push(Write {
                         binding: *id,
                         value,
                         start,
@@ -158,6 +172,7 @@ impl Visitor for Build<'_> {
             }
             _ => {}
         }
+        Ok(())
     }
 }
 fn binary(op: &str, a: Fact, b: Fact, increment: bool) -> Fact {
@@ -179,13 +194,13 @@ fn binary(op: &str, a: Fact, b: Fact, increment: bool) -> Fact {
     bounds.map_or(Fact::None, |(lo, hi)| Fact::Integer(lo, hi))
 }
 fn evaluate_range(
-    system: &System,
+    graph: &Graph,
     bindings: &[Fact],
     values: &mut [Fact],
     range: std::ops::RangeInclusive<usize>,
 ) {
     for index in range {
-        values[index] = match system.nodes[index] {
+        values[index] = match graph.nodes[index] {
             Node::None => Fact::None,
             Node::Literal(n) => Fact::Integer(n, n),
             Node::Read(id) => bindings[id],
@@ -193,26 +208,25 @@ fn evaluate_range(
                 op,
                 values[a],
                 values[b],
-                matches!(system.nodes[a], Node::Literal(1))
-                    || matches!(system.nodes[b], Node::Literal(1)),
+                matches!(graph.nodes[a], Node::Literal(1))
+                    || matches!(graph.nodes[b], Node::Literal(1)),
             ),
         };
     }
 }
-fn evaluate(system: &System, bindings: &[Fact], values: &mut Vec<Fact>) {
-    values.resize(system.nodes.len(), Fact::Unset);
-    if !system.nodes.is_empty() {
-        evaluate_range(system, bindings, values, 0..=system.nodes.len() - 1);
+fn evaluate(graph: &Graph, bindings: &[Fact], values: &mut Vec<Fact>) {
+    values.resize(graph.nodes.len(), Fact::Unset);
+    if !graph.nodes.is_empty() {
+        evaluate_range(graph, bindings, values, 0..=graph.nodes.len() - 1);
     }
 }
 // Seven fixed radix passes sort the bounded thresholds in linear time.
-fn thresholds(values: &mut Vec<u64>) {
-    values.push(MAX);
-    let mut scratch = vec![0; values.len()];
+fn thresholds(values: &mut Vec<(usize, u64)>) {
+    let mut scratch = vec![(0, 0); values.len()];
     for shift in (0..56).step_by(8) {
         let mut ends = [0usize; 256];
         for n in values.iter() {
-            ends[((n >> shift) & 255) as usize] += 1;
+            ends[((n.1 >> shift) & 255) as usize] += 1;
         }
         let mut sum = 0;
         for end in &mut ends {
@@ -220,42 +234,48 @@ fn thresholds(values: &mut Vec<u64>) {
             *end = sum;
         }
         for n in values.iter().rev() {
-            let bucket = ((n >> shift) & 255) as usize;
+            let bucket = ((n.1 >> shift) & 255) as usize;
             ends[bucket] -= 1;
             scratch[ends[bucket]] = *n;
         }
         std::mem::swap(values, &mut scratch);
     }
-    values.dedup();
 }
 struct Mark<'a>(&'a HashSet<Site>);
 impl Visitor for Mark<'_> {
-    fn expression(&mut self, e: &mut Expr) {
+    fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
         if self.0.contains(&Site::Expression(address(e)))
             && let E::Binary(op, _, _) = &mut e.kind
         {
             *op = NATIVE_REMAINDER;
         }
+        Ok(())
     }
-    fn statement(&mut self, s: &mut S) {
+    fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
         if self.0.contains(&Site::Assignment(address(s)))
             && let S::Assign(_, Some(op), _) = s
         {
             *op = NATIVE_REMAINDER;
         }
+        Ok(())
     }
 }
-fn visit_module(module: &mut Module, visitor: &mut impl Visitor) {
-    walk::statements(&mut module.body, visitor);
+fn visit_module(module: &mut Module, visitor: &mut impl Visitor) -> Result<(), Diagnostic> {
+    let walk = walk::Walk {
+        source: &module.source,
+        limit: module.depth,
+    };
+    walk.statements(&mut module.body, visitor, 0)?;
     for f in &mut module.functions {
         for (_, e) in &mut f.parameters {
             if let Some(e) = e {
-                walk::expression(e, visitor);
+                walk.expression(e, visitor, 0)?;
             }
         }
-        walk::statements(&mut f.initializers, visitor);
-        walk::statements(&mut f.body, visitor);
+        walk.statements(&mut f.initializers, visitor, 0)?;
+        walk.statements(&mut f.body, visitor, 0)?;
     }
+    Ok(())
 }
 #[derive(Default)]
 pub(crate) struct Report {
@@ -263,27 +283,33 @@ pub(crate) struct Report {
     pub(crate) sites: Vec<u32>,
     pub(crate) components_at_limit: usize,
 }
-pub(crate) fn analyze(module: &mut Module) -> Report {
+pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
+    let walk = walk::Walk {
+        source: &module.source,
+        limit: module.depth,
+    };
     let owners: Vec<_> = module.bindings.iter().map(|b| b.owner).collect();
     let mut roots = vec![0; owners.len()];
     for (id, &owner) in owners.iter().enumerate() {
         roots[id] = if owner == 0 { id + 1 } else { roots[owner - 1] };
     }
-    let mut systems: Vec<_> = (0..=owners.len()).map(|_| System::default()).collect();
+    let mut graphs: Vec<_> = (0..=owners.len()).map(|_| Graph::default()).collect();
     let mut eligible = vec![false; owners.len()];
     let mut build = Build {
-        system: &mut systems[0],
+        source: &module.source,
+        graph: &mut graphs[0],
         indices: HashMap::new(),
         starts: HashMap::new(),
         stack: Vec::new(),
         owners: &owners,
         eligible: &mut eligible,
     };
-    walk::statements(&mut module.body, &mut build);
+    walk.statements(&mut module.body, &mut build, 0)?;
     for f in &mut module.functions {
-        let system = &mut systems[roots[f.binding]];
+        let graph = &mut graphs[roots[f.binding]];
         let mut build = Build {
-            system,
+            source: &module.source,
+            graph,
             indices: HashMap::new(),
             starts: HashMap::new(),
             stack: Vec::new(),
@@ -292,11 +318,11 @@ pub(crate) fn analyze(module: &mut Module) -> Report {
         };
         for (_, e) in &mut f.parameters {
             if let Some(e) = e {
-                walk::expression(e, &mut build);
+                walk.expression(e, &mut build, 0)?;
             }
         }
-        walk::statements(&mut f.initializers, &mut build);
-        walk::statements(&mut f.body, &mut build);
+        walk.statements(&mut f.initializers, &mut build, 0)?;
+        walk.statements(&mut f.body, &mut build, 0)?;
     }
     let mut bindings: Vec<_> = eligible
         .iter()
@@ -305,18 +331,18 @@ pub(crate) fn analyze(module: &mut Module) -> Report {
     let mut report = Report::default();
     let mut native = HashSet::new();
     let mut values = vec![];
-    for system in systems.iter_mut().filter(|s| !s.nodes.is_empty()) {
-        let (rounds, at_limit) = components::solve(system, &mut bindings);
+    for graph in graphs.iter_mut().filter(|s| !s.nodes.is_empty()) {
+        let (rounds, at_limit) = components::solve(graph, &mut bindings);
         report.rounds = report.rounds.max(rounds);
         report.components_at_limit += at_limit;
-        evaluate(system, &bindings, &mut values);
-        for &(node, key, start) in &system.sites {
+        evaluate(graph, &bindings, &mut values);
+        for &(node, key, start) in &graph.sites {
             if matches!(values[node], Fact::Integer(..)) {
                 native.insert(key);
                 report.sites.push(start);
             }
         }
     }
-    visit_module(module, &mut Mark(&native));
-    report
+    visit_module(module, &mut Mark(&native))?;
+    Ok(report)
 }

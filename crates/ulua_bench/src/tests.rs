@@ -1,5 +1,6 @@
 //! Cheap gate checks. The benchmark suite is never a cargo test.
 use super::*;
+#[cfg(feature = "remainder-shadow")]
 use crate::measurement::Workload;
 use std::time::Instant;
 #[path = "../../ulua/tests/support/tsc.rs"]
@@ -174,8 +175,9 @@ fn all_luau_workloads_compile() {
     );
 }
 
+// Cost: 5.521 s, Debug; one Ulua and one reference run per workload.
 #[test]
-#[ignore = "One full correctness run per workload; run with ULUA_REMAINDER_SHADOW=1"]
+#[cfg(feature = "remainder-shadow")]
 fn shadow_ten_workloads() {
     assert!(std::env::var_os("ULUA_REMAINDER_SHADOW").is_some());
     let start = Instant::now();

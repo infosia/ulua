@@ -40,4 +40,4 @@ cc.workspace = true
 
 [dev-dependencies]
 cc.workspace = true
-ulua_compiler = { path = "../ulua_compiler", features = ["test-output-limit", "remainder-shadow"] }
+ulua_compiler = { path = "../ulua_compiler", features = ["test-output-limit"] }
