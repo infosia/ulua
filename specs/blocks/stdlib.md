@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 10, 2026-10-17. Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 11, 2026-10-17. Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -392,6 +392,9 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
    array rule (C6.9 `array-modified`). A `set` on a present key and
    an `add` of a present member change no entry and do not trap (as
    `node`).
+   An `await` in the body of a `for…of` over a `Map` or `Set` is
+   rejected (C6): a suspended traversal outlives its run, and a failed
+   run of another export would reset its count.
 7. **Rejected** (C6): `entries()`, `for…of` over a `Map` (each needs a
    tuple type), `new Map([[k, v]])`, a `forEach` callback with the
    collection parameter, `keys()` or `values()` outside the subject of
@@ -499,7 +502,9 @@ contract).
    (128, the prior contract's value) stops: `stringify` traps
    `limit:json-depth` (a resource limit, outside the comparison,
    invariant 5); `parse` throws `SyntaxError`, as the prior contract
-   treats deep input as malformed.
+   treats deep input as malformed. The script can catch it, so it is a
+   named divergence (C20), not a limit: `node` parses 200 levels and
+   gives the value.
 6. **`JSON.parse(text)`** needs a target type from its context (an
    annotation, a parameter, a result, a field); a call with no
    contextual type is rejected (C20). The target follows rule 1, except
@@ -511,7 +516,10 @@ contract).
    - Well-formed text that does not match the target throws
      `TypeError`: a missing field, a value of another type, `null` for
      a type without `null`. Divergence: `node` returns the value.
-   - A field that the target does not declare is ignored.
+   - A field that the target does not declare is ignored. Divergence:
+     a later `stringify` of the value omits it; `node` keeps it
+     (measured: `{"x":1,"y":2}` parsed as `{ x: number }` gives
+     `{"x":1}` here and `{"x":1,"y":2}` in `node`).
    - A duplicate key takes the last occurrence (as `node`).
    - A number outside the finite range (`1e400`) throws `TypeError`, by
      rule 3 (the prior contract §13.4). Divergence: `node` gives
