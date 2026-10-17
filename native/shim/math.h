@@ -4,6 +4,7 @@
 #include "lua.h"
 #include "lualib.h"
 #include "steps.h"
+#include <cstring>
 // P7.1 Rev 2 Debug Math shapes: N=1/2/4/8 gave maxima 2.747/1.748/1.664/1.719.
 // Select the smallest candidate whose maximum is at most 5.
 static constexpr uint64_t NATIVE_CALL_STEPS = 1;
@@ -37,6 +38,34 @@ static int math_native(lua_State* state) {
     const double result = vm->math_dispatch(op, a, b);
     // Rust returns before a VM allocation or raise.
     lua_pushnumber(state, result);
+    return 1;
+}
+// P7.3 string cost is measured by number_parse_byte_cost.
+static constexpr uint64_t NATIVE_BYTES_PER_STEP = 1;
+static int number_native(lua_State* state) {
+    const unsigned op = static_cast<unsigned>(lua_tointeger(state, lua_upvalueindex(1)));
+    auto* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, lua_upvalueindex(2)));
+    size_t length = 0;
+    const char* input = op <= 1 ? lua_tolstring(state, 1, &length) : "";
+    charge_steps(state, vm, NATIVE_CALL_STEPS + length / NATIVE_BYTES_PER_STEP);
+    const double a = op <= 1 ? 0 : lua_tonumber(state, 1);
+    const double b = lua_tonumber(state, 2);
+    unsigned char output[2300];
+    double number = 0;
+    const int result = vm->number_dispatch(op, a, b, lua_gettop(state) >= 2,
+        reinterpret_cast<const unsigned char*>(input), length, output, &number);
+    if (result < 0) {
+        vm->trap_kind = 4;
+        luaL_error(state, "Invalid Number argument");
+    }
+    if (op <= 1) lua_pushnumber(state, number);
+    else if (op >= 6) lua_pushboolean(state, number != 0);
+    else {
+        // Rust returns the closed format_steps formula in the numeric result slot.
+        // Charge it before allocating the VM result string; no Rust frame is live.
+        charge_steps(state, vm, static_cast<uint64_t>(number));
+        lua_pushlstring(state, reinterpret_cast<const char*>(output), static_cast<size_t>(result));
+    }
     return 1;
 }
 static void push_math(lua_State* state, ulua_vm* vm) {
@@ -132,6 +161,17 @@ static void push_math(lua_State* state, ulua_vm* vm) {
     lua_pushlightuserdata(state, vm);
     lua_pushcclosure(state, math_random, "random", 1);
     lua_setfield(state, -2, "random");
+    if (vm->number_dispatch) {
+        static const char* names[] = {"parseInt", "parseFloat", "toFixed", "toExponential", "toPrecision", "toString", "isNaN", "isFinite", "isInteger", "isSafeInteger"};
+        for (unsigned op = 0; op < 10; ++op) {
+            lua_pushinteger(state, op);
+            lua_pushlightuserdata(state, vm);
+            lua_pushcclosure(state, number_native, names[op], 2);
+            char name[64] = "number_";
+            std::strcat(name, names[op]);
+            lua_setfield(state, -2, name);
+        }
+    }
     lua_setreadonly(state, -1, true);
 }
 #endif

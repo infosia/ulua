@@ -21,6 +21,9 @@ unsafe extern "C" {
         out: *mut *mut c_void,
         error: *mut c_char,
         math: Option<extern "C" fn(u32, f64, f64) -> f64>,
+        number: Option<
+            unsafe extern "C" fn(u32, f64, f64, i32, *const u8, usize, *mut u8, *mut f64) -> i32,
+        >,
     ) -> i32;
     pub(crate) fn ulua_internal_shim_call(
         vm: *mut c_void,

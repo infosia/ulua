@@ -1,4 +1,4 @@
-// Isolate native charges from CALL interrupts in the product Math closures.
+// Isolate native charges from CALL interrupts in the product Math and Number closures.
 #include "../shim/math.h"
 #include "../shim/runtime_errors.h"
 #include "lualib.h"
@@ -44,7 +44,7 @@ static int run_budget(lua_State* state) {
     lua_getref(state, probe->marks);
     for (int i = 1; i <= 3; ++i) {
         lua_rawgeti(state, -1, i);
-        if (lua_isnumber(state, -1)) ++probe->completed;
+        if (!lua_isnil(state, -1)) ++probe->completed;
         lua_pop(state, 1);
     }
     lua_pop(state, 1);
@@ -78,6 +78,44 @@ extern "C" int ulua_internal_probe_math_charge(uint64_t budget, int random,
         const char* text = lua_tostring(state, -1);
         std::strncpy(error, text ? run_message(text) : "No Math probe diagnostic", 255);
         error[255] = 0;
+    }
+    counters[0] = probe.vm.steps;
+    counters[1] = probe.interrupts;
+    counters[2] = probe.interrupt_stops;
+    counters[3] = probe.completed;
+    lua_close(state);
+    ulua_internal_shim_bytecode_free(bytecode);
+    return code;
+}
+
+extern "C" uint64_t ulua_internal_probe_native_bytes_per_step() noexcept {
+    return NATIVE_BYTES_PER_STEP;
+}
+// Exercise the real product closure with exactly known native charges.
+extern "C" int ulua_internal_probe_number_charge(uint64_t budget, int formatting,
+    ulua_number_fn dispatch, uint64_t* counters, char* error) noexcept {
+    const char* source = formatting
+        ? "local arm,m,marks=...\narm()\nmarks[1]=m.number_toFixed(2.5,100)\nmarks[2]=m.number_toFixed(2.5,100)\nmarks[3]=m.number_toFixed(2.5,100)\n"
+        : "local arm,m,marks=...\nlocal s='                               1'\narm()\nmarks[1]=m.number_parseInt(s,10)\nmarks[2]=m.number_parseInt(s,10)\nmarks[3]=m.number_parseInt(s,10)\n";
+    char* bytecode = nullptr;
+    size_t size = 0;
+    int code = ulua_internal_shim_compile(source, std::strlen(source), &bytecode, &size, error);
+    if (code) return code;
+    lua_State* state = luaL_newstate();
+    if (!state) { ulua_internal_shim_bytecode_free(bytecode); return SHIM_MEMORY; }
+    MathBudget probe;
+    probe.bytecode = bytecode;
+    probe.size = size;
+    probe.budget = budget;
+    probe.vm.max_steps = UINT64_MAX;
+    probe.vm.number_dispatch = dispatch;
+    lua_pushcfunction(state, run_budget, "run_budget");
+    lua_pushlightuserdata(state, &probe);
+    const int status = lua_pcall(state, 1, 0, 0);
+    code = status ? (probe.vm.flag ? probe.vm.flag : SHIM_INTERNAL) : 0;
+    if (status) {
+        const char* text = lua_tostring(state, -1);
+        if (text) { std::strncpy(error, text, 255); error[255] = 0; }
     }
     counters[0] = probe.vm.steps;
     counters[1] = probe.interrupts;

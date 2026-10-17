@@ -14,6 +14,7 @@ mod math;
 #[cfg(test)]
 mod math_tests;
 mod native;
+mod number;
 mod objects;
 #[cfg(test)]
 mod p3_tests;

@@ -14,6 +14,7 @@ mod inference;
 mod math;
 mod methods;
 mod narrowing;
+mod number;
 mod order;
 mod paths;
 mod promises;

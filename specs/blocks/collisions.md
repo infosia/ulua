@@ -200,8 +200,16 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    radix outside 2 to 36, or a digit count outside the range of the
    member, traps `invalid-argument`; `node` throws `RangeError` for
    the format members and gives NaN from `parseInt` (radix 0 is its
-   default). The slice adds each measured difference of
-   `toString(radix)` and of `parseInt` here.
+   default). `parseInt` gives the correctly rounded double of the
+   digit prefix (it equals a BigInt reference on every row); `node`
+   approximates at the radixes other than 2, 4, 8, 10, 16, and 32,
+   which ECMA-262 permits. Measured over 10,100 random strings and
+   radixes: 3,265 differences of 1 to 6 ulp, all at those radixes; for
+   example `parseInt("+7hakjc0uq87wsasj!", 34)` is
+   `7.043295590006961e+23` here and `7.043295590006962e+23` under
+   `node`. `toString(radix)`, `toFixed`, `toExponential`,
+   `toPrecision`, and `parseFloat` equal `node` on every row of their
+   tables (10,100 to 20,200 rows each).
 
 Accept: `a02`, `a03`, `a04`, `a10`, `a37`, `a68`, `a69`, `a70`, `a71`, `a74`, `a75`, `a76`. Reject: `r15`, `r22`, `r44`, `r57`, `r149`, `r150`, `r151`, `r156`, `r157`, `r158`,
 `r58`. Trap: `t12`. Retired by P2.4: `retired:r21-string-plus-number`,

@@ -538,6 +538,7 @@ pub unsafe extern "C" fn ulua_instance_new(
                 } else {
                     None
                 },
+                Some(crate::number::dispatch),
             );
             if callback.panicked.get() {
                 native::ulua_internal_shim_free(vm);

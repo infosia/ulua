@@ -119,10 +119,7 @@ fn native_closures_follow_grant_order_and_grants_have_no_tdz() {
 #[test]
 fn library_names_outside_the_surface_are_c11() {
     for body in [
-        "Number('1');",
         "JSON.stringify(1);",
-        "parseInt('1');",
-        "isNaN(1);",
         "Date.now();",
         "const x=globalThis;",
         "Boolean(1);",

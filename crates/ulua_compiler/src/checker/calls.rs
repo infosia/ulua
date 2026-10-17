@@ -33,6 +33,14 @@ impl Checker<'_> {
         {
             return self.math_call(e, call, m, depth, statement);
         }
+        if let Expression::StaticMemberExpression(m) = &call.callee
+            && matches!(&m.object, Expression::Identifier(n) if n.name == "Number" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        {
+            if m.optional {
+                return Err(self.unsupported(m.span));
+            }
+            return self.number_call(e, call, m.property.name.as_str(), None, depth, statement);
+        }
         let mut field_callee = None;
         if let Expression::StaticMemberExpression(m) = &call.callee
             && !m.optional
@@ -48,6 +56,16 @@ impl Checker<'_> {
                     return self.finish_expr(e, statement, value.ty, value.kind);
                 }
                 self.promise_operator(receiver.ty, m.span)?;
+                if receiver.ty == Type::Number {
+                    return self.number_call(
+                        e,
+                        call,
+                        m.property.name.as_str(),
+                        Some(receiver),
+                        depth,
+                        statement,
+                    );
+                }
                 if receiver.ty == Type::String {
                     let method =
                         self.string_method(call, m.property.name.as_str(), receiver, depth)?;
@@ -153,6 +171,35 @@ impl Checker<'_> {
         let callee = if let Some(callee) = field_callee {
             callee
         } else if let Expression::Identifier(n) = &call.callee {
+            if !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())) {
+                match n.name.as_str() {
+                    "Number" => {
+                        return Err(self.error(
+                            call.span,
+                            "C4",
+                            "Number converts its argument; use parseFloat",
+                        ));
+                    }
+                    "isNaN" => {
+                        return Err(self.error(
+                            call.span,
+                            "C4",
+                            "the global isNaN converts its argument; use Number.isNaN",
+                        ));
+                    }
+                    "isFinite" => {
+                        return Err(self.error(
+                            call.span,
+                            "C4",
+                            "the global isFinite converts its argument; use Number.isFinite",
+                        ));
+                    }
+                    "parseInt" | "parseFloat" => {
+                        return self.number_call(e, call, n.name.as_str(), None, depth, statement);
+                    }
+                    _ => (),
+                }
+            }
             self.default_reference(n.name.as_str(), n.span)?;
             if matches!(n.name.as_str(), "print" | "String")
                 && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str()))

@@ -418,7 +418,7 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
 }
 extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_internal_capability* grants, size_t grant_count,
-    const ulua_run_limits* limits, ulua_vm** out, char* error, ulua_math_fn math_dispatch) noexcept {
+    const ulua_run_limits* limits, ulua_vm** out, char* error, ulua_math_fn math_dispatch, ulua_number_fn number_dispatch) noexcept {
     ulua_vm* vm = nullptr;
     try {
         vm = static_cast<ulua_vm*>(std::calloc(1, sizeof(ulua_vm)));
@@ -428,6 +428,7 @@ extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, 
         vm->max_open_requests = limits->max_open_requests;
         vm->host = *host;
         vm->math_dispatch = math_dispatch;
+        vm->number_dispatch = number_dispatch;
         vm->charging = true;
 #ifdef ULUA_FAULT_INJECTION
         fault_begin(&vm->fault);
@@ -533,5 +534,5 @@ extern "C" void ulua_internal_shim_seed_random(ulua_vm* vm, uint64_t seed) noexc
 extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_internal_capability* grants, size_t grant_count,
     const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
-    return ulua_internal_shim_new_math(bytecode, length, host, grants, grant_count, limits, out, error, nullptr);
+    return ulua_internal_shim_new_math(bytecode, length, host, grants, grant_count, limits, out, error, nullptr, nullptr);
 }

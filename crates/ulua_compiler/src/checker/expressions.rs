@@ -429,8 +429,26 @@ impl Checker<'_> {
                     })?;
                     return self.finish_expr(e, statement, Type::Number, ExprKind::Number(n));
                 }
+                if matches!(&m.object, Expression::Identifier(n) if n.name == "Number" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    let n = crate::number::constant(m.property.name.as_str()).ok_or_else(|| {
+                        self.error(
+                            m.span,
+                            "C4",
+                            "a Number member is called or read as a constant",
+                        )
+                    })?;
+                    return self.finish_expr(e, statement, Type::Number, ExprKind::Number(n));
+                }
                 let a = self.expr(&m.object, depth, false)?;
                 self.promise_operator(a.ty, m.span)?;
+                if a.ty == Type::Number {
+                    return Err(self.error(
+                        m.span,
+                        "C4",
+                        "a number member is called, not read as a value",
+                    ));
+                }
                 if a.ty == Type::Error {
                     let key = exceptions::field(m.property.name.as_str()).ok_or_else(|| {
                         self.error(m.span, "C17", "Error has only name and message")
@@ -537,6 +555,14 @@ impl Checker<'_> {
                 return Err(self.error(e.span(), "C2", "Optional field only precedes coalescing"));
             }
             Expression::NewExpression(new) => {
+                if matches!(&new.callee, Expression::Identifier(n) if n.name == "Number" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    return Err(self.error(
+                        new.span,
+                        "C4",
+                        "Number converts its argument; use parseFloat",
+                    ));
+                }
                 if matches!(&new.callee, Expression::Identifier(n) if n.name == "Promise"
                     && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
                 {

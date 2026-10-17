@@ -5,7 +5,10 @@ use std::collections::BTreeSet;
 pub(super) fn prelude(members: &BTreeSet<&str>) -> (String, Vec<String>) {
     let mut text = String::new();
     let mut names = vec![];
-    if members.iter().any(|n| native(n).is_some()) {
+    if members
+        .iter()
+        .any(|n| native(n).is_some() || n.starts_with("__ulua_number_"))
+    {
         text.push_str("local __ulua_math_native: any = select(6, ...)\n");
         names.push("__ulua_math_native".into());
     }
@@ -18,7 +21,18 @@ pub(super) fn prelude(members: &BTreeSet<&str>) -> (String, Vec<String>) {
             continue;
         }
         names.push(name.into());
-        if let Some(member) = native(name) {
+        if let Some(member) = name.strip_prefix("__ulua_number_") {
+            let signature = match member {
+                "parseInt" => "(string, number) -> number",
+                "parseFloat" => "(string) -> number",
+                "toFixed" | "toExponential" => "(number, number?) -> string",
+                "toPrecision" | "toString" => "(number, number) -> string",
+                _ => "(number) -> boolean",
+            };
+            text.push_str(&format!(
+                "local {name}: {signature} = __ulua_math_native.number_{member}\n"
+            ));
+        } else if let Some(member) = native(name) {
             let arity = crate::math::member(member).map_or(1, |(_, arity)| arity);
             let params = vec!["number"; arity].join(", ");
             text.push_str(&format!(

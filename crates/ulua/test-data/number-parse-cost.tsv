@@ -1,0 +1,14 @@
+# Product VM Debug; median of 5 at 1000000 steps; fastest of 3 baseline medians; NATIVE_CALL_STEPS=1; NATIVE_BYTES_PER_STEP=1.
+shape	call	baseline_seconds	seconds	ratio
+space	parseInt(s,10)	0.005377	0.021368	3.974
+space	parseInt(s,3)	0.005377	0.021325	3.966
+space	parseFloat(s)	0.005377	0.021342	3.969
+digits	parseInt(s,10)	0.005377	0.006505	1.210
+digits	parseInt(s,3)	0.005377	0.007793	1.449
+digits	parseFloat(s)	0.005377	0.002847	0.529
+leading-zero	parseInt(s,10)	0.005377	0.016753	3.116
+leading-zero	parseInt(s,3)	0.005377	0.016703	3.106
+leading-zero	parseFloat(s)	0.005377	0.003430	0.638
+unicode	parseInt(s,10)	0.005377	0.009459	1.759
+unicode	parseInt(s,3)	0.005377	0.009426	1.753
+unicode	parseFloat(s)	0.005377	0.009441	1.756

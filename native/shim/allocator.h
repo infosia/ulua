@@ -58,6 +58,7 @@ struct ulua_vm {
     uint64_t random_state[4];
     int math;
     ulua_math_fn math_dispatch;
+    ulua_number_fn number_dispatch;
     ulua_host host;
 };
 static void record_stop(ulua_vm* vm, int code) {
