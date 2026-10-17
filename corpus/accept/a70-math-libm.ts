@@ -24,7 +24,7 @@ export function main(): void {
   print(`sinh ${Math.sinh(3.141592653589793)} ${Math.sinh(1e-8)}`);
   print(`tan ${Math.tan(1)} ${Math.tan(1.5)}`);
   print(`tanh ${Math.tanh(-0.44094602336741673)} ${Math.tanh(0.5)}`);
-  print(`atan2 ${Math.atan2(1, 710)} ${Math.atan2(0, -1)} ${Math.atan2(1, 0.1)}`);
+  print(`atan2 ${Math.atan2(1, 710)} ${Math.atan2(-0, -1)} ${Math.atan2(1, 0.1)}`);
   print(`hypot ${Math.hypot(1, 1.5)} ${Math.hypot(3, 4)} ${Math.hypot(1e+300, 1e+300)}`);
   print(`pow ${Math.pow(2, 0.5)} ${Math.pow(10, -3)} ${Math.pow(1.1, 100)}`);
 }

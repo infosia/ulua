@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 1, 2026-10-17. Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 2, 2026-10-17. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -180,7 +180,15 @@ other member are rejected (C11).
    reaches each helper through a generated local; no script name
    reaches it. A helper call is a `CALL`, not a `FASTCALL`: it fires
    the interrupt of §5.19 and is never folded by the Luau compiler.
-   The slice measures the cost per call and records it.
+   The slice measures the cost per call and records it. Each helper
+   call charges `NATIVE_CALL_STEPS` extra steps to `max_steps`, so the
+   time per step stays inside the §5.19 ratio bound. Measured with no
+   extra charge (P7.1 first form): `x = Math.sin(x)` in a loop gave the
+   ratio 6.152 against the bound 6 (`Math.round`, a prelude helper:
+   1.968); a native `sin` call cost 30.3 ns against 11.1 ns for the
+   `floor` alias. The value is the smallest of 1, 2, 4, 8 whose
+   largest Math-shape ratio is at most 5 (a margin of 1 against run
+   noise); the tracking note records each measured ratio.
 6. **`random`.** Each instance owns one xoshiro256++ generator, seeded
    by splitmix64 expansion of a 64-bit seed. The default seed is
    `0x5355425352454144`, as in the prior contract. The state words
