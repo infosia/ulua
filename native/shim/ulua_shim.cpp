@@ -219,6 +219,14 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         code = SHIM_MAP_MODIFIED;
         message(error, "Map modified");
     }
+    if (!vm->flag && vm->trap_kind == 6) {
+        code = SHIM_JSON_NUMBER;
+        message(error, "Nonfinite JSON number");
+    }
+    if (!vm->flag && vm->trap_kind == 7) {
+        code = SHIM_JSON_DEPTH;
+        message(error, "JSON depth exceeded");
+    }
     if (code == SHIM_UNCAUGHT) message(error, vm->exception);
 
     if (code >= 11 && code <= 13) message(error, vm->capability_name);

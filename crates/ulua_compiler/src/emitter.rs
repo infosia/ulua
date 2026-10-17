@@ -16,6 +16,7 @@ mod expressions;
 mod functions;
 mod interrupts;
 mod joins;
+mod json;
 #[cfg(test)]
 mod loop_tests;
 mod math;

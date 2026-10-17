@@ -161,6 +161,7 @@ impl Paths<'_, '_> {
                 | E::OptionalField(a, _)
                 | E::OptionalLength(a)
                 | E::Length(a)
+                | E::Json(_, a)
                 | E::Await(a)
                 | E::Unary(_, a) => pending.push(a),
                 E::Coalesce(a, b)

@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17; P7.5 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
+Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17; P7.5 COMPLETE 2026-10-17; P7.6 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
 
 ## Slices
 
@@ -270,3 +270,35 @@ Gates on the final code: `cargo test -p ulua_compiler` 239 passed;
 `gate.sh full` PASS (207.4 s); `gate.sh timing` PASS (434.0 s): §5.19
 largest 5.929 (`boolean-template`; case shapes 2.155, 1.202), analyzer
 largest 11.620, P6.3 within every bound (primes 1.169, sort 3.394).
+
+## P7.6 `JSON`
+
+Contract: `stdlib.md` §10 (Rev 10), collisions.md C20 (Rev 52),
+corpus.md §6 `json-number`, surface.md Rev 31. Corpus: `a83` to `a85`
+(equal to `node`), `a86` (`js-comparable: no C20`), `t16`, `r165` to
+`r169`. Red before: all ten gave C11.
+
+The form: the emitter writes a serializer and a target check per
+static type; a Rust parser (`crates/ulua/src/json.rs`) gives grammar
+events, and the shim (`native/shim/json.h`) builds the values through
+the VM allocator.
+
+Failures before the fix: the first `gate.sh timing` run gave the
+compile-memory base 85,520 bytes against the bound 85,347. Removal of
+redundant declaration metadata and empty type-cache entries gave
+85,180.
+
+`node` differential (`crates/ulua/test-data/json-oracle.tsv`, from
+`json-oracle.mjs`): 10 record and array types, 320 `stringify` values
+and 320 `parse` round trips, 0 differences. Runtime tests cover every
+malformed prefix, long strings, many keys, memory limits, and depth 128
+and 129 for both members.
+
+Throughput (Release; a record with a 10,000-element number array, 100
+calls, 4,889,800 bytes): `stringify` 18.7 MB/s, `parse` 34.5 MB/s.
+
+Gates on the final code: `cargo test -p ulua_compiler` 244 passed;
+`gate.sh full` PASS (190.5 s); `gate.sh timing` PASS (412.7 s): §5.19
+largest 5.749 (`boolean-template`; JSON shapes 3.673, 4.466, 4.433,
+1.217), analyzer largest 11.638, P6.3 within every bound (primes
+1.188, sort 3.406).

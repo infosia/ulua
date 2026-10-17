@@ -30,3 +30,5 @@ fn measurement_lock() -> std::sync::MutexGuard<'static, ()> {
 mod p74_tables;
 
 mod p75_strings;
+
+mod p76_json;

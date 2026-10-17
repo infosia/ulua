@@ -32,7 +32,7 @@ impl Checker<'_> {
             let arg = arg
                 .as_expression()
                 .ok_or_else(|| self.unsupported(arg.span()))?;
-            let value = self.expr(arg, depth, false)?;
+            let value = self.expr_as(arg, depth, false, Some(Type::Number))?;
             self.flow(&value.ty, Some(&Type::Number), arg.span())?;
             args.push(value);
         }

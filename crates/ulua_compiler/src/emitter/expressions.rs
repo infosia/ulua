@@ -27,6 +27,12 @@ impl Emitter<'_> {
             return Ok(dest);
         }
         match &expr.kind {
+            E::Json(id, value) => {
+                let slot = self.expression(value, depth)?;
+                self.capture("__ulua_json");
+                self.write_slot(dest, format!("__ulua_json.c{id}({})", self.temp(slot)));
+                self.release(slot);
+            }
             E::Await(value) => {
                 self.capture("__ulua_await");
                 let slot = self.expression(value, depth)?;

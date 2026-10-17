@@ -313,6 +313,7 @@ fn contains_call(expr: &Expr) -> bool {
             | E::Method(..)
             | E::OptionalCall(..)
             | E::OptionalMethod(..)
+            | E::Json(..)
             | E::Await(..) => return true,
             E::Error(_, a)
             | E::InstanceOf(a, _)

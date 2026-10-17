@@ -153,7 +153,7 @@ impl Checker<'_> {
             let arg = call.arguments[0]
                 .as_expression()
                 .ok_or_else(|| self.error(call.span, "C11", "Spread is rejected"))?;
-            let value = self.expr(arg, depth, false)?;
+            let value = self.expr_as(arg, depth, false, Some(Type::String))?;
             self.flow(&value.ty, Some(&Type::String), arg.span())?;
             return self.finish_expr(
                 e,

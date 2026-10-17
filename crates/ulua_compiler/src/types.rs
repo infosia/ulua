@@ -1,6 +1,7 @@
 //! Interned type identities. Signatures store child identities, never child trees.
 mod depths;
 mod field_counts;
+mod json;
 mod links;
 mod partition;
 use std::{collections::HashMap, rc::Rc};
@@ -149,6 +150,8 @@ struct ClassType {
 }
 
 pub(crate) struct Types {
+    json_order_cache: std::cell::RefCell<HashMap<(Type, Type), bool>>,
+    declaration_fields: HashMap<Type, Vec<(usize, Type)>>,
     tables: HashMap<(Type, Option<Type>), Type>,
     nodes: Vec<Node>,
     canonical: Vec<Type>,
@@ -176,6 +179,8 @@ pub(crate) struct Types {
 impl Types {
     pub(crate) fn new() -> Self {
         Self {
+            json_order_cache: Default::default(),
+            declaration_fields: HashMap::new(),
             tables: HashMap::new(),
             nodes: [
                 "number",
@@ -326,12 +331,18 @@ impl Types {
         ty
     }
     pub(crate) fn define_record(&mut self, ty: Type, mut fields: Vec<(usize, Type)>) {
+        if fields.windows(2).any(|p| p[0].0 > p[1].0) {
+            self.declaration_fields.insert(ty, fields.clone());
+        } else {
+            self.declaration_fields.remove(&ty);
+        }
         fields.sort_unstable_by_key(|f| f.0);
         let node = Node::Record(Rc::new(fields));
         self.field_counts[ty.0] = self.count_node(&node);
         self.nodes[ty.0] = node;
     }
     pub(crate) fn record(&mut self, mut fields: Vec<(usize, Type)>) -> Type {
+        let declaration = fields.clone();
         for (_, ty) in &mut fields {
             *ty = self.count_identity(*ty);
         }
@@ -360,7 +371,16 @@ impl Types {
             identity
         };
         self.anonymous_records.insert(fields, ty);
+        if declaration.windows(2).any(|p| p[0].0 > p[1].0) {
+            self.declaration_fields.entry(ty).or_insert(declaration);
+        }
         ty
+    }
+    pub(crate) fn declaration_fields(&self, ty: Type) -> Option<&[(usize, Type)]> {
+        self.declaration_fields
+            .get(&ty)
+            .map(Vec::as_slice)
+            .or_else(|| self.fields(ty))
     }
     pub(crate) fn fields(&self, ty: Type) -> Option<&[(usize, Type)]> {
         match self.nodes.get(ty.0) {
@@ -386,6 +406,11 @@ impl Types {
         mut fields: Vec<(usize, Type)>,
         methods: Vec<(usize, Type)>,
     ) {
+        if fields.windows(2).any(|p| p[0].0 > p[1].0) {
+            self.declaration_fields.insert(ty, fields.clone());
+        } else {
+            self.declaration_fields.remove(&ty);
+        }
         fields.sort_unstable_by_key(|f| f.0);
         let node = Node::Class(Rc::new(ClassType { fields, methods }));
         self.field_counts[ty.0] = self.count_node(&node);

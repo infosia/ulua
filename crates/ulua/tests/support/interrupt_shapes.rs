@@ -72,6 +72,18 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
         ),
         ("increment", number, "x++;", "}"),
         (
+            "json-stringify",
+            "type J={s:string;xs:number[]};export function main(b:boolean):void{const r:J={s:'a\\n\\t\\u0001',xs:[1,2,3]};",
+            "JSON.stringify(r);",
+            "}",
+        ),
+        (
+            "json-parse",
+            "export function main(b:boolean):void{",
+            "{const j:number=JSON.parse('1');}",
+            "}",
+        ),
+        (
             "string-case",
             "export function main(b:boolean):void{let s='Straße ΟΣ İ ﬀ';",
             "s=s.toUpperCase().toLowerCase();",
@@ -161,6 +173,24 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
     ] {
         shapes.push((name, fill(prefix, unit, suffix)));
     }
+    let json_string = "a\\n\\u0001".repeat(bytes / 128);
+    shapes.push((
+        "json-stringify-long",
+        fill(
+            &format!("export function main(b:boolean):void{{const s='{json_string}';"),
+            "JSON.stringify(s);",
+            "}",
+        ),
+    ));
+    let json_space = " ".repeat(bytes / 8);
+    shapes.push((
+        "json-parse-long",
+        fill(
+            &format!("export function main(b:boolean):void{{const s='{json_space}1';"),
+            "{const j:number=JSON.parse(s);}",
+            "}",
+        ),
+    ));
     let long_case = "ΐΣİﬀ".repeat(bytes / 64);
     shapes.push((
         "string-case-long",

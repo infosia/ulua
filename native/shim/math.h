@@ -93,6 +93,7 @@ static int case_native(lua_State* state) {
     lua_pushlstring(state, reinterpret_cast<const char*>(output), static_cast<size_t>(result));
     return 1;
 }
+#include "json.h"
 static void push_math(lua_State* state, ulua_vm* vm) {
     lua_createtable(state, 0, 23);
     lua_pushinteger(state, 0);
@@ -204,6 +205,9 @@ static void push_math(lua_State* state, ulua_vm* vm) {
         lua_pushcclosure(state, case_native, cases[i], 2);
         lua_setfield(state, -2, cases[i]);
     }
+    lua_pushlightuserdata(state, vm);
+    lua_pushcclosure(state, json_parse, "json_parse", 1);
+    lua_setfield(state, -2, "json_parse");
     lua_setreadonly(state, -1, true);
 }
 #endif

@@ -390,6 +390,10 @@ pub(crate) unsafe extern "C" fn dispatch(
     output: *mut u8,
     number: *mut f64,
 ) -> i32 {
+    if op == 14 {
+        // SAFETY: The JSON shim provides its private state and bounded scratch buffer.
+        return unsafe { crate::json::dispatch(input, len, a, output, number) };
+    }
     if op >= 10 {
         // SAFETY: The shim supplies the input and a 3*len (or four byte) output buffer.
         return unsafe { crate::string_case::dispatch(op, a, input, len, output) };

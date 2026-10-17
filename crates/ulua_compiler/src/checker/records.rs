@@ -153,7 +153,9 @@ impl Checker<'_> {
         }
         for ty in self.aliases.values_mut() {
             let identity = self.types.identity(*ty);
-            if self.types.depth(*ty) == self.types.depth(identity) {
+            if self.types.depth(*ty) == self.types.depth(identity)
+                && self.types.same_json_order(*ty, identity)
+            {
                 *ty = identity;
             }
         }
@@ -220,6 +222,8 @@ impl Checker<'_> {
                 return Err(self.error(object.span, "C1", "Value types do not agree"));
             }
             self.checked_type_depth(expected, object.span)?;
+            self.json_literals
+                .push((expected, entries.iter().map(|e| e.0).collect(), object.span));
             return Ok((expected, ExprKind::Object(entries)));
         }
         let ty = self.types.record(fields);
@@ -231,6 +235,8 @@ impl Checker<'_> {
                 "Field limit includes nested anonymous object types",
             ));
         }
+        self.json_literals
+            .push((ty, entries.iter().map(|e| e.0).collect(), object.span));
         Ok((ty, ExprKind::Object(entries)))
     }
     pub(super) fn optional_field(

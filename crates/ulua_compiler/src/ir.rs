@@ -14,6 +14,8 @@ pub(crate) struct Binding {
     pub(crate) declaration: bool,
 }
 pub(crate) struct Module {
+    pub(crate) json: Vec<(bool, Type)>,
+    pub(crate) field_names: std::collections::HashMap<usize, String>,
     pub(crate) hosts: Vec<(usize, String)>,
     pub(crate) exceptions: bool,
     pub(crate) asynchronous: bool,
@@ -63,6 +65,7 @@ pub(crate) struct Expr {
 pub(crate) const NATIVE_REMAINDER: &str = "native%";
 
 pub(crate) enum ExprKind {
+    Json(usize, Box<Expr>),
     Await(Box<Expr>),
     Null,
     Error(&'static str, Box<Expr>),
@@ -264,6 +267,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             | ExprKind::OptionalErrorField(a, _)
             | ExprKind::Field(a, _)
             | ExprKind::OptionalField(a, _)
+            | ExprKind::Json(_, a)
             | ExprKind::Await(a)
             | ExprKind::Unary(_, a)
             | ExprKind::Length(a) => expressions.push(a),

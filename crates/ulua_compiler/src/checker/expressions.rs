@@ -62,6 +62,14 @@ impl Checker<'_> {
         statement: bool,
         expected: Option<Type>,
     ) -> Result<Expr, Diagnostic> {
+        if let Expression::CallExpression(call) = e
+            && let Expression::StaticMemberExpression(m) = &call.callee
+            && matches!(&m.object, Expression::Identifier(n) if n.name == "JSON" && !self.scopes.iter().any(|s| s.contains_key("JSON")))
+        {
+            let depth = self.descend(depth, e.span())?;
+            let value = self.json_call(call, m, expected, depth)?;
+            return self.finish_expr(e, statement, value.ty, value.kind);
+        }
         self.host_value_form(e)?;
         if matches!(e, Expression::Identifier(n) if n.name == "Promise"
             && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))

@@ -126,6 +126,7 @@ impl Walk<'_> {
             | E::Field(a, _)
             | E::OptionalField(a, _)
             | E::OptionalLength(a)
+            | E::Json(_, a)
             | E::Await(a)
             | E::Unary(_, a)
             | E::Length(a) => self.expression(a, visitor, depth)?,

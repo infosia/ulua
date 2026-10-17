@@ -4,7 +4,10 @@ use crate::FIELD_BOUND;
 impl Types {
     // Use the identity only when both budgets retain the same contribution.
     pub(super) fn count_identity(&self, ty: Type) -> Type {
-        if self.nested_field_count(ty) == 0 && self.depth(ty) == self.depth(self.identity(ty)) {
+        if self.nested_field_count(ty) == 0
+            && self.depth(ty) == self.depth(self.identity(ty))
+            && self.same_json_order(ty, self.identity(ty))
+        {
             self.identity(ty)
         } else {
             ty

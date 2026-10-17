@@ -11,6 +11,7 @@ mod expressions;
 mod functions;
 mod hosts;
 mod inference;
+mod json;
 mod math;
 mod methods;
 mod narrowing;
@@ -55,6 +56,8 @@ pub(crate) struct Checker<'s> {
     source_owner: u32,
     captured_writes: std::collections::HashSet<u32>,
     binding_starts: HashMap<u32, usize>,
+    json: Vec<(bool, Type)>,
+    json_literals: Vec<(Type, Vec<usize>, Span)>,
     math: std::collections::BTreeSet<&'static str>,
     methods: std::collections::BTreeSet<(ir::Method, usize)>,
     pub(super) bindings: Vec<ir::Binding>,
@@ -365,6 +368,8 @@ pub(crate) fn check_with_grants(
         source_owner: u32::MAX,
         captured_writes: writes.captured,
         binding_starts: HashMap::new(),
+        json: vec![],
+        json_literals: vec![],
         math: Default::default(),
         methods: Default::default(),
         bindings: vec![],
@@ -489,11 +494,14 @@ pub(crate) fn check_with_grants(
         ids.extend(c.hosts.iter().map(|(id, _)| *id));
     }
     c.tdz()?;
+    c.json_order()?;
     let mut captured: Vec<_> = c.bindings.iter().map(|b| b.declaration).collect();
     for &(owner, id, _) in &c.references {
         captured[id] |= owner != c.bindings[id].owner;
     }
     Ok(ir::Module {
+        json: c.json,
+        field_names: c.fields.into_iter().map(|(name, id)| (id, name)).collect(),
         hosts: c.hosts,
         exceptions: c.uses_exceptions || c.uses_async,
         asynchronous: c.uses_async,

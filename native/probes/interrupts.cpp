@@ -67,7 +67,15 @@ static void interrupt(lua_State* state, int gc) {
     ++gap->interrupts;
 }
 // Instruction counting excludes native bodies; preserve the string for the next call.
-static int case_identity(unsigned, double, double, int, const unsigned char* input, size_t len, unsigned char* output, double*) {
+static int case_identity(unsigned op, double cursor, double, int, const unsigned char* input, size_t len, unsigned char* output, double* consumed) {
+    // Native work is outside this instruction measurement. The parse shape reads the number 1.
+    if (op == 14) {
+        if (cursor != 0) return 8;
+        const double value = 1;
+        std::memcpy(output + 136, &value, sizeof(value));
+        *consumed = 1;
+        return 1;
+    }
     std::memcpy(output, input, len);
     return static_cast<int>(len);
 }

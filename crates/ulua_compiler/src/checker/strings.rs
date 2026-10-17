@@ -130,7 +130,7 @@ impl Checker<'_> {
         let arg = call.arguments[0]
             .as_expression()
             .ok_or_else(|| self.error(call.span, "C5", "String spread is rejected"))?;
-        let value = self.expr(arg, depth, false)?;
+        let value = self.expr_as(arg, depth, false, Some(Type::Number))?;
         if value.ty != Type::Number {
             return Err(self.error(arg.span(), "C5", "String argument type is rejected"));
         }

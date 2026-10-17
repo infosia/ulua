@@ -254,6 +254,8 @@ mod tests {
                     source_owner: u32::MAX,
                     captured_writes: Default::default(),
                     binding_starts: Default::default(),
+                    json: vec![],
+                    json_literals: vec![],
                     math: Default::default(),
                     methods: Default::default(),
                     bindings: vec![],

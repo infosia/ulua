@@ -34,6 +34,9 @@ mod protected_loops;
 mod remainder;
 
 #[allow(dead_code)]
+#[path = "json_shapes.rs"]
+mod json;
+#[allow(dead_code)]
 #[path = "table_shapes.rs"]
 mod tables;
 
@@ -86,6 +89,7 @@ fn nil_checks(shape: &str, bytes: usize) -> String {
 
 pub fn all() -> Vec<Shape> {
     let mut out = vec![];
+    add(&mut out, "P76", json::KEYS, json::source);
     add(&mut out, "P74", tables::KEYS, tables::source);
     add(&mut out, "P6", &["fact-rounds"], remainder::source);
     add(&mut out, "S4", inputs::SOURCE_SHAPES, p1);

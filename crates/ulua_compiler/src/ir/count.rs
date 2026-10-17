@@ -65,6 +65,7 @@ pub(crate) fn nodes(module: &Module) -> usize {
             | ExprKind::Field(a, _)
             | ExprKind::OptionalField(a, _)
             | ExprKind::OptionalLength(a)
+            | ExprKind::Json(_, a)
             | ExprKind::Await(a)
             | ExprKind::Unary(_, a)
             | ExprKind::Length(a) => expressions.push(a),

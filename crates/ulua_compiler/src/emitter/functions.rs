@@ -68,6 +68,7 @@ pub(super) fn emit_with_plan_hook(
     let (math_prelude, math_names) = math::prelude(&module.math);
     let library_locals = LIBRARY_LOCALS
         + math_names.len()
+        + usize::from(!module.json.is_empty())
         + usize::from(paged_exports || repeat_exports)
         + usize::from(!module.hosts.is_empty())
         + numeric_arrows.locals
@@ -376,6 +377,7 @@ pub(super) fn emit_with_plan_hook(
     out.push_str(&prelude::checkpoint(&math_prelude));
     out.push_str(&prelude::checkpoint(&method_prelude));
     out.push_str(&types.declarations);
+    out.push_str(&prelude::checkpoint(&json::prelude(module, bound)?));
     out.push_str(&chunk.headers(&context.numeric_arrows.declarations));
     if let Some(layout) = &context.layouts[0] {
         out.push_str(&chunk.headers(&layout.headers));

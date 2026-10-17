@@ -35,7 +35,12 @@ impl Checker<'_> {
             let arg = arg
                 .as_expression()
                 .ok_or_else(|| self.unsupported(arg.span()))?;
-            let value = self.expr(arg, depth, false)?;
+            let expected = if parse && i == 0 {
+                Type::String
+            } else {
+                Type::Number
+            };
+            let value = self.expr_as(arg, depth, false, Some(expected))?;
             self.flow(
                 &value.ty,
                 Some(&if parse && i == 0 {
