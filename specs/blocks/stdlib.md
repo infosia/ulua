@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 6, 2026-10-17. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 7, 2026-10-17. Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -342,3 +342,72 @@ an Ulua rule forces.
    (random values, digit counts, radixes, and strings) equals the
    helpers, or each difference is named in collisions.md C4.10; the
    §5.19, analyzer, and P6.3 tests pass.
+
+## 8. P7.4 `Map` and `Set`
+
+The member set of the prior contract (its §10), with the changes that
+an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
+
+1. **Representation (M3).** A `Map<K, V>` or a `Set<K>` is a prelude
+   table that the script cannot read (§0.3): an index table from key
+   to slot, a key array and a value array in insertion order, a
+   separate slot for the NaN key, a live count, and holes that a
+   compaction removes when the live count falls to half of the slots.
+   Measured cost against a plain table (M3): `set` 1.3 to 1.5 times,
+   `get` 1.2 to 1.3, `delete` 2.4 to 2.8 (with compaction), iteration
+   1.5.
+2. **Key types.** `number` (SameValueZero: NaN is one key, `-0` is
+   stored as `+0`), `string` (content), `boolean`, and a class, record,
+   or array type (identity, as `node` compares object keys). A
+   function type, a `T | null` type, a `T?` type, and a promise type
+   are rejected as `K` (C7 does not define their equality). `V` has no
+   restriction except §1.4 for `get`.
+3. **Order.** Iteration follows the first insertion: `set` on a
+   present key keeps its position; `delete` and a later `set` append
+   it. Measured: `set a, set b, set a, delete b, set b, set c` gives
+   keys `a,b,c` and values `9,3,4`.
+4. **`Map<K, V>` API.** `new Map<K, V>()` (the type arguments come
+   from the annotation or the call), `new Map<K, V>(other)` with a
+   `Map<K, V>` source (a shallow copy in insertion order), `size`
+   (read), `get(k)` (§1: the absent type `V?`; rejected when `V`
+   includes `null`), `getOr(k, fallback)` (a prelude addition, total
+   for every `V`), `set(k, v)` (returns the receiver), `has(k)`,
+   `delete(k)` (returns whether an entry was removed), `clear()`,
+   `forEach(f)` with `f` of `(v)` or `(v, k)`, and `for (const k of
+   m.keys())` and `for (const v of m.values())` as the direct subject
+   of `for…of`.
+5. **`Set<K>` API.** `new Set<K>()`, `new Set<K>(xs)` with a `K[]`
+   source (first-occurrence order), `new Set<K>(other)` with a
+   `Set<K>` source, `size`, `add(k)` (returns the receiver), `has`,
+   `delete`, `clear`, `forEach(f)` with `f` of `(k)`, and `for (const
+   k of s)`.
+6. **Mutation during traversal.** A `forEach` callback or a `for…of`
+   body that adds, deletes, or clears an entry of the traversed
+   container traps `map-modified` after that change. Divergence:
+   `node` continues; it visits an entry added during the traversal and
+   skips an entry deleted before its turn (measured: `forEach` over
+   `{x}` that sets `y` visits `x,y`; `for…of` over `{1,2,3}` that
+   deletes 2 at 1 visits `1,3`). The prior contract visits only the
+   entries present at the start, without a trap; Ulua follows its own
+   array rule (C6.9 `array-modified`).
+7. **Rejected** (C6): `entries()`, `for…of` over a `Map` (each needs a
+   tuple type), `new Map([[k, v]])`, a `forEach` callback with the
+   collection parameter, `keys()` or `values()` outside the subject of
+   `for…of`, `WeakMap`, `WeakSet`, a member read as a value, `Map` and
+   `Set` as values, and the set algebra and `Map.groupBy` (a later
+   revision).
+8. **Limits.** Each prelude loop (compaction, copy, traversal) has the
+   interrupt points of §5.19 and its allocations are charged.
+9. **Corpus.** `a77` (map battery with number and string keys, NaN and
+   `-0`, `getOr`, `size`, `clear`), `a78` (insertion order with
+   overwrite, delete, re-insert; `keys()`, `values()`, `forEach`), `a79`
+   (set battery, array source, identity keys of a class), all
+   `js-comparable: yes`; `t13` (`forEach` that adds an entry traps
+   `map-modified`; `js-comparable: no C6`); `r159` (a function key), `r160`
+   (`entries()`), `r161` (`for…of` over a `Map`), `r162` (`get` on a
+   `V | null` map).
+10. **Exit.** The corpus equals its goldens; `node` agrees on `a77` to
+    `a79`; a randomized differential test of 10^4 operation sequences
+    against `node` agrees on every observable result; the §5.19,
+    analyzer, and P6.3 tests pass; the cost of each operation is
+    measured and recorded.

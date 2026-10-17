@@ -42,6 +42,10 @@ export function install(output, grants = [], requests = []) {
   globalThis.print = (text) => {
     output.push(String(text));
   };
+  // stdlib.md §8: the prelude addition getOr.
+  Map.prototype.getOr = function (key, fallback) {
+    return this.has(key) ? this.get(key) : fallback;
+  };
   globalThis.Utf8 = Object.freeze({
     byteLength: (text) => Buffer.byteLength(text, "utf8"),
   });

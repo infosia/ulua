@@ -11,7 +11,7 @@ at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: infe
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
 reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
-optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2; Rev 26: `main` is optional, D27; Rev 27: `Math`, P7.1; Rev 28: `Number`, `parseInt`, `parseFloat`, the number members, P7.3; the §3 rows name `Math`).
+optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2; Rev 26: `main` is optional, D27; Rev 27: `Math`, P7.1; Rev 28: `Number`, `parseInt`, `parseFloat`, the number members, P7.3; the §3 rows name `Math`; Rev 29: `Map`, `Set`, P7.4).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -78,12 +78,12 @@ rejected, also where `tsc` accepts it.
 | `ArrayExpression` | Each element is an expr. No hole, no `SpreadElement`. |
 | `ObjectExpression` | Each property is an `ObjectProperty` of kind `init` with an identifier key: not computed, not shorthand, not a method, not `get` or `set`, no `SpreadElement`. |
 | `ParenthesizedExpression` | Around an expr. |
-| `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), a class of the Error family (C17.1; as the callee of `NewExpression` or the right operand of `instanceof`), a catch binding (C17.4), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `Promise` (only as the object of `Promise.all`, C19.13), `String` (only as the callee of `String(n)`), `Math` (only as the object of its members, stdlib.md §5), `Number` (only as the object of its members, stdlib.md §7), `parseInt`, `parseFloat` (as callees). |
+| `IdentifierReference` | A binding, a parameter, a function declaration, a class (only as the callee of `NewExpression`), a class of the Error family (C17.1; as the callee of `NewExpression` or the right operand of `instanceof`), a catch binding (C17.4), `Infinity`, `NaN`, `print`, `Utf8` (only as the object of `Utf8.byteLength`), `Promise` (only as the object of `Promise.all`, C19.13), `String` (only as the callee of `String(n)`), `Math` (only as the object of its members, stdlib.md §5), `Number` (only as the object of its members, stdlib.md §7), `parseInt`, `parseFloat` (as callees), `Map` and `Set` (only as the callee of `NewExpression`, stdlib.md §8). |
 | `ThisExpression` | In a method or a constructor, or in an arrow inside one at any depth (C13.5). Not in a field initializer (C13.2) and not in a nested function declaration (`tsc` TS2683). A value of the class type. |
-| `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, `then`, `catch`, and `finally` on a promise and `Promise.all` as callees (C19.10 to C19.13), the `string` members of C5.2 as callees, the `Math` and `Number` members of stdlib.md §5 and §7, and the `number` members `toFixed`, `toExponential`, `toPrecision`, `toString` of stdlib.md §7 as callees. No other member. |
+| `StaticMemberExpression` | `o.f` where `o` has an object type or a class type and `f` is a field. As the callee of a `CallExpression`, `f` can be a method of a class or a field of function type. Also `xs.length` and `xs.push` on an array, `Utf8.byteLength` as a callee, `then`, `catch`, and `finally` on a promise and `Promise.all` as callees (C19.10 to C19.13), the `string` members of C5.2 as callees, the `Math` and `Number` members of stdlib.md §5 and §7, and the `number` members `toFixed`, `toExponential`, `toPrecision`, `toString` of stdlib.md §7 as callees, the `Map` and `Set` members of stdlib.md §8 (`size` as a read, the others as callees). No other member. |
 | `ComputedMemberExpression` | `xs[i]` where `xs` has an array type and `i` has type `number`. |
 | `CallExpression` | The callee is an `IdentifierReference` of a function declaration, or of a binding or a parameter of function type, a `StaticMemberExpression` above, a `ParenthesizedExpression` around an `ArrowFunctionExpression`, or `String`. Each argument is an expr; no `SpreadElement`. The argument count equals the parameter count, less trailing parameters with a default. Not optional (`f?.()`). `xs.push(e)` only as an `ExpressionStatement`. |
-| `NewExpression` | The callee is the identifier of a class declaration. Arguments as for `CallExpression`. |
+| `NewExpression` | The callee is the identifier of a class declaration, or `Map` or `Set` with the type arguments and sources of stdlib.md §8. Arguments as for `CallExpression`. |
 | `ArrowFunctionExpression` | `async` only with a result type annotation `Promise<T>` and not as an argument of an array method (C19). Each parameter is a `FormalParameter` of §4 without a default. An expression body, or a block body with a result type annotation. An arrow whose result type contains a function type at any depth (a function, or an array of functions) has a result type annotation: an inferred result would nest the body type, and its size would not follow from the source. An expression body of type `void` is a call, as for an `ExpressionStatement`. |
 | `UnaryExpression` | `-` on a `number`. `!` on a `boolean`. |
 | `BinaryExpression` | `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` on two numbers. `+` on two strings. `===`, `!==`, `==`, `!=` on two operands of the same type, under the operand rules of C7; `==`, `!=` with one `NullLiteral` operand (C2). `instanceof` with a class of the Error family on the right and a catch binding or a value of the family on the left (C17.2). |
@@ -116,7 +116,7 @@ its target.
 | `TSUnionType` | Exactly two members: `T` and `null` (C2). `T` is not `null` and not a union. |
 | `TSArrayType` | `T[]`. The element type does not include `null` (C6.5). |
 | `TSFunctionType` | Parameters as in §4, without defaults. A result type. |
-| `TSTypeReference` | The name of a type alias or a class declaration. No type arguments, no qualified name. Also `Promise<T>` with one type argument `T` that is not a `Promise` type (C19); `Promise<void>` only as the result type of an `async` function. |
+| `TSTypeReference` | The name of a type alias or a class declaration. No type arguments, no qualified name. Also `Promise<T>` with one type argument `T` that is not a `Promise` type (C19); `Promise<void>` only as the result type of an `async` function. Also `Map<K, V>` and `Set<K>` with the key and value rules of stdlib.md §8. |
 | `TSTypeLiteral` | Only as the body of a `TSTypeAliasDeclaration`. Members are `TSPropertySignature`s with an identifier key and a type annotation: not optional, not computed, no index signatures, no method signatures. |
 | `TSParenthesizedType` | Around a type. |
 
@@ -168,6 +168,7 @@ n` for a `number` parameter gives no error.
 | `Math` | the members and constants of stdlib.md §5, as calls and constant reads only |
 | `Number` | the constants and predicates of stdlib.md §7; `parseInt`, `parseFloat` as globals and as `Number` members |
 | `number` | `toFixed`, `toExponential`, `toPrecision`, `toString(radix)` (stdlib.md §7) |
+| `Map<K, V>`, `Set<K>` | the members of stdlib.md §8; `getOr` is a prelude addition |
 | `string` | `length` (read) and the members of collisions.md C5.2 |
 | `T[]` | `length` (read; the statement `xs.length = 0`); `push` with one argument of type `T`, as an expression statement only; the methods of collisions.md C6.9 |
 

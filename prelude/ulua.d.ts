@@ -28,6 +28,11 @@ interface String {
   codePointAt(pos: number): number;
 }
 
+/** Ulua addition (stdlib.md §8): the value of `key`, or `fallback` on a miss. */
+interface Map<K, V> {
+  getOr(key: K, fallback: V): V;
+}
+
 /** Byte operations on UTF-8 strings. JavaScript has no such names. */
 declare namespace Utf8 {
   /** Returns the number of UTF-8 bytes in `text`. */

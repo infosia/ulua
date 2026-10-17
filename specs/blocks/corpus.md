@@ -132,6 +132,7 @@ recorded defect of the golden, in the same commit.
 |---|---|
 | `index-out-of-range` | collisions.md C6 |
 | `array-modified` | collisions.md C6.9 |
+| `map-modified` | collisions.md C6.10 |
 | `string-boundary` | collisions.md C5 |
 | `invalid-argument` | collisions.md C5 |
 | `uncaught-exception` | collisions.md C17.8, C19.7 (an unhandled rejection) |

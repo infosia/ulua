@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -128,7 +128,7 @@ Accept: `a01`, `a05`, `a09`, `a15`, `a16`, `a49`. Reject: `r19`, `r43`, `r53`, `
   here and `true` under `node`.
 
 Accept: `a08`, `a14`, `a15`, `a40`, `a72`, `a73`. Reject: `r02`, `r03`, `r04`, `r12`, `r13`,
-`r14`, `r48`, `r63`, `r118`, `r152`, `r153`, `r154`, `r155`. Retired by P2.5: `retired:r05-strict-null-equality`.
+`r14`, `r48`, `r63`, `r118`, `r152`, `r153`, `r154`, `r155`, `r162`. Retired by P2.5: `retired:r05-strict-null-equality`.
 
 ## C3. Truth tests are `boolean`
 
@@ -383,11 +383,20 @@ Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
      without `init` (it changes meaning with the argument count),
      `flat`, `entries`, `keys`, `values`, `toString`, a method read as
      a value, and every variadic form.
+10. **`Map` and `Set` (P7.4, stdlib.md §8).** A key compares by
+   SameValueZero for `number` (one NaN key; `-0` stored as `+0`), by
+   content for `string`, by value for `boolean`, and by identity for a
+   class, record, or array. Iteration follows the first insertion.
+   `get` gives the absent type of C2. Divergence: a `forEach` callback
+   or a `for…of` body that adds, deletes, or clears an entry of the
+   container it traverses traps `map-modified`; `node` continues, visits
+   an entry added during the traversal, and skips an entry deleted
+   before its turn.
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
-Accept: `a09`, `a13`, `a32`, `a33`, `a34`, `a72`. Reject: `r06`, `r23`, `r45`, `r64`,
-`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`.
+Accept: `a09`, `a13`, `a32`, `a33`, `a34`, `a72`, `a77`, `a78`, `a79`. Reject: `r06`, `r23`, `r45`, `r64`, `r159`, `r160`, `r161`,
+`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`, `t13`.
 Retired by P7.2: `retired:r24-array-find` (D32).
 
 ## C7. Equality
