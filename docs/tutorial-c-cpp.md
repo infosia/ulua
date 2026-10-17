@@ -358,6 +358,11 @@ free resources
   capability that you free counts as revoked in every module that
   holds it. A string result is valid until your next call on the
   context.
+- **`Math.random` is deterministic.** Each instance starts its
+  sequence from a fixed default seed, so two runs of a script give the
+  same numbers. To change it, set `random_seed_set = 1` and
+  `random_seed` in `ulua_host`, or call `ulua_instance_seed_random`.
+  Ulua reads no clock and no system entropy.
 - **No compatibility promise.** The ABI is version 1 and can change
   with the header; rebuild your host against the header you link.
 

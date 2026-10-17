@@ -99,9 +99,8 @@ no `bigint`. `Math` and the `Number` members are in the library; see
 
 ## `T | null` is the only union
 
-There is no `undefined`. An optional parameter, a `T | undefined`
-type, and every library call whose miss is `undefined` in JavaScript
-are rejected. A value that can be absent has the type `T | null`, and
+There is no `undefined`. An optional parameter and a `T | undefined`
+type are rejected. A value that can be absent has the type `T | null`, and
 you test it before you use it:
 
 ```ts

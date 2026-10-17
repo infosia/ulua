@@ -98,6 +98,15 @@ and `async`/`await` with `Promise<T>` are in the subset. A form that
 `tsc` accepts and Ulua cannot run as `node` runs it is rejected at its
 source position, with a code that names the rule.
 
+The standard library has `Math`, the `Number` members with `parseInt`
+and `parseFloat`, `find` and `findLast`, string case and code points,
+`Map`, `Set`, and `JSON`. Each member gives the result of `node`, or
+the difference has a name: `find` gives `null` for a miss, a `Map`
+that changes during its own iteration stops the run, and
+`Math.random` gives a sequence that the host seeds.
+[The TypeScript tutorial](docs/tutorial-typescript.md#the-standard-library)
+shows each difference.
+
 ## Under the hood
 
 ### One C header
