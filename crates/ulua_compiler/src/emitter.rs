@@ -80,6 +80,8 @@ struct Slot {
     busy: bool,
 }
 struct Emitter<'a> {
+    #[cfg(feature = "remainder-shadow")]
+    remainder_shadow: bool,
     module: &'a ir::Module,
     function_types: &'a types::FunctionTypes,
     owner: usize,
@@ -133,6 +135,8 @@ impl<'a> Emitter<'a> {
         function_types: &'a types::FunctionTypes,
     ) -> Self {
         Self {
+            #[cfg(feature = "remainder-shadow")]
+            remainder_shadow: std::env::var_os("ULUA_REMAINDER_SHADOW").is_some(),
             module,
             function_types,
             owner,

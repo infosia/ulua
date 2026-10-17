@@ -11,6 +11,7 @@ mod p6_builtin_aliases;
 mod p6_conditions_loops;
 mod p6_expressions;
 mod p6_index_edges;
+mod p6_remainder;
 mod p6_shrink;
 mod s4_bytecode;
 mod s4_review;

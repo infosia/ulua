@@ -1,0 +1,44 @@
+//! The full ABI measures the eight-round fact shape at 4, 16, and 64 KiB.
+#[path = "../support/remainder_growth.rs"]
+mod shape;
+#[allow(dead_code)]
+#[path = "../support/script.rs"]
+mod support;
+use std::time::Instant;
+#[test]
+fn eight_fact_rounds_keep_linear_pipeline_growth() {
+    let _measurement = crate::measurement_lock();
+    let start = Instant::now();
+    let mut times = vec![];
+    for bytes in [4096, 16384, 65536] {
+        let source = shape::source("fact-rounds", bytes);
+        let mut minimum = f64::INFINITY;
+        for _ in 0..2 {
+            let now = Instant::now();
+            let script = support::Script::new(&source);
+            minimum = minimum.min(now.elapsed().as_secs_f64());
+            drop(script);
+        }
+        let compiled = ulua_compiler::compile(source.as_bytes(), Default::default()).unwrap();
+        assert!(compiled.luau.contains(" % "));
+        assert!(
+            compiled.luau.len()
+                <= ulua_compiler::OUTPUT_PRELUDE_BYTES + bytes * ulua_compiler::OUTPUT_FACTOR
+        );
+        eprintln!("P6 fact-rounds bytes={bytes} seconds={minimum:.6}");
+        times.push(minimum);
+    }
+    for pair in times.windows(2) {
+        assert!(
+            pair[1] / pair[0] <= 8.0,
+            "fact-rounds ratio={:.3}",
+            pair[1] / pair[0]
+        );
+    }
+    eprintln!(
+        "P6 fact-rounds ratios={:.3}/{:.3} cost={:.3}s",
+        times[1] / times[0],
+        times[2] / times[1],
+        start.elapsed().as_secs_f64()
+    );
+}

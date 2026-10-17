@@ -18,3 +18,6 @@ ulua = { path = "../ulua" }
 
 [build-dependencies]
 cc.workspace = true
+
+[dev-dependencies]
+ulua = { path = "../ulua", features = ["remainder-shadow"] }

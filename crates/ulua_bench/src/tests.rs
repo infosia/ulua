@@ -1,5 +1,6 @@
 //! Cheap gate checks. The benchmark suite is never a cargo test.
 use super::*;
+use crate::measurement::Workload;
 use std::time::Instant;
 #[path = "../../ulua/tests/support/tsc.rs"]
 mod tsc;
@@ -169,6 +170,32 @@ fn all_luau_workloads_compile() {
     }
     eprintln!(
         "all_luau_workloads_compile cost={:.6}s",
+        start.elapsed().as_secs_f64()
+    );
+}
+
+#[test]
+#[ignore = "One full correctness run per workload; run with ULUA_REMAINDER_SHADOW=1"]
+fn shadow_ten_workloads() {
+    assert!(std::env::var_os("ULUA_REMAINDER_SHADOW").is_some());
+    let start = Instant::now();
+    for id in IDS {
+        let directory = directory().join("workloads");
+        let source = std::fs::read(directory.join("ulua").join(format!("{id}.ts"))).unwrap();
+        let reference = std::fs::read(directory.join("luau").join(format!("{id}.luau"))).unwrap();
+        let mut ulua = subjects::Ulua::new(&source).unwrap();
+        let mut luau = subjects::Luau::new(&reference).unwrap();
+        ulua.prepare();
+        luau.prepare();
+        let status = ulua.call();
+        let actual = ulua.result(status).unwrap_or_else(|e| panic!("{id}: {e}"));
+        let status = luau.call();
+        let expected = luau.result(status).unwrap();
+        assert_eq!(actual, expected, "{id}");
+        eprintln!("shadow workload={id} checksum={actual} stops=0");
+    }
+    eprintln!(
+        "shadow workloads=10 cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
 }

@@ -8,6 +8,7 @@ license.workspace = true
 [features]
 fault-injection = []
 timing = []
+remainder-shadow = ["ulua_compiler/remainder-shadow"]
 measurements = ["timing", "ulua_compiler/measurements"]
 
 [[test]]
@@ -39,4 +40,4 @@ cc.workspace = true
 
 [dev-dependencies]
 cc.workspace = true
-ulua_compiler = { path = "../ulua_compiler", features = ["test-output-limit"] }
+ulua_compiler = { path = "../ulua_compiler", features = ["test-output-limit", "remainder-shadow"] }

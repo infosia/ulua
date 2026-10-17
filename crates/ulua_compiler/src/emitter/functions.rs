@@ -304,6 +304,8 @@ pub(super) fn emit_with_plan_hook(
         "__ulua_concat",
         "__ulua_print",
         "__ulua_fmod",
+        #[cfg(feature = "remainder-shadow")]
+        "__ulua_native_remainder",
         "__ulua_floor",
         "__ulua_ceil",
         "__ulua_tostring",
@@ -338,6 +340,10 @@ pub(super) fn emit_with_plan_hook(
     }
     let mut out = String::from("--!strict\n");
     out.push_str(&prelude::checkpoint(LIBRARIES));
+    #[cfg(feature = "remainder-shadow")]
+    if chunk.remainder_shadow {
+        out.push_str(&prelude::checkpoint(prelude::REMAINDER_SHADOW));
+    }
     if module.exceptions {
         out.push_str(&prelude::checkpoint(prelude::EXCEPTIONS));
     }

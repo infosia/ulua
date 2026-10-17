@@ -12,7 +12,7 @@ impl Operation {
             text,
             // Inline forms remove statements. Reserve earlier checkpoints for their remaining work.
             cost: match expr.kind {
-                E::Binary("%", _, _) => 3,
+                E::Binary("%" | ir::NATIVE_REMAINDER, _, _) => 3,
                 E::Binary("<" | "<=" | ">" | ">=" | "==" | "~=", _, _) => 2,
                 _ => 1,
             },

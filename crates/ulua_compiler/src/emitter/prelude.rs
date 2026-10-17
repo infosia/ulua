@@ -122,3 +122,15 @@ local function __ulua_try(body: __ulua_completion_body, handler: __ulua_completi
     return tag, value, target
 end
 "#;
+
+// This helper exists only in feature-enabled test builds. An ordinary VM error maps to internal.
+#[cfg(feature = "remainder-shadow")]
+pub(super) const REMAINDER_SHADOW: &str = r#"local function __ulua_native_remainder(a: number, b: number): number
+    local native = a % b
+    local reference = math.fmod(a, b)
+    if native ~= reference or (native == 0 and 1 / native ~= 1 / reference) then
+        error("native remainder shadow mismatch")
+    end
+    return native
+end
+"#;

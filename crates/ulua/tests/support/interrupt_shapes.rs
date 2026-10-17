@@ -68,6 +68,7 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
         ),
         ("increment", number, "x++;", "}"),
         ("remainder", number, "x=x%3;", "}"),
+        ("remainder-compound", number, "x%=3;", "}"),
         (
             "boolean-template",
             "export function main(b:boolean):void{let s='';",

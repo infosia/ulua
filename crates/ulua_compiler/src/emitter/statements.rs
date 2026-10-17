@@ -102,14 +102,17 @@ impl Emitter<'_> {
                 }
                 let v = self.operand(e, depth, false, 1)?;
                 let value = if let (Some(op), Some(old)) = (op, old) {
-                    if *op == "%" {
-                        self.capture("__ulua_fmod");
-                    }
+                    self.capture_binary(op);
                     self.binary(op, &self.temp(old), &self.operand_text(&v))
                 } else {
                     self.operand_text(&v)
                 };
-                self.write_binding(*id, value)?;
+                let cost = if matches!(op, Some("%" | ir::NATIVE_REMAINDER)) {
+                    3
+                } else {
+                    1
+                };
+                self.write_binding_weighted(*id, value, cost)?;
                 self.joins.assigned(*id);
                 self.release_operand(v);
                 if let Some(v) = old {
@@ -132,9 +135,7 @@ impl Emitter<'_> {
                     self.access_receiver_check(receiver, deferred);
                 }
                 let result = if let (Some(op), Some(old)) = (op, old) {
-                    if *op == "%" {
-                        self.capture("__ulua_fmod");
-                    }
+                    self.capture_binary(op);
                     self.binary(op, &self.temp(old), &self.temp(value))
                 } else {
                     self.temp(value)

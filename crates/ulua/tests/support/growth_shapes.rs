@@ -30,6 +30,8 @@ mod asynchronous;
 mod hosts;
 #[path = "protected_loops.rs"]
 mod protected_loops;
+#[path = "remainder_growth.rs"]
+mod remainder;
 
 pub struct Shape {
     pub label: String,
@@ -80,6 +82,7 @@ fn nil_checks(shape: &str, bytes: usize) -> String {
 
 pub fn all() -> Vec<Shape> {
     let mut out = vec![];
+    add(&mut out, "P6", &["fact-rounds"], remainder::source);
     add(&mut out, "S4", inputs::SOURCE_SHAPES, p1);
     add(&mut out, "S6", review::SHAPES, review::source);
     add(&mut out, "P21", functions::SHAPES, functions::source);

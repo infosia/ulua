@@ -8,6 +8,7 @@ license.workspace = true
 [features]
 measurements = []
 test-output-limit = []
+remainder-shadow = []
 
 [dependencies]
 oxc_allocator.workspace = true

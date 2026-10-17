@@ -66,10 +66,17 @@ pub fn run(source: &str, limits: RunLimits) -> (Status, String, String, String) 
         let mut host = Host::default();
         host.output = Some(collect);
         host.userdata = ptr::from_mut(&mut f.output).cast();
-        assert_eq!(
-            ulua_instance_new(c, m, &host, &limits, &mut i, &mut d),
-            ULUA_OK
-        );
+        let status = ulua_instance_new(c, m, &host, &limits, &mut i, &mut d);
+        if status != ULUA_OK {
+            return (
+                status,
+                CStr::from_ptr(d.code.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+                f.output.iter().map(|s| format!("{s}\n")).collect(),
+                declarations,
+            );
+        }
         assert_eq!(
             ulua_module_find_export(m, c"main".as_ptr(), 4, &mut index),
             ULUA_OK

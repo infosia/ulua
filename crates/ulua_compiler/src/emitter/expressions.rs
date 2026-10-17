@@ -603,6 +603,13 @@ impl Emitter<'_> {
     pub(super) fn binary(&self, op: &str, a: &str, b: &str) -> String {
         match op {
             "%" => format!("__ulua_fmod({a}, {b})"),
+            ir::NATIVE_REMAINDER => {
+                #[cfg(feature = "remainder-shadow")]
+                if self.remainder_shadow {
+                    return format!("__ulua_native_remainder({a}, {b})");
+                }
+                format!("({a} % {b})")
+            }
             "==" => format!("__ulua_equal({a}, {b})"),
             "~=" => format!("__ulua_unequal({a}, {b})"),
             _ => format!("({a} {op} {b})"),
@@ -611,6 +618,10 @@ impl Emitter<'_> {
     pub(super) fn capture_binary(&mut self, op: &str) {
         match op {
             "%" => self.capture("__ulua_fmod"),
+            #[cfg(feature = "remainder-shadow")]
+            ir::NATIVE_REMAINDER if self.remainder_shadow => {
+                self.capture("__ulua_native_remainder")
+            }
             "==" => self.capture("__ulua_equal"),
             "~=" => self.capture("__ulua_unequal"),
             _ => {}

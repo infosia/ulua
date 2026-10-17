@@ -57,6 +57,10 @@ pub(crate) struct Expr {
     pub(crate) ty: Type,
     pub(crate) kind: ExprKind,
 }
+// The binary and compound-assignment operator stores the remainder form explicitly.
+// Source `%` means fmod; this internal operator means the proved native form.
+pub(crate) const NATIVE_REMAINDER: &str = "native%";
+
 pub(crate) enum ExprKind {
     Await(Box<Expr>),
     Null,

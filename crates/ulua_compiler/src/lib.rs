@@ -15,6 +15,7 @@ mod p26_shapes;
 mod p26_tests;
 #[cfg(test)]
 mod p3_tests;
+mod remainder;
 #[cfg(test)]
 mod round6_tests;
 #[cfg(test)]
@@ -421,7 +422,8 @@ fn compile_observed(
     observer("check", true);
     let module = checker::check_with_grants(&parsed.program, source, max_depth, grants);
     observer("check", false);
-    let module = module?;
+    let mut module = module?;
+    remainder::analyze(&mut module);
     for f in module.functions.iter().filter(|f| f.exported) {
         if !matches!(
             module.types.promise_value(f.result).unwrap_or(f.result),

@@ -10,6 +10,7 @@ mod p41_growth;
 mod p55_capture;
 mod p55_ratio;
 mod p63_performance;
+mod remainder_growth;
 mod s4_growth;
 
 fn measurement_lock() -> MutexGuard<'static, ()> {
