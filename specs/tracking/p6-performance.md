@@ -373,6 +373,23 @@ component never joined, so a member kept an integer fact without that
 write (Rev 54). The IR-built test `unset_member_invalidates_the_whole_component`
 fails before the fix (2 fmod sites expected, 0 found).
 
+## P6.S6 Phase Review
+
+Review of d34a194..b00ff4c: 0 CRITICAL, 0 MAJOR, 5 MINOR. No native
+`%` differs from `node`: 181 + 80 generated programs (about 2,200
+functions, literals near 2^53) equal `node`; 201 generated programs
+with 9,260 native sites under the shadow check, no stop; the proof of
+§5.25 checked by hand against `luai_nummod`, `LOP_MOD`, `LOP_MODK`,
+and the constant fold at c54f558.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The fact pass walks the IR by recursion with no depth counter and indexes maps with `[]` (panic on a missing key); §3 item 4 | MINOR | Rev 55: work lists or a depth counter; a missing node is `internal` |
+| No gate runs the shadow check; the instruction-bound test counts `" % "` and fails under it | MINOR | Rev 55: `gate.sh full` runs the corpus and workload shadow tests by name |
+| The shadow option is read from the environment in each `Emitter::new`; a change during one compile can omit the helper | MINOR | Rev 55: one compilation reads the option once |
+| Thresholds per function: `i % 2` to `i % 8` in one loop gave 0 native of 7 (a cost that the source of one `%` does not show) | MINOR | Rev 55: thresholds per binding |
+| "system" names the solved unit in the contract and the function graph in the code | MINOR | Rev 55: "component" in the contract; the code type is renamed |
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten

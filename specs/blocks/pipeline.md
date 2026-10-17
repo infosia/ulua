@@ -56,6 +56,7 @@ Rev 51: §5.20 the index test runs before the table access (UBSan, P6 close).
 Rev 52: §5.25 native remainder from integer facts (P6.S6).
 Rev 53: §5.25 one system per dependency component; the measured reach (P6.S6 implementation).
 Rev 54: §5.25 an unset binding at the end voids its system (P6.S6 review).
+Rev 55: §5.25 thresholds per binding, walks without recursion, the shadow check in gate full; "component" for the solved unit (P6.S6 Phase Review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -809,41 +810,51 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       has no fact.
     - **Fixed point.** A binding `x` depends on a binding `y` when a
       write of `x` reads `y`. The bindings of one outermost function
-      and these edges form a graph. Each strongly connected component
-      of the graph is one system. The compiler solves the systems in
-      dependency order: a system reads the final facts of the systems
-      that it depends on. The component walk uses no recursion (D13).
-      In one system, at the start each binding is unset. Each round
+      (its closures included) and these edges form the fact graph of
+      that function. Each strongly connected component of the graph is
+      solved as one unit, in dependency order: a component reads the
+      final facts of the components that it depends on. The component
+      walk and every walk of the pass use work lists or a depth counter
+      (D13, §3 item 4); a missing node is `internal`, never a panic.
+      In one component, at the start each binding is unset. Each round
       computes every write from the facts of the round before. A write
       that reads an unset binding adds nothing to the join of that
-      round. When the `hi` of a binding grows,
-      it takes the smallest threshold at or above the new value. The
-      thresholds are `hi_b - 1` of each `%` in the function with a
-      literal divisor `b >= 1`, and `2^53`. When the `lo` of a binding
-      falls, it takes `0`. The system ends when a round changes no
-      fact. If a binding of the system is still unset at the end, no
-      binding of that system has a fact: a write that read it never
-      joined. If
-      the system does not end within `FACT_ROUNDS` (8) rounds, no
-      binding of that system has a fact; the other systems keep
-      theirs. The compiler stores the result
-      in the IR: each `%` node carries its form, native or `fmod`
-      (principle 8); the emitter reads the flag and computes no fact.
-    - Each round of a system costs time linear in the size of the
-      writes of that system, and the component walk is linear, so the
-      pass is linear in the source size (§3.10). The growth test
-      includes a shape with many systems that each reach
-      `FACT_ROUNDS`. The tracking note records the largest round count
-      of the corpus and the benchmark workloads.
-    - Measured with one system per function (P6.S6 first form): in
-      fib-loop the system of `a`, `b`, and `next` (`next = a + b;
+      round. When the `hi` of a binding grows, it takes the smallest
+      threshold of that binding at or above the new value. The
+      thresholds of a binding `x` are `b - 1` for each write `x = e % b`
+      or `x %= b` with an integer literal `b >= 1`, `k` for each write
+      `x = k` with an integer literal `k`, and `2^53`. When the `lo` of
+      a binding falls, it takes `0`. The component ends when a round
+      changes no fact. If a binding of the component is still unset at
+      the end, no binding of that component has a fact: a write that
+      read it never joined. If the component does not end within
+      `FACT_ROUNDS` (8) rounds, no binding of that component has a
+      fact; the other components keep theirs. The compiler stores the
+      result in the IR: each `%` node carries its form, native or
+      `fmod` (principle 8); the emitter reads the flag and computes no
+      fact.
+    - Each round of a component costs time linear in the size of its
+      writes, and the component walk is linear, so the pass is linear
+      in the source size (§3.10). The growth test includes a shape with
+      many components that each reach `FACT_ROUNDS`. The tracking note
+      records the largest round count of the corpus and the benchmark
+      workloads.
+    - Measured with one unit per function (P6.S6 first form): in
+      fib-loop the unit of `a`, `b`, and `next` (`next = a + b;
       a = b; b = next`) did not end in 8 rounds, so the unrelated
-      counter `i` lost its fact and `i % 40` stayed `fmod`.
+      counter `i` lost its fact and `i % 40` stayed `fmod`. Measured
+      with thresholds per function (P6.S6 review): a counter with
+      `i % 2` to `i % 8` in one loop climbed one threshold per round,
+      did not end, and all 7 stayed `fmod`; the reach of one `%`
+      depended on the other `%` of the function (principle 16).
     - **Shadow check.** A test-only compile option emits, at each
       native `%`, a comparison with `math.fmod` that stops the run as
       `internal` on a difference (sign of zero included). It is not
-      in the public API. The corpus, the benchmark workloads, and the
-      differential program generator run under it with no stop.
+      in the public API. One compilation reads the option once.
+      `gate.sh full` runs the corpus and the benchmark workloads under
+      it, by test name, with no stop. A phase review runs its
+      differential programs under it; the tracking note records the
+      count and the stops.
     - Native `%` is the `MOD` instruction; the `fmod` alias is a
       `FASTCALL`. Neither ends the statement count of §5.19.
     - Measured before the rule (after P6.S3, each `%` hand-edited to
