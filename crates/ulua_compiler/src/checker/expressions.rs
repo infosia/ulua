@@ -412,7 +412,10 @@ impl Checker<'_> {
                     ));
                 }
                 let (a, i, element) = self.index(&m.object, &m.expression, depth, m.span)?;
-                (element, ExprKind::Index(Box::new(a), Box::new(i)))
+                (
+                    element,
+                    ExprKind::Index(Box::new(a), Box::new(i), crate::ir::IndexForm::Checked),
+                )
             }
             Expression::StaticMemberExpression(m) => {
                 if m.optional {

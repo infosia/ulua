@@ -70,7 +70,7 @@ fn parameter_and_module_binding_have_no_fact() {
         assert_eq!(code.matches("__ulua_fmod(").count(), 1, "{code}");
     }
 }
-fn checked(source: &str) -> Module {
+pub(super) fn checked(source: &str) -> Module {
     let allocator = oxc_allocator::Allocator::default();
     let parsed = oxc_parser::Parser::new(
         &allocator,
@@ -158,6 +158,10 @@ fn nested_independent_component_keeps_its_fact() {
 fn report_corpus_and_workload_facts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut largest = 0;
+    let mut corpus_sites = 0;
+    let mut corpus_checks = 0;
+    let mut corpus_compounds = 0;
+    let mut corpus_shadow_tests = 0;
     for directory in [
         "corpus/accept",
         "corpus/trap",
@@ -203,6 +207,50 @@ fn report_corpus_and_workload_facts() {
                 crate::checker::check_with_grants(&parsed.program, source.as_bytes(), 128, &grants)
                     .unwrap();
             let report = analyze(&mut module).unwrap();
+            let (index_sites, compound_writes) = super::index_tests::index_counts(&mut module);
+            assert_eq!(index_sites, report.index_sites.len(), "{}", path.display());
+            let code = crate::emitter::emit(&module, crate::OUTPUT_FACTOR).unwrap();
+            let checks = code
+                .lines()
+                .filter(|line| {
+                    (line.contains(" < #__ulua_") || line.contains(" <= #__ulua_"))
+                        && !line.contains("__ulua_floor")
+                        && (line.contains("then __ulua_trap(1) end")
+                            || line.contains(": boolean = not ("))
+                })
+                .count();
+            assert_eq!(checks, index_sites + compound_writes, "{}", path.display());
+            let shadow_tests = code
+                .lines()
+                .filter(|line| line.contains("then error(\"proven index shadow mismatch\") end"))
+                .count();
+            #[cfg(feature = "remainder-shadow")]
+            if std::env::var_os("ULUA_REMAINDER_SHADOW").is_some() {
+                assert_eq!(shadow_tests, checks, "{}", path.display());
+            }
+            if directory.starts_with("corpus") {
+                corpus_sites += report.index_sites.len();
+                corpus_checks += checks;
+                corpus_compounds += compound_writes;
+                corpus_shadow_tests += shadow_tests;
+            } else {
+                let id = path.file_stem().unwrap().to_str().unwrap();
+                let expected = match id {
+                    "queen" => 3,
+                    "particles" | "collect" => 2,
+                    _ => 0,
+                };
+                assert_eq!(checks, expected, "{id}");
+                #[cfg(feature = "remainder-shadow")]
+                if expected > 0 && std::env::var_os("ULUA_REMAINDER_SHADOW").is_some() {
+                    assert!(shadow_tests > 0, "{id}");
+                }
+                eprintln!(
+                    "proven workload={} ir_sites={} compound_writes={compound_writes} emitted_checks={checks} shadow_tests={shadow_tests}",
+                    path.file_stem().unwrap().to_str().unwrap(),
+                    report.index_sites.len()
+                );
+            }
             largest = largest.max(report.rounds);
             directory_largest = directory_largest.max(report.rounds);
             let sites: Vec<_> = report
@@ -222,6 +270,10 @@ fn report_corpus_and_workload_facts() {
         }
         eprintln!("largest fact round count for {directory}={directory_largest}");
     }
+    assert_eq!(corpus_checks, corpus_sites + corpus_compounds);
+    eprintln!(
+        "proven corpus ir_sites={corpus_sites} compound_writes={corpus_compounds} emitted_checks={corpus_checks} shadow_tests={corpus_shadow_tests}"
+    );
     eprintln!("largest fact round count={largest}");
     assert!(largest <= FACT_ROUNDS);
 }

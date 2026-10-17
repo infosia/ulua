@@ -184,7 +184,13 @@ impl Checker<'_> {
                         ));
                     }
                     self.flow(&value.ty, Some(&element), a.span)?;
-                    return Ok(S::Element(array, index, op, value));
+                    return Ok(S::Element(
+                        array,
+                        index,
+                        op,
+                        value,
+                        crate::ir::IndexForm::Checked,
+                    ));
                 }
                 if let AssignmentTarget::StaticMemberExpression(m) = &a.left {
                     if m.optional {

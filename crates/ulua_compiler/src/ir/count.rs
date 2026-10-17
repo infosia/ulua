@@ -23,7 +23,7 @@ pub(crate) fn nodes(module: &Module) -> usize {
             Statement::Field(a, _, _, e) | Statement::ErrorField(a, _, _, e) => {
                 expressions.extend([a, e])
             }
-            Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
+            Statement::Element(a, i, _, e, _) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
                 statements.push(b);
@@ -73,7 +73,7 @@ pub(crate) fn nodes(module: &Module) -> usize {
             | ExprKind::Coalesce(a, b)
             | ExprKind::Binary(_, a, b)
             | ExprKind::Logical(_, a, b)
-            | ExprKind::Index(a, b)
+            | ExprKind::Index(a, b, _)
             | ExprKind::Push(a, b) => expressions.extend([a.as_ref(), b.as_ref()]),
             ExprKind::OptionalMethod(_, _, c, args)
             | ExprKind::OptionalCall(c, _, args)

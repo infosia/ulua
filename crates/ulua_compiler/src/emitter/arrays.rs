@@ -1,6 +1,6 @@
 //! Checked element operations and live-length iteration preserve C12 order.
 use super::*;
-use crate::ir::{Expr, ExprKind as E, Statement};
+use crate::ir::{Expr, ExprKind as E, IndexForm, Statement};
 pub(super) enum ElementTarget {
     Slot(usize),
     Binding(usize),
@@ -12,7 +12,7 @@ impl Emitter<'_> {
         receiver: &Expr,
         depth: u32,
     ) -> Result<(usize, bool), Diagnostic> {
-        if let E::Index(a, i) = &receiver.kind {
+        if let E::Index(a, i, _) = &receiver.kind {
             self.offset = receiver.start as usize;
             let depth = self.guard(depth)?;
             let (a, deferred) = self.access_receiver(a, depth)?;
@@ -99,8 +99,9 @@ impl Emitter<'_> {
         ty: Type,
         array: usize,
         index: &str,
+        form: IndexForm,
     ) -> Result<(), Diagnostic> {
-        self.element_read_text(dest, ty, &self.temp(array), index)
+        self.element_read_text(dest, ty, &self.temp(array), index, form)
     }
     fn element_read_text(
         &mut self,
@@ -108,15 +109,17 @@ impl Emitter<'_> {
         ty: Type,
         array: &str,
         index: &str,
+        form: IndexForm,
     ) -> Result<(), Diagnostic> {
-        self.capture("__ulua_floor");
+        let test = self.index_test(array, index, "<", form);
         self.capture("__ulua_trap");
         // Reject unsafe numeric keys before the VM converts a table index to an integer.
         // A fresh scoped local bounds analyzer growth across repeated element checks.
         let read = self.generated()?;
         let ty = self.function_types.luau(&ty);
         self.line("do");
-        self.line_weighted(format!("if not ({index} >= 0 and {index} < #{array} and __ulua_floor({index}) == {index}) then __ulua_trap(1) end"), 4);
+        // Keep the full check weight; this also bounds every proven check.
+        self.line_weighted(format!("if not ({test}) then __ulua_trap(1) end"), 4);
         self.line(format!("local {read}: {ty} = {array}[{index} + 1]"));
         match dest {
             ElementTarget::Slot(dest) => self.write_slot(dest, read),
@@ -126,10 +129,32 @@ impl Emitter<'_> {
         self.generated_live -= 1;
         Ok(())
     }
-    fn element_check(&mut self, array: &str, index: &str, bound: &str) -> Result<(), Diagnostic> {
+    fn index_test(&mut self, array: &str, index: &str, bound: &str, form: IndexForm) -> String {
+        if form == IndexForm::Proven {
+            #[cfg(feature = "remainder-shadow")]
+            if self.remainder_shadow {
+                self.capture("__ulua_floor");
+                self.line_weighted(format!("if not ({index} >= 0 and __ulua_floor({index}) == {index}) then error(\"proven index shadow mismatch\") end"), 4);
+            }
+            format!("{index} {bound} #{array}")
+        } else {
+            self.capture("__ulua_floor");
+            format!(
+                "{index} >= 0 and {index} {bound} #{array} and __ulua_floor({index}) == {index}"
+            )
+        }
+    }
+    fn element_check(
+        &mut self,
+        array: &str,
+        index: &str,
+        bound: &str,
+        form: IndexForm,
+    ) -> Result<(), Diagnostic> {
+        let test = self.index_test(array, index, bound, form);
         let checked = self.generated()?;
         self.line("do");
-        self.line_weighted(format!("local {checked}: boolean = not ({index} >= 0 and {index} {bound} #{array} and __ulua_floor({index}) == {index})"), 4);
+        self.line_weighted(format!("local {checked}: boolean = not ({test})"), 4);
         self.line(format!("if {checked} then __ulua_trap(1) end"));
         self.line("end");
         self.generated_live -= 1;
@@ -141,6 +166,7 @@ impl Emitter<'_> {
         i: &Expr,
         op: Option<&str>,
         e: &Expr,
+        form: IndexForm,
         depth: u32,
     ) -> Result<(), Diagnostic> {
         // Stable receivers need no mutable snapshot across index and RHS calls.
@@ -164,7 +190,7 @@ impl Emitter<'_> {
         let old = if op.is_some() {
             self.access_receiver_check_text(&array, deferred);
             let old = self.slot(&e.ty)?;
-            self.element_read_text(ElementTarget::Slot(old), e.ty, &array, &index)?;
+            self.element_read_text(ElementTarget::Slot(old), e.ty, &array, &index, form)?;
             Some(old)
         } else {
             None
@@ -184,9 +210,8 @@ impl Emitter<'_> {
         } else {
             self.temp(value)
         };
-        self.capture("__ulua_floor");
         self.capture("__ulua_trap");
-        self.element_check(&array, &index, "<=")?;
+        self.element_check(&array, &index, "<=", form)?;
         self.write(
             &format!("{array}[{index} + 1]"),
             result,

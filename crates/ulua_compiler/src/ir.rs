@@ -64,6 +64,12 @@ pub(crate) struct Expr {
 // Source `%` means fmod; this internal operator means the proved native form.
 pub(crate) const NATIVE_REMAINDER: &str = "native%";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IndexForm {
+    Checked,
+    Proven,
+}
+
 pub(crate) enum ExprKind {
     Json(usize, Box<Expr>),
     Await(Box<Expr>),
@@ -94,7 +100,7 @@ pub(crate) enum ExprKind {
     ClassCall(Box<Expr>, Box<Expr>, Vec<Expr>, bool),
     Template(Vec<Expr>),
     Array(Vec<Expr>),
-    Index(Box<Expr>, Box<Expr>),
+    Index(Box<Expr>, Box<Expr>, IndexForm),
     Length(Box<Expr>),
     Push(Box<Expr>, Box<Expr>),
     Method(Method, usize, Box<Expr>, Vec<Expr>),
@@ -106,7 +112,7 @@ pub(crate) enum Statement {
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
     Field(Expr, usize, Option<&'static str>, Expr),
-    Element(Expr, Expr, Option<&'static str>, Expr),
+    Element(Expr, Expr, Option<&'static str>, Expr, IndexForm),
     ForOf(usize, Expr, Box<Statement>),
     Eval(Expr),
     Block(Vec<Statement>),
@@ -224,7 +230,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             Statement::Field(a, _, _, e) | Statement::ErrorField(a, _, _, e) => {
                 expressions.extend([a, e])
             }
-            Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
+            Statement::Element(a, i, _, e, _) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
                 statements.push(b);
@@ -275,7 +281,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             | ExprKind::Coalesce(a, b)
             | ExprKind::Binary(_, a, b)
             | ExprKind::Logical(_, a, b)
-            | ExprKind::Index(a, b)
+            | ExprKind::Index(a, b, _)
             | ExprKind::Push(a, b) => {
                 expressions.push(a);
                 expressions.push(b);

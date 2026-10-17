@@ -6,6 +6,9 @@ use crate::{
 pub(super) trait Visitor {
     fn enter_expression(&mut self) {}
     fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic>;
+    fn index_expression(&mut self, e: &mut Expr, _: bool) -> Result<(), Diagnostic> {
+        self.expression(e)
+    }
     fn statement(&mut self, _: &mut S) -> Result<(), Diagnostic> {
         Ok(())
     }
@@ -56,12 +59,16 @@ impl Walk<'_> {
             | S::Eval(e)
             | S::Return(Some(e))
             | S::Throw(e) => self.expression(e, visitor, depth)?,
-            S::Field(a, _, _, e) | S::ErrorField(a, _, _, e) => {
+            S::Field(a, _, _, e) => {
+                self.expression_context(a, visitor, depth, true)?;
+                self.expression(e, visitor, depth)?;
+            }
+            S::ErrorField(a, _, _, e) => {
                 self.expression(a, visitor, depth)?;
                 self.expression(e, visitor, depth)?;
             }
-            S::Element(a, i, _, e) => {
-                self.expression(a, visitor, depth)?;
+            S::Element(a, i, _, e, _) => {
+                self.expression_context(a, visitor, depth, true)?;
                 self.expression(i, visitor, depth)?;
                 self.expression(e, visitor, depth)?;
             }
@@ -116,6 +123,16 @@ impl Walk<'_> {
         visitor: &mut impl Visitor,
         depth: u32,
     ) -> Result<(), Diagnostic> {
+        self.expression_context(e, visitor, depth, false)
+    }
+    // Only these receivers use the emitter's deferred access_receiver path.
+    fn expression_context(
+        &self,
+        e: &mut Expr,
+        visitor: &mut impl Visitor,
+        depth: u32,
+        receiver: bool,
+    ) -> Result<(), Diagnostic> {
         let depth = self.guard(depth, e.start as usize)?;
         visitor.enter_expression();
         match &mut e.kind {
@@ -123,18 +140,21 @@ impl Walk<'_> {
             | E::InstanceOf(a, _)
             | E::ErrorField(a, _)
             | E::OptionalErrorField(a, _)
-            | E::Field(a, _)
             | E::OptionalField(a, _)
             | E::OptionalLength(a)
             | E::Json(_, a)
             | E::Await(a)
             | E::Unary(_, a)
             | E::Length(a) => self.expression(a, visitor, depth)?,
+            E::Field(a, _) => self.expression_context(a, visitor, depth, true)?,
+            E::Index(a, b, _) => {
+                self.expression_context(a, visitor, depth, true)?;
+                self.expression(b, visitor, depth)?;
+            }
             E::OptionalPush(a, b)
             | E::Coalesce(a, b)
             | E::Binary(_, a, b)
             | E::Logical(_, a, b)
-            | E::Index(a, b)
             | E::Push(a, b) => {
                 self.expression(a, visitor, depth)?;
                 self.expression(b, visitor, depth)?;
@@ -178,6 +198,10 @@ impl Walk<'_> {
             | E::Closure(_)
             | E::Builtin(_) => {}
         }
-        visitor.expression(e)
+        if matches!(e.kind, E::Index(..)) {
+            visitor.index_expression(e, receiver)
+        } else {
+            visitor.expression(e)
+        }
     }
 }

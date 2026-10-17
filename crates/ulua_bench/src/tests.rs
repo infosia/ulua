@@ -190,11 +190,13 @@ fn shadow_ten_workloads() {
         ulua.prepare();
         luau.prepare();
         let status = ulua.call();
-        let actual = ulua.result(status).unwrap_or_else(|e| panic!("{id}: {e}"));
+        let result = ulua.result(status);
+        let runtime_stops = usize::from(result.is_err());
+        eprintln!("shadow workload={id} result={result:?} runtime_stops={runtime_stops}");
+        let actual = result.unwrap_or_else(|e| panic!("{id}: {e}"));
         let status = luau.call();
         let expected = luau.result(status).unwrap();
         assert_eq!(actual, expected, "{id}");
-        eprintln!("shadow workload={id} checksum={actual} stops=0");
     }
     eprintln!(
         "shadow workloads=10 cost={:.3}s",

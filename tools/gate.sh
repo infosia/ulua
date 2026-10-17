@@ -75,10 +75,13 @@ if [ -f Cargo.toml ]; then
     step docs-witness "$NODE" tools/witness/docs.mjs "${CARGO_TARGET_DIR:-target}/examples/docs-run" docs/tutorial-typescript.md
 fi
 if [ "$shape" = full ]; then
-    # pipeline.md §5.25: each native % against math.fmod, over the corpus
+    # pipeline.md §5.25 and §5.26: each native % against math.fmod and each
+    # proven index against the omitted tests, over the corpus
     # and the benchmark workloads. Cost with the build: about 4 s and 9 s.
     step remainder-shadow-corpus env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua --features remainder-shadow --test runtime p6_remainder::shadow_corpus_accept_and_trap -- --exact
     step remainder-shadow-workloads env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua_bench --features remainder-shadow --bin bench tests::shadow_ten_workloads -- --exact
+    # A false native or proven flag must stop under the shadow check (§5.25, §5.26).
+    step remainder-shadow-false env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua_compiler --features remainder-shadow shadow_rejects_false -- --ignored
     step hygiene sh tools/hygiene.sh
 fi
 printf 'gate %s: PASS\n' "$shape"

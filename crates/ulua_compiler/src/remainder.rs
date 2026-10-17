@@ -1,5 +1,7 @@
-//! Bounded integer facts select the remainder form before emission.
+//! Bounded integer facts select remainder and index forms before emission.
 mod components;
+#[cfg(test)]
+mod index_tests;
 #[cfg(test)]
 mod tests;
 mod walk;
@@ -35,6 +37,8 @@ enum Node {
 enum Site {
     Expression(usize),
     Assignment(usize),
+    IndexRead(usize),
+    IndexWrite(usize),
 }
 struct Write {
     binding: usize,
@@ -139,9 +143,23 @@ impl Visitor for Build<'_> {
         self.starts.insert(address(e), start);
         Ok(())
     }
+    fn index_expression(&mut self, e: &mut Expr, receiver: bool) -> Result<(), Diagnostic> {
+        self.expression(e)?;
+        if !receiver && let E::Index(_, i, _) = &e.kind {
+            self.graph
+                .sites
+                .push((self.index(i)?, Site::IndexRead(address(e)), e.start));
+        }
+        Ok(())
+    }
     fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
         let key = address(s);
         match s {
+            S::Element(_, i, _, _, _) => {
+                self.graph
+                    .sites
+                    .push((self.index(i)?, Site::IndexWrite(key), i.start));
+            }
             S::Declare(id, e) => {
                 if self.owners[*id] != 0 {
                     self.eligible[*id] = true;
@@ -249,6 +267,11 @@ impl Visitor for Mark<'_> {
         {
             *op = NATIVE_REMAINDER;
         }
+        if self.0.contains(&Site::IndexRead(address(e)))
+            && let E::Index(_, _, form) = &mut e.kind
+        {
+            *form = crate::ir::IndexForm::Proven;
+        }
         Ok(())
     }
     fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
@@ -256,6 +279,11 @@ impl Visitor for Mark<'_> {
             && let S::Assign(_, Some(op), _) = s
         {
             *op = NATIVE_REMAINDER;
+        }
+        if self.0.contains(&Site::IndexWrite(address(s)))
+            && let S::Element(_, _, _, _, form) = s
+        {
+            *form = crate::ir::IndexForm::Proven;
         }
         Ok(())
     }
@@ -281,6 +309,7 @@ fn visit_module(module: &mut Module, visitor: &mut impl Visitor) -> Result<(), D
 pub(crate) struct Report {
     pub(crate) rounds: usize,
     pub(crate) sites: Vec<u32>,
+    pub(crate) index_sites: Vec<u32>,
     pub(crate) components_at_limit: usize,
 }
 pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
@@ -339,7 +368,10 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
         for &(node, key, start) in &graph.sites {
             if matches!(values[node], Fact::Integer(..)) {
                 native.insert(key);
-                report.sites.push(start);
+                match key {
+                    Site::Expression(_) | Site::Assignment(_) => report.sites.push(start),
+                    Site::IndexRead(_) | Site::IndexWrite(_) => report.index_sites.push(start),
+                }
             }
         }
     }
