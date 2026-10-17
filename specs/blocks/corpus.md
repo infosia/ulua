@@ -135,6 +135,7 @@ recorded defect of the golden, in the same commit.
 | `map-modified` | collisions.md C6.10 |
 | `string-boundary` | collisions.md C5 |
 | `invalid-argument` | collisions.md C5 |
+| `json-number` | collisions.md C20 |
 | `uncaught-exception` | collisions.md C17.8, C19.7 (an unhandled rejection) |
 
 Resource limit traps (depth, time, memory; `CLAUDE.md` invariant 2) join

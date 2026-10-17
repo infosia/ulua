@@ -1,0 +1,10 @@
+1.5 0 1e+21 0.30000000000000004
+"q\"b\\s/\b\t\n\f\r\u0001\u001f é😀"
+true false
+[] [1,2,3] ["a","b"]
+{"x":1,"y":-2}
+{"name":"tri","points":[{"x":0,"y":0},{"x":1,"y":0},{"x":0,"y":1}],"closed":true,"tag":null}
+{"name":"line","points":[],"closed":false,"tag":"t"}
+{"id":7,"label":"box"}
+[[1],[],[2,3]]
+null

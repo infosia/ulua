@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 9, 2026-10-17. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 10, 2026-10-17. Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -457,3 +457,87 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
 7. **Exit.** The corpus equals its goldens; `node` agrees on `a80` and
    `a81`; a unit test compares both mappings with a `node` table over
    every code point; the §5.19 and P6.3 tests pass.
+
+## 10. P7.6 `JSON`
+
+The contract of the owner's prior project (its §13), with the changes
+that an Ulua rule forces. Measured with `node` v24.18.0 (P7.6
+contract).
+
+1. **`JSON.stringify(value)`** with one argument. The checker requires
+   a serializable type and the emitter writes a serializer for it (no
+   run-time type data: the static type is the value's type, as in the
+   prior contract §13.1). Serializable: `number`, `string`, `boolean`,
+   `T | null` (`null` gives `null`), `T[]`, a record, and a class (its
+   fields; no method). Rejected (C20): a function type, `Map`, `Set`,
+   a promise, an Error-family value, the absent type `T?`, and a type
+   that contains one of them. `node` gives `{}` for a `Map` and a
+   `Set` and omits a function field: a silent loss, as the prior
+   contract states. The `replacer` and `space` arguments are rejected
+   (a later revision).
+2. **Field order (D34).** A record or class writes its fields in the
+   declaration order of its type. An object literal whose type is, or
+   relates to (D19), a record type that a `JSON.stringify` call can
+   reach (through fields and elements) lists its fields in that
+   declaration order; another order is rejected (C20). Reason: `node`
+   writes the order of the literal (M4), and a Luau table keeps no
+   order. Divergence: a value from `JSON.parse` writes in declaration
+   order; `node` writes the key order of the parsed text.
+3. **Values.** A number follows C4.5 (`-0` gives `0`). NaN and the
+   infinities trap `json-number`, as the prior contract decides (§13.3:
+   `node` writes `null`, a silent loss; the value that comes back is
+   not the value that went in). A string escapes `"` and `\`, the five
+   short escapes `\b \t \n \f \r`, and every other code point below
+   U+0020 as a lowercase `\u00xx`; `/`, U+007F, U+2028, and U+2029 stay
+   unescaped (measured).
+4. **Cycles.** If the field graph of the type can reach the type again,
+   the serializer keeps a visited set and throws `TypeError` on a
+   revisit, as `node` does (measured). The prior contract traps; Ulua
+   has catchable exceptions (C17), so it follows `node`. A type whose
+   graph cannot cycle carries no visited set.
+5. **Depth.** A serializer or a parse deeper than `MAX_JSON_DEPTH`
+   (128, the prior contract's value) stops: `stringify` traps
+   `limit:json-depth` (a resource limit, outside the comparison,
+   invariant 5); `parse` throws `SyntaxError`, as the prior contract
+   treats deep input as malformed.
+6. **`JSON.parse(text)`** needs a target type from its context (an
+   annotation, a parameter, a result, a field); a call with no
+   contextual type is rejected (C20). The target follows rule 1, except
+   that a class is not a target (its constructor would not run). A
+   parse is a native helper (form 4) that reads the text with the
+   ECMAScript JSON grammar, then a check that the emitter writes per
+   target type converts the value.
+   - Malformed text throws `SyntaxError` (as `node`).
+   - Well-formed text that does not match the target throws
+     `TypeError`: a missing field, a value of another type, `null` for
+     a type without `null`. Divergence: `node` returns the value.
+   - A field that the target does not declare is ignored.
+   - A duplicate key takes the last occurrence (as `node`).
+   - A number outside the finite range (`1e400`) throws `TypeError`, by
+     rule 3 (the prior contract §13.4). Divergence: `node` gives
+     `Infinity`.
+   - A `\u` escape of a lone surrogate throws `SyntaxError`: UTF-8 has
+     no form for it (C5.1); a surrogate pair decodes to its code point.
+     Divergence: `node` gives a one-unit string.
+7. **Charges.** `stringify` is emitted Luau with the interrupt points
+   of §5.19. `parse` charges `NATIVE_CALL_STEPS` plus one step per
+   `NATIVE_BYTES_PER_STEP` bytes of the text; its values are charged to
+   `max_memory_bytes`.
+8. **Corpus.** `a83` (a `stringify` battery per serializable family
+   with the escape set), `a84` (a `parse` battery: records, arrays,
+   escapes, a surrogate pair, an extra field, a duplicate key, `-0`, a
+   round trip), `a85` (malformed text throws `SyntaxError`; a cycle
+   throws `TypeError`), all `js-comparable: yes`; `a86` (a mismatch
+   throws `TypeError`, `1e400` included; `js-comparable: no C20`);
+   `t16` (NaN traps `json-number`; `js-comparable: no C20`); `r165` (a
+   `Map` value), `r166` (a function field), `r167` (a parse without a
+   target), `r168` (a literal in another field order), `r169` (a
+   `space` argument). A runtime test covers the depth bound at 128 and
+   at 129 for both members.
+9. **Exit.** The corpus equals its goldens; `node` agrees on `a83` to
+   `a85`; a differential test of random values of 10 record and array
+   types against `node` (`stringify`, and `parse` of the `node` text)
+   agrees; a hostile-input test (deep nesting, long strings, many
+   keys, every malformed prefix of a valid text) stays inside the
+   limits; the §5.19 and P6.3 tests pass; the throughput of each member
+   is measured and recorded.

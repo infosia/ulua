@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review; Rev 51: C5.6 case and code points, P7.5).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review; Rev 51: C5.6 case and code points, P7.5; Rev 52: C20 JSON, P7.6).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -1034,6 +1034,32 @@ Luau model of the jobs gives the `node` order on 2,040 programs.
 
 Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`, `a64`. Reject: `r134`, `r135`, `r136`,
 `r137`, `r138`, `r139`, `r140`, `r141`, `r143`, `r144`, `r145`, `r146`, `r147`, `r148`. Trap: `t10`, `t11`.
+
+## C20. JSON
+
+`JSON.stringify` and `JSON.parse` follow stdlib.md §10.
+
+1. `JSON.stringify(value)` takes one argument of a serializable type
+   (stdlib.md §10 rule 1). A function type, `Map`, `Set`, a promise, an
+   Error-family value, the absent type, a type that contains one of
+   them, and a `replacer` or `space` argument are rejected: `node`
+   writes `{}` for a `Map` and a `Set` and omits a function field.
+2. A record or a class writes its fields in declaration order. An
+   object literal that reaches a `JSON.stringify` call lists its
+   fields in that order; another order is rejected (D34). Divergence:
+   a value from `JSON.parse` writes in declaration order; `node` writes
+   the key order of the parsed text.
+3. Divergence: NaN and the infinities trap `json-number`; `node`
+   writes `null`.
+4. A cycle throws `TypeError`, as `node` does.
+5. `JSON.parse(text)` needs a contextual target type; a call without
+   one is rejected. Malformed text throws `SyntaxError`, as `node`
+   does. Divergence: well-formed text that does not match the target
+   throws `TypeError`, a number outside the finite range throws
+   `TypeError`, and a lone surrogate escape throws `SyntaxError`;
+   `node` returns the value.
+
+Accept: `a83`, `a84`, `a85`, `a86`. Reject: `r165`, `r166`, `r167`, `r168`, `r169`. Trap: `t16`.
 
 ## Open items
 
