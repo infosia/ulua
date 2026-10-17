@@ -7,6 +7,21 @@ pub(super) fn prelude(methods: &BTreeSet<(Method, usize)>) -> (String, usize) {
     for &(method, _) in methods {
         if let Method::String(m) = method {
             let (params, result, body) = member(m);
+            if matches!(m, M::Upper | M::Lower) {
+                let native = if m == M::Upper {
+                    "__ulua_case_upper"
+                } else {
+                    "__ulua_case_lower"
+                };
+                selected.insert(
+                    super::methods::name(method, 0),
+                    format!(
+                        "local {}: (string) -> string = {native}\n",
+                        super::methods::name(method, 0)
+                    ),
+                );
+                continue;
+            }
             selected.insert(
                 super::methods::name(method, 0),
                 format!(
@@ -296,6 +311,8 @@ end
 ];
 fn member(m: M) -> (&'static str, &'static str, &'static str) {
     match m {
+        M::Upper => ("s: string", "string", "    return __ulua_case_upper(s)\n"),
+        M::Lower => ("s: string", "string", "    return __ulua_case_lower(s)\n"),
         M::Slice => (
             "s: string, start: number?, finish: number?",
             "string",

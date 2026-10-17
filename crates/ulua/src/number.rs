@@ -390,6 +390,10 @@ pub(crate) unsafe extern "C" fn dispatch(
     output: *mut u8,
     number: *mut f64,
 ) -> i32 {
+    if op >= 10 {
+        // SAFETY: The shim supplies the input and a 3*len (or four byte) output buffer.
+        return unsafe { crate::string_case::dispatch(op, a, input, len, output) };
+    }
     if op <= 1 {
         // SAFETY: The shim supplies the live UTF-8 Luau string for this call.
         let s = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(input, len)) };

@@ -66,6 +66,11 @@ static void interrupt(lua_State* state, int gc) {
     gap->run = 0;
     ++gap->interrupts;
 }
+// Instruction counting excludes native bodies; preserve the string for the next call.
+static int case_identity(unsigned, double, double, int, const unsigned char* input, size_t len, unsigned char* output, double*) {
+    std::memcpy(output, input, len);
+    return static_cast<int>(len);
+}
 static int unused(lua_State*) { return 0; }
 static int register_async(lua_State* state) {
     auto* gap = static_cast<Gap*>(lua_callbacks(state)->userdata);
@@ -91,6 +96,7 @@ extern "C" int ulua_internal_probe_interrupts(const char* source, size_t length,
     ulua_vm math_vm = {};
     math_vm.max_steps = UINT64_MAX;
     math_vm.math_dispatch = math_dispatch;
+    math_vm.number_dispatch = case_identity;
     seed_random(&math_vm, UINT64_C(0x5355425352454144));
     push_math(state, &math_vm);
     const int math_ref = lua_ref(state, -1);

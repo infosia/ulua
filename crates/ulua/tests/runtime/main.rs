@@ -28,3 +28,5 @@ fn measurement_lock() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|error| error.into_inner())
 }
 mod p74_tables;
+
+mod p75_strings;

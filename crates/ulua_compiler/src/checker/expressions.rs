@@ -440,6 +440,14 @@ impl Checker<'_> {
                     })?;
                     return self.finish_expr(e, statement, Type::Number, ExprKind::Number(n));
                 }
+                if matches!(&m.object, Expression::Identifier(n) if n.name == "String" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    return Err(self.error(
+                        m.span,
+                        "C5",
+                        "a String member is called, not read as a value",
+                    ));
+                }
                 let a = self.expr(&m.object, depth, false)?;
                 self.promise_operator(a.ty, m.span)?;
                 if self.types.table_parts(a.ty).is_some() {

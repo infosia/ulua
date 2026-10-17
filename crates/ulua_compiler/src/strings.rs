@@ -24,10 +24,14 @@ pub(crate) enum StringMethod {
     ReplaceAll,
     Concat,
     Next,
+    Upper,
+    Lower,
 }
 impl StringMethod {
     pub(crate) fn parse(name: &str) -> Option<Self> {
         Some(match name {
+            "toUpperCase" => Self::Upper,
+            "toLowerCase" => Self::Lower,
             "slice" => Self::Slice,
             "substring" => Self::Substring,
             "substr" => Self::Substr,
@@ -55,6 +59,8 @@ impl StringMethod {
     }
     pub(crate) fn name(self) -> &'static str {
         match self {
+            Self::Upper => "str_upper",
+            Self::Lower => "str_lower",
             Self::Slice => "str_slice",
             Self::Substring => "str_substring",
             Self::Substr => "str_substr",
@@ -87,13 +93,50 @@ mod tests {
     use crate::{Limits, compile};
 
     #[test]
+    fn case_and_scalar_calls_have_native_lowerings() {
+        for (expression, helper) in [
+            ("'Straße'.toUpperCase()", "case_upper"),
+            ("'ΟΣ'.toLowerCase()", "case_lower"),
+            ("String.fromCodePoint(128512)", "case_fromCodePoint"),
+            ("String.fromCharCode(65)", "case_fromCharCode"),
+        ] {
+            let source = format!("export function main():string{{return {expression};}}");
+            let compiled = compile(source.as_bytes(), Limits::default()).unwrap();
+            assert!(compiled.native_math);
+            assert!(
+                compiled
+                    .luau
+                    .contains(&format!("__ulua_math_native.{helper}"))
+            );
+        }
+    }
+    #[test]
+    fn case_diagnostics_name_arity_and_locale() {
+        for name in ["fromCodePoint", "fromCharCode"] {
+            for args in ["", "65,66"] {
+                let source = format!("export function main():void{{String.{name}({args});}}");
+                let error = compile(source.as_bytes(), Limits::default()).unwrap_err();
+                assert_eq!(error.code, "C5");
+                assert_eq!(
+                    error.message,
+                    format!("String.{name} takes exactly one argument")
+                );
+            }
+        }
+        for name in ["toLocaleUpperCase", "toLocaleLowerCase", "localeCompare"] {
+            let source = format!("export function main():void{{'x'.{name}();}}");
+            let error = compile(source.as_bytes(), Limits::default()).unwrap_err();
+            assert_eq!(error.code, "C5");
+            assert_eq!(error.message, format!("{name} depends on locale data"));
+        }
+    }
+
+    #[test]
     fn string_surface_rejects_unlisted_members_and_forms() {
         for body in [
             "const c='x'[0];",
             "const x='a'<'b';",
             "const f='x'.slice;",
-            "'x'.toUpperCase();",
-            "'x'.toLowerCase();",
             "'x'.toLocaleUpperCase();",
             "'x'.toLocaleLowerCase();",
             "'x'.localeCompare('y');",
@@ -103,8 +146,14 @@ mod tests {
             "'x'.search('x');",
             "'x'.replace(/x/,'y');",
             "'x'.replaceAll(/x/g,'y');",
-            "String.fromCharCode(65);",
             "String.raw('x');",
+            "const f=String.fromCharCode;",
+            "const f=String.fromCodePoint;",
+            "String.fromCharCode('65');",
+            "'x'.toUpperCase(1);",
+            "'x'.toLowerCase(1);",
+            "const f='x'.toUpperCase;",
+            "const f='x'.toLowerCase;",
             "'x'.concat('a','b');",
             "'x'.split();",
             "'x'.slice('1');",

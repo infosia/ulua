@@ -23,6 +23,7 @@ mod p41_tests;
 #[cfg(test)]
 mod p43_tests;
 mod requests;
+mod string_case;
 #[cfg(test)]
 mod tests;
 mod types;

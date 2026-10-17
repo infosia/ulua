@@ -68,6 +68,31 @@ static int number_native(lua_State* state) {
     }
     return 1;
 }
+// The VM buffer bounds Rust's temporary result and is charged before conversion.
+// Unicode default casing expands UTF-8 by at most three times (e.g. U+0390).
+static int case_native(lua_State* state) {
+    const unsigned op = static_cast<unsigned>(lua_tointeger(state, lua_upvalueindex(1)));
+    auto* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, lua_upvalueindex(2)));
+    size_t length = 0;
+    const char* input = op <= 11 ? lua_tolstring(state, 1, &length) : "";
+    charge_steps(state, vm, NATIVE_CALL_STEPS + length / NATIVE_BYTES_PER_STEP);
+    if (length > (static_cast<size_t>(INT32_MAX) - 4) / 3) {
+        record_stop(vm, SHIM_MEMORY);
+        luaL_error(state, "String result exceeds memory limit");
+    }
+    unsigned char small[4];
+    auto* output = op <= 11 ? static_cast<unsigned char*>(lua_newbuffer(state, length * 3 + 4)) : small;
+    const double a = op <= 11 ? 0 : lua_tonumber(state, 1);
+    double unused = 0;
+    const int result = vm->number_dispatch(op, a, 0, 0,
+        reinterpret_cast<const unsigned char*>(input), length, output, &unused);
+    if (result < 0) {
+        vm->trap_kind = 4;
+        luaL_error(state, "Invalid String argument");
+    }
+    lua_pushlstring(state, reinterpret_cast<const char*>(output), static_cast<size_t>(result));
+    return 1;
+}
 static void push_math(lua_State* state, ulua_vm* vm) {
     lua_createtable(state, 0, 23);
     lua_pushinteger(state, 0);
@@ -171,6 +196,13 @@ static void push_math(lua_State* state, ulua_vm* vm) {
             std::strcat(name, names[op]);
             lua_setfield(state, -2, name);
         }
+    }
+    static const char* cases[] = {"case_upper", "case_lower", "case_fromCodePoint", "case_fromCharCode"};
+    for (unsigned i = 0; i < 4; ++i) {
+        lua_pushinteger(state, 10 + i);
+        lua_pushlightuserdata(state, vm);
+        lua_pushcclosure(state, case_native, cases[i], 2);
+        lua_setfield(state, -2, cases[i]);
     }
     lua_setreadonly(state, -1, true);
 }

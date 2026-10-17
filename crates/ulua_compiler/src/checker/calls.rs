@@ -41,6 +41,15 @@ impl Checker<'_> {
             }
             return self.number_call(e, call, m.property.name.as_str(), None, depth, statement);
         }
+        if let Expression::StaticMemberExpression(m) = &call.callee
+            && matches!(&m.object, Expression::Identifier(n) if n.name == "String" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        {
+            if m.optional {
+                return Err(self.unsupported(m.span));
+            }
+            let value = self.string_static(call, m.property.name.as_str(), depth)?;
+            return self.finish_expr(e, statement, value.ty, value.kind);
+        }
         let mut field_callee = None;
         if let Expression::StaticMemberExpression(m) = &call.callee
             && !m.optional

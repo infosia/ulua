@@ -5,10 +5,9 @@ use std::collections::BTreeSet;
 pub(super) fn prelude(members: &BTreeSet<&str>) -> (String, Vec<String>) {
     let mut text = String::new();
     let mut names = vec![];
-    if members
-        .iter()
-        .any(|n| native(n).is_some() || n.starts_with("__ulua_number_"))
-    {
+    if members.iter().any(|n| {
+        native(n).is_some() || n.starts_with("__ulua_number_") || n.starts_with("__ulua_case_")
+    }) {
         text.push_str("local __ulua_math_native: any = select(6, ...)\n");
         names.push("__ulua_math_native".into());
     }
@@ -21,7 +20,16 @@ pub(super) fn prelude(members: &BTreeSet<&str>) -> (String, Vec<String>) {
             continue;
         }
         names.push(name.into());
-        if let Some(member) = name.strip_prefix("__ulua_number_") {
+        if let Some(member) = name.strip_prefix("__ulua_case_") {
+            let arg = if matches!(member, "upper" | "lower") {
+                "string"
+            } else {
+                "number"
+            };
+            text.push_str(&format!(
+                "local {name}: ({arg}) -> string = __ulua_math_native.case_{member}\n"
+            ));
+        } else if let Some(member) = name.strip_prefix("__ulua_number_") {
             let signature = match member {
                 "parseInt" => "(string, number) -> number",
                 "parseFloat" => "(string) -> number",

@@ -72,6 +72,12 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
         ),
         ("increment", number, "x++;", "}"),
         (
+            "string-case",
+            "export function main(b:boolean):void{let s='Straße ΟΣ İ ﬀ';",
+            "s=s.toUpperCase().toLowerCase();",
+            "}",
+        ),
+        (
             "math-native-loop",
             "export function main(b:boolean):void{let x=1;for(let i=0;i<2;i++){",
             "x=Math.sin(x);",
@@ -155,6 +161,15 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
     ] {
         shapes.push((name, fill(prefix, unit, suffix)));
     }
+    let long_case = "ΐΣİﬀ".repeat(bytes / 64);
+    shapes.push((
+        "string-case-long",
+        fill(
+            &format!("export function main(b:boolean):void{{const s='{long_case}';let result='';"),
+            "result=s.toUpperCase();result=s.toLowerCase();",
+            "}",
+        ),
+    ));
     let array = fill(
         "export function main(b:boolean):void{let x=1;let a=[",
         "x+x,",

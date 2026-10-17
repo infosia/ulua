@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
+Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17; P7.5 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
 
 ## Slices
 
@@ -243,3 +243,30 @@ largest 11.440, P6.3 within every bound (primes 1.178, sort 3.512).
 After round 1 (the helper loops did not change): `cargo test -p
 ulua_compiler` 237 passed, `p74_tables` 8 passed, `luau.mjs` 229
 entries pass, `gate.sh quick` PASS (156.2 s).
+
+## P7.5 String case and code points
+
+Contract: `stdlib.md` §9 (Rev 9), collisions.md C5.4, C5.6 (Rev 51),
+surface.md Rev 30. Corpus: `a80`, `a81` (equal to `node`), `t14`,
+`t15`, `r163`, `r164`; `r18` retired. Red before: `a80`, `a81`, `t14`,
+`t15` gave C5.
+
+The four members are native calls of the `Math` table path. A case
+call charges `NATIVE_CALL_STEPS` plus one step per byte, and allocates
+a VM buffer of `3 × len + 4` bytes before the conversion; the Rust
+result is bounded by that charged buffer. The per-scalar expansion
+bound of 3 is checked over every scalar.
+
+Version pair: Rust `char::UNICODE_VERSION` 17.0.0, `node` v24.18.0
+(Unicode 17.0). `node` table (`crates/ulua/test-data/string-case-oracle.tsv`,
+from `string-case-oracle.mjs`): 3,037 changed scalars and 9 context
+rows, 0 differences.
+
+Cost (Release, ns per call, median of 5 × 200,000, loop included),
+upper / lower: `"Hello World"` 74.2 / 68.2, `"Straße ΟΣ İ ﬀ"` 137.5 /
+199.7.
+
+Gates on the final code: `cargo test -p ulua_compiler` 239 passed;
+`gate.sh full` PASS (207.4 s); `gate.sh timing` PASS (434.0 s): §5.19
+largest 5.929 (`boolean-template`; case shapes 2.155, 1.202), analyzer
+largest 11.620, P6.3 within every bound (primes 1.169, sort 3.394).

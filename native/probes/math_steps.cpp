@@ -94,7 +94,9 @@ extern "C" uint64_t ulua_internal_probe_native_bytes_per_step() noexcept {
 // Exercise the real product closure with exactly known native charges.
 extern "C" int ulua_internal_probe_number_charge(uint64_t budget, int formatting,
     ulua_number_fn dispatch, uint64_t* counters, char* error) noexcept {
-    const char* source = formatting
+    const char* source = formatting == 2
+        ? "local arm,m,marks=...\nlocal s='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'\narm()\nmarks[1]=m.case_upper(s)\nmarks[2]=m.case_upper(s)\nmarks[3]=m.case_upper(s)\n"
+        : formatting
         ? "local arm,m,marks=...\narm()\nmarks[1]=m.number_toFixed(2.5,100)\nmarks[2]=m.number_toFixed(2.5,100)\nmarks[3]=m.number_toFixed(2.5,100)\n"
         : "local arm,m,marks=...\nlocal s='                               1'\narm()\nmarks[1]=m.number_parseInt(s,10)\nmarks[2]=m.number_parseInt(s,10)\nmarks[3]=m.number_parseInt(s,10)\n";
     char* bytecode = nullptr;

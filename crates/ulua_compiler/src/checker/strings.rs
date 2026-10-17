@@ -12,11 +12,17 @@ impl Checker<'_> {
         receiver: Expr,
         depth: u32,
     ) -> Result<Expr, Diagnostic> {
+        if matches!(
+            name,
+            "toLocaleUpperCase" | "toLocaleLowerCase" | "localeCompare"
+        ) {
+            return Err(self.error(call.span, "C5", &format!("{name} depends on locale data")));
+        }
         let method = M::parse(name)
             .ok_or_else(|| self.error(call.span, "C5", "String member is rejected"))?;
         let (min, max) = match method {
             M::Slice => (0, 2),
-            M::Trim | M::TrimStart | M::TrimEnd => (0, 0),
+            M::Trim | M::TrimStart | M::TrimEnd | M::Upper | M::Lower => (0, 0),
             M::Replace | M::ReplaceAll => (2, 2),
             M::CharAt | M::CharCodeAt | M::CodePointAt | M::At | M::Repeat | M::Concat => (1, 1),
             _ => (1, 2),
@@ -59,6 +65,15 @@ impl Checker<'_> {
             M::Split => self.types.array(Type::String),
             _ => Type::String,
         };
+        match method {
+            M::Upper => {
+                self.math.insert("__ulua_case_upper");
+            }
+            M::Lower => {
+                self.math.insert("__ulua_case_lower");
+            }
+            _ => {}
+        }
         let method = Method::String(method);
         self.methods.insert((method, 0));
         Ok(Expr {
@@ -68,5 +83,57 @@ impl Checker<'_> {
             ty,
             kind: ExprKind::Method(method, 0, Box::new(receiver), args),
         })
+    }
+    fn string_native(
+        &mut self,
+        start: u32,
+        helper: &'static str,
+        argument: Expr,
+    ) -> Result<Expr, Diagnostic> {
+        self.math.insert(helper);
+        let callee = Expr {
+            flow: None,
+            bare_true: false,
+            start,
+            ty: self.types.intern(vec![argument.ty], Type::String, 1),
+            kind: ExprKind::Builtin(helper),
+        };
+        Ok(Expr {
+            flow: None,
+            bare_true: false,
+            start,
+            ty: Type::String,
+            kind: ExprKind::Call(Box::new(callee), vec![argument]),
+        })
+    }
+    pub(super) fn string_static(
+        &mut self,
+        call: &CallExpression<'_>,
+        name: &str,
+        depth: u32,
+    ) -> Result<Expr, Diagnostic> {
+        let helper = match name {
+            "fromCodePoint" => "__ulua_case_fromCodePoint",
+            "fromCharCode" => "__ulua_case_fromCharCode",
+            _ => return Err(self.error(call.span, "C5", "String member is rejected")),
+        };
+        if call.optional || call.type_arguments.is_some() {
+            return Err(self.unsupported(call.span));
+        }
+        if call.arguments.len() != 1 {
+            return Err(self.error(
+                call.span,
+                "C5",
+                &format!("String.{name} takes exactly one argument"),
+            ));
+        }
+        let arg = call.arguments[0]
+            .as_expression()
+            .ok_or_else(|| self.error(call.span, "C5", "String spread is rejected"))?;
+        let value = self.expr(arg, depth, false)?;
+        if value.ty != Type::Number {
+            return Err(self.error(arg.span(), "C5", "String argument type is rejected"));
+        }
+        self.string_native(call.span.start, helper, value)
     }
 }
