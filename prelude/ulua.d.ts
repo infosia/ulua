@@ -15,6 +15,8 @@ interface Array<T> {
   at(index: number): T;
   /** ES2023; the project library is ES2022. */
   findLastIndex(predicate: (value: T, index: number) => boolean): number;
+  /** ES2023; a miss is `null` in Ulua and `undefined` under node (stdlib.md §6). */
+  findLast(predicate: (value: T, index: number) => boolean): T | undefined;
 }
 
 /**

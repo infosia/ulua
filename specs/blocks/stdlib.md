@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 2, 2026-10-17. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 3, 2026-10-17. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -223,3 +223,48 @@ other member are rejected (C11).
     §8 pass; the §5.19 interrupt and analyzer tests and P6.3 pass; the
     cost per native call is recorded; `benchmarks.md` §4 states the
     revised pair rule.
+
+## 6. P7.2 `find`, `findLast`, and the absent type
+
+1. `xs.find(f)` and `xs.findLast(f)` on `T[]` follow the callback rules
+   of collisions.md C6.9: `f` takes `(v)` or `(v, i)` and returns
+   `boolean`; the array parameter is rejected. `find` scans from index
+   0, `findLast` from the end. The prelude declares `findLast` (ES2023)
+   with the result `T | undefined`, as the library declares `find`.
+2. **The absent type.** The checker types the result `T?`: the element
+   on a hit, `nil` on a miss. `T` excludes `null` (C6.5), so `nil`
+   never is an element. `tsc` types the same value `T | undefined`.
+3. **Accepted flows of `T?`**, each clean under `tsc` (M6):
+   - the initializer of a `let` or `const` without a type annotation;
+     the binding has type `T?`;
+   - an assignment to a `T?` binding of a `T?` or a `T` value;
+   - `x == null`, `x != null`, `x === null`, `x !== null`; they narrow
+     as a null test of `T | null` narrows (C16);
+   - `x ?? y`: the result is `T` when `y` has type `T`, and `T?` when
+     `y` has type `T?`;
+   - `x?.f` and `x?.m(args)` in the positions that C2 accepts for
+     `T | null`.
+4. **Rejected flows** (C2): a `T?` value to a declared type, a
+   parameter, a result, a field, an array element, or `push`; an
+   assignment of `null` to a `T?` binding; an equality with an operand
+   other than `null`; a template substitution. Measured with `tsc`:
+   `const r: number | null = xs.find(f)` gives TS2322, `r = null` on an
+   inferred `r` gives TS2322, a `number | null` parameter gives TS2345,
+   a `number | null` result gives TS2322; `r === 2` and `[r]` are clean
+   under `tsc` and rejected here by C7 and C6.5.
+5. D18 treats a reference of type `T?` as a reference of type
+   `T | null`: it is a narrowable reference form.
+6. **Divergence (C2).** On a miss, `x === null` is `true` here and
+   `false` under `node`; `x !== null` is `false` here and `true` under
+   `node`. `==`, `!=`, `??`, and `?.` agree. An entry with `===` or
+   `!==` on a `T?` value is `js-comparable: no C2`.
+7. **Corpus.** `a72` (hits, misses, `== null`, `!= null` narrowing,
+   `??`, `?.` on a record; `js-comparable: yes`), `a73` (`=== null`
+   and `!== null` on a miss; `js-comparable: no C2`), `r152` (a
+   `T | null` annotation; `tsc` TS2322), `r153` (`null` assigned to a
+   `T?` binding; TS2322), `r154` (a `T?` argument to a `T | null`
+   parameter; TS2345), `r155` (a `T?` template substitution; `tsc`
+   accepts). `r24` retires: its reason was D16.
+8. **Exit.** The corpus equals its goldens; `node` agrees on `a72`;
+   collisions.md C6.9 lists `find` and `findLast`; the D18 tests cover
+   a `T?` reference.

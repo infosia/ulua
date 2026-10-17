@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -121,8 +121,14 @@ Accept: `a01`, `a05`, `a09`, `a15`, `a16`, `a49`. Reject: `r19`, `r43`, `r53`, `
   `undefined`. A step after the optional step, as in `a?.f.g`, is
   rejected: JavaScript skips the whole chain when `a` is `null`.
 
-Accept: `a08`, `a14`, `a15`, `a40`. Reject: `r02`, `r03`, `r04`, `r12`, `r13`,
-`r14`, `r48`, `r63`, `r118`. Retired by P2.5: `retired:r05-strict-null-equality`.
+- **The absent type (D32, stdlib.md §6).** `find` and `findLast` give
+  `T?`: `nil` on a miss, where `node` gives `undefined`. `==`, `!=`,
+  `??`, and `?.` agree with `node`. Divergence: on a miss `x === null`
+  is `true` here and `false` under `node`, and `x !== null` is `false`
+  here and `true` under `node`.
+
+Accept: `a08`, `a14`, `a15`, `a40`, `a72`, `a73`. Reject: `r02`, `r03`, `r04`, `r12`, `r13`,
+`r14`, `r48`, `r63`, `r118`, `r152`, `r153`, `r154`, `r155`. Retired by P2.5: `retired:r05-strict-null-equality`.
 
 ## C3. Truth tests are `boolean`
 
@@ -319,8 +325,8 @@ Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
      length), `copyWithin(target, start, end?)`, `at(i)`, `pop()`,
      `shift()`, and the statement `xs.length = 0`.
    - With a callback: `forEach`, `map`, `filter`, `some`, `every`,
-     `findIndex`, `findLastIndex`, `flatMap` (the callback returns an
-     array), `reduce(f, init)` and `reduceRight(f, init)` with `init`
+     `find`, `findLast` (stdlib.md §6), `findIndex`, `findLastIndex`,
+     `flatMap` (the callback returns an array), `reduce(f, init)` and `reduceRight(f, init)` with `init`
      required, and `sort(cmp)` with the comparator required.
    - A callback takes `(v)` or `(v, i)`; the callback of `reduce` and
      `reduceRight` takes `(acc, v)` or `(acc, v, i)`; the comparator of
@@ -358,7 +364,7 @@ Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
      continues, skips or reads missing elements, or makes holes.
    - `xs.length = n` with `n` other than the literal `0` stays rejected:
      a larger length makes holes.
-   - Rejected: `find` and `findLast` (D16: a miss is `undefined`), a
+   - Rejected: a
      `sort` without a comparator (it compares strings), a `reduce`
      without `init` (it changes meaning with the argument count),
      `flat`, `entries`, `keys`, `values`, `toString`, a method read as
@@ -366,8 +372,9 @@ Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
-Accept: `a09`, `a13`, `a32`, `a33`, `a34`. Reject: `r06`, `r23`, `r24`, `r45`, `r64`,
+Accept: `a09`, `a13`, `a32`, `a33`, `a34`, `a72`. Reject: `r06`, `r23`, `r45`, `r64`,
 `r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`.
+Retired by P7.2: `retired:r24-array-find` (D32).
 
 ## C7. Equality
 
