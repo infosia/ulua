@@ -197,6 +197,13 @@ impl Checker<'_> {
                 let sig = self.types.signature(v.ty).ok_or_else(|| {
                     self.error(call.span, "C6", "Collection callback must be a function")
                 })?;
+                if self.types.promise_value(sig.result).is_some() {
+                    return Err(self.error(
+                        arg.span(),
+                        "C6",
+                        "await in a Map or Set traversal is rejected",
+                    ));
+                }
                 let max = if value.is_some() { 2 } else { 1 };
                 if !(1..=max).contains(&sig.params.len()) {
                     return Err(self.error(

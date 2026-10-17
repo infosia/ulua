@@ -144,19 +144,19 @@ fn special(x: f64) -> Option<String> {
         None
     }
 }
-fn shortest(x: f64) -> (String, i32) {
+fn shortest(x: f64) -> Result<(String, i32), ()> {
     let s = format!("{:e}", x.abs());
-    let (m, e) = s.split_once('e').unwrap();
-    let e: i32 = e.parse().unwrap();
+    let (m, e) = s.split_once('e').ok_or(())?;
+    let e: i32 = e.parse().map_err(|_| ())?;
     let mut m = m.to_owned();
     let fraction_digits = m.split_once('.').map_or(0, |(_, f)| f.len());
     // Rust's shortest dtoa picks the larger decimal on a tie. ECMAScript
     // shortest dtoa picks the even significand among equally close choices.
-    if tie_down(x, fraction_digits as i32 - e) && m.as_bytes().last().unwrap() % 2 == 1 {
-        let last = m.pop().unwrap() as u8;
+    if tie_down(x, fraction_digits as i32 - e) && m.as_bytes().last().ok_or(())? % 2 == 1 {
+        let last = m.pop().ok_or(())? as u8;
         m.push((last - 1) as char);
     }
-    (m, e)
+    Ok((m, e))
 }
 fn fixed_layout(m: &str, e: i32) -> String {
     let digits = m.replace('.', "");
@@ -173,19 +173,19 @@ fn fixed_layout(m: &str, e: i32) -> String {
         )
     }
 }
-pub(crate) fn decimal(x: f64) -> String {
+pub(crate) fn decimal(x: f64) -> Result<String, ()> {
     if let Some(s) = special(x) {
-        return s;
+        return Ok(s);
     }
     if x == 0.0 {
-        return "0".into();
+        return Ok("0".into());
     }
     let sign = if x < 0.0 { "-" } else { "" };
-    let (m, e) = shortest(x);
+    let (m, e) = shortest(x)?;
     if (-6..21).contains(&e) {
-        format!("{sign}{}", fixed_layout(&m, e))
+        Ok(format!("{sign}{}", fixed_layout(&m, e)))
     } else {
-        format!("{sign}{m}e{e:+}")
+        Ok(format!("{sign}{m}e{e:+}"))
     }
 }
 // Rust rounds decimal ties to even. Determine an exact halfway case using
@@ -213,7 +213,7 @@ fn tie_down(x: f64, k: i32) -> bool {
     }
     m % 4 == 1 // 5^k is 1 modulo 4, including its inverse.
 }
-fn increment(s: &mut String) {
+fn increment(s: &mut String) -> Result<(), ()> {
     let mut bytes = s.as_bytes().to_vec();
     for c in bytes.iter_mut().rev() {
         if *c == b'.' {
@@ -223,20 +223,21 @@ fn increment(s: &mut String) {
             *c = b'0';
         } else {
             *c += 1;
-            *s = String::from_utf8(bytes).unwrap();
-            return;
+            *s = String::from_utf8(bytes).map_err(|_| ())?;
+            return Ok(());
         }
     }
     bytes.insert(0, b'1');
-    *s = String::from_utf8(bytes).unwrap();
+    *s = String::from_utf8(bytes).map_err(|_| ())?;
+    Ok(())
 }
-fn scientific(x: f64, digits: usize) -> (String, i32) {
+fn scientific(x: f64, digits: usize) -> Result<(String, i32), ()> {
     let s = format!("{:.*e}", digits, x.abs());
-    let (mantissa, exponent) = s.split_once('e').unwrap();
-    let mut e: i32 = exponent.parse().unwrap();
+    let (mantissa, exponent) = s.split_once('e').ok_or(())?;
+    let mut e: i32 = exponent.parse().map_err(|_| ())?;
     let mut m = mantissa.to_owned();
     if tie_down(x, digits as i32 - e) {
-        increment(&mut m);
+        increment(&mut m)?;
         if m.starts_with("10") {
             m = if digits == 0 {
                 "1".into()
@@ -246,7 +247,7 @@ fn scientific(x: f64, digits: usize) -> (String, i32) {
             e += 1;
         }
     }
-    (m, e)
+    Ok((m, e))
 }
 pub(crate) fn format_number(op: u32, x: f64, arg: Option<f64>) -> Result<String, ()> {
     let d = integer(arg.unwrap_or(0.0));
@@ -254,11 +255,11 @@ pub(crate) fn format_number(op: u32, x: f64, arg: Option<f64>) -> Result<String,
         if !(2.0..=36.0).contains(&d) {
             return Err(());
         }
-        return Ok(if d == 10.0 {
+        return if d == 10.0 {
             decimal(x)
         } else {
             radix_string(x, d as u32)
-        });
+        };
     }
     if !(if op == 4 { 1.0 } else { 0.0 }..=100.0).contains(&d) {
         return Err(());
@@ -270,19 +271,19 @@ pub(crate) fn format_number(op: u32, x: f64, arg: Option<f64>) -> Result<String,
     let n = d as usize;
     if op == 2 {
         if x.abs() >= 1e21 {
-            return Ok(decimal(x));
+            return decimal(x);
         }
         let mut s = format!("{:.*}", n, x.abs());
         if tie_down(x, n as i32) {
-            increment(&mut s);
+            increment(&mut s)?;
         }
         return Ok(format!("{sign}{s}"));
     }
     if op == 3 && arg.is_none() {
-        let (m, e) = shortest(x);
+        let (m, e) = shortest(x)?;
         return Ok(format!("{sign}{m}e{e:+}"));
     }
-    let (m, e) = scientific(x, if op == 4 { n - 1 } else { n });
+    let (m, e) = scientific(x, if op == 4 { n - 1 } else { n })?;
     if op == 3 || e < -6 || e >= n as i32 {
         return Ok(format!("{sign}{m}e{e:+}"));
     }
@@ -290,12 +291,12 @@ pub(crate) fn format_number(op: u32, x: f64, arg: Option<f64>) -> Result<String,
 }
 // V8's precision-bounded radix conversion, including its integer zero fill.
 // Algorithm reference: v8/src/numbers/conversions.cc DoubleToRadixStringView.
-pub(crate) fn radix_string(x: f64, radix: u32) -> String {
+pub(crate) fn radix_string(x: f64, radix: u32) -> Result<String, ()> {
     if let Some(s) = special(x) {
-        return s;
+        return Ok(s);
     }
     if x == 0.0 {
-        return "0".into();
+        return Ok("0".into());
     }
     let value = x.abs();
     let r = radix as f64;
@@ -352,7 +353,7 @@ pub(crate) fn radix_string(x: f64, radix: u32) -> String {
         head.push(b'.');
         head.extend(tail.into_iter().map(|d| DIGITS[d as usize]));
     }
-    String::from_utf8(head).unwrap()
+    String::from_utf8(head).map_err(|_| ())
 }
 /// Rev 6 cost model: 32 + 3 * output bytes + ceil(abs(floor(log2(abs(x)))) / 2).
 /// Zero and nonfinite values use exponent 0. Digits are represented by the
@@ -429,15 +430,14 @@ pub(crate) unsafe extern "C" fn dispatch(
         return 0;
     }
     match format_number(op, a, (has_b != 0).then_some(b)) {
-        Ok(s) => {
-            assert!(s.len() <= 2300);
+        Ok(s) if s.len() <= 2300 => {
             unsafe {
                 *number = format_steps(a, (has_b != 0).then_some(b), &s) as f64;
                 std::ptr::copy_nonoverlapping(s.as_ptr(), output, s.len());
             }
             s.len() as i32
         }
-        Err(()) => -1,
+        Ok(_) | Err(()) => -1,
     }
 }
 

@@ -113,3 +113,73 @@ fn collection_nullable_optional_access_and_source_shadowing() {
     let error = check("new Map<number,number>([[1,2]]);").unwrap_err();
     assert_eq!(error.code, "C6");
 }
+
+#[test]
+fn collection_traversal_rejects_await_at_each_body_position() {
+    for subject in ["m.keys()", "m.values()", "s"] {
+        for body in [
+            "await value(k);",
+            "{{await value(k);}}",
+            "if(k>0){await value(k);}",
+            "while(k>0){await value(k);break;}",
+            "for(let i=0;i<1;i++){await value(k);}",
+            "for(const x of [k]){await value(x);}",
+            "for(const x of m.values()){await value(x);}",
+            "try{await value(k);}catch(e){}",
+            "try{}finally{await value(k);}",
+            "const n=await value(k);",
+            "for(let i=await value(k);i<1;i++){}",
+            "for(let i=0;i<await value(k);i++){}",
+            "for(let i=0;i<1;i+=await value(k)){}",
+            "for(const x of [await value(k)]){}",
+            "return await value(k);",
+        ] {
+            let source = format!(
+                "async function value(n:number):Promise<number>{{return n;}}export async function main():Promise<number>{{const m=new Map<number,number>();const s=new Set<number>();for(const k of {subject}){{{body}}}return 0;}}"
+            );
+            let error = compile(source.as_bytes(), Limits::default()).unwrap_err();
+            assert_eq!(error.code, "C6", "{source}");
+            assert_eq!(
+                error.message, "await in a Map or Set traversal is rejected",
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn collection_for_each_rejects_promise_callbacks() {
+    for collection in ["new Map<number,number>()", "new Set<number>()"] {
+        for callback in [
+            "async (v:number):Promise<number>=>await value(v)",
+            "(async (v:number):Promise<number>=>{return await value(v);})",
+            "value",
+            "(v:number):Promise<number>=>value(v)",
+            "callback",
+        ] {
+            let source = format!(
+                "async function value(n:number):Promise<number>{{return n;}}const callback=value;export function main():void{{const m={collection};m.forEach({callback});}}"
+            );
+            let error = compile(source.as_bytes(), Limits::default()).unwrap_err();
+            assert_eq!(error.code, "C6", "{source}");
+            assert_eq!(
+                error.message, "await in a Map or Set traversal is rejected",
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn collection_traversal_allows_await_in_a_separate_function_frame() {
+    for body in [
+        "const f=async ():Promise<number>=>await value(k);",
+        "async function f():Promise<number>{return await value(k);}",
+        "const f=async ():Promise<number>=>{return await value(k);};const p=f();",
+    ] {
+        let source = format!(
+            "async function value(n:number):Promise<number>{{return n;}}export function main():void{{const s=new Set<number>([1]);for(const k of s){{{body}}}}}"
+        );
+        compile(source.as_bytes(), Limits::default()).unwrap();
+    }
+}

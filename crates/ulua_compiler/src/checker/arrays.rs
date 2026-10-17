@@ -68,6 +68,13 @@ impl Checker<'_> {
                 "for...of over a Map needs a tuple type; iterate keys() or values()",
             ));
         }
+        if table.is_some() && self.suspends(f.body.span()) {
+            return Err(self.error(
+                f.body.span(),
+                "C6",
+                "await in a Map or Set traversal is rejected",
+            ));
+        }
         let mut table_binding = None;
         if table.is_some() {
             // Internal storage has no source name and cannot shadow the iteration binding.

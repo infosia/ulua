@@ -296,3 +296,31 @@ fn present_keys_and_members_can_be_updated_during_traversal() {
         );
     }
 }
+
+#[test]
+fn traversal_then_failed_export_preserves_mutation_traps() {
+    for (declaration, setup, subject) in [
+        ("new Map<number,number>()", "m.set(1,1);", "m.keys()"),
+        ("new Map<number,number>()", "m.set(1,1);", "m.values()"),
+        ("new Set<number>([1])", "", "m"),
+    ] {
+        let source = format!(
+            "const m={declaration};async function value(n:number):Promise<number>{{return n;}}export function traverse():number{{{setup}let total=0;for(const k of {subject}){{const f=async ():Promise<number>=>await value(k);const p=f();total+=k;}}return total;}}export function fail():void{{throw new Error('stop');}}export function mutate():void{{m.forEach((v:number):void=>{{m.delete(v);}});}}export function size():number{{return m.size;}}"
+        );
+        let mut s = support::Script::new(&source);
+        assert_eq!(s.instance(RunLimits::default()).0, ULUA_OK);
+        let (status, _, value) = s.call(s.index("traverse"), &[]);
+        assert_eq!(status, ULUA_OK);
+        assert_eq!(value.number, 1.0);
+        let (status, code, _) = s.call(s.index("fail"), &[]);
+        assert_eq!(
+            (status, code),
+            (ULUA_FAILED, "trap:uncaught-exception".into())
+        );
+        let (status, code, _) = s.call(s.index("mutate"), &[]);
+        assert_eq!((status, code), (ULUA_FAILED, "trap:map-modified".into()));
+        let (status, _, value) = s.call(s.index("size"), &[]);
+        assert_eq!(status, ULUA_OK);
+        assert_eq!(value.number, 0.0);
+    }
+}

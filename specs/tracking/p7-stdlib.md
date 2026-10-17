@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17; P7.5 COMPLETE 2026-10-17; P7.6 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
+Status: P7 COMPLETE 2026-10-17 (P7.0 to P7.6; Phase Review round 1). Contract: `blocks/stdlib.md` Rev 11.
 
 ## Slices
 
@@ -302,3 +302,39 @@ Gates on the final code: `cargo test -p ulua_compiler` 244 passed;
 largest 5.749 (`boolean-template`; JSON shapes 3.673, 4.466, 4.433,
 1.217), analyzer largest 11.638, P6.3 within every bound (primes
 1.188, sort 3.406).
+
+## P7 Phase Review round 1
+
+A fresh reviewer read `git diff 0c3a4d7^..HEAD` with probes under the
+product binary and a C host. Result: 0 CRITICAL, 3 MAJOR, 3 MINOR.
+
+- M1 (MAJOR): a failed run reset the traversal count of a `for…of`
+  over a `Map` that a suspended task held; the count went to -1 and
+  `map-modified` stopped. Measured: `each 1`, `each 4`, status 0;
+  `node` gives `each 1`, `each 3`, `each 4`. Fix: `await` in such a
+  body and a promise-result `forEach` callback are rejected (C6.10 Rev
+  53, `r170`). With no suspended traversal, the reset at a failed run
+  is exact.
+- M2 (MAJOR): a field outside the parse target is dropped on a later
+  `stringify`; no rule named it. Fix: C20.6 names it with both
+  outputs; `a86` pins it.
+- M3 (MAJOR): a parse deeper than 128 throws a catchable
+  `SyntaxError`; `node` gives the value at 200 levels. Fix: C20.5
+  names it; `a86` pins it.
+- m1 (MINOR, open): a case call builds its result in a Rust `String`
+  outside the VM allocator. The size is at most the charged VM buffer
+  of `3 × len + 4` bytes, so peak host memory is at most twice the
+  charge for the duration of the call.
+- m2 (MINOR): `assert!` and `unwrap()` on the `number.rs` dispatch
+  path. Fix: total forms that return -1.
+- m3 (MINOR): `a84` did not stringify an extra field. Fix: `a86`.
+
+Gates on the final code: `cargo test -p ulua_compiler` 247 passed;
+`p74_tables` 9 passed; `luau.mjs` 245 entries pass; `gate.sh full`
+PASS (primary run); `hygiene.sh` PASS. Timing: the emitted helper
+loops did not change after the P7.6 timing run (§5.19 largest 5.749,
+analyzer largest 11.638).
+
+Open: m1; the analyzer ratio of `P22-array-wide-function-product`
+stays from 11.44 to 11.91 against the bound 12 (one run gave 12.023 in
+P6).
