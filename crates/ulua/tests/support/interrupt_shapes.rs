@@ -11,6 +11,10 @@ mod p25;
 #[path = "growth_shapes.rs"]
 mod growth_shapes;
 
+#[allow(dead_code)]
+#[path = "table_shapes.rs"]
+mod tables;
+
 pub fn fill_at(bytes: usize, prefix: &str, unit: &str, suffix: &str) -> String {
     assert!(prefix.len() + suffix.len() <= bytes);
     let mut source = prefix.to_owned();
@@ -274,6 +278,7 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
     source.push_str(&suffix);
     source.extend(std::iter::repeat_n(' ', bytes - source.len()));
     shapes.push(("paged-spill", source));
+    shapes.extend(tables::interrupts(bytes));
     shapes
 }
 

@@ -6,6 +6,7 @@ impl Node {
     fn children(&self) -> Vec<usize> {
         match self {
             Self::Primitive(_) => vec![],
+            Self::Table(k, v) => std::iter::once(k.0).chain(v.iter().map(|t| t.0)).collect(),
             Self::Array(t) | Self::Nullable(t) | Self::Absent(t) | Self::Promise(t) => vec![t.0],
             Self::Function(f) => f
                 .params

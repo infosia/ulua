@@ -33,6 +33,10 @@ mod protected_loops;
 #[path = "remainder_growth.rs"]
 mod remainder;
 
+#[allow(dead_code)]
+#[path = "table_shapes.rs"]
+mod tables;
+
 pub struct Shape {
     pub label: String,
     pub key: &'static str,
@@ -82,6 +86,7 @@ fn nil_checks(shape: &str, bytes: usize) -> String {
 
 pub fn all() -> Vec<Shape> {
     let mut out = vec![];
+    add(&mut out, "P74", tables::KEYS, tables::source);
     add(&mut out, "P6", &["fact-rounds"], remainder::source);
     add(&mut out, "S4", inputs::SOURCE_SHAPES, p1);
     add(&mut out, "S6", review::SHAPES, review::source);

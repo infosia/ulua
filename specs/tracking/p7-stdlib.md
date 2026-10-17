@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
+Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17; P7.3 COMPLETE 2026-10-17; P7.4 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
 
 ## Slices
 
@@ -207,3 +207,39 @@ Gates on the final code: `cargo test -p ulua_compiler` 233 passed;
 `gate.sh full` PASS (238.5 s); `gate.sh timing` PASS (433.6 s): §5.19
 largest 5.824 (`boolean-template`), analyzer largest 11.912
 (`P22-array-wide-function-product`), P6.3 within every bound.
+
+## P7.4 `Map` and `Set`
+
+Contract: `stdlib.md` §8 (Rev 8), collisions.md C6.10 (Rev 50). Corpus:
+`a77` to `a79`, `a82` (equal to `node`), `t13`, `r159` to `r162`. Red
+before: all eight (C6, C11).
+
+The representation: an opaque prelude table with an index table, key
+and value arrays in insertion order, a NaN slot, a live count, and
+compaction at half of the slots. The shim keeps a registry of active
+traversals and clears it at a failed run boundary; `map-modified` is
+shim status 19.
+
+Failures before the fix (review round 1):
+
+- An overwrite of a present key during a traversal trapped
+  `map-modified`; `node` continues. The contract (Rev 8, C6.10 Rev 50)
+  now states that an overwrite changes no entry; `a82` pins it and was
+  Red with `trap:map-modified`.
+- The checker used `unreachable!()` and guarded `.unwrap()` calls
+  (core principle 5). They are total matches now.
+
+`node` differential (`crates/ulua/test-data/map-oracle.tsv`, from
+`map-oracle.mjs`): 10,000 sequences, 320,000 operations, 0 differences.
+
+Cost (Release product VM, ns per operation, median of 5 × 100,000,
+loop included), number keys / string keys: `set` 139.3 / 210.0, `get`
+59.3 / 104.8, `has` 37.3 / 91.2, `delete` 256.5 / 286.0, iteration per
+entry 34.5 / 34.6.
+
+Gates: before round 1, `gate.sh full` PASS (163.9 s), `gate.sh timing`
+PASS (409.6 s): §5.19 largest 5.807 (`boolean-template`), analyzer
+largest 11.440, P6.3 within every bound (primes 1.178, sort 3.512).
+After round 1 (the helper loops did not change): `cargo test -p
+ulua_compiler` 237 passed, `p74_tables` 8 passed, `luau.mjs` 229
+entries pass, `gate.sh quick` PASS (156.2 s).

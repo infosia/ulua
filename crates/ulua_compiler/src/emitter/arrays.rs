@@ -209,14 +209,35 @@ impl Emitter<'_> {
         depth: u32,
     ) -> Result<(), Diagnostic> {
         self.joins.enter();
+        let table = self.module.types.table_parts(a.ty).is_some();
+        let values = matches!(
+            a.kind,
+            crate::ir::ExprKind::Method(
+                crate::ir::Method::Table(crate::tables::TableMethod::Values),
+                ..
+            )
+        );
+        let a = if table {
+            if let crate::ir::ExprKind::Method(_, _, receiver, _) = &a.kind {
+                receiver
+            } else {
+                a
+            }
+        } else {
+            a
+        };
         let string = a.ty == Type::String;
         let a = self.expression(a, depth)?;
         let counter = self.slot(&Type::Number)?;
         self.write_slot(counter, "1");
         self.line(format!(
-            "while {} <= #{} do",
+            "while {} <= {} do",
             self.temp(counter),
-            self.temp(a)
+            if table {
+                format!("{}.slots", self.temp(a))
+            } else {
+                format!("#{}", self.temp(a))
+            }
         ));
         self.indent += 1;
         // Emit the binding's storage before its value, once per iteration.
@@ -224,7 +245,28 @@ impl Emitter<'_> {
             if let Some(entry) = parts.first() {
                 self.statement(entry, depth)?;
             }
-            if string {
+            if table {
+                self.line(format!(
+                    "if {}.keys[{}] == nil then",
+                    self.temp(a),
+                    self.temp(counter)
+                ));
+                self.indent += 1;
+                self.write_slot(counter, format!("{} + 1", self.temp(counter)));
+                self.line("continue");
+                self.indent -= 1;
+                self.line("end");
+                self.write_binding(
+                    id,
+                    format!(
+                        "{}.{}[{}]",
+                        self.temp(a),
+                        if values { "values" } else { "keys" },
+                        self.temp(counter)
+                    ),
+                )?;
+                self.write_slot(counter, format!("{} + 1", self.temp(counter)));
+            } else if string {
                 self.capture("__ulua_str_charAt_0");
                 self.capture("__ulua_str_next_0");
                 self.write_binding(

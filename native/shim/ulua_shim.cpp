@@ -83,7 +83,8 @@ static int trap(lua_State* state) {
 }
 static int register_errors(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
-    vm->errors = lua_ref(state, 1);
+    if (lua_toboolean(state, 2)) vm->tables = lua_ref(state, 1);
+    else vm->errors = lua_ref(state, 1);
     return 0;
 }
 static int check_resume(lua_State* state) {
@@ -214,12 +215,29 @@ static int finish(ulua_vm* vm, lua_State* state, int status, char* error) {
         code = SHIM_INVALID_ARGUMENT;
         message(error, "Invalid argument");
     }
+    if (!vm->flag && vm->trap_kind == 5) {
+        code = SHIM_MAP_MODIFIED;
+        message(error, "Map modified");
+    }
     if (code == SHIM_UNCAUGHT) message(error, vm->exception);
 
     if (code >= 11 && code <= 13) message(error, vm->capability_name);
     vm->trap_kind = 0;
     vm->flag = 0;
     lua_settop(state, 0);
+    // Every active traversal unwound at the failed run boundary. Reset only active roots;
+    // their count is bounded by the VM stack. Updating an existing field cannot allocate.
+    if (vm->tables) {
+        lua_getref(state, vm->tables);
+        lua_pushnil(state);
+        while (lua_next(state, -2)) {
+            lua_pop(state, 1);
+            lua_pushinteger(state, 0);
+            lua_setfield(state, -2, "active");
+        }
+        lua_cleartable(state, -1);
+        lua_pop(state, 1);
+    }
     // These operations do not allocate. Release queue roots before the collection.
     if (vm->jobs) {
         lua_getref(state, vm->jobs);

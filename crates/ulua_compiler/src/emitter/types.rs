@@ -177,7 +177,9 @@ impl FunctionTypes {
                 continue;
             }
             let name = self.luau(&ty);
-            let definition = if let Some(value) = module.types.promise_value(ty) {
+            let definition = if module.types.table_parts(ty).is_some() {
+                "__ulua_Table".to_owned()
+            } else if let Some(value) = module.types.promise_value(ty) {
                 format!(
                     "__ulua_Promise<{}>",
                     if value == Type::Void {

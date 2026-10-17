@@ -177,7 +177,11 @@ impl Emitter<'_> {
             }
             E::Length(receiver) => {
                 let slot = self.expression(receiver, depth)?;
-                let value = format!("#{}", self.temp(slot));
+                let value = if self.module.types.table_parts(receiver.ty).is_some() {
+                    format!("{}.live", self.temp(slot))
+                } else {
+                    format!("#{}", self.temp(slot))
+                };
                 self.release(slot);
                 Some(value)
             }

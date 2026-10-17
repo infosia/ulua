@@ -55,6 +55,11 @@ impl Checker<'_> {
                     let value = self.promise_method(call, m, receiver, depth)?;
                     return self.finish_expr(e, statement, value.ty, value.kind);
                 }
+                if self.types.table_parts(receiver.ty).is_some() {
+                    let value =
+                        self.table_method(call, m.property.name.as_str(), receiver, depth)?;
+                    return self.finish_expr(e, statement, value.ty, value.kind);
+                }
                 self.promise_operator(receiver.ty, m.span)?;
                 if receiver.ty == Type::Number {
                     return self.number_call(

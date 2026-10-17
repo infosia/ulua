@@ -28,6 +28,9 @@ impl Types {
         };
         match node {
             Node::Primitive(_) => 0,
+            Node::Table(k, v) => v.map_or(self.nested_field_count(*k), |v| {
+                add(self.nested_field_count(*k), v)
+            }),
             Node::Array(child)
             | Node::Nullable(child)
             | Node::Absent(child)

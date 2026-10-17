@@ -442,6 +442,21 @@ impl Checker<'_> {
                 }
                 let a = self.expr(&m.object, depth, false)?;
                 self.promise_operator(a.ty, m.span)?;
+                if self.types.table_parts(a.ty).is_some() {
+                    if m.property.name != "size" {
+                        return Err(self.error(
+                            m.span,
+                            "C6",
+                            "a Map or Set member is called, not read as a value",
+                        ));
+                    }
+                    return self.finish_expr(
+                        e,
+                        statement,
+                        Type::Number,
+                        ExprKind::Length(Box::new(a)),
+                    );
+                }
                 if a.ty == Type::Number {
                     return Err(self.error(
                         m.span,
@@ -572,7 +587,10 @@ impl Checker<'_> {
                         "the Promise identifier is not a value",
                     ));
                 }
-                if let Some(value) = self.new_error(new, depth)? {
+                if matches!(&new.callee, Expression::Identifier(n) if matches!(n.name.as_str(), "Map" | "Set") && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    self.new_table(new, expected, depth)?
+                } else if let Some(value) = self.new_error(new, depth)? {
                     value
                 } else {
                     self.new_instance(new, depth)?

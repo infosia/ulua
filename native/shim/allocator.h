@@ -19,6 +19,7 @@ struct ulua_vm {
     int trap_kind;
     int exports;
     int errors;
+    int tables;
     int drain;
     int new_promise;
     int fulfill;

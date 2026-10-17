@@ -126,7 +126,8 @@ impl Paths<'_, '_> {
                 E::ClassCall(_, _, _, _) | E::OptionalCall(_, _, _) => true,
                 E::Method(m, _, _, _) | E::OptionalMethod(m, _, _, _) => matches!(
                     m,
-                    ir::Method::ForEach
+                    ir::Method::Table(crate::tables::TableMethod::Each)
+                        | ir::Method::ForEach
                         | ir::Method::Map
                         | ir::Method::Filter
                         | ir::Method::Some

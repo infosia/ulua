@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 7, 2026-10-17. Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 8, 2026-10-17. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -389,7 +389,9 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
    `{x}` that sets `y` visits `x,y`; `for…of` over `{1,2,3}` that
    deletes 2 at 1 visits `1,3`). The prior contract visits only the
    entries present at the start, without a trap; Ulua follows its own
-   array rule (C6.9 `array-modified`).
+   array rule (C6.9 `array-modified`). A `set` on a present key and
+   an `add` of a present member change no entry and do not trap (as
+   `node`).
 7. **Rejected** (C6): `entries()`, `for…of` over a `Map` (each needs a
    tuple type), `new Map([[k, v]])`, a `forEach` callback with the
    collection parameter, `keys()` or `values()` outside the subject of
@@ -401,8 +403,9 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
 9. **Corpus.** `a77` (map battery with number and string keys, NaN and
    `-0`, `getOr`, `size`, `clear`), `a78` (insertion order with
    overwrite, delete, re-insert; `keys()`, `values()`, `forEach`), `a79`
-   (set battery, array source, identity keys of a class), all
-   `js-comparable: yes`; `t13` (`forEach` that adds an entry traps
+   (set battery, array source, identity keys of a class), `a82` (a
+   `set` on a present key during a traversal), all `js-comparable:
+   yes`; `t13` (`forEach` that adds an entry traps
    `map-modified`; `js-comparable: no C6`); `r159` (a function key), `r160`
    (`entries()`), `r161` (`for…of` over a `Map`), `r162` (`get` on a
    `V | null` map).

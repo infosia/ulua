@@ -27,6 +27,7 @@ mod round6_tests;
 #[cfg(test)]
 mod round7_tests;
 mod strings;
+mod tables;
 mod types;
 
 use oxc_allocator::Allocator;
@@ -636,3 +637,6 @@ mod p27_tests;
 
 #[cfg(test)]
 mod p72_tests;
+
+#[cfg(test)]
+mod p74_tests;

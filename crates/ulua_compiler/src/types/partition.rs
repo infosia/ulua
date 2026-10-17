@@ -8,6 +8,7 @@ use std::{
 enum Shape {
     Primitive(&'static str),
     Array,
+    Table(bool),
     Promise,
     Nullable,
     Absent,
@@ -27,6 +28,10 @@ impl Types {
             let (shape, children) = match node {
                 Node::Primitive(s) => (Shape::Primitive(s), vec![]),
                 Node::Array(t) => (Shape::Array, vec![*t]),
+                Node::Table(k, v) => (
+                    Shape::Table(v.is_some()),
+                    std::iter::once(*k).chain(*v).collect(),
+                ),
                 Node::Promise(t) => (Shape::Promise, vec![*t]),
                 Node::Nullable(t) => (Shape::Nullable, vec![*t]),
                 Node::Absent(t) => (Shape::Absent, vec![*t]),
@@ -116,6 +121,7 @@ impl Types {
         // Keep source links for cached budgets. Rebuild every identity index with canonical child keys.
         self.records.clear();
         self.arrays.clear();
+        self.tables.clear();
         self.promises.clear();
         self.nullable.clear();
         self.functions.clear();
@@ -132,6 +138,12 @@ impl Types {
                     self.nullable.insert(self.canonical[t.0], identity);
                 }
                 Node::Absent(_) => {}
+                Node::Table(k, v) => {
+                    self.tables.insert(
+                        (self.canonical[k.0], v.map(|t| self.canonical[t.0])),
+                        identity,
+                    );
+                }
                 Node::Function(f) => {
                     let signature = Rc::new(FunctionType {
                         params: f.params.iter().map(|t| self.canonical[t.0]).collect(),

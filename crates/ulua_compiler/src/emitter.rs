@@ -30,6 +30,7 @@ mod spill_tests;
 mod statements;
 mod storage;
 mod strings;
+mod tables;
 mod types;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,

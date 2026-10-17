@@ -251,8 +251,9 @@ impl Checker<'_> {
             .types
             .inner(receiver.ty)
             .ok_or_else(|| self.error(chain.span, "C2", "Optional receiver must include null"))?;
-        if (inner == Type::String || self.types.element(inner).is_some())
-            && m.property.name == "length"
+        if ((inner == Type::String || self.types.element(inner).is_some())
+            && m.property.name == "length")
+            || (self.types.table_parts(inner).is_some() && m.property.name == "size")
         {
             let ty = self.types.nullable(Type::Number);
             return Ok(Expr {
@@ -320,7 +321,10 @@ impl Checker<'_> {
                 }
             }
         }
-        if inner == Type::String || self.types.element(inner).is_some() {
+        if inner == Type::String
+            || self.types.element(inner).is_some()
+            || self.types.table_parts(inner).is_some()
+        {
             if let Some(element) = self.types.element(inner)
                 && m.property.name == "push"
             {
@@ -345,6 +349,8 @@ impl Checker<'_> {
             receiver.ty = inner;
             let method = if inner == Type::String {
                 self.string_method(c, m.property.name.as_str(), receiver, depth)?
+            } else if self.types.table_parts(inner).is_some() {
+                self.table_method(c, m.property.name.as_str(), receiver, depth)?
             } else {
                 self.array_method(
                     c,

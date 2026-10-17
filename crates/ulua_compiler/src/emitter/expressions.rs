@@ -111,7 +111,16 @@ impl Emitter<'_> {
                 let slot = self.expression(receiver, depth)?;
                 self.write_slot(
                     dest,
-                    format!("if {0} ~= nil then #{0} else nil", self.temp(slot)),
+                    if self
+                        .module
+                        .types
+                        .inner(receiver.ty)
+                        .is_some_and(|t| self.module.types.table_parts(t).is_some())
+                    {
+                        format!("if {0} ~= nil then {0}.live else nil", self.temp(slot))
+                    } else {
+                        format!("if {0} ~= nil then #{0} else nil", self.temp(slot))
+                    },
                 );
                 self.release(slot);
             }
@@ -437,6 +446,11 @@ impl Emitter<'_> {
                 )?;
                 self.release(a);
                 self.release(i);
+            }
+            E::Length(a) if self.module.types.table_parts(a.ty).is_some() => {
+                let a = self.expression(a, depth)?;
+                self.write_slot(dest, format!("{}.live", self.temp(a)));
+                self.release(a);
             }
             E::Length(a) => {
                 let a = self.expression(a, depth)?;

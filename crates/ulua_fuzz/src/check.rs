@@ -120,6 +120,7 @@ pub fn decode(d: &Diagnostic) -> Result<Decoded, String> {
 pub const TRAPS: &[&str] = &[
     "trap:index-out-of-range",
     "trap:array-modified",
+    "trap:map-modified",
     "trap:string-boundary",
     "trap:invalid-argument",
     "trap:uncaught-exception",

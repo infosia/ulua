@@ -136,6 +136,7 @@ enum Node {
     Function(Rc<FunctionType>),
     Array(Type),
     Promise(Type),
+    Table(Type, Option<Type>),
     Nullable(Type),
     Absent(Type),
     Record(Rc<Vec<(usize, Type)>>),
@@ -148,6 +149,7 @@ struct ClassType {
 }
 
 pub(crate) struct Types {
+    tables: HashMap<(Type, Option<Type>), Type>,
     nodes: Vec<Node>,
     canonical: Vec<Type>,
     // Identity indexes use canonical child ids after the alias seal.
@@ -174,6 +176,7 @@ pub(crate) struct Types {
 impl Types {
     pub(crate) fn new() -> Self {
         Self {
+            tables: HashMap::new(),
             nodes: [
                 "number",
                 "boolean",
@@ -208,6 +211,36 @@ impl Types {
         }
     }
 
+    pub(crate) fn table(&mut self, key: Type, value: Option<Type>) -> Type {
+        let pair = (
+            self.count_identity(key),
+            value.map(|t| self.count_identity(t)),
+        );
+        if let Some(ty) = self.tables.get(&pair) {
+            return *ty;
+        }
+        let canonical = (self.identity(key), value.map(|t| self.identity(t)));
+        let identity = if let Some(ty) = self.tables.get(&canonical) {
+            *ty
+        } else {
+            let ty = self.add_counted(Node::Table(canonical.0, canonical.1), None);
+            self.tables.insert(canonical, ty);
+            ty
+        };
+        let ty = if pair == canonical {
+            identity
+        } else {
+            self.add_counted(Node::Table(pair.0, pair.1), Some(identity))
+        };
+        self.tables.insert(pair, ty);
+        ty
+    }
+    pub(crate) fn table_parts(&self, ty: Type) -> Option<(Type, Option<Type>)> {
+        match self.nodes.get(ty.0) {
+            Some(Node::Table(k, v)) => Some((*k, *v)),
+            _ => None,
+        }
+    }
     pub(crate) fn promise_value(&self, ty: Type) -> Option<Type> {
         match self.nodes.get(ty.0) {
             Some(Node::Promise(value)) => Some(*value),
@@ -237,6 +270,10 @@ impl Types {
             }
             match self.nodes.get(ty.0) {
                 Some(Node::Array(t) | Node::Nullable(t) | Node::Absent(t)) => pending.push(*t),
+                Some(Node::Table(k, v)) => {
+                    pending.push(*k);
+                    pending.extend(*v);
+                }
                 Some(Node::Record(fields)) => pending.extend(fields.iter().map(|f| f.1)),
                 Some(Node::Class(class)) => {
                     pending.extend(class.fields.iter().map(|f| f.1));
@@ -426,6 +463,10 @@ impl Types {
                 .or_else(|| self.promise_value(ty))
             {
                 pending.push(t);
+            }
+            if let Some((k, v)) = self.table_parts(ty) {
+                pending.push(k);
+                pending.extend(v);
             }
             if let Some(fields) = self.fields(ty) {
                 pending.extend(fields.iter().map(|f| f.1));

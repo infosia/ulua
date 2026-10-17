@@ -22,6 +22,7 @@ mod records;
 mod statements;
 mod strict;
 mod strings;
+mod tables;
 use crate::{
     Diagnostic,
     ir::{self, Type},
@@ -164,6 +165,16 @@ impl Checker<'_> {
                 let TSTypeName::IdentifierReference(n) = &r.type_name else {
                     return Err(self.error(r.span, "C11", "Qualified type name is rejected"));
                 };
+                if matches!(n.name.as_str(), "Map" | "Set")
+                    && !self.aliases.contains_key(n.name.as_str())
+                {
+                    return self.table_type(
+                        n.name.as_str(),
+                        r.type_arguments.as_ref().map(|a| a.params.as_slice()),
+                        r.span,
+                        depth,
+                    );
+                }
                 if n.name == "Promise" {
                     return self.promise_type(r, result, depth);
                 }
