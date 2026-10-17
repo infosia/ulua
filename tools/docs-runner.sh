@@ -22,11 +22,14 @@ case "$(uname -s)" in
         vswhere="C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
         vs=$("$vswhere" -latest -products '*' -property installationPath \
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 | tr -d '\r')
+        # cygpath -w adds .exe to a path when that executable exists, so
+        # convert only the directory.
+        out_win="$(cygpath -w "$(dirname "$out")")\\$(basename "$out")"
         bat="$out.bat"
         cat > "$bat" <<EOF
 @call "$vs\VC\Auxiliary\Build\vcvars64.bat" >nul 2>nul || exit /b 1
 @cl /nologo /W4 /WX /MD /D_CRT_SECURE_NO_WARNINGS /TC /std:c11 ^
- examples\run\host.c /I include /Fo"$(cygpath -w "$out").obj" /Fe"$(cygpath -w "$out").exe" ^
+ examples\run\host.c /I include /Fo"$out_win.obj" /Fe"$out_win.exe" ^
  /link "$(cygpath -w "$target/debug/ulua.lib")" advapi32.lib bcrypt.lib ntdll.lib userenv.lib ws2_32.lib
 EOF
         cmd //c "$(cygpath -w "$bat")"

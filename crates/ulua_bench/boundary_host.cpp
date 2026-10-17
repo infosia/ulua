@@ -1,5 +1,5 @@
 // Measurement-only ablations. No product source or object is replaced.
-#include "allocator.h"
+#include "../../native/shim/allocator.h"
 #include "lua.h"
 #include "lualib.h"
 #include "luacode.h"
