@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 5, 2026-10-17. Rev 5: §7 rule 5 `FORMAT_CALL_STEPS` (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 6, 2026-10-17. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -315,14 +315,19 @@ an Ulua rule forces.
    plus one step per `NATIVE_BYTES_PER_STEP` bytes of its string
    argument (measured: the smallest power of 2 that keeps a long-string
    shape at a §5.19 ratio of at most 5). A format member call charges
-   `FORMAT_CALL_STEPS` instead of `NATIVE_CALL_STEPS`: its work depends
-   on the digit count and the magnitude, both bounded (at most 100
-   digits, a finite double), so the worst case is a constant. Measured
-   with `NATIVE_CALL_STEPS` only (P7.3 first form): `toFixed(100)` in a
-   loop gave the ratio 30.6 against the bound 6. The value is the
-   smallest power of 2 that keeps each worst-case shape (`toFixed(100)`,
-   `toExponential(100)`, `toPrecision(100)` of the slowest value class,
-   `toString(radix)` of the longest fraction) at a ratio of at most 5.
+   `NATIVE_CALL_STEPS` plus `format_steps(x, digits, output)`, a closed
+   formula over the length of the output and the binary exponent of
+   `x`, stated in the code with its measurement. The formula follows
+   the work: `toString(radix)` of a small fraction writes more than
+   1,000 digits, and exact decimal rounding works over the whole
+   exponent. Measured before the rule (P7.3): a fixed charge needed 512
+   steps per call and still gave 7.162 in the timing gate for the
+   longest binary fraction (`toFixed(100)` gave 30.6 at
+   `NATIVE_CALL_STEPS` alone). The formula keeps every shape of a sweep
+   over the value classes (subnormal, near 1, near 2^53, near
+   `MAX_VALUE`), the digit counts (0, 20, 100), and the radixes (2, 3,
+   10, 36) at a §5.19 ratio of at most 5; the tracking note records the
+   sweep.
    Each result string is a Luau string charged to `max_memory_bytes`.
 6. **Rejected** (C4): `Number(x)`, `new Number(x)`, the global `isNaN`
    and `isFinite`, `toLocaleString`, `x.toString()` without a radix,
