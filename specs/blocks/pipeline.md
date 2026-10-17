@@ -54,6 +54,7 @@ Rev 49: §6.5 collector settings (P6.4).
 Rev 50: §5.22 conditions with `&&` and `||`; §5.24 counted loops (P6.S5).
 Rev 51: §5.20 the index test runs before the table access (UBSan, P6 close).
 Rev 52: §5.25 native remainder from integer facts (P6.S6).
+Rev 53: §5.25 one system per dependency component; the measured reach (P6.S6 implementation).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -805,25 +806,36 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       gives the binding no fact. A binding without an initializer has
       no fact. A binding that `for…of`, `catch`, or a pattern declares
       has no fact.
-    - **Fixed point.** The binding facts of one outermost function
-      form one system. At the start each binding is unset. Each round
+    - **Fixed point.** A binding `x` depends on a binding `y` when a
+      write of `x` reads `y`. The bindings of one outermost function
+      and these edges form a graph. Each strongly connected component
+      of the graph is one system. The compiler solves the systems in
+      dependency order: a system reads the final facts of the systems
+      that it depends on. The component walk uses no recursion (D13).
+      In one system, at the start each binding is unset. Each round
       computes every write from the facts of the round before. A write
       that reads an unset binding adds nothing to the join of that
       round. When the `hi` of a binding grows,
       it takes the smallest threshold at or above the new value. The
-      thresholds are `hi_b - 1` of each `%` in the system with a
+      thresholds are `hi_b - 1` of each `%` in the function with a
       literal divisor `b >= 1`, and `2^53`. When the `lo` of a binding
       falls, it takes `0`. The system ends when a round changes no
       fact. A binding that is still unset at the end has no fact. If
       the system does not end within `FACT_ROUNDS` (8) rounds, no
-      binding of the system has a fact. The compiler stores the result
+      binding of that system has a fact; the other systems keep
+      theirs. The compiler stores the result
       in the IR: each `%` node carries its form, native or `fmod`
       (principle 8); the emitter reads the flag and computes no fact.
-    - Each round costs time linear in the size of the function, so the
+    - Each round of a system costs time linear in the size of the
+      writes of that system, and the component walk is linear, so the
       pass is linear in the source size (§3.10). The growth test
-      includes a shape that reaches `FACT_ROUNDS`. The tracking note
-      records the largest round count of the corpus and the benchmark
-      workloads.
+      includes a shape with many systems that each reach
+      `FACT_ROUNDS`. The tracking note records the largest round count
+      of the corpus and the benchmark workloads.
+    - Measured with one system per function (P6.S6 first form): in
+      fib-loop the system of `a`, `b`, and `next` (`next = a + b;
+      a = b; b = next`) did not end in 8 rounds, so the unrelated
+      counter `i` lost its fact and `i % 40` stayed `fmod`.
     - **Shadow check.** A test-only compile option emits, at each
       native `%`, a comparison with `math.fmod` that stops the run as
       `internal` on a difference (sign of zero included). It is not
@@ -834,10 +846,14 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     - Measured before the rule (after P6.S3, each `%` hand-edited to
       native): `%` through `fmod` is 49.9% of the primes overhead,
       51.0% of callbacks, 8.8% of collect, 6.2% of sort. The facts
-      reach `n % d` and the counter in primes, `i % 40` in fib-loop,
-      the index remainders of particles and collect, and the LCG of
-      sort and callbacks. They do not reach a callback parameter
-      (callbacks `map`, `filter`, `reduce`) or a field.
+      reach `n % d` and `(count + 1) % 4294967296` in primes,
+      `i % 40` in fib-loop, `i % 2` in collect, and the LCG of sort
+      and callbacks. They do not reach a parameter or a field: the
+      callbacks of `map`, `filter`, and `reduce`, the remainders of
+      the particles setup (fields), the remainders of the collect
+      constructor (a parameter). Measured with the first form, before
+      the per-component rule: no `%` of fib-loop, particles,
+      mandelbrot, tree, queen, or fib-recursive was native.
 
 ## 6. Limits
 
