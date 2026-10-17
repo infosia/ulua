@@ -22,7 +22,7 @@ program type-checks under stock `tsc --strict`.
 | In TypeScript | In Ulua |
 |---|---|
 | `number`, `bigint` | `number` only (a binary64 double) |
-| `undefined`, `T \| U` | `T \| null` only; `undefined` does not exist |
+| `undefined`, `T \| U` | `T \| null` only; `undefined` does not exist; a library miss is `null` |
 | Structural types, `interface` | `type` aliases of object literal types; same fields, same type |
 | `class` with `extends` | Nominal classes, no inheritance, no getters or setters |
 | `any`, generics | Neither; every type is concrete |
@@ -31,7 +31,8 @@ program type-checks under stock `tsc --strict`.
 | A fault such as `xs[10]` | A trap: the run stops, and no `catch` or `finally` sees it |
 | Event loop, `Promise` | `Promise<T>` in the job order of `node`; the host drives each run |
 | `string` of UTF-16 units | `string` of UTF-8 bytes; lengths and offsets count bytes |
-| `globalThis`, `Math`, `JSON` | Not in the library; the host grants what a script needs |
+| `Math`, `Number`, `Map`, `Set`, `JSON` | In the library; some results differ from `node` |
+| `globalThis`, `console`, `RegExp` | Not in the library; the host grants what a script needs |
 | A program with a top level | Exported functions that the host calls |
 | npm, `import` | One module per compilation |
 
@@ -90,9 +91,11 @@ export function main(): void {
 Infinity -Infinity NaN 1e+21
 ```
 
-`**`, `Math`, and `Number(...)` are not in the subset. `**` gives
-`C4` ("Numeric operator has no lowering"): Luau's `^` follows C `pow`,
-which differs from JavaScript on some inputs. There is no `bigint`.
+`**` and `Number(...)` are not in the subset. `**` gives `C4`
+("Numeric operator has no lowering"): Luau's `^` follows C `pow`,
+which differs from JavaScript on some inputs. Use `Math.pow`. There is
+no `bigint`. `Math` and the `Number` members are in the library; see
+[The standard library](#the-standard-library).
 
 ## `T | null` is the only union
 
@@ -133,9 +136,10 @@ copy it into a `const` first, as `contact` does. An `await` ends the
 narrowing of a binding that another function can assign while the
 body waits.
 
-`find` is rejected (`C6`, "Array method is rejected"): it gives
-`undefined` for a miss. Use `findIndex`, or `indexOf`, which give
-`-1`.
+A library call that gives `undefined` for a miss in JavaScript gives
+`null` in Ulua: `find`, `findLast`, and `Map.get`. The
+[standard library](#the-standard-library) section shows the one test
+that differs.
 
 ## Records and classes
 
@@ -199,10 +203,10 @@ export function main(): void {
 
 `node` prints `5 2 hél` on the first line. `for...of` steps one code
 point at a time, as in JavaScript. A position that falls inside a
-code point traps with `string-boundary`. `toUpperCase`,
-`toLowerCase`, `localeCompare`, and `normalize` are rejected (`C5`,
-"String member is rejected"): Luau has no Unicode case or
-normalization data. `s[i]` and `<` between strings are rejected too:
+code point traps with `string-boundary`. `localeCompare`,
+`toLocaleUpperCase`, and `normalize` are rejected (`C5`): the result
+depends on locale or normalization data. `s[i]` and `<` between
+strings are rejected too:
 the element of a JavaScript string is a UTF-16 unit, which has no
 byte form.
 
@@ -228,6 +232,169 @@ stopped trap:index-out-of-range: Index out of range
 array stops the run: the value would be outside the static type.
 Holes, spreads, and arrays of `T | null` elements are not in the
 subset.
+
+## The standard library
+
+The library has `Math`, the `Number` members, `parseInt`,
+`parseFloat`, `find`, `findLast`, `toUpperCase`, `toLowerCase`,
+`String.fromCodePoint`, `String.fromCharCode`, `Map`, `Set`, and
+`JSON`. Most results equal the results of `node`. This section shows
+the differences that you can see in a program. The full list, with
+the measured outputs of both sides, is in
+[`specs/blocks/collisions.md`](../specs/blocks/collisions.md).
+
+### `Math` and `Number`
+
+```ts
+export function main(): void {
+  print(`${Math.floor(-1.5)} ${Math.round(2.5)} ${Math.max(3, 7)} ${Math.pow(2, 10)}`);
+  print(`${(1.005).toFixed(2)} ${(255).toString(16)} ${parseInt("ff", 16)} ${Number.isInteger(5)}`);
+  print(`${Math.exp(1)}`);
+}
+```
+
+```text
+-2 3 7 1024
+1.00 ff 255 true
+2.7182818284590455
+```
+
+`node` prints `2.718281828459045` on the last line. `exp`, `sin`,
+`log`, `pow`, and the other transcendental members use one portable
+library on every host OS, so a result can differ from `node` by 1 or
+2 units in the last place. `floor`, `round`, `abs`, `sqrt`, and the
+formatting and parsing members equal `node`.
+
+- `Math.max`, `Math.min`, and `Math.hypot` take exactly two arguments.
+- `parseInt` needs its radix. A radix outside 2 to 36 traps with
+  `invalid-argument`.
+- `Math.random` gives a sequence that the host seeds. The same seed
+  gives the same sequence on every run.
+
+### A miss is `null`
+
+```ts
+type User = { name: string; age: number };
+
+export function main(): void {
+  const users: User[] = [{ name: "ada", age: 36 }, { name: "bob", age: 17 }];
+  const kid = users.find((u: User): boolean => u.age < 18);
+  print(kid?.name ?? "none");
+  const old = users.find((u: User): boolean => u.age > 90);
+  print(`${old == null} ${old === null}`);
+}
+```
+
+```text
+bob
+true true
+```
+
+`node` prints `true false` on the last line: `find` gives `undefined`
+there. `== null`, `??`, and `?.` give the same result on both sides,
+so test a miss with `== null`. `find` on an array whose element type
+includes `null` is rejected: a miss and a `null` element give the
+same value.
+
+### Case and code points
+
+```ts
+export function main(): void {
+  print(`${"straße".toUpperCase()} ${"ΟΔΥΣΣΕΥΣ".toLowerCase()}`);
+  print(`${String.fromCodePoint(0x1F600)} ${String.fromCharCode(72)}`);
+  print(String.fromCodePoint(0xD800));
+}
+```
+
+```text
+STRASSE οδυσσευς
+😀 H
+stopped trap:invalid-argument: Invalid argument
+```
+
+Case conversion follows Unicode 17.0, as `node` does, with the final
+sigma and the one-to-many results. A UTF-8 string has no form for a
+lone surrogate, so a surrogate code point traps. `node` gives a string
+of one UTF-16 unit there.
+
+### `Map` and `Set`
+
+```ts
+export function main(): void {
+  const counts = new Map<string, number>();
+  for (const w of "a b a c b a".split(" ")) {
+    counts.set(w, counts.getOr(w, 0) + 1);
+  }
+  for (const k of counts.keys()) {
+    print(`${k} ${counts.getOr(k, 0)}`);
+  }
+  print(`${counts.get("z") ?? -1} ${counts.size}`);
+  counts.forEach((n: number, k: string): void => {
+    counts.delete("c");
+  });
+}
+```
+
+```text
+a 3
+b 2
+c 1
+-1 3
+stopped trap:map-modified: Map modified
+```
+
+Iteration follows the insertion order, as in `node`. `getOr(key,
+fallback)` is an Ulua addition: it reads a value with no `null` test.
+
+A `forEach` callback or a `for...of` body that adds, deletes, or
+clears an entry of the collection that it iterates traps with
+`map-modified`. `node` continues: it visits an entry that the loop
+adds and skips an entry that the loop deletes. A `set` on a key that
+is present does not trap. `entries()`, `for...of` directly over a
+`Map`, and `await` in the body of a `Map` or `Set` loop are rejected.
+
+### `JSON`
+
+```ts
+type Point = { x: number; y: number };
+
+export function main(): void {
+  const p: Point = JSON.parse('{"y": 2, "x": 1, "z": 3}');
+  print(JSON.stringify(p));
+  try {
+    const q: Point = JSON.parse('{"x": "1", "y": 2}');
+    print(`${q.x}`);
+  } catch (e) {
+    if (e instanceof TypeError) {
+      print(`caught ${e.name}`);
+    }
+  }
+  const bad: Point = { x: 0 / 0, y: 0 };
+  print(JSON.stringify(bad));
+}
+```
+
+```text
+{"x":1,"y":2}
+caught TypeError
+stopped trap:json-number: Nonfinite JSON number
+```
+
+`node` prints `{"y":2,"x":1,"z":3}`, then `1`, then `{"x":null,"y":0}`.
+
+- `JSON.parse` needs a target type from its context, here the
+  annotation `Point`. The result has the fields of that type only, so
+  a field that the type does not declare is dropped.
+- Text that does not match the target type throws `TypeError`.
+  Malformed text throws `SyntaxError`, as in `node`.
+- `JSON.stringify` writes the fields in the declaration order of the
+  type. An object literal that reaches `JSON.stringify` must list its
+  fields in that order.
+- `NaN` and the infinities trap with `json-number`: `node` writes
+  `null`, which does not parse back to the same value.
+- `JSON.stringify` takes one argument. A `Map`, a `Set`, and a
+  function field are rejected: `node` writes `{}` for them or omits
+  them.
 
 ## Exceptions, and traps that no `catch` sees
 
@@ -402,7 +569,8 @@ table shows the code and the message of the real diagnostic:
 | `number \| undefined`, `number \| string` | `C2` | Only T \| null is a union |
 | `f(x?: number)` | `C2` | Optional parameters are rejected |
 | `2 ** 3` | `C4` | Numeric operator has no lowering |
-| `[1].find(...)` | `C6` | Array method is rejected |
+| `Math.max(1, 2, 3)` | `C4` | Math.max takes exactly two arguments |
+| `parseInt("10")` | `C4` | parseInt takes a string and a radix |
 | `[...xs]` | `C6` | Array holes and spreads are rejected |
 | `const [a, b] = xs` | `C11` | Binding patterns are rejected |
 | `class B extends A` | `C11` | Invalid class declaration |
@@ -411,8 +579,10 @@ table shows the code and the message of the real diagnostic:
 | `interface I { ... }` | `C8` | Interface declarations have no lowering |
 | `function id<T>(x: T)` | `C8` | Generic declarations have no lowering |
 | `typeof 1` | `C8` | Unary operator has no lowering |
-| `Math.floor(1.5)` | `C11` | Math member has no lowering |
-| `JSON.stringify(1)`, `Number("1")` | `C11` | Unknown value identifier |
+| `Number("1")` | `C4` | Number converts its argument; use parseFloat |
+| `"i".toLocaleUpperCase()` | `C5` | toLocaleUpperCase depends on locale data |
+| `const v = JSON.parse("1")` | `C20` | JSON.parse needs a target type |
+| `JSON.stringify(xs, null, 2)` | `C20` | JSON.stringify takes exactly one argument |
 | `throw "x"` | `C17` | Throw needs an Error value |
 | `f();` where `f` returns a promise | `C19` | a promise value is stored, passed, returned, or awaited |
 | a nullable `let` that another function assigns, read after a test | `C16` | Nullable receiver needs a stable null test |
