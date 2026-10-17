@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 4, 2026-10-17. Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 5, 2026-10-17. Rev 5: §7 rule 5 `FORMAT_CALL_STEPS` (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -314,8 +314,16 @@ an Ulua rule forces.
    prior contract §11.4). A helper call charges `NATIVE_CALL_STEPS`
    plus one step per `NATIVE_BYTES_PER_STEP` bytes of its string
    argument (measured: the smallest power of 2 that keeps a long-string
-   shape at a §5.19 ratio of at most 5). Each result string is a Luau
-   string charged to `max_memory_bytes`.
+   shape at a §5.19 ratio of at most 5). A format member call charges
+   `FORMAT_CALL_STEPS` instead of `NATIVE_CALL_STEPS`: its work depends
+   on the digit count and the magnitude, both bounded (at most 100
+   digits, a finite double), so the worst case is a constant. Measured
+   with `NATIVE_CALL_STEPS` only (P7.3 first form): `toFixed(100)` in a
+   loop gave the ratio 30.6 against the bound 6. The value is the
+   smallest power of 2 that keeps each worst-case shape (`toFixed(100)`,
+   `toExponential(100)`, `toPrecision(100)` of the slowest value class,
+   `toString(radix)` of the longest fraction) at a ratio of at most 5.
+   Each result string is a Luau string charged to `max_memory_bytes`.
 6. **Rejected** (C4): `Number(x)`, `new Number(x)`, the global `isNaN`
    and `isFinite`, `toLocaleString`, `x.toString()` without a radix,
    `toPrecision()` without an argument, a member read as a value.
