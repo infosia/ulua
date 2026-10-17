@@ -99,6 +99,13 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
   changed where an Ulua rule forces it; the subjects are Luau and
   Ulua (D30). Contract:
   `specs/blocks/benchmarks.md`; slices in `specs/tracking/p6-performance.md`.
+- **P7 — standard library.** The library of the owner's prior project,
+  changed where an Ulua rule forces it: `Math`, absence of a result
+  (D32), `Number` formatting and parsing, `Map` and `Set`, string case
+  and code units, `JSON`. A measurement round P7.0 opens the phase.
+  Contract: `specs/blocks/stdlib.md`; slices in
+  `specs/tracking/p7-stdlib.md`. Exit: each slice of `stdlib.md` §3
+  meets its exit; Phase Review.
 
 ## 7. Measurement items (P0.5)
 
@@ -152,6 +159,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D29 | Fuzzing is in-house: structured and byte-level mutation over the corpus and generated programs, time-boxed, under the sanitizer build. No coverage-guided tool (it needs a nightly toolchain) | 2026-10-14 | `tracking/p5-hardening.md`; owner decision at the P5 start |
 | D30 | The benchmarks compare Ulua with hand-written Luau on the pinned VM only; Luau is 1.00×. No C, LuaJIT, or JavaScript subject | 2026-10-16 | `benchmarks.md` Rev 1; owner decision at the P6 start |
 | D31 | Reload leaves P6; a later phase decides its meaning and contract | 2026-10-16 | `tracking/p6-performance.md`; owner decision |
+| D32 | Where `node` gives `undefined` for a missing result, Ulua gives `null`, as the owner's prior project does: `find`, `findLast`, and `Map.get` are accepted for a result type without `null`; `== null` and `??` agree with `node`; `=== null` on such a result is a named divergence. The source keeps no `undefined`. Revises the library part of D16 | 2026-10-17 | `stdlib.md` §1; owner decision at the P7 plan |
 
 ## 9. Corrections and revisions
 
@@ -180,3 +188,10 @@ Each entry records what changed, the evidence, and the consequence.
   no P1 program executes them. Consequence: the P2 exit runs entries
   that execute C12.6 and C16.4. Evidence: `tracking/p1-skeleton.md`
   round 9.
+- **Rev 5 (2026-10-17).** §6 adds P7, the standard library. §8 adds
+  D32: a missing library result is `null`. D16 stays for the source:
+  no `undefined` token, type, or optional form. Evidence: the owner
+  decision at the P7 plan; the planning probe in
+  `tracking/p7-stdlib.md`. Consequence: `find`, `findLast`, and
+  `Map.get` can join in P7.2 and P7.4; C2 names the `=== null`
+  divergence when P7.2 lands.
