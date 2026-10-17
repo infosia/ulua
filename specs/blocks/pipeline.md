@@ -55,6 +55,7 @@ Rev 50: §5.22 conditions with `&&` and `||`; §5.24 counted loops (P6.S5).
 Rev 51: §5.20 the index test runs before the table access (UBSan, P6 close).
 Rev 52: §5.25 native remainder from integer facts (P6.S6).
 Rev 53: §5.25 one system per dependency component; the measured reach (P6.S6 implementation).
+Rev 54: §5.25 an unset binding at the end voids its system (P6.S6 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -820,7 +821,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       thresholds are `hi_b - 1` of each `%` in the function with a
       literal divisor `b >= 1`, and `2^53`. When the `lo` of a binding
       falls, it takes `0`. The system ends when a round changes no
-      fact. A binding that is still unset at the end has no fact. If
+      fact. If a binding of the system is still unset at the end, no
+      binding of that system has a fact: a write that read it never
+      joined. If
       the system does not end within `FACT_ROUNDS` (8) rounds, no
       binding of that system has a fact; the other systems keep
       theirs. The compiler stores the result
