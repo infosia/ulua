@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review; Rev 51: C5.6 case and code points, P7.5).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -284,18 +284,25 @@ character is `js-comparable: no C5`.
    - an index `s[i]`: the element of a string is a UTF-16 unit in
      JavaScript and has no byte form;
    - `<`, `>`, `<=`, `>=` between strings;
-   - `toUpperCase`, `toLowerCase`, `toLocaleUpperCase`,
-     `toLocaleLowerCase`, `localeCompare`, `normalize`: Luau has no
-     Unicode case or normalization data (`string.upper` and
-     `string.lower` act on ASCII only); a later revision can add a
-     native helper;
+   - `toLocaleUpperCase`, `toLocaleLowerCase`, `localeCompare`:
+     the result depends on locale data;
+   - `normalize`: Luau has no Unicode normalization data;
    - `match`, `matchAll`, `search`, a `RegExp` argument, and
-     `String.fromCharCode`, `String.raw`, `String` as a value.
+     `String.raw`, `String` as a value;
+   - `String.fromCharCode` and `String.fromCodePoint` with other than
+     one argument.
 5. Byte operations keep the prelude name `Utf8.byteLength`, equal to
    `length`.
+6. Case and code points (stdlib.md §9): `toUpperCase()` and
+   `toLowerCase()` apply the Unicode 17.0 default case conversion,
+   equal to `node`. `String.fromCodePoint(cp)` and
+   `String.fromCharCode(c)` take one argument. Divergence: a code point
+   outside 0 to 0x10FFFF traps `invalid-argument` (`node` throws
+   RangeError); a surrogate traps `invalid-argument` (`node` gives a
+   lone surrogate).
 
-Accept: `a11`, `a12`, `a19`, `a37`, `a38`, `a39`. Reject: `r09`, `r10`, `r18`, `r34`, `r37`.
-Trap: `t06`. Retired by P2.4: `retired:r08-string-length`,
+Accept: `a11`, `a12`, `a19`, `a37`, `a38`, `a39`, `a80`, `a81`. Reject: `r09`, `r10`, `r34`, `r37`, `r163`, `r164`.
+Trap: `t06`, `t14`, `t15`. Retired by P7.5: `retired:r18-to-upper-case` (stdlib.md §9). Retired by P2.4: `retired:r08-string-length`,
 `retired:r29-string-slice`, `retired:r30-string-index-of`,
 `retired:r31-string-trim`, `retired:r32-string-position-argument`,
 `retired:r33-split-non-literal`, `retired:r39-string-for-of`.
@@ -1030,5 +1037,4 @@ Accept: `a58`, `a59`, `a60`, `a61`, `a62`, `a63`, `a64`. Reject: `r134`, `r135`,
 
 ## Open items
 
-- Case mapping and normalization of strings wait for a native helper
-  (C5.4).
+- Normalization of strings waits for a native helper (C5.4).

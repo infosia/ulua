@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 8, 2026-10-17. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 9, 2026-10-17. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -414,3 +414,46 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
     against `node` agrees on every observable result; the §5.19,
     analyzer, and P6.3 tests pass; the cost of each operation is
     measured and recorded.
+
+## 9. P7.5 String case and code points
+
+1. **Case.** `s.toUpperCase()` and `s.toLowerCase()` apply Unicode
+   default case conversion with the special casing of Unicode 17.0
+   (one-to-many results, final sigma), as the prior contract does
+   (M5). The implementation is a native helper (form 4) over the Rust
+   standard library `str::to_uppercase` and `str::to_lowercase` of the
+   pinned toolchain (`rust-toolchain.toml`; `char::UNICODE_VERSION` is
+   17.0). Measured (P7.5 contract): over every code point, the 3,037
+   code points that either mapping changes give the same results as
+   `node` v24.18.0 (Unicode 17.0), and 9 context rows (final sigma,
+   `İ`, `ﬀ`, `ǅ`) are equal. A toolchain or `node` upgrade that
+   changes the Unicode version changes the results; the tracking note
+   records the version pair.
+2. **Code points.** `String.fromCodePoint(cp)` with one `number`
+   argument gives the UTF-8 string of `cp`. A `cp` that is not an
+   integer in 0 to 0x10FFFF, or that is a surrogate (0xD800 to 0xDFFF),
+   traps `invalid-argument`. Divergence: `node` throws `RangeError`
+   outside the range and gives a lone surrogate for a surrogate.
+   `String.fromCharCode(c)` with one `number` argument converts `c` as
+   ToUint16; a result in the surrogate range traps `invalid-argument`
+   (C5.1: UTF-8 has no lone surrogate). Divergence: `node` gives a lone
+   surrogate, and two such calls concatenated form a pair there.
+3. **Arity.** Each member takes exactly one argument (§0.7); the
+   variadic forms are rejected.
+4. **Charge.** A case call charges `NATIVE_CALL_STEPS` plus one step
+   per `NATIVE_BYTES_PER_STEP` bytes of its argument; the result can be
+   longer than the argument (`ß` gives `SS`) and is charged to
+   `max_memory_bytes`.
+5. **Rejected** (C5): `toLocaleUpperCase`, `toLocaleLowerCase`,
+   `localeCompare`, `normalize`, `String.raw`, a member read as a
+   value.
+6. **Corpus.** `a80` (case over ASCII, Latin, Greek final sigma,
+   German sharp s, Turkish dotted I, ligatures), `a81` (code points
+   from ASCII to the astral planes), both `js-comparable: yes`; `t14`
+   (`fromCodePoint(0x110000)`), `t15` (`fromCharCode(0xD800)`), both
+   `js-comparable: no C5`; `r163` (`fromCharCode` with two arguments),
+   `r164` (`toLocaleUpperCase`). `r18` retires: `toUpperCase` is
+   accepted.
+7. **Exit.** The corpus equals its goldens; `node` agrees on `a80` and
+   `a81`; a unit test compares both mappings with a `node` table over
+   every code point; the §5.19 and P6.3 tests pass.
