@@ -1,6 +1,6 @@
 # Benchmarks — contract
 
-Status: Rev 4, 2026-10-17. Rev 4: §4 a pair can use the `Math` members of the builtin-alias form (P7.1). Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
+Status: Rev 5, 2026-10-17. Rev 5: §6 a bound covers each measured target (Windows x86_64). Rev 4: §4 a pair can use the `Math` members of the builtin-alias form (P7.1). Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
 Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
 contract follows the benchmark contract of the owner's prior project:
 its timing method, its workload set, and its boundary-price
@@ -150,8 +150,12 @@ ratios, not budgets (principle 15).
 - Samples: a warm-up of at least 3 runs and 50 ms per subject, then
   the median of 7 runs for each subject; the two subjects alternate,
   so a load change hits both.
-- Bound per workload: the ratio measured at the slice close in the
-  gate's profile, times 1.25, rounded up to two decimals. The test
+- Bound per workload: the largest ratio of three runs at the slice
+  close in the gate's profile, over each measured target, times 1.25,
+  rounded up to two decimals. The measured targets are macOS aarch64
+  and Windows x86_64. The ratio depends on the target: the CPU and the
+  C++ compiler of the VM change each subject differently. When a
+  change moves a ratio, measure it on each measured target. The test
   prints each ratio and its bound.
 - The test is Red against a build without P6.S3 (a measurement at the
   slice close, not a committed test).

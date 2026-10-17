@@ -408,6 +408,38 @@ Open: the analyzer ratio of `P22-array-wide-function-product` moves
 from 11.2 to 12.0 between runs (its 4 KiB base is 22 ms), so the bound
 12 can fail on noise (MINOR, flake risk).
 
+## Measurements: Windows x86_64 (benchmarks.md Rev 5)
+
+Failure: `gate.sh timing` on Windows x86_64 at 7e08e23 failed
+`ten_workload_performance_ratios`: mandelbrot 1.594 > 1.46; a rerun
+gave 1.589. The same gate gave `async-reject-resume` 6.17 > 6 in
+`p55_ratio`; a rerun gave 5.195 (noise, MINOR, as the p63 flake risk
+above).
+
+Three runs at c8cb050, `p63_performance`, `ulua / luau`:
+
+| Workload | Run 1 | Run 2 | Run 3 | macOS max | Bound |
+|---|---:|---:|---:|---:|---:|
+| fib-recursive | 1.660 | 1.583 | 1.579 | 1.739 | 2.18 |
+| fib-loop | 1.301 | 1.293 | 1.361 | 2.275 | 2.85 |
+| mandelbrot | 1.585 | 1.644 | 1.564 | 1.160 | 1.46 to 2.06 |
+| primes | 1.420 | 1.406 | 1.398 | 2.889 | 3.62 |
+| sort | 3.401 | 3.351 | 3.142 | 3.628 | 4.54 |
+| tree | 1.927 | 2.040 | 2.083 | 2.301 | 2.88 |
+| queen | 4.121 | 4.157 | 4.126 | 3.207 | 4.01 to 5.20 |
+| particles | 2.176 | 2.194 | 2.183 | 3.533 | 4.42 |
+| callbacks | 1.614 | 1.541 | 1.669 | 3.176 | 3.98 |
+| collect | 1.695 | 1.713 | 1.651 | 2.082 | 2.61 |
+
+- Eight workloads have a lower ratio on Windows. mandelbrot and queen
+  have a higher ratio. The cause is not measured.
+- queen gave 3.557 in the earlier rerun of the same session and 4.12
+  to 4.16 in these three runs.
+
+Consequence: a bound from one target does not hold on another. Each
+bound is the largest of the three runs over each measured target,
+times 1.25.
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten
