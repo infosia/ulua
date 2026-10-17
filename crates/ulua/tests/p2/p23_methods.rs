@@ -12,6 +12,7 @@ fn array_methods_match_node_and_the_named_traps() {
     let mut s = Suite::new();
     positions(&mut s);
     callbacks(&mut s);
+    find_absence(&mut s);
     loops(&mut s);
     random(&mut s);
     s.finish();
@@ -196,6 +197,8 @@ fn callbacks(s: &mut Suite) {
         "filter",
         "some",
         "every",
+        "find",
+        "findLast",
         "findIndex",
         "findLastIndex",
         "flatMap",
@@ -335,4 +338,20 @@ fn helper_loops_use_steps_and_callback_traps_leave_the_instance_usable() {
         script.instance(RunLimits::default()),
         (ULUA_FAILED, "trap:array-modified".into())
     );
+}
+
+fn find_absence(s: &mut Suite) {
+    for method in ["find", "findLast"] {
+        for array in ["[]", "[1]", "[1,2,3,4]"] {
+            for predicate in ["true", "false", "i < 2", "v > 2"] {
+                s.case(&format!("const xs:number[]={array};let calls='';const x=xs.{method}((v:number,i:number):boolean=>{{calls+=`${{i}},`;return {predicate};}});return `${{x??-1}}/${{calls}}`;"));
+            }
+        }
+        for result in ["true", "false"] {
+            s.trap(&format!("const xs=[1,2];xs.{method}((v:number):boolean=>{{xs.push(v);return {result};}});"), "trap:array-modified");
+        }
+        s.case(&format!("const xs=[false,true];const x=xs.{method}((v:boolean):boolean=>!v);return `${{x??true}}`;"));
+        // Receiver, callback creation, and callback execution retain C12 order.
+        s.case(&format!("let order='';function receiver():number[]{{order+='r';return [1,2];}}function callback():(v:number)=>boolean{{order+='c';return (v:number):boolean=>{{order+='v';return true;}};}}const x=receiver().{method}(callback());return `${{x??0}}/${{order}}`;"));
+    }
 }

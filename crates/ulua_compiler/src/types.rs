@@ -137,6 +137,7 @@ enum Node {
     Array(Type),
     Promise(Type),
     Nullable(Type),
+    Absent(Type),
     Record(Rc<Vec<(usize, Type)>>),
     Class(Rc<ClassType>),
 }
@@ -159,6 +160,7 @@ pub(crate) struct Types {
     promises: HashMap<Type, Type>,
     promise_views: HashMap<Type, Type>,
     nullable: HashMap<Type, Type>,
+    absent: HashMap<Type, Type>,
     records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
     anonymous_records: HashMap<Rc<Vec<(usize, Type)>>, Type>,
     named_records: std::collections::HashSet<Type>,
@@ -193,6 +195,7 @@ impl Types {
             promises: HashMap::new(),
             promise_views: HashMap::new(),
             nullable: HashMap::new(),
+            absent: HashMap::new(),
             records: HashMap::new(),
             anonymous_records: HashMap::new(),
             named_records: Default::default(),
@@ -233,7 +236,7 @@ impl Types {
                 continue;
             }
             match self.nodes.get(ty.0) {
-                Some(Node::Array(t) | Node::Nullable(t)) => pending.push(*t),
+                Some(Node::Array(t) | Node::Nullable(t) | Node::Absent(t)) => pending.push(*t),
                 Some(Node::Record(fields)) => pending.extend(fields.iter().map(|f| f.1)),
                 Some(Node::Class(class)) => {
                     pending.extend(class.fields.iter().map(|f| f.1));
@@ -260,9 +263,21 @@ impl Types {
     }
     pub(crate) fn inner(&self, ty: Type) -> Option<Type> {
         match self.nodes.get(ty.0) {
-            Some(Node::Nullable(inner)) => Some(*inner),
+            Some(Node::Nullable(inner) | Node::Absent(inner)) => Some(*inner),
             _ => None,
         }
+    }
+    pub(crate) fn is_absent(&self, ty: Type) -> bool {
+        matches!(self.nodes.get(ty.0), Some(Node::Absent(_)))
+    }
+    pub(crate) fn absent(&mut self, inner: Type) -> Type {
+        let inner = self.count_identity(inner);
+        if let Some(ty) = self.absent.get(&inner) {
+            return *ty;
+        }
+        let ty = self.add_counted(Node::Absent(inner), None);
+        self.absent.insert(inner, ty);
+        ty
     }
     pub(crate) fn reserve_record(&mut self) -> Type {
         let ty = Type(self.nodes.len());
@@ -368,9 +383,12 @@ impl Types {
     }
     pub(crate) fn assignable(&self, from: Type, to: Type) -> bool {
         self.equal(from, to)
-            || self
-                .inner(to)
-                .is_some_and(|inner| from == Type::Null || self.equal(from, inner))
+            || (self.is_absent(from)
+                && self.is_absent(to)
+                && self.equal(self.inner(from).unwrap(), self.inner(to).unwrap()))
+            || self.inner(to).is_some_and(|inner| {
+                (!self.is_absent(to) && from == Type::Null) || self.equal(from, inner)
+            })
     }
     pub(crate) fn join(&mut self, a: Type, b: Type) -> Option<Type> {
         if self.assignable(a, b) {
@@ -459,7 +477,9 @@ impl Types {
                         pending.push(Part::Text("}"));
                         pending.push(Part::Ty(element));
                         pending.push(Part::Text("{"));
-                    } else if let Some(Node::Nullable(inner)) = self.nodes.get(ty.0) {
+                    } else if let Some(Node::Nullable(inner) | Node::Absent(inner)) =
+                        self.nodes.get(ty.0)
+                    {
                         pending.push(Part::Text("?"));
                         pending.push(Part::Ty(*inner));
                     } else if let Some(f) = self.function(ty) {

@@ -77,6 +77,8 @@ pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize),
             | M::Filter
             | M::Some
             | M::Every
+            | M::Find
+            | M::FindLast
             | M::FindIndex
             | M::FindLastIndex
             | M::FlatMap
@@ -298,6 +300,8 @@ fn plain(method: M) -> Result<Helper, Diagnostic> {
         | M::Filter
         | M::Some
         | M::Every
+        | M::Find
+        | M::FindLast
         | M::FindIndex
         | M::FindLastIndex
         | M::FlatMap
@@ -395,6 +399,14 @@ fn callback(method: M, arity: usize) -> Result<Helper, Diagnostic> {
             "        if not value then return false end\n",
             "    return true\n",
         ),
+        M::Find | M::FindLast => (
+            "<T>",
+            "boolean",
+            "T?",
+            "",
+            "        if value then return v end\n",
+            "    return nil\n",
+        ),
         M::FindIndex | M::FindLastIndex => (
             "<T>",
             "boolean",
@@ -422,7 +434,7 @@ fn callback(method: M, arity: usize) -> Result<Helper, Diagnostic> {
         | M::ReduceRight
         | M::Sort => return Err(invalid()),
     };
-    let range = if method == M::FindLastIndex {
+    let range = if matches!(method, M::FindLastIndex | M::FindLast) {
         "n, 1, -1"
     } else {
         "1, n"

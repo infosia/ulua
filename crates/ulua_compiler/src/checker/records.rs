@@ -199,6 +199,7 @@ impl Checker<'_> {
                 self.inferred_this(&p.value)?;
             }
             let value = self.expr_as(&p.value, depth, false, contextual)?;
+            self.reject_absent(value.ty, p.span)?;
             if let Some(ty) = contextual {
                 self.flow(&value.ty, Some(&ty), p.span)?;
             } else {

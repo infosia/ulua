@@ -85,6 +85,18 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
             "x=Math.random();",
             "}}",
         ),
+        (
+            "array-find",
+            "export function main(b:boolean):void{const xs=[1,2,3,4];",
+            "xs.find((v:number,i:number):boolean=>i>9);",
+            "}",
+        ),
+        (
+            "array-findLast",
+            "export function main(b:boolean):void{const xs=[1,2,3,4];",
+            "xs.findLast((v:number,i:number):boolean=>i>9);",
+            "}",
+        ),
         ("remainder", number, "x=x%3;", "}"),
         ("remainder-compound", number, "x%=3;", "}"),
         (

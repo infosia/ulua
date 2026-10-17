@@ -22,6 +22,8 @@ pub(crate) enum Method {
     Filter,
     Some,
     Every,
+    Find,
+    FindLast,
     FindIndex,
     FindLastIndex,
     FlatMap,
@@ -53,6 +55,8 @@ impl Method {
             "filter" => Self::Filter,
             "some" => Self::Some,
             "every" => Self::Every,
+            "find" => Self::Find,
+            "findLast" => Self::FindLast,
             "findIndex" => Self::FindIndex,
             "findLastIndex" => Self::FindLastIndex,
             "flatMap" => Self::FlatMap,
@@ -86,6 +90,8 @@ impl Method {
             Self::Filter => "filter",
             Self::Some => "some",
             Self::Every => "every",
+            Self::Find => "find",
+            Self::FindLast => "findLast",
             Self::FindIndex => "findIndex",
             Self::FindLastIndex => "findLastIndex",
             Self::FlatMap => "flatMap",
@@ -118,6 +124,8 @@ impl Method {
             | Self::Filter
             | Self::Some
             | Self::Every
+            | Self::Find
+            | Self::FindLast
             | Self::FindIndex
             | Self::FindLastIndex
             | Self::FlatMap => 1..=2,

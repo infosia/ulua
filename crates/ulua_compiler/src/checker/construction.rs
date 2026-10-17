@@ -131,6 +131,8 @@ impl Paths<'_, '_> {
                         | ir::Method::Filter
                         | ir::Method::Some
                         | ir::Method::Every
+                        | ir::Method::Find
+                        | ir::Method::FindLast
                         | ir::Method::FindIndex
                         | ir::Method::FindLastIndex
                         | ir::Method::FlatMap

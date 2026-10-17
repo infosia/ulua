@@ -6,7 +6,7 @@ impl Node {
     fn children(&self) -> Vec<usize> {
         match self {
             Self::Primitive(_) => vec![],
-            Self::Array(t) | Self::Nullable(t) | Self::Promise(t) => vec![t.0],
+            Self::Array(t) | Self::Nullable(t) | Self::Absent(t) | Self::Promise(t) => vec![t.0],
             Self::Function(f) => f
                 .params
                 .iter()

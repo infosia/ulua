@@ -627,3 +627,6 @@ mod p23_tests;
 mod p27_shapes;
 #[cfg(test)]
 mod p27_tests;
+
+#[cfg(test)]
+mod p72_tests;

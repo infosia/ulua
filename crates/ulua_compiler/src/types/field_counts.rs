@@ -28,9 +28,10 @@ impl Types {
         };
         match node {
             Node::Primitive(_) => 0,
-            Node::Array(child) | Node::Nullable(child) | Node::Promise(child) => {
-                self.nested_field_count(*child)
-            }
+            Node::Array(child)
+            | Node::Nullable(child)
+            | Node::Absent(child)
+            | Node::Promise(child) => self.nested_field_count(*child),
             Node::Function(f) => f
                 .params
                 .iter()

@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
+Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17; P7.2 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
 
 ## Slices
 
@@ -156,3 +156,20 @@ Gates on the final code: `cargo test -p ulua_compiler` 228 passed;
 timing` PASS (421.7 s): §5.19 largest 5.894 (`async-reject-resume`,
 not a Math shape; Math shapes 3.094, 1.880, 1.009), analyzer largest
 11.608, P6.3 within every bound (primes 1.186, sort 3.520).
+
+## P7.2 `find`, `findLast`, the absent type
+
+Contract: `stdlib.md` §6 (Rev 3), collisions.md C2, C6.9. Corpus:
+`a72` (equal to `node`), `a73` (`js-comparable: no C2`), `r152` to
+`r155`; `r24` retired. Red before: all seven gave C6. The checker
+holds `T?` as its own type (`Absent`), apart from `T | null`; the
+helper returns the element or `nil`.
+
+Gates on the final code: `cargo test -p ulua_compiler` 231 passed;
+`gate.sh full` PASS (152.4 s); `gate.sh timing` PASS (399.0 s): §5.19
+largest 5.814 (`boolean-template`; `find` 1.914, `findLast` 1.921),
+analyzer largest 11.650, P6.3 within every bound.
+
+A process failure during the slice: Red P7.3 entries entered the
+working tree while the P7.2 gates ran, and `gate.sh full` failed on
+them. They moved to the scratchpad until the P7.2 commit.

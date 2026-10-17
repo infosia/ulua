@@ -18,8 +18,6 @@ fn methods_keep_exact_argument_and_callback_types() {
         "const xs=[1];xs.map((v:number,i:number,a:number[]):number=>v);",
         "const xs=[1];xs.map(():number=>1);",
         "const xs=[1];xs.flat();",
-        "const xs=[1];xs.find((v:number):boolean=>v>0);",
-        "const xs=[1];xs.findLast((v:number):boolean=>v>0);",
         "const xs=[1];xs.entries();",
         "const xs=[1];xs.keys();",
         "const xs=[1];xs.values();",

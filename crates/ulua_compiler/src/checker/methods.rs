@@ -31,6 +31,8 @@ impl Checker<'_> {
             "filter" => ("filter", 1, 1),
             "some" => ("some", 1, 1),
             "every" => ("every", 1, 1),
+            "find" => ("find", 1, 1),
+            "findLast" => ("findLast", 1, 1),
             "findIndex" => ("findIndex", 1, 1),
             "findLastIndex" => ("findLastIndex", 1, 1),
             "flatMap" => ("flatMap", 1, 1),
@@ -67,6 +69,8 @@ impl Checker<'_> {
                 | "filter"
                 | "some"
                 | "every"
+                | "find"
+                | "findLast"
                 | "findIndex"
                 | "findLastIndex"
                 | "flatMap"
@@ -132,7 +136,13 @@ impl Checker<'_> {
                 }
                 if matches!(
                     name,
-                    "filter" | "some" | "every" | "findIndex" | "findLastIndex"
+                    "filter"
+                        | "some"
+                        | "every"
+                        | "find"
+                        | "findLast"
+                        | "findIndex"
+                        | "findLastIndex"
                 ) {
                     self.flow(&signature.result, Some(&Type::Boolean), arg.span())?;
                 } else if name == "sort" {
@@ -156,6 +166,7 @@ impl Checker<'_> {
                             self.error(arg.span(), "C6", "FlatMap callback must return an array")
                         })?
                     };
+                    self.reject_absent(element, arg.span())?;
                     if self.types.contains_null(element) {
                         return Err(self.error(
                             arg.span(),
@@ -172,6 +183,7 @@ impl Checker<'_> {
             "includes" | "some" | "every" => Type::Boolean,
             "join" => Type::String,
             "at" | "pop" | "shift" => element,
+            "find" | "findLast" => self.types.absent(element),
             "forEach" => Type::Void,
             "map" | "flatMap" | "reduce" | "reduceRight" => {
                 let result = self

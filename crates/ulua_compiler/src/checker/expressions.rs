@@ -2,12 +2,32 @@
 use super::*;
 use crate::ir::{Expr, ExprKind};
 impl Checker<'_> {
+    pub(super) fn reject_absent(&self, ty: Type, span: Span) -> Result<(), Diagnostic> {
+        if self.types.is_absent(ty) {
+            return Err(self.error(
+                span,
+                "C2",
+                "a find result is held only through an inferred type",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn flow(
         &self,
         from: &Type,
         to: Option<&Type>,
         span: Span,
     ) -> Result<(), Diagnostic> {
+        if self.types.is_absent(*from) && !to.is_some_and(|t| self.types.is_absent(*t)) {
+            return Err(self.error(
+                span,
+                "C2",
+                "a find result is held only through an inferred type",
+            ));
+        }
+        if *from == Type::Null && to.is_some_and(|t| self.types.is_absent(*t)) {
+            return Err(self.error(span, "C2", "null is not assignable to a find result"));
+        }
         if !to.is_some_and(|to| self.types.assignable(*from, *to)) {
             if self.types.promise_value(*from).is_some()
                 || to.is_some_and(|t| self.types.promise_value(*t).is_some())
@@ -262,7 +282,11 @@ impl Checker<'_> {
                         self.error(l.span, "C2", "Coalescing requires a nullable left operand")
                     })?;
                     let b = self.expr_as(&l.right, depth, false, expected.or(Some(inner)))?;
-                    let nullable = self.types.nullable(inner);
+                    let nullable = if self.types.is_absent(original) {
+                        original
+                    } else {
+                        self.types.nullable(inner)
+                    };
                     self.flow(&b.ty, Some(&nullable), l.span)?;
                     let ty = if self.types.contains_null(b.ty) {
                         nullable
@@ -352,6 +376,7 @@ impl Checker<'_> {
                         self.inferred_this(e)?;
                     }
                     let value = self.expr_as(e, depth, false, contextual_element)?;
+                    self.reject_absent(value.ty, e.span())?;
                     if self.types.contains_null(value.ty) {
                         return Err(self.error(e.span(), "C6", "Array elements must exclude null"));
                     }
@@ -471,6 +496,13 @@ impl Checker<'_> {
                     });
                     if let Some(e) = t.expressions.get(i) {
                         let value = self.expr(e, depth, false)?;
+                        if self.types.is_absent(value.ty) {
+                            return Err(self.error(
+                                e.span(),
+                                "C2",
+                                "a find result is not a template substitution",
+                            ));
+                        }
                         self.promise_operator(value.ty, e.span())?;
                         if !matches!(value.ty, Type::Number | Type::String | Type::Boolean) {
                             return Err(self.error(

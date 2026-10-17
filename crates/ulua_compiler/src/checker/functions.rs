@@ -276,6 +276,7 @@ impl Checker<'_> {
             if result.is_none() {
                 self.inferred_reference(e, value.ty)?;
             }
+            self.reject_absent(value.ty, e.span())?;
             if value.ty == Type::Void
                 && !matches!(
                     value.kind,

@@ -10,6 +10,7 @@ enum Shape {
     Array,
     Promise,
     Nullable,
+    Absent,
     Function(usize, usize),
     Record(Vec<usize>),
     Class(usize),
@@ -28,6 +29,7 @@ impl Types {
                 Node::Array(t) => (Shape::Array, vec![*t]),
                 Node::Promise(t) => (Shape::Promise, vec![*t]),
                 Node::Nullable(t) => (Shape::Nullable, vec![*t]),
+                Node::Absent(t) => (Shape::Absent, vec![*t]),
                 Node::Function(f) => {
                     let mut children = f.params.clone();
                     children.push(f.result);
@@ -129,6 +131,7 @@ impl Types {
                 Node::Nullable(t) => {
                     self.nullable.insert(self.canonical[t.0], identity);
                 }
+                Node::Absent(_) => {}
                 Node::Function(f) => {
                     let signature = Rc::new(FunctionType {
                         params: f.params.iter().map(|t| self.canonical[t.0]).collect(),
