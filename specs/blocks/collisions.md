@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review; Rev 51: C5.6 case and code points, P7.5; Rev 52: C20 JSON, P7.6; Rev 53: C6.10 `await` in a traversal, C20.5 and C20.6, P7 Phase Review).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1; Rev 47: C2 the absent type, C6.9 `find` and `findLast`, P7.2; Rev 48: C4.10 `Number`, P7.3; Rev 49: C6.10 `Map` and `Set`, P7.4; Rev 50: C6.10 an overwrite during a traversal, P7.4 review; Rev 51: C5.6 case and code points, P7.5; Rev 52: C20 JSON, P7.6; Rev 53: C6.10 `await` in a traversal, C20.5 and C20.6, P7 Phase Review; Rev 54: C6 entries of the proven index, P6.S7).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -403,8 +403,8 @@ Trap: `t06`, `t14`, `t15`. Retired by P7.5: `retired:r18-to-upper-case` (stdlib.
 8. An index signature type `{ [k: string]: T }` is rejected. A missing
    key reads `undefined` in JavaScript and `nil` in Luau, outside `T`.
 
-Accept: `a09`, `a13`, `a32`, `a33`, `a34`, `a72`, `a77`, `a78`, `a79`, `a82`. Reject: `r06`, `r23`, `r45`, `r64`, `r159`, `r160`, `r161`, `r170`,
-`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`, `t13`.
+Accept: `a09`, `a13`, `a32`, `a33`, `a34`, `a72`, `a77`, `a78`, `a79`, `a82`, `a87`. Reject: `r06`, `r23`, `r45`, `r64`, `r159`, `r160`, `r161`, `r170`,
+`r90`, `r91`, `r92`, `r93`, `r94`, `r96`. Trap: `t01`, `t02`, `t03`, `t04`, `t05`, `t07`, `t13`, `t17`.
 Retired by P7.2: `retired:r24-array-find` (D32).
 
 ## C7. Equality

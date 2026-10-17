@@ -58,6 +58,7 @@ Rev 53: §5.25 one system per dependency component; the measured reach (P6.S6 im
 Rev 54: §5.25 an unset binding at the end voids its system (P6.S6 review).
 Rev 55: §5.25 thresholds per binding, walks without recursion, the shadow check in gate full; "component" for the solved unit (P6.S6 Phase Review).
 Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over the measured targets.
+Rev 57: §5.26 proven index (P6.S7).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -869,6 +870,44 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       constructor (a parameter). Measured with the first form, before
       the per-component rule: no `%` of fib-loop, particles,
       mandelbrot, tree, queen, or fib-recursive was native.
+
+26. **Proven index (P6.S7).** An element read `a[i]` and an element
+    write `a[i] = e` or `a[i] op= e` of item 20 omit the tests
+    `i >= 0` and `floor(i) == i` when the index expression `i` has a
+    fact of item 25. The bound test stays: `i < #a` for a read,
+    `i <= #a` for a write.
+    - Proof: a fact states that each value is `+0` or an integer in
+      `[0, 2^53]`, so both omitted tests are true. The bound test
+      still runs before the table access. A value that passes it is
+      an integer below `#a + 1`, so the `int(indexd)` conversion of
+      item 20 stays defined.
+    - The trap set stays the same. A proven index has no NaN, no
+      infinity, no non-integer, no negative value, and no `-0`. An
+      index at or above `#a` (`#a + 1` for a write) traps
+      `index-out-of-range`, as before. The C12 order stays the same:
+      the index is evaluated at the same point, and the test reads
+      the same snapshot.
+    - The fact pass of item 25 computes the index facts. It adds no
+      binding, no write, and no edge, so the facts of item 25 and the
+      cost bound of item 25 stay the same. The compiler stores the
+      result in the IR: each element read and element write carries
+      its index form, proven or checked (principle 8). The emitter
+      reads the form and computes no fact.
+    - Out of scope: the deferred read of an optional chain
+      (`__ulua_get`), the receiver of a nested access, the array
+      helpers, and each test of the upper bound. A parameter, a
+      field, and an element have no fact (item 25).
+    - **Shadow check.** At each proven index, the test-only option of
+      item 25 emits the two omitted tests before the bound test. A
+      failed test stops the run as `internal`. `gate.sh full` runs
+      the corpus and the workloads under it.
+    - The weight of a proven index test is at most the weight of the
+      full test. The instruction bound of §5.19 counts the emitted
+      instructions; the ratio test of §5.19 passes.
+    - Measured before the rule (P6.S4 measurement, before the inline
+      form): the index check is 85% of the sort overhead, 77% of
+      queen, and 47% of particles. The tracking note records the
+      proven sites of each workload and the time before and after.
 
 ## 6. Limits
 
