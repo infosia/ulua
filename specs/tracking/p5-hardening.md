@@ -22,6 +22,44 @@ Status: COMPLETE 2026-10-16 (P5.1 to P5.6, Phase Review). Decisions: D28, D29 (`
 - M1, M2 of P0.5 were measured on macOS arm64 only
   (`tracking/p05-measurements.md`).
 
+## Compiler memory on x86_64 (pipeline.md Rev 56)
+
+Status: COMPLETE on Windows x86_64; macOS not remeasured.
+
+Failure: `gate.sh timing` on Windows x86_64 at 7e08e23 failed
+`compile_memory_bound`: derived base 85,504 > `COMPILE_MEMORY_BASE`
+85,347. Largest small peak 68,403 B, seven distinct empty classes.
+macOS aarch64 after P7 (`p7-stdlib.md`): derived base 85,180; the small
+peak is not recorded (85,180 * 4 / 5 gives about 68,144 B).
+
+Cause, measured on Windows (allocation backtraces at the peak):
+
+| Source | Peak | Caller | Worker | Hash tables live | x86_64 extra |
+|---|---:|---:|---:|---:|---:|
+| `""` | 11,254 | 454 | 10,800 | 5 | 40 |
+| `class A{}` | 34,986 | 454 | 34,532 | 16 | 128 |
+| seven classes | 68,403 | 454 | 67,949 | 34 | 272 |
+
+- A hashbrown 0.16.1 table has one control byte per bucket plus
+  `Group::WIDTH`: 16 on x86_64 (SSE2), 8 on aarch64 (NEON). 34 live
+  tables give 272 B more on x86_64.
+- The seven-class peak without the 272 B is 68,131 B, against about
+  68,144 B from the macOS derivation. The 13 B difference has no known
+  origin.
+- The only Windows-specific allocation is the UTF-16 thread name
+  (28 B, worker). It is freed before the peak.
+- The derived factor is 1,115 on Windows x86_64 (peak 58,409,165 B at
+  65,536 B, nested-empty-blocks). The last macOS record is P5.4: peak
+  58,408,895 B, factor 1,115.
+
+Change: `COMPILE_MEMORY_BASE` 85,504 (the Windows x86_64 derivation);
+`COMPILE_MEMORY_FACTOR` stays 1,115. `compile_memory_bound` on Windows
+after the change: passed (107 s).
+
+Consequence: a constant derived on one architecture does not bound
+another. Each constant is the largest derivation over the measured
+targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
+
 ## Measurements (P5.1)
 
 - `sh tools/gate.sh sanitize` (macOS arm64, Apple clang, working

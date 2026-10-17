@@ -57,6 +57,7 @@ Rev 52: §5.25 native remainder from integer facts (P6.S6).
 Rev 53: §5.25 one system per dependency component; the measured reach (P6.S6 implementation).
 Rev 54: §5.25 an unset binding at the end voids its system (P6.S6 review).
 Rev 55: §5.25 thresholds per binding, walks without recursion, the shadow check in gate full; "component" for the solved unit (P6.S6 Phase Review).
+Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over the measured targets.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -943,6 +944,14 @@ necessary and that this table does not name is a contract question.
      peak of the set, times 1.25. The test asserts the bound for each
      small source and for each shape.
    - The test prints the largest ratio and the largest small peak.
+   - The peak depends on the target architecture. A hash table of
+     hashbrown has one control byte per bucket plus `Group::WIDTH`:
+     16 on x86_64 (SSE2) and 8 on aarch64 (NEON). Each constant is
+     the largest derivation over the measured targets. The measured
+     targets are macOS aarch64 and Windows x86_64. Linux x86_64 is
+     not measured: it has the x86_64 group width, and other
+     differences are unknown. When a change moves a peak, measure it
+     on each measured target.
    - Native `luau_compile` memory: the output of each growth shape at
      64 KiB is measured. The record names the largest peak and the
      largest peak per output byte; it follows `OUTPUT_FACTOR`
