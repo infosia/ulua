@@ -350,6 +350,29 @@ queen is the index check and the interrupt cost (invariant 2). On
 primes and callbacks the largest part is `%` through `fmod` (the
 remaining-overhead table above: 49.9% and 51.0%). Next: P6.S6.
 
+## Measurements (P6.S6)
+
+Record at 535f2fe (clean tree). `ulua / luau` at 7cca876 and at
+535f2fe: primes 3.40 to 1.19 (263.0 to 101.7 ms), fib-loop 2.31 to
+2.08, sort 3.69 to 3.53, callbacks 3.16 to 3.12; fib-recursive 1.75,
+mandelbrot 1.16 to 1.15, tree 2.32 to 2.33, queen 3.07 to 3.12,
+particles 3.51 to 3.49, collect 2.08 to 2.06. Largest IQR 3.22% of
+the median (fib-loop / luau); no cell withheld.
+Native sites: primes `n % d` and `(count + 1) % 4294967296`; fib-loop
+`i % 40`; collect `i % 2`; the LCG of sort and callbacks. Largest
+round count: corpus 6, workloads 8 (fib-loop: the `a`, `b`, `next`
+component reaches the limit and loses its facts; `i` keeps its fact).
+Shadow check: corpus 79, workloads 10, generator 361 (140 native
+sites), no stop. `cargo test -p ulua_compiler` 218 passed; `gate.sh
+full` 139.65 s; `gate.sh timing` 446.35 s: §5.19 largest 5.856,
+analyzer largest 11.196, fact-rounds growth 4.454 and 4.161 (54, 218,
+873 components at the limit), P6.3 within every bound.
+
+Review of the first form: a write that read an unset member of its
+component never joined, so a member kept an integer fact without that
+write (Rev 54). The IR-built test `unset_member_invalidates_the_whole_component`
+fails before the fix (2 fmod sites expected, 0 found).
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten
