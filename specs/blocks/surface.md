@@ -11,7 +11,7 @@ at any depth of an arrow result, P2.2; Rev 12: array methods, P2.3; Rev 13: infe
 references, access paths, P2.3 review 3; Rev 15: string members, P2.4; Rev 16: D18 for nullable references, P2.5; Rev 17: D18 for object literal
 fields, P2.5 review; Rev 18: optional chains and parentheses in a
 reference, P2.5 review 2; Rev 19: `this`, P2.6; Rev 20: `private` access, constructor `return` and modifiers, P2.6; Rev 21: `this` in D18,
-optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2; Rev 26: `main` is optional, D27).
+optional calls as arrow bodies, P2.6 review; Rev 22: exceptions, P2.7; Rev 23: host functions, P3: every `declare` form is rejected, C18; Rev 24: async functions, `await`, `Promise<T>`, P4.1, C19; Rev 25: `then`, `catch`, `finally`, `Promise.all`, P4.2; Rev 26: `main` is optional, D27; Rev 27: `Math`, P7.1).
 
 This file is the closed list of the forms that the compiler accepts.
 The list is a table of syntax node kinds, with the names of the ESTree
@@ -165,9 +165,10 @@ n` for a `number` parameter gives no error.
 |---|---|
 | prelude | `print(text: string)`, `Utf8.byteLength(text: string)` |
 | global | `Infinity`, `NaN`, `String(n)` with `n: number` |
+| `Math` | the members and constants of stdlib.md §5, as calls and constant reads only |
 | `string` | `length` (read) and the members of collisions.md C5.2 |
 | `T[]` | `length` (read; the statement `xs.length = 0`); `push` with one argument of type `T`, as an expression statement only; the methods of collisions.md C6.9 |
 
 Every other global, namespace, and member is rejected, for example
-`Math`, `Number`, `Array`, `Object`, `JSON`, and every other method of
+`Number`, `Array`, `Object`, `JSON`, and every other method of
 `string` and `T[]`.

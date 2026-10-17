@@ -1,6 +1,7 @@
 # Standard library — contract
 
-Status: Rev 0, 2026-10-17 (P7 plan). Rev 0 states the design rules,
+Status: Rev 1, 2026-10-17. Rev 1: the P7.0 decisions (§2) and the
+P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
 Evidence is in `specs/tracking/p7-stdlib.md`.
@@ -92,6 +93,22 @@ its numbers in the tracking note and a decision here.
 | M5 | Case mapping | `toUpperCase` and `toLowerCase`: `string.upper` (ASCII only) against a prelude table and a native helper; data size and cost |
 | M6 | Absence (§1) | the `tsc` view and the `node` and Ulua outputs of each form of §1.2 and §1.3 on `find` and `Map.get` |
 
+Decisions (P7.0, `tracking/p7-stdlib.md`):
+
+- M1 (D33): the members whose builtin differs from `node` or is absent
+  use Rust `libm` 0.2.16 as a native helper (form 4). The result does
+  not depend on the host OS. The difference from `node` is a named
+  divergence (collisions.md C4.9).
+- M2: `toFixed` is form 2: `string.format` with fixed rewrites for an
+  exact tie, `-0`, and a magnitude at or above 1e21 (P7.3).
+- M3: `Map` and `Set` are the ordered prelude table with a separate
+  NaN slot (P7.4).
+- M4 (D34): an object literal whose type reaches `JSON.stringify`
+  lists its fields in the declaration order of the type (P7.6).
+- M5: Unicode default case conversion with special casing, form 4, at
+  a pinned Unicode version, as the prior contract (P7.5).
+- M6: §1 stands as written; `r === null` is the C2 divergence.
+
 ## 3. Slices
 
 Each slice: a section of this file, corpus entries (Red at the
@@ -121,3 +138,80 @@ typed arrays, `WeakMap`, `WeakRef`.
   pair rule is revised: a pair can use `Math.floor` and `Math.abs`
   against `math.floor` and `math.abs`.
 - `surface.md` §6 lists the library; each slice updates it.
+
+## 5. P7.1 `Math`
+
+The member set of the prior contract, without its binary32 bit
+accessors. Each member is a call of `Math.<name>(...)` or a read of
+`Math.<CONST>`. `Math` as a value, a member read as a value, and every
+other member are rejected (C11).
+
+1. **Members and forms** (§0.2; M1 measured each row):
+
+   | Form | Members |
+   |---|---|
+   | 1, builtin alias | `abs`, `ceil`, `floor`, `sqrt` |
+   | 3, prelude helper | `round`, `sign`, `trunc`, `max`, `min`, `clz32`, `imul`, `fround` |
+   | 4, native (Rust `libm`) | `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `atan2`, `cbrt`, `cos`, `cosh`, `exp`, `expm1`, `hypot`, `log`, `log1p`, `log10`, `log2`, `pow`, `sin`, `sinh`, `tan`, `tanh` |
+   | 4, native (instance PRNG) | `random` |
+
+2. **Arity.** `atan2`, `hypot`, `pow`, `max`, `min`, and `imul` take
+   exactly two arguments. Every other member except `random` takes
+   one. `random` takes none. Another argument count is rejected
+   (§0.7).
+3. **ECMAScript edge rules**, each pinned by a corpus row: `round`
+   rounds half toward +Infinity and gives `-0` for an argument in
+   `[-0.5, -0]`; `sign` keeps `±0` and NaN; `max` and `min` give NaN
+   when an argument is NaN, `max(+0, -0)` is `+0`, `min(+0, -0)` is
+   `-0`; `trunc` keeps the sign of zero; `pow` gives NaN for a NaN
+   exponent and for a base of `±1` with an infinite exponent, and `1`
+   for an exponent of `±0`, also for a NaN base; `abs(-0)` is `+0`;
+   `clz32(0)` is 32; `clz32` and `imul` convert as ECMAScript ToUint32
+   and ToInt32 convert; `fround` rounds to binary32 to nearest even.
+4. **Constants.** `E`, `LN2`, `LN10`, `LOG2E`, `LOG10E`, `PI`,
+   `SQRT1_2`, `SQRT2` lower to number literals with the bits of the
+   ECMAScript values. The emitter writes a literal that reads back to
+   the same bits.
+5. **Native helpers.** The product registers each form-4 member as a
+   Luau C function before the sandbox freezes the environment. The
+   helper calls the function of Rust `libm` 0.2.16
+   (<https://crates.io/crates/libm/0.2.16>, pinned in `Cargo.lock`).
+   `pow` adds the edge rules of rule 3 before the call. The prelude
+   reaches each helper through a generated local; no script name
+   reaches it. A helper call is a `CALL`, not a `FASTCALL`: it fires
+   the interrupt of §5.19 and is never folded by the Luau compiler.
+   The slice measures the cost per call and records it.
+6. **`random`.** Each instance owns one xoshiro256++ generator, seeded
+   by splitmix64 expansion of a 64-bit seed. The default seed is
+   `0x5355425352454144`, as in the prior contract. The state words
+   `s[0]` to `s[3]` are the first four splitmix64 outputs from the seed
+   (`z = (x += 0x9E3779B97F4A7C15)`, `z = (z ^ (z >> 30)) *
+   0xBF58476D1CE4E5B9`, `z = (z ^ (z >> 27)) * 0x94D049BB133111EB`,
+   output `z ^ (z >> 31)`, all modulo 2^64). A draw takes the output
+   `rotl(s[0] + s[3], 23) + s[0]` and then advances the state by the
+   xoshiro256++ step. It maps the top 53 bits of the output to `[0, 1)`
+   as `(x >> 11) * 2^-53`. The host
+   sets the seed with `ulua_host.random_seed` before the module
+   statements run, and with `ulua_instance_seed_random` later
+   (`abi.md` §6, §7). The sequence does not depend on the host OS.
+7. **Divergence (C4.9).** A form-4 member gives the value of Rust
+   `libm`; `node` gives the value of V8. M1 measured 11 to 14,824
+   differences of 1 or 2 ulp per 100,050 inputs (72,500 pairs), by
+   member. `random` gives the sequence of rule 6; `node` gives an
+   unseeded sequence. An entry that prints such a value is
+   `js-comparable: no C4`. Its golden comes from a harness that calls
+   Rust `libm` and the reference generator outside the product
+   (principle 12).
+8. **`**`** stays rejected (C4.4); `Math.pow` is the accepted spelling.
+9. **Corpus.** `a69` (forms 1 and 3, the edge rules, the constants;
+   `js-comparable: yes`), `a70` (form-4 members, `js-comparable: no
+   C4`), `a71` (`random` at the default seed, `js-comparable: no C4`),
+   `r149` (three arguments to `max`), `r150` (`Math.sin` as a value),
+   `r151` (one argument to `hypot`). `r46` retires: `Math.round` is
+   accepted; its row moves to `a69`.
+10. **Exit.** The corpus above equals its goldens; `node` agrees on
+    `a69`; a unit test per member compares the helper with the
+    reference value at the edge classes; the seed tests of `abi.md`
+    §8 pass; the §5.19 interrupt and analyzer tests and P6.3 pass; the
+    cost per native call is recorded; `benchmarks.md` §4 states the
+    revised pair rule.

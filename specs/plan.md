@@ -160,6 +160,8 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D30 | The benchmarks compare Ulua with hand-written Luau on the pinned VM only; Luau is 1.00×. No C, LuaJIT, or JavaScript subject | 2026-10-16 | `benchmarks.md` Rev 1; owner decision at the P6 start |
 | D31 | Reload leaves P6; a later phase decides its meaning and contract | 2026-10-16 | `tracking/p6-performance.md`; owner decision |
 | D32 | Where `node` gives `undefined` for a missing result, Ulua gives `null`, as the owner's prior project does: `find`, `findLast`, and `Map.get` are accepted for a result type without `null`; `== null` and `??` agree with `node`; `=== null` on such a result is a named divergence. The source keeps no `undefined`. Revises the library part of D16 | 2026-10-17 | `stdlib.md` §1; owner decision at the P7 plan |
+| D33 | `Math` members whose Luau builtin differs from `node` or is absent use Rust `libm` 0.2.16 as a native helper: one result on every host OS; the 1- or 2-ulp difference from `node` is a named divergence | 2026-10-17 | `stdlib.md` §2, §5; collisions.md C4.9; owner decision after P7.0 M1 |
+| D34 | An object literal whose type reaches `JSON.stringify` lists its fields in the declaration order of the type, so the output order equals `node` | 2026-10-17 | `stdlib.md` §2; owner decision after P7.0 M4 |
 
 ## 9. Corrections and revisions
 
@@ -195,3 +197,7 @@ Each entry records what changed, the evidence, and the consequence.
   `tracking/p7-stdlib.md`. Consequence: `find`, `findLast`, and
   `Map.get` can join in P7.2 and P7.4; C2 names the `=== null`
   divergence when P7.2 lands.
+- **Rev 6 (2026-10-17).** §8 adds D33 and D34 after the P7.0
+  measurements. Evidence: `tracking/p7-stdlib.md` M1, M4. Consequence:
+  P7.1 adds native helpers and a seed field to the C ABI; P7.6 adds a
+  literal-order rule.

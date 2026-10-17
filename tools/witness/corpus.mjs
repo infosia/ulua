@@ -72,7 +72,7 @@ function parseHeader(entry) {
     if (names.some((n) => !FIXTURE_NAMES.includes(n)) || new Set(names).size !== names.length)
       fail(entry.id, `grants '${header.grants}' must name distinct fixtures of corpus.md section 7`);
   }
-  if (!/^P[1-6](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P6, with an optional slice`);
+  if (!/^P[1-7](\.[1-9])?$/.test(header.phase || "")) fail(entry.id, `phase ${header.phase} is not P1 to P7, with an optional slice`);
   const rules = (header.rule || "").split(", ").filter(Boolean);
   if (entry.dir !== "reject") {
     const jc = /^(yes|no (C\d+))$/.exec(header["js-comparable"] || "");

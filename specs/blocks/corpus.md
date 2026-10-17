@@ -38,7 +38,7 @@ Each entry starts with `//` header lines, in this order:
 // corpus: <dir>/<name>
 // purpose: <one sentence>
 // rule: <collision ids, comma-separated>
-// phase: P1 | P2 | ... | P6, with an optional slice: P2.1
+// phase: P1 | P2 | ... | P7, with an optional slice: P2.1
 // grants: <fixture names, comma-separated>   (optional)
 // tsc: accepts | errors <TSnnnn>[, <TSnnnn>...]
 // js-comparable: yes | no <collision id>    (accept and trap only)

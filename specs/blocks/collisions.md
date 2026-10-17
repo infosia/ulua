@@ -18,7 +18,7 @@ P2.5 review; Rev 30: C16.7 join edges, P2.5 review 2; Rev 31: C16.8
 unreachable points, P2.5 review 3; Rev 32: C16.9 edge ends, P2.5 review 4; Rev 33: C16.1 `?:` tests,
 C16.9 logical tests, P2.5 review 5; Rev 34: C16.9 `??` tests and
 contradicted references, P2.5 review 6; Rev 35: C12.4 store through an
-element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6).
+element read, P2.5 review 7; Rev 36: C16.4 tests in nested bodies, P2.5 review 10; Rev 37: C13.3 to C13.5, C1.6 class members, P2.6; Rev 38: C2 optional calls in arrow bodies, P2.6 review; Rev 39: C17 exceptions, C16.9 `throw`, P2.7; Rev 40: C16.8 arrows at unreachable points, P2.7 review 3; Rev 41: C18 host functions, P3; Rev 42: C19 async functions and promises, P4.1; Rev 43: C19.10 to C19.15 then, catch, finally, Promise.all, map, P4.2; Rev 44: C19.16 async host functions, P4.3; Rev 45: C4.3 native remainder, P6.S6; Rev 46: C4.4 `Math.pow`, C4.9 `Math`, C11 `Math`, P7.1).
 
 This file resolves each collision between the TypeScript surface and
 the native Luau representation (`CLAUDE.md` invariants 4 and 5). Stock
@@ -154,7 +154,7 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    Where integer facts prove a dividend of `+0` or an integer up to
    `2^53` and a finite integer divisor `>= 1`, `%` lowers to the
    native Luau `%`, which gives the same value (`pipeline.md` §5.25).
-4. `**` and `Math.pow` are rejected. Luau `^` follows C `pow` and gives
+4. `**` is rejected. `Math.pow` is accepted (stdlib.md §5). Luau `^` follows C `pow` and gives
    `1` where JavaScript gives `NaN` for a base of ±1 with a NaN or
    infinite exponent. No lowering is decided.
 5. A number in a template substitution or in `String(n)` follows the
@@ -177,7 +177,21 @@ Accept: `a06`, `a07`, `a10`. Reject: `r07`.
    an object as `[object Object]`, and an array by its elements. Luau
    `tostring` gives `nil` and a table address.
 
-Accept: `a02`, `a03`, `a04`, `a10`, `a37`, `a68`. Reject: `r15`, `r22`, `r44`, `r57`,
+9. `Math` (stdlib.md §5). The form-4 members give the values of Rust
+   `libm` 0.2.16; `node` gives the values of V8. Measured over 100,050
+   inputs (72,500 pairs for `atan2`, `hypot`, `pow`), the number of
+   1- or 2-ulp differences: `acos` 24, `acosh` 1,221, `asin` 71,
+   `asinh` 529, `atan` 57, `atanh` 23, `atan2` 280, `cbrt` 8,399, `cos`
+   961, `cosh` 229, `exp` 11, `expm1` 22, `hypot` 14,824, `log` 265,
+   `log1p` 43, `log10` 3,024, `log2` 0, `pow` 2,032 (after the edge
+   rules), `sin` 961, `sinh` 103, `tan` 760, `tanh` 3,539. For example
+   `Math.exp(1)` is `2.7182818284590455` here and `2.718281828459045`
+   under `node`. `Math.random` gives the seeded sequence of stdlib.md
+   §5 rule 6; `node` gives an unseeded sequence. The other members
+   agree with `node` on every measured input. An entry that prints a
+   form-4 or `random` result is `js-comparable: no C4`.
+
+Accept: `a02`, `a03`, `a04`, `a10`, `a37`, `a68`, `a69`, `a70`, `a71`. Reject: `r15`, `r22`, `r44`, `r57`, `r149`, `r150`, `r151`,
 `r58`. Retired by P2.4: `retired:r21-string-plus-number`,
 `retired:r38-string-plus-assign-number`.
 
@@ -480,9 +494,9 @@ function body, and `node` gives a SyntaxError in both places. A rule in this fil
 explains a listed form or a rejection near the list. It does not make
 a form acceptable.
 
-Accept: `a27`, `a30`. Reject: `r46`, `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
+Accept: `a27`, `a30`. Reject: `r47`, `r55`, `r59`, `r60`, `r61`, `r62`, `r65`, `r66`,
 `r75`, `r78`, `r81`, `r82`, `r85`, `r87`, `r88`, `r98`, `r99`, `r100`, `r104`, `r105`, `r106`, `r107`, `r112`, `r116`, `r117`.
-Retired: `retired:r97-narrowed-let-copy` (D18 revision).
+Retired: `retired:r97-narrowed-let-copy` (D18 revision), `retired:r46-math-round` (P7.1: `Math` is accepted, stdlib.md §5).
 
 ## C12. Evaluation order
 
