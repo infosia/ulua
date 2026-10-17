@@ -226,7 +226,12 @@ pub unsafe extern "C" fn ulua_compile(
                         }
                         let owner = Bytecode(bytecode);
                         let code = slice::from_raw_parts(owner.0.cast::<u8>(), size).to_vec();
-                        Ok(Ok((compiled.exports, code, compiled.hosts)))
+                        Ok(Ok((
+                            compiled.exports,
+                            code,
+                            compiled.hosts,
+                            compiled.native_math,
+                        )))
                     });
                 match worker {
                     Ok(worker) => worker
@@ -236,12 +241,13 @@ pub unsafe extern "C" fn ulua_compile(
                 }
             });
             match joined {
-                Ok(Ok(Ok((exports, bytecode, hosts)))) => {
+                Ok(Ok(Ok((exports, bytecode, hosts, native_math)))) => {
                     let by_name: std::collections::HashMap<_, _> = grants
                         .iter()
                         .map(|g| (g.signature.name.as_str(), g))
                         .collect();
                     let module = Box::new(Module {
+                        native_math,
                         context,
                         grants: hosts
                             .iter()
@@ -483,6 +489,8 @@ pub unsafe extern "C" fn ulua_instance_new(
         if (*module).context != context
             || (*host).struct_size != size_of::<Host>() as u32
             || (*host).reserved != 0
+            || (*host).random_seed_set > 1
+            || (*host).reserved2 != 0
         {
             return ULUA_INVALID_ARGUMENT;
         }
@@ -516,7 +524,7 @@ pub unsafe extern "C" fn ulua_instance_new(
             let host = shim_host(&mut callback);
             let mut vm = ptr::null_mut();
             let mut error = [0; 256];
-            let code = native::ulua_internal_shim_new(
+            let code = native::ulua_internal_shim_new_math(
                 (*module).bytecode.as_ptr().cast(),
                 (*module).bytecode.len(),
                 &host,
@@ -525,6 +533,11 @@ pub unsafe extern "C" fn ulua_instance_new(
                 &limits,
                 &mut vm,
                 error.as_mut_ptr(),
+                if (*module).native_math {
+                    Some(crate::math::dispatch)
+                } else {
+                    None
+                },
             );
             if callback.panicked.get() {
                 native::ulua_internal_shim_free(vm);

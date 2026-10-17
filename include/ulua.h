@@ -54,6 +54,9 @@ typedef struct ulua_host {
     uint32_t reserved;
     void* userdata;
     ulua_output_fn output;
+    uint32_t random_seed_set; /* 0: default seed; 1: random_seed */
+    uint32_t reserved2; /* zero */
+    uint64_t random_seed;
 } ulua_host;
 typedef int32_t (*ulua_host_fn)(void*, const ulua_value*, size_t, ulua_value*);
 typedef int32_t (*ulua_host_start_fn)(void*, const ulua_value*, size_t, uint64_t);
@@ -106,6 +109,8 @@ ulua_status ulua_module_find_export(const ulua_module* module, const char* name,
 ulua_status ulua_instance_new(ulua_context* context, const ulua_module* module,
     const ulua_host* host, const ulua_run_limits* limits, ulua_instance** out, ulua_diagnostic* diagnostic);
 ulua_status ulua_instance_free(ulua_instance* instance);
+/* Restart the instance Math.random sequence from this seed. */
+ulua_status ulua_instance_seed_random(ulua_instance* instance, uint64_t seed);
 /* Calls drain promise jobs under the run limits. Promise<T> exports expose T's tag.
    Fulfillment returns T; rejection gives trap:uncaught-exception; pending gives async:pending. */
 ulua_status ulua_call(ulua_instance* instance, uint32_t export_index,

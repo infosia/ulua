@@ -13,6 +13,7 @@ mod p6_expressions;
 mod p6_index_edges;
 mod p6_remainder;
 mod p6_shrink;
+mod p71_math_cost;
 mod s4_bytecode;
 mod s4_review;
 mod s5_native;

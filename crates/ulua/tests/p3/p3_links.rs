@@ -88,6 +88,7 @@ fn c11_cpp17_static_dynamic_and_exports() {
         "ulua_module_export_signature",
         "ulua_module_find_export",
         "ulua_instance_new",
+        "ulua_instance_seed_random",
         "ulua_instance_free",
         "ulua_call",
         "ulua_call_start",

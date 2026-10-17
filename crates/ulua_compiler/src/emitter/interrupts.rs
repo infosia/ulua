@@ -211,6 +211,8 @@ fn always_calls(text: &str) -> bool {
         && !matches!(
             callee,
             "__ulua_fmod"
+                | "__ulua_math_abs"
+                | "__ulua_math_sqrt"
                 | "__ulua_floor"
                 | "__ulua_ceil"
                 | "__ulua_tostring"
@@ -242,6 +244,8 @@ mod tests {
         for (call, count) in [
             ("__ulua_fmod(x, 3)", INTERRUPT_STATEMENTS),
             ("__ulua_floor(x)", INTERRUPT_STATEMENTS),
+            ("__ulua_math_abs(x)", INTERRUPT_STATEMENTS),
+            ("__ulua_math_sqrt(x)", INTERRUPT_STATEMENTS),
             ("__ulua_ceil(x)", INTERRUPT_STATEMENTS),
             ("__ulua_tostring(x)", INTERRUPT_STATEMENTS / 2),
             ("__ulua_gsub(s, 'x', 'y')", INTERRUPT_STATEMENTS),

@@ -20,6 +20,8 @@ static void inspect(Proto* proto, unsigned* fastcalls, unsigned* calls, size_t l
                 else if (builtin == LBF_TOSTRING) fastcalls[line] |= 2;
                 else if (builtin == LBF_MATH_FLOOR) fastcalls[line] |= 4;
                 else if (builtin == LBF_MATH_CEIL) fastcalls[line] |= 8;
+                else if (builtin == LBF_MATH_ABS) fastcalls[line] |= 32;
+                else if (builtin == LBF_MATH_SQRT) fastcalls[line] |= 64;
                 else fastcalls[line] |= 16;
             }
             if (op == LOP_CALL) ++calls[line];

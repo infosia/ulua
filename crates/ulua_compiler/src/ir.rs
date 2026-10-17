@@ -17,6 +17,7 @@ pub(crate) struct Module {
     pub(crate) hosts: Vec<(usize, String)>,
     pub(crate) exceptions: bool,
     pub(crate) asynchronous: bool,
+    pub(crate) math: std::collections::BTreeSet<&'static str>,
     pub(crate) methods: std::collections::BTreeSet<(Method, usize)>,
     pub(crate) types: Types,
     pub(crate) bindings: Vec<Binding>,

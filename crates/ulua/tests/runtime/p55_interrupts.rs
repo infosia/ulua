@@ -22,6 +22,7 @@ unsafe extern "C" {
         run: *mut u64,
         result: *mut f64,
         error: *mut std::ffi::c_char,
+        math: Option<extern "C" fn(u32, f64, f64) -> f64>,
     ) -> i32;
 }
 
@@ -97,6 +98,7 @@ fn check_gaps<S: AsRef<str>>(sources: Vec<(S, String)>) {
                     &mut run,
                     &mut result,
                     error.as_mut_ptr(),
+                    Some(math_reference),
                 )
             };
             // SAFETY: The probe terminates this fixed diagnostic buffer.
@@ -246,6 +248,7 @@ fn statement_probe_separates_caller_and_callee() {
                 &mut run,
                 &mut result,
                 error.as_mut_ptr(),
+                Some(math_reference),
             )
         };
         assert_eq!(status, 0);
@@ -261,4 +264,9 @@ fn statement_probe_separates_caller_and_callee() {
             arguments == 32
         );
     }
+}
+
+// The instruction probe uses the product C closure and an independent Rust libm reference.
+extern "C" fn math_reference(op: u32, a: f64, _b: f64) -> f64 {
+    if op == 18 { libm::sin(a) } else { f64::NAN }
 }

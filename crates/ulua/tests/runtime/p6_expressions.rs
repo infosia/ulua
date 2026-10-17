@@ -16,6 +16,7 @@ unsafe extern "C" {
         run: *mut u64,
         result: *mut f64,
         error: *mut std::ffi::c_char,
+        math: Option<extern "C" fn(u32, f64, f64) -> f64>,
     ) -> i32;
 }
 
@@ -38,6 +39,7 @@ pub(super) fn instructions(source: &str, expected: f64) -> u64 {
             &mut run,
             &mut result,
             error.as_mut_ptr(),
+            None,
         )
     };
     // SAFETY: The probe terminates the diagnostic buffer.

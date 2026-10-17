@@ -1,6 +1,6 @@
 # Benchmarks — contract
 
-Status: Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
+Status: Rev 4, 2026-10-17. Rev 4: §4 a pair can use the `Math` members of the builtin-alias form (P7.1). Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
 Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
 contract follows the benchmark contract of the owner's prior project:
 its timing method, its workload set, and its boundary-price
@@ -97,7 +97,11 @@ stays below 2^53.
 - The two workloads of a pair do the same operations. The Luau
   workload can use the idiomatic Luau loop form (a numeric `for`), but
   it uses no library function and no operation that the Ulua workload
-  does not use (Ulua has no `Math`). A loop bound that JavaScript
+  does not use. Since P7.1 a pair can use `Math.abs`, `Math.ceil`,
+  `Math.floor`, and `Math.sqrt` in Ulua against `math.abs`,
+  `math.ceil`, `math.floor`, and `math.sqrt` in Luau: they lower to
+  the same builtin (stdlib.md §5). The other `Math` members are
+  helpers or native calls in Ulua and stay out of the pairs. A loop bound that JavaScript
   evaluates on each iteration is hoisted in the Ulua workload, so the
   numeric `for` of Luau does the same work. Before this rule, fib-loop
   evaluated `i % 40` 20.5M times in Ulua and 1M times in Luau (16.0

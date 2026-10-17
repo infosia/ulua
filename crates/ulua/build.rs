@@ -143,6 +143,7 @@ fn run() -> Result<(), String> {
         .file(root.join("native/probes/stack_shrink.cpp"))
         .file(root.join("native/probes/host_steps.cpp"))
         .file(root.join("native/probes/interrupts.cpp"))
+        .file(root.join("native/probes/math_steps.cpp"))
         .file(root.join("native/probes/builtin_aliases.cpp"))
         .file(root.join("native/probes/capture_memory.cpp"))
         .file(root.join("native/probes/async.cpp"));

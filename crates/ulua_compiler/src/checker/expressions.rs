@@ -389,6 +389,21 @@ impl Checker<'_> {
                         "Optional step needs a terminal chain position",
                     ));
                 }
+                if matches!(&m.object, Expression::Identifier(n) if n.name == "Math" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+                {
+                    let n = crate::math::constant(m.property.name.as_str()).ok_or_else(|| {
+                        self.error(
+                            m.span,
+                            if crate::math::member(m.property.name.as_str()).is_some() {
+                                "C4"
+                            } else {
+                                "C11"
+                            },
+                            "a Math member is called or read as a constant",
+                        )
+                    })?;
+                    return self.finish_expr(e, statement, Type::Number, ExprKind::Number(n));
+                }
                 let a = self.expr(&m.object, depth, false)?;
                 self.promise_operator(a.ty, m.span)?;
                 if a.ty == Type::Error {

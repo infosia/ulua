@@ -29,6 +29,7 @@ impl Context {
 /// Opaque compiled module. Export names live until this object is freed.
 #[non_exhaustive]
 pub struct Module {
+    pub(crate) native_math: bool,
     pub(crate) context: *mut Context,
     pub(crate) grants: Vec<std::rc::Rc<crate::capabilities::State>>,
     pub(crate) bytecode: Vec<u8>,
@@ -86,6 +87,8 @@ pub(crate) fn shim_host(callback: &mut Callback) -> Host {
     Host {
         userdata: std::ptr::from_mut(callback).cast(),
         output: Some(output),
+        random_seed_set: callback.host.random_seed_set,
+        random_seed: callback.host.random_seed,
         ..Host::default()
     }
 }

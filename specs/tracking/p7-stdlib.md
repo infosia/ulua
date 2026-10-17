@@ -1,6 +1,6 @@
 # P7 standard library
 
-Status: P7.0 measured 2026-10-17; two owner decisions open (below). Contract: `blocks/stdlib.md` Rev 0.
+Status: P7.0 COMPLETE 2026-10-17 (D33, D34); P7.1 COMPLETE 2026-10-17. Contract: `blocks/stdlib.md` Rev 0.
 
 ## Slices
 
@@ -128,3 +128,31 @@ t: number | null = xs.find(f)` gives TS2322. `node`: `r == null` is
 M5 follows the prior contract: Unicode default case conversion with
 the special-casing table, as a native helper (form 4 of `stdlib.md`
 §0.2), at a pinned Unicode version.
+
+## P7.1 `Math`
+
+Contract: `stdlib.md` §5 (Rev 2), `abi.md` Rev 10, collisions.md C4.4,
+C4.9. Corpus: `a69` (equal to `node`), `a70` (golden from Rust `libm`
+outside the product), `a71` (golden from a reference xoshiro256++),
+`r149` to `r151`; `r46` retired. Red before: all six gave C11.
+
+Failures before the fix:
+
+- `a70` gave `+pi` for row 27: the source generator wrote `-0` as `0`
+  (`String(-0)`), while the golden used `atan2(-0, -1)`. The source now
+  reads `-0`.
+- `math-native-loop` gave the §5.19 ratio 6.152 against 6 with no extra
+  step charge.
+
+Measurements (Release, macOS arm64): a builtin `floor` call 11.1 ns, a
+native `sin` call 30.3 ns, `random` 13.6 ns. `NATIVE_CALL_STEPS`
+selection (§5 rule 5), largest Math-shape ratio: 1 gives 2.747, 2
+gives 1.748, 4 gives 1.664, 8 gives 1.719; the value is 1. A boundary
+test: a budget of 5 steps stops with `limit:steps` at the third native
+charge. `luau-analyze` on `a69` to `a71`: 0 errors.
+
+Gates on the final code: `cargo test -p ulua_compiler` 228 passed;
+`math_tests` 42 passed; `gate.sh full` PASS (226.8 s); `gate.sh
+timing` PASS (421.7 s): §5.19 largest 5.894 (`async-reject-resume`,
+not a Math shape; Math shapes 3.094, 1.880, 1.009), analyzer largest
+11.608, P6.3 within every bound (primes 1.186, sort 3.520).

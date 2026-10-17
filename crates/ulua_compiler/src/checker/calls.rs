@@ -28,6 +28,11 @@ impl Checker<'_> {
             let value = self.promise_all(call, m, depth)?;
             return self.finish_expr(e, statement, value.ty, value.kind);
         }
+        if let Expression::StaticMemberExpression(m) = &call.callee
+            && matches!(&m.object, Expression::Identifier(n) if n.name == "Math" && !self.scopes.iter().any(|s| s.contains_key(n.name.as_str())))
+        {
+            return self.math_call(e, call, m, depth, statement);
+        }
         let mut field_callee = None;
         if let Expression::StaticMemberExpression(m) = &call.callee
             && !m.optional

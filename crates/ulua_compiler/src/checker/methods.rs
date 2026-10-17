@@ -242,6 +242,7 @@ mod tests {
                     source_owner: u32::MAX,
                     captured_writes: Default::default(),
                     binding_starts: Default::default(),
+                    math: Default::default(),
                     methods: Default::default(),
                     bindings: vec![],
                     scopes: vec![HashMap::new()],

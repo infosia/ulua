@@ -65,7 +65,9 @@ pub(super) fn emit_with_plan_hook(
     let types = types::FunctionTypes::new(module)?;
     let numeric_arrows = constants::numeric_arrows(module, &types)?;
     let paged_exports = module.functions.iter().filter(|f| f.exported).count() > EXPORT_FIELDS;
+    let (math_prelude, math_names) = math::prelude(&module.math);
     let library_locals = LIBRARY_LOCALS
+        + math_names.len()
         + usize::from(paged_exports || repeat_exports)
         + usize::from(!module.hosts.is_empty())
         + numeric_arrows.locals
@@ -333,6 +335,9 @@ pub(super) fn emit_with_plan_hook(
     ] {
         context.locals[0].insert(name.into());
     }
+    for name in math_names {
+        context.locals[0].insert(name);
+    }
     for &(method, arity) in &module.methods {
         context.locals[0].insert(methods::name(method, arity));
     }
@@ -368,6 +373,7 @@ pub(super) fn emit_with_plan_hook(
     if module.asynchronous {
         out.push_str(&prelude::checkpoint(asynchronous::PRELUDE));
     }
+    out.push_str(&prelude::checkpoint(&math_prelude));
     out.push_str(&prelude::checkpoint(&method_prelude));
     out.push_str(&types.declarations);
     out.push_str(&chunk.headers(&context.numeric_arrows.declarations));

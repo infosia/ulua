@@ -18,6 +18,7 @@ mod interrupts;
 mod joins;
 #[cfg(test)]
 mod loop_tests;
+mod math;
 pub(crate) mod methods;
 mod operands;
 mod output;
@@ -455,6 +456,7 @@ fn output_bound(module: &ir::Module, factor: usize) -> Result<usize, Diagnostic>
         } else {
             0
         })
+        .saturating_add(prelude::checkpoint(&math::prelude(&module.math).0).len())
         .saturating_add(prelude::checkpoint(&methods::prelude(&module.methods)?.0).len())
         .saturating_add(factor.saturating_mul(module.source.len()));
     Ok(bound)

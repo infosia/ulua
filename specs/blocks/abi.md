@@ -1,8 +1,9 @@
 # C ABI
 
-Status: Rev 9, 2026-10-14. ABI version 1. No binary compatibility
+Status: Rev 10, 2026-10-17. ABI version 1. No binary compatibility
 rule applies (D23): a change of this file changes `include/ulua.h`, the
 implementation, and the tests in one commit.
+Rev 10: §6 `random_seed`, §6.0, §7 `ulua_instance_seed_random` (P7.1).
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 Rev 2: §1.10, §8 (P1 Phase Review round 2).
 Rev 3: §1.10 names the dynamic library (round 3).
@@ -171,8 +172,20 @@ typedef struct ulua_host {
     uint32_t reserved;
     void* userdata;
     ulua_output_fn output;      /* null: print discards the text */
+    uint32_t random_seed_set;   /* 1: use random_seed; 0: the default seed */
+    uint32_t reserved2;         /* 0 */
+    uint64_t random_seed;       /* the Math.random seed (stdlib.md §5) */
 } ulua_host;
 ```
+
+### 6.0 Random seed
+
+`ulua_instance_new` seeds the `Math.random` generator of the instance
+before the module statements run: with `random_seed` when
+`random_seed_set` is 1, else with the default seed of stdlib.md §5.
+A `random_seed_set` other than 0 or 1, or a `reserved2` other than 0,
+gives `ULUA_INVALID_ARGUMENT`. `ulua_instance_seed_random` seeds the
+generator again; the next draw is the first of the new sequence.
 
 ### 6.1 Output
 
@@ -399,6 +412,7 @@ ulua_status ulua_pump(ulua_instance* instance, uint32_t max_requests,
 ulua_status ulua_instance_requests(const ulua_instance* instance,
     uint32_t* open, uint32_t* recorded);
 ulua_status ulua_task_discard(ulua_instance* instance, uint64_t task);
+ulua_status ulua_instance_seed_random(ulua_instance* instance, uint64_t seed);
 ```
 
 1. `ulua_context_free` frees each module, instance, and capability of

@@ -3,6 +3,7 @@
 #include "lua.h"
 #include "lualib.h"
 #include "lstate.h"
+#include "../shim/math.h"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -78,7 +79,7 @@ static int drain(lua_State* state, Gap& gap) {
 }
 extern "C" int ulua_internal_probe_interrupts(const char* source, size_t length, int branch,
     uint64_t* largest, uint64_t* interrupts, uint64_t* statement,
-    int* statement_line, uint64_t* total, uint64_t* run, double* result, char* error) {
+    int* statement_line, uint64_t* total, uint64_t* run, double* result, char* error, ulua_math_fn math_dispatch) {
     *result = std::numeric_limits<double>::quiet_NaN();
     char* bytecode = nullptr;
     size_t size = 0;
@@ -87,6 +88,13 @@ extern "C" int ulua_internal_probe_interrupts(const char* source, size_t length,
     lua_State* state = luaL_newstate();
     if (!state) { ulua_internal_shim_bytecode_free(bytecode); return SHIM_MEMORY; }
     luaL_openlibs(state);
+    ulua_vm math_vm = {};
+    math_vm.max_steps = UINT64_MAX;
+    math_vm.math_dispatch = math_dispatch;
+    seed_random(&math_vm, UINT64_C(0x5355425352454144));
+    push_math(state, &math_vm);
+    const int math_ref = lua_ref(state, -1);
+    lua_pop(state, 1);
     luaL_sandbox(state);
     luaL_sandboxthread(state);
     status = luau_load(state, "interrupt-probe", bytecode, size, 0);
@@ -123,7 +131,8 @@ extern "C" int ulua_internal_probe_interrupts(const char* source, size_t length,
         lua_pushcfunction(state, unused, "register");
         lua_pushcfunction(state, unused, "stop");
         lua_pushcfunction(state, register_async, "async_register");
-        status = lua_pcall(state, 5, 1, 0);
+        lua_getref(state, math_ref);
+        status = lua_pcall(state, 6, 1, 0);
         if (!status) status = drain(state, gap);
     }
     if (!status) {

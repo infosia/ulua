@@ -10,6 +10,9 @@ mod declarations;
 #[cfg(feature = "fault-injection")]
 pub mod fault_injection;
 mod host_names;
+mod math;
+#[cfg(test)]
+mod math_tests;
 mod native;
 mod objects;
 #[cfg(test)]
@@ -28,6 +31,7 @@ pub use capabilities::{
     Capability, ulua_capability_free, ulua_capability_new, ulua_capability_revoke,
 };
 pub use declarations::ulua_declarations;
+pub use math::ulua_instance_seed_random;
 pub use objects::{Context, Instance, Module};
 pub use requests::*;
 pub use types::*;

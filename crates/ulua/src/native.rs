@@ -11,7 +11,7 @@ unsafe extern "C" {
         error: *mut c_char,
     ) -> i32;
     pub(crate) fn ulua_internal_shim_bytecode_free(bytecode: *mut c_char);
-    pub(crate) fn ulua_internal_shim_new(
+    pub(crate) fn ulua_internal_shim_new_math(
         bytecode: *const c_char,
         length: usize,
         host: *const Host,
@@ -20,6 +20,7 @@ unsafe extern "C" {
         limits: *const RunLimits,
         out: *mut *mut c_void,
         error: *mut c_char,
+        math: Option<extern "C" fn(u32, f64, f64) -> f64>,
     ) -> i32;
     pub(crate) fn ulua_internal_shim_call(
         vm: *mut c_void,
@@ -59,5 +60,6 @@ unsafe extern "C" {
         error: *mut c_char,
     ) -> i32;
     pub(crate) fn ulua_internal_shim_counts(vm: *mut c_void, open: *mut u32, recorded: *mut u32);
+    pub(crate) fn ulua_internal_shim_seed_random(vm: *mut c_void, seed: u64);
     pub(crate) fn ulua_internal_shim_free(vm: *mut c_void);
 }

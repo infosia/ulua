@@ -67,6 +67,24 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
             "}",
         ),
         ("increment", number, "x++;", "}"),
+        (
+            "math-native-loop",
+            "export function main(b:boolean):void{let x=1;for(let i=0;i<2;i++){",
+            "x=Math.sin(x);",
+            "}}",
+        ),
+        (
+            "math-prelude-loop",
+            "export function main(b:boolean):void{let x=1;for(let i=0;i<2;i++){",
+            "x=Math.round(x);",
+            "}}",
+        ),
+        (
+            "math-random-loop",
+            "export function main(b:boolean):void{let x=1;for(let i=0;i<2;i++){",
+            "x=Math.random();",
+            "}}",
+        ),
         ("remainder", number, "x=x%3;", "}"),
         ("remainder-compound", number, "x%=3;", "}"),
         (

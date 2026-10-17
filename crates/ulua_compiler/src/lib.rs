@@ -8,6 +8,9 @@ mod depth;
 mod emitter;
 mod host_names;
 mod ir;
+mod math;
+#[cfg(test)]
+mod math_tests;
 mod methods;
 #[cfg(test)]
 mod p26_shapes;
@@ -184,6 +187,8 @@ pub struct Export {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Compiled {
+    /// Whether the VM must register private native Math functions before the sandbox freezes.
+    pub native_math: bool,
     /// Host declaration names in chunk argument order.
     pub hosts: Vec<String>,
     /// Strict, generated Luau source.
@@ -446,6 +451,7 @@ fn compile_observed(
     let luau = emission(&module, output_factor);
     observer("emit", false);
     Ok(Compiled {
+        native_math: module.math.iter().any(|n| math::native(n).is_some()),
         hosts: module.hosts.iter().map(|(_, n)| n.clone()).collect(),
         luau: luau?,
         exports: module

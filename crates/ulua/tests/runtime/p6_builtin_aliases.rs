@@ -120,3 +120,42 @@ return {{module = {exports}, witness = alias_witness}}
         start.elapsed().as_secs_f64()
     );
 }
+
+// Cost: one small native compile, with all four accepted Math builtin aliases.
+#[test]
+fn math_builtin_aliases_use_fastcall_and_native_calls_do_not() {
+    let source = "export function main(x:number):number{return Math.abs(x)+Math.ceil(x)+Math.floor(x)+Math.sqrt(x)+Math.sin(x)+Math.sin(1)+Math.round(x);}";
+    let luau = ulua_compiler::compile(source.as_bytes(), ulua_compiler::Limits::default())
+        .unwrap()
+        .luau;
+    let (fastcalls, calls) = inspect(&luau);
+    for (name, bit) in [
+        ("__ulua_math_abs", 32),
+        ("__ulua_ceil", 8),
+        ("__ulua_floor", 4),
+        ("__ulua_math_sqrt", 64),
+    ] {
+        let sites: Vec<_> = luau
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| line.contains(&format!("{name}(")))
+            .collect();
+        assert!(!sites.is_empty(), "{name}");
+        for (i, line) in sites {
+            assert_ne!(fastcalls[i + 1] & bit, 0, "{line}");
+        }
+    }
+    for name in ["sin", "round"] {
+        let needle = format!("__ulua_math_{name}(");
+        let sites: Vec<_> = luau
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| line.contains(&needle) && !line.starts_with("local function"))
+            .collect();
+        assert!(!sites.is_empty());
+        for (i, line) in sites {
+            assert_eq!(fastcalls[i + 1], 0, "{line}");
+            assert!(calls[i + 1] > 0, "{line}");
+        }
+    }
+}

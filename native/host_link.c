@@ -65,6 +65,7 @@ static void async_links(ulua_context* context, const ulua_run_limits* limits) {
     assert(ulua_task_discard(instance, task) == ULUA_OK);
     assert(ulua_task_discard(instance, task) == ULUA_INVALID_ARGUMENT);
     assert(ulua_task_result(instance, task, &value, &diagnostic) == ULUA_INVALID_ARGUMENT);
+    assert(ulua_instance_seed_random(instance, UINT64_C(42)) == ULUA_OK);
     assert(ulua_instance_free(instance) == ULUA_OK);
     assert(ulua_module_free(module) == ULUA_OK);
     assert(ulua_capability_free(cap) == ULUA_OK);
@@ -134,6 +135,7 @@ int main(void) {
     assert(ulua_call(instance, 0, NULL, 0, &value, &diagnostic) == ULUA_HOST_ERROR);
     assert(strcmp(diagnostic.code,"host:revoked") == 0 && strcmp(diagnostic.message,"hostVoid") == 0);
     assert(ulua_module_free(module) == ULUA_OK);
+    assert(ulua_instance_seed_random(instance, UINT64_C(42)) == ULUA_OK);
     assert(ulua_instance_free(instance) == ULUA_OK);
     async_links(context, &run_limits);
     assert(ulua_context_free(context) == ULUA_OK);

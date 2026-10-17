@@ -66,13 +66,13 @@ fn c3_each_boolean_context() {
 }
 #[test]
 fn c4_numbers_and_template_types() {
+    accept(&body("const x = Math.pow(1, NaN);"));
     for s in [
         "const x = -'x';",
         "const x = true * 1;",
         "const x = ~1;",
         "const x = 1 << 2;",
         "const x: bigint = 1;",
-        "const x = Math.pow(1, NaN);",
     ] {
         reject(&body(s), "C4");
     }

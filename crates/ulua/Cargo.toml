@@ -33,6 +33,7 @@ required-features = ["measurements"]
 crate-type = ["rlib", "staticlib", "cdylib"]
 
 [dependencies]
+libm = "=0.2.16"
 ulua_compiler = { path = "../ulua_compiler" }
 
 [build-dependencies]

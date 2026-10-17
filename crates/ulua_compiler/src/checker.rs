@@ -11,6 +11,7 @@ mod expressions;
 mod functions;
 mod hosts;
 mod inference;
+mod math;
 mod methods;
 mod narrowing;
 mod order;
@@ -52,6 +53,7 @@ pub(crate) struct Checker<'s> {
     source_owner: u32,
     captured_writes: std::collections::HashSet<u32>,
     binding_starts: HashMap<u32, usize>,
+    math: std::collections::BTreeSet<&'static str>,
     methods: std::collections::BTreeSet<(ir::Method, usize)>,
     pub(super) bindings: Vec<ir::Binding>,
     scopes: Vec<HashMap<String, usize>>,
@@ -351,6 +353,7 @@ pub(crate) fn check_with_grants(
         source_owner: u32::MAX,
         captured_writes: writes.captured,
         binding_starts: HashMap::new(),
+        math: Default::default(),
         methods: Default::default(),
         bindings: vec![],
         scopes: vec![HashMap::new()],
@@ -482,6 +485,7 @@ pub(crate) fn check_with_grants(
         hosts: c.hosts,
         exceptions: c.uses_exceptions || c.uses_async,
         asynchronous: c.uses_async,
+        math: c.math,
         methods: c.methods,
         types: c.types,
         captured,

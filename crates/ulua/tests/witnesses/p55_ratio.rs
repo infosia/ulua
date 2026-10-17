@@ -265,3 +265,43 @@ fn spilled_header_entry_cost() {
         start.elapsed().as_secs_f64()
     );
 }
+
+// Only the three Math shapes need four candidate measurements. The final gate checks every shape.
+#[test]
+#[ignore = "select NATIVE_CALL_STEPS with the four measurements of stdlib section 5 rule 5"]
+fn math_native_charge_selection_ratios() {
+    let _measurement = crate::measurement_lock();
+    // SAFETY: The test-only getter has no arguments and returns the compiled native constant.
+    #[link(name = "ulua_test_native", kind = "static")]
+    unsafe extern "C" {
+        fn ulua_internal_probe_native_call_steps() -> u64;
+    }
+    // SAFETY: This getter reads one fixed constant and owns no resources.
+    let charge = unsafe { ulua_internal_probe_native_call_steps() };
+    let sources = std::thread::Builder::new()
+        .stack_size(ulua_compiler::COMPILER_STACK_BYTES)
+        .spawn(|| {
+            shapes::all_at(65536 - 256)
+                .into_iter()
+                .filter(|(name, _)| name.starts_with("math-"))
+                .map(|(name, source)| (name, shapes::loop_source(&source)))
+                .collect::<Vec<_>>()
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+    assert_eq!(sources.len(), 3);
+    let baseline = run(
+        "function start():number{let i=0;while(true){i++;}return 0;}const stop=start();export function main():void{}",
+    );
+    let mut largest = 0.0f64;
+    for (name, source) in sources {
+        let elapsed = run(&source);
+        let ratio = elapsed / baseline;
+        largest = largest.max(ratio);
+        eprintln!(
+            "Math selection NATIVE_CALL_STEPS={charge} {name}: baseline={baseline:.6}s time={elapsed:.6}s ratio={ratio:.6}"
+        );
+    }
+    eprintln!("Math selection NATIVE_CALL_STEPS={charge} largest={largest:.6}");
+}

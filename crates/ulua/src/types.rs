@@ -112,6 +112,12 @@ pub struct Host {
     pub userdata: *mut c_void,
     /// Optional output capability.
     pub output: Option<OutputFn>,
+    /// One selects random_seed; zero selects the default seed.
+    pub random_seed_set: u32,
+    /// Must be zero.
+    pub reserved2: u32,
+    /// Initial Math.random seed.
+    pub random_seed: u64,
 }
 impl Default for Host {
     fn default() -> Self {
@@ -120,6 +126,9 @@ impl Default for Host {
             reserved: 0,
             userdata: std::ptr::null_mut(),
             output: None,
+            random_seed_set: 0,
+            reserved2: 0,
+            random_seed: 0,
         }
     }
 }

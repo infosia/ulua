@@ -5,6 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 #include "luacode.h"
+#include "steps.h"
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -22,13 +23,7 @@ static void message(char* out, const char* text) { message_bytes(out, text, std:
 static void interrupt(lua_State* state, int gc) {
     if (gc >= 0) return;
     ulua_vm* vm = static_cast<ulua_vm*>(lua_callbacks(state)->userdata);
-    // A protected unwind must preserve the first recorded native stop.
-    if (vm->flag || vm->trap_kind) luaL_error(state, "Run stopped");
-    if (vm->steps >= vm->max_steps) {
-        vm->flag = SHIM_STEPS;
-        luaL_error(state, "Step limit exceeded");
-    }
-    ++vm->steps;
+    charge_steps(state, vm, 1);
 #ifdef ULUA_MEASUREMENTS
     ++vm->interrupts;
 #endif
@@ -155,6 +150,7 @@ static void raise_call_error(lua_State* state, ulua_vm* vm) {
     }
     lua_error(state);
 }
+#include "math.h"
 static int collect(lua_State* state);
 static int setup(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, 1));
@@ -165,6 +161,12 @@ static int setup(lua_State* state) {
     lua_pushcfunction(state, collect, "collect");
     vm->collection = lua_ref(state, -1);
     lua_pop(state, 1);
+    seed_random(vm, vm->host.random_seed_set ? vm->host.random_seed : UINT64_C(0x5355425352454144));
+    if (vm->math_dispatch) {
+        push_math(state, vm);
+        vm->math = lua_ref(state, -1);
+        lua_pop(state, 1);
+    }
     luaL_sandbox(state);
     vm->thread = lua_newthread(state);
     lua_ref(state, -1);
@@ -255,7 +257,7 @@ struct Load {
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
     if (luau_load(state, "=script", args->bytecode, args->length, 0)) lua_error(state);
-    if (!lua_checkstack(state, 7)) luaL_error(state, "stack limit");
+    if (!lua_checkstack(state, 8)) luaL_error(state, "stack limit");
     lua_pushcfunction(state, trap, "__ulua_trap");
     lua_createtable(state, static_cast<int>(args->grant_count), 0);
     for (size_t i = 0; i < args->grant_count; ++i) {
@@ -267,7 +269,9 @@ static int load(lua_State* state) {
     lua_pushcfunction(state, register_errors, "register_errors");
     lua_pushcfunction(state, check_resume, "check_resume");
     lua_pushcfunction(state, register_async, "register_async");
-    if (lua_pcall(state, 5, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
+    if (args->vm->math) lua_getref(state, args->vm->math);
+    else lua_pushnil(state);
+    if (lua_pcall(state, 6, 1, 0) != LUA_OK) raise_call_error(state, args->vm);
     if (args->vm->drain) {
         lua_getref(state, args->vm->drain);
         if (lua_pcall(state, 0, 0, 0) != LUA_OK) raise_call_error(state, args->vm);
@@ -412,9 +416,9 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
 #endif
     std::free(vm);
 }
-extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
+extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_internal_capability* grants, size_t grant_count,
-    const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
+    const ulua_run_limits* limits, ulua_vm** out, char* error, ulua_math_fn math_dispatch) noexcept {
     ulua_vm* vm = nullptr;
     try {
         vm = static_cast<ulua_vm*>(std::calloc(1, sizeof(ulua_vm)));
@@ -423,6 +427,7 @@ extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const
         vm->max_steps = limits->max_steps;
         vm->max_open_requests = limits->max_open_requests;
         vm->host = *host;
+        vm->math_dispatch = math_dispatch;
         vm->charging = true;
 #ifdef ULUA_FAULT_INJECTION
         fault_begin(&vm->fault);
@@ -519,3 +524,14 @@ extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, const char* name, cons
 #ifdef ULUA_FAULT_INJECTION
 #include "fault_api.h"
 #endif
+
+extern "C" void ulua_internal_shim_seed_random(ulua_vm* vm, uint64_t seed) noexcept {
+    seed_random(vm, seed);
+}
+
+// Native probes without Math keep their original private entry point.
+extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
+    const ulua_internal_capability* grants, size_t grant_count,
+    const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
+    return ulua_internal_shim_new_math(bytecode, length, host, grants, grant_count, limits, out, error, nullptr);
+}

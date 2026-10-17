@@ -7,15 +7,15 @@ use std::{
 };
 const HELLO: &[u8] = b"export function main(): void { print(\"hello\"); }";
 
-struct Fixture {
-    context: *mut Context,
-    module: *mut Module,
+pub(crate) struct Fixture {
+    pub(crate) context: *mut Context,
+    pub(crate) module: *mut Module,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::source(HELLO)
     }
-    fn source(source: &[u8]) -> Self {
+    pub(crate) fn source(source: &[u8]) -> Self {
         let mut context = ptr::null_mut();
         let mut module = ptr::null_mut();
         // SAFETY: Test-local output storage and source bytes satisfy the ABI preconditions.
@@ -37,7 +37,7 @@ impl Fixture {
         }
         Self { context, module }
     }
-    fn instance(&self, host: &Host) -> *mut Instance {
+    pub(crate) fn instance(&self, host: &Host) -> *mut Instance {
         let mut instance = ptr::null_mut();
         // SAFETY: The fixture owns live objects and the host descriptor covers its size.
         unsafe {
@@ -531,6 +531,9 @@ fn header_layout() {
         offset_of!(Host, reserved),
         offset_of!(Host, userdata),
         offset_of!(Host, output),
+        offset_of!(Host, random_seed_set),
+        offset_of!(Host, reserved2),
+        offset_of!(Host, random_seed),
         ULUA_OK as usize,
         ULUA_INVALID_ARGUMENT as usize,
         ULUA_REJECTED as usize,
