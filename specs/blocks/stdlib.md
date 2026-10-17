@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 3, 2026-10-17. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 4, 2026-10-17. Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -268,3 +268,64 @@ other member are rejected (C11).
 8. **Exit.** The corpus equals its goldens; `node` agrees on `a72`;
    collisions.md C6.9 lists `find` and `findLast`; the D18 tests cover
    a `T?` reference.
+
+## 7. P7.3 `Number` statics, parsing, and formatting
+
+The member set of the prior contract (its §11), with the changes that
+an Ulua rule forces.
+
+1. **Constants.** `Number.MAX_SAFE_INTEGER`, `MIN_SAFE_INTEGER`,
+   `EPSILON`, `MAX_VALUE`, `MIN_VALUE`, `POSITIVE_INFINITY`,
+   `NEGATIVE_INFINITY`, `NaN` lower to literals with the ECMAScript
+   bits, as the `Math` constants do (§5 rule 4).
+2. **Predicates.** `Number.isNaN(x)`, `Number.isFinite(x)`,
+   `Number.isInteger(x)`, `Number.isSafeInteger(x)` with `x: number`;
+   an argument of another type is rejected (the library types the
+   parameter `unknown`). The global `isNaN` and `isFinite` and
+   `Number(x)` are rejected: they convert their argument.
+3. **Parsing.** `parseInt(s, radix)` and `Number.parseInt(s, radix)`
+   with the radix required; `parseFloat(s)` and `Number.parseFloat(s)`.
+   ECMAScript semantics: leading StrWhiteSpaceChar skipped (the set of
+   C5.2 `trim`), an optional sign, the longest valid prefix, NaN when no
+   digit is read; `parseInt` with radix 16 skips a `0x` or `0X` prefix;
+   `parseFloat` reads `Infinity` with a sign. The radix converts as
+   ToInt32; a radix outside 2 to 36 traps `invalid-argument`
+   (divergence: `node` gives NaN for 1 and 37 and reads 0 as the
+   default). The result of `parseFloat` and of `parseInt` at radix 10
+   is the correctly rounded double of the prefix.
+4. **Formatting.** `x.toFixed(digits?)` (no argument is 0),
+   `x.toExponential(digits?)` (no argument: as many digits as the
+   value needs), `x.toPrecision(digits)` (required),
+   `x.toString(radix)` (required). `digits` converts as
+   ToIntegerOrInfinity; outside 0 to 100 (1 to 100 for `toPrecision`)
+   it traps `invalid-argument`; a radix outside 2 to 36 traps
+   `invalid-argument` (divergence: `node` throws `RangeError`, which a
+   `catch` receives). NaN and the infinities give `NaN`, `Infinity`,
+   `-Infinity`. `toFixed`: an exact tie picks the larger magnitude,
+   `-0` gives no sign, a magnitude at or above 1e21 gives `String(x)`
+   (M2). `toExponential` writes the exponent without padding
+   (`0.00e+0`). `toString(10)` equals `String(x)` (C4.5).
+   `toString(radix)` for another radix writes the fraction digits that
+   `node` writes; the slice compares it with a table of `node` outputs
+   and names each difference that remains.
+5. **Implementation.** Each parse and format member is a native helper
+   (form 4) in Rust, with no call of the host `printf` or `strtod`:
+   their rounding and their exponent form depend on the host (M2; the
+   prior contract §11.4). A helper call charges `NATIVE_CALL_STEPS`
+   plus one step per `NATIVE_BYTES_PER_STEP` bytes of its string
+   argument (measured: the smallest power of 2 that keeps a long-string
+   shape at a §5.19 ratio of at most 5). Each result string is a Luau
+   string charged to `max_memory_bytes`.
+6. **Rejected** (C4): `Number(x)`, `new Number(x)`, the global `isNaN`
+   and `isFinite`, `toLocaleString`, `x.toString()` without a radix,
+   `toPrecision()` without an argument, a member read as a value.
+7. **Corpus.** `a74` (constants and predicates), `a75` (formatting
+   edges), `a76` (parsing edges), all `js-comparable: yes`; `t12`
+   (`toFixed(101)` traps `invalid-argument`; `js-comparable: no C4`);
+   `r156` (`Number(s)`), `r157` (the global `isNaN`), `r158`
+   (`toString()` without a radix).
+8. **Exit.** The corpus equals its goldens; `node` agrees on `a74` to
+   `a76`; a unit table of at least 10^4 `node` outputs per member
+   (random values, digit counts, radixes, and strings) equals the
+   helpers, or each difference is named in collisions.md C4.10; the
+   §5.19, analyzer, and P6.3 tests pass.
