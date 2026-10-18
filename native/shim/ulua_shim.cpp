@@ -279,6 +279,8 @@ struct Load {
     size_t length;
     const ulua_internal_capability* grants;
     size_t grant_count;
+    const char* const* export_names;
+    size_t export_count;
 };
 static int load(lua_State* state) {
     Load* args = static_cast<Load*>(lua_tolightuserdata(state, 1));
@@ -304,11 +306,24 @@ static int load(lua_State* state) {
     }
     if (!lua_istable(state, -1)) luaL_error(state, "Generated chunk returned no export table");
     args->vm->exports = lua_ref(state, -1);
+    if (args->export_count > SIZE_MAX / sizeof(int)) luaL_error(state, "Export reference array is too large");
+    if (args->export_count) {
+        args->vm->export_refs = static_cast<int*>(
+            allocate_record(args->vm, nullptr, 0, args->export_count * sizeof(int)));
+        if (!args->vm->export_refs) luaL_error(state, "not enough memory");
+        args->vm->export_count = args->export_count;
+        for (size_t i = 0; i < args->export_count; ++i) {
+            lua_getfield(state, -1, args->export_names[i]);
+            if (!lua_isfunction(state, -1)) luaL_error(state, "Generated export is not a function");
+            args->vm->export_refs[i] = lua_ref(state, -1);
+            lua_pop(state, 1);
+        }
+    }
     return 0;
 }
 struct Call {
     ulua_vm* vm;
-    const char* name;
+    uint32_t export_index;
     const ulua_value* arguments;
     size_t count;
     uint32_t result_type;
@@ -323,9 +338,7 @@ static int call(lua_State* state) {
         args->vm->async_failed = false;
     }
     if (args->vm->result_ref) { lua_unref(state, args->vm->result_ref); args->vm->result_ref = 0; }
-    lua_getref(state, args->vm->exports);
-    lua_getfield(state, -1, args->name);
-    if (!lua_isfunction(state, -1)) luaL_error(state, "Generated export is not a function");
+    lua_getref(state, args->vm->export_refs[args->export_index]);
     for (size_t i = 0; i < args->count; ++i) {
         const ulua_value* value = &args->arguments[i];
         if (value->type == ULUA_TYPE_NUMBER) lua_pushnumber(state, value->number);
@@ -435,6 +448,7 @@ extern "C" void ulua_internal_shim_bytecode_free(char* bytecode) noexcept { std:
 extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
     if (!vm) return;
     discard_records(vm);
+    release_export_refs(vm);
     try { if (vm->state) lua_close(vm->state); } catch (...) { }
 #ifdef ULUA_FAULT_INJECTION
     vm->fault.snapshot.live_bytes = vm->used;
@@ -444,7 +458,7 @@ extern "C" void ulua_internal_shim_free(ulua_vm* vm) noexcept {
 }
 extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_internal_capability* grants, size_t grant_count,
-    const ulua_run_limits* limits, ulua_vm** out, char* error, ulua_math_fn math_dispatch, ulua_number_fn number_dispatch) noexcept {
+    const char* const* export_names, size_t export_count, const ulua_run_limits* limits, ulua_vm** out, char* error, ulua_math_fn math_dispatch, ulua_number_fn number_dispatch) noexcept {
     ulua_vm* vm = nullptr;
     try {
         vm = static_cast<ulua_vm*>(std::calloc(1, sizeof(ulua_vm)));
@@ -479,7 +493,7 @@ extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, 
         }
         if (!code) {
             lua_callbacks(vm->state)->interrupt = interrupt;
-            Load args = {vm, bytecode, length, grants, grant_count};
+            Load args = {vm, bytecode, length, grants, grant_count, export_names, export_count};
             vm->charging = true;
             code = finish(vm, vm->thread, lua_cpcall(vm->thread, load, &args), error);
         }
@@ -496,11 +510,11 @@ extern "C" int ulua_internal_shim_new_math(const char* bytecode, size_t length, 
         return SHIM_INTERNAL;
     }
 }
-extern "C" int ulua_internal_shim_call(ulua_vm* vm, const char* name, const ulua_value* arguments,
+extern "C" int ulua_internal_shim_call(ulua_vm* vm, uint32_t export_index, const ulua_value* arguments,
     size_t count, uint32_t result_type, ulua_value* result, char* error) noexcept {
     try {
         begin_run(vm);
-        Call args = {vm, name, arguments, count, result_type, result, nullptr};
+        Call args = {vm, export_index, arguments, count, result_type, result, nullptr};
         int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call, &args), error);
         lua_settop(vm->thread, 0);
 #ifdef ULUA_FAULT_INJECTION
@@ -524,11 +538,11 @@ static int call_start(lua_State* state) {
     args->task->type = args->result_type;
     return call(state);
 }
-extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, const char* name, const ulua_value* arguments,
+extern "C" int ulua_internal_shim_call_start(ulua_vm* vm, uint32_t export_index, const ulua_value* arguments,
     size_t count, uint32_t result_type, uint64_t* task, char* error) noexcept {
     try {
         begin_run(vm);
-        Call args = {vm, name, arguments, count, result_type, nullptr, nullptr};
+        Call args = {vm, export_index, arguments, count, result_type, nullptr, nullptr};
         int code = finish(vm, vm->thread, lua_cpcall(vm->thread, call_start, &args), error);
         if (code) {
             if (args.task) {
@@ -559,6 +573,6 @@ extern "C" void ulua_internal_shim_seed_random(ulua_vm* vm, uint64_t seed) noexc
 // Native probes without Math keep their original private entry point.
 extern "C" int ulua_internal_shim_new(const char* bytecode, size_t length, const ulua_host* host,
     const ulua_internal_capability* grants, size_t grant_count,
-    const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
-    return ulua_internal_shim_new_math(bytecode, length, host, grants, grant_count, limits, out, error, nullptr, nullptr);
+    const char* const* export_names, size_t export_count, const ulua_run_limits* limits, ulua_vm** out, char* error) noexcept {
+    return ulua_internal_shim_new_math(bytecode, length, host, grants, grant_count, export_names, export_count, limits, out, error, nullptr, nullptr);
 }

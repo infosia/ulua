@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <limits>
+static const char* const export_names[] = {"main"};
 
 struct Statement {
     int line = -1;
@@ -187,7 +188,7 @@ extern "C" int ulua_internal_probe_step_loop(const char* source, size_t length,
     ulua_host host = {};
     host.struct_size = sizeof(host);
     ulua_vm* vm = nullptr;
-    int status = ulua_internal_shim_new(source, length, &host, nullptr, 0, limits, &vm, error);
+    int status = ulua_internal_shim_new(source, length, &host, nullptr, 0, nullptr, 0, limits, &vm, error);
     ulua_internal_shim_free(vm);
     return status;
 }
@@ -201,15 +202,15 @@ extern "C" int ulua_internal_probe_entry(const char* bytecode, size_t length,
     ulua_host host = {};
     host.struct_size = sizeof(host);
     ulua_vm* vm = nullptr;
-    int status = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, limits, &vm, error);
+    int status = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, export_names, 1, limits, &vm, error);
     if (!status) {
         ulua_value result = {};
-        status = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
+        status = ulua_internal_shim_call(vm, 0, nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
         *steps = vm->steps;
         const auto begin = std::chrono::steady_clock::now();
         constexpr int samples = 100;
         for (int i = 0; !status && i < samples; ++i)
-            status = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
+            status = ulua_internal_shim_call(vm, 0, nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
         *seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count() / samples;
     }
     ulua_internal_shim_free(vm);

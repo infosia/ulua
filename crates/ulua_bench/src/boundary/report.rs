@@ -35,7 +35,7 @@ fn layer(variant: &str) -> &'static str {
     match variant {
         "floor" => "VM floor",
         "accounting" => "step interrupts and charging allocator",
-        "protected" => "protected wrapper and export lookup",
+        "protected" => "protected wrapper",
         "conversion" => "numeric ABI conversion and direct typed callback (script only)",
         "trampoline" => "host trampoline, callback dispatch and call charge",
         "shim" => "remaining native shim",

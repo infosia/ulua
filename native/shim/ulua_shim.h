@@ -17,10 +17,10 @@ extern "C" {
 #endif
 int ulua_internal_shim_compile(const char*, size_t, char**, size_t*, char*) ULUA_NOEXCEPT;
 void ulua_internal_shim_bytecode_free(char*) ULUA_NOEXCEPT;
-int ulua_internal_shim_new(const char*, size_t, const ulua_host*, const struct ulua_internal_capability*, size_t, const ulua_run_limits*, struct ulua_vm**, char*) ULUA_NOEXCEPT;
-int ulua_internal_shim_new_math(const char*, size_t, const ulua_host*, const struct ulua_internal_capability*, size_t, const ulua_run_limits*, struct ulua_vm**, char*, ulua_math_fn, ulua_number_fn) ULUA_NOEXCEPT;
-int ulua_internal_shim_call(struct ulua_vm*, const char*, const ulua_value*, size_t, uint32_t, ulua_value*, char*) ULUA_NOEXCEPT;
-int ulua_internal_shim_call_start(struct ulua_vm*, const char*, const ulua_value*, size_t, uint32_t, uint64_t*, char*) ULUA_NOEXCEPT;
+int ulua_internal_shim_new(const char*, size_t, const ulua_host*, const struct ulua_internal_capability*, size_t, const char* const*, size_t, const ulua_run_limits*, struct ulua_vm**, char*) ULUA_NOEXCEPT;
+int ulua_internal_shim_new_math(const char*, size_t, const ulua_host*, const struct ulua_internal_capability*, size_t, const char* const*, size_t, const ulua_run_limits*, struct ulua_vm**, char*, ulua_math_fn, ulua_number_fn) ULUA_NOEXCEPT;
+int ulua_internal_shim_call(struct ulua_vm*, uint32_t, const ulua_value*, size_t, uint32_t, ulua_value*, char*) ULUA_NOEXCEPT;
+int ulua_internal_shim_call_start(struct ulua_vm*, uint32_t, const ulua_value*, size_t, uint32_t, uint64_t*, char*) ULUA_NOEXCEPT;
 int ulua_internal_shim_task_result(struct ulua_vm*, uint64_t, ulua_value*, char*) ULUA_NOEXCEPT;
 int ulua_internal_shim_task_discard(struct ulua_vm*, uint64_t) ULUA_NOEXCEPT;
 int ulua_internal_shim_complete(struct ulua_vm*, uint64_t, const ulua_value*, char*) ULUA_NOEXCEPT;

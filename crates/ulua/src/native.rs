@@ -17,6 +17,8 @@ unsafe extern "C" {
         host: *const Host,
         grants: *const crate::capabilities::NativeCapability,
         grant_count: usize,
+        export_names: *const *const c_char,
+        export_count: usize,
         limits: *const RunLimits,
         out: *mut *mut c_void,
         error: *mut c_char,
@@ -27,7 +29,7 @@ unsafe extern "C" {
     ) -> i32;
     pub(crate) fn ulua_internal_shim_call(
         vm: *mut c_void,
-        name: *const c_char,
+        export_index: u32,
         arguments: *const Value,
         count: usize,
         result_type: u32,
@@ -36,7 +38,7 @@ unsafe extern "C" {
     ) -> i32;
     pub(crate) fn ulua_internal_shim_call_start(
         vm: *mut c_void,
-        name: *const c_char,
+        export_index: u32,
         arguments: *const Value,
         count: usize,
         result_type: u32,

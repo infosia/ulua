@@ -5,6 +5,7 @@
 #include "lstate.h"
 #include <cstdio>
 #include <cstring>
+static const char* const export_names[] = {"main"};
 
 struct ErrorCase {
     const char* source;
@@ -91,11 +92,11 @@ static int runtime_error_cases(const ErrorCase* cases, size_t count) {
         size_t length = 0;
         int code = ulua_internal_shim_compile(test.source, std::strlen(test.source), &bytecode, &length, error);
         ulua_vm* vm = nullptr;
-        if (!code) code = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, &limits, &vm, error);
+        if (!code) code = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, export_names, 1, &limits, &vm, error);
         ulua_internal_shim_bytecode_free(bytecode);
         if (code) { std::fprintf(stderr, "runtime fixture %d setup: %d %s\n", index, code, error); return index; }
         ulua_value result = {};
-        code = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_VOID, &result, error);
+        code = ulua_internal_shim_call(vm, 0, nullptr, 0, ULUA_TYPE_VOID, &result, error);
         ulua_internal_shim_free(vm);
         if (code != test.code || std::strcmp(error, test.message) != 0) {
             std::fprintf(stderr, "runtime fixture %d: %d %s\n", index, code, error);

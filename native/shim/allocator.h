@@ -18,6 +18,8 @@ struct ulua_vm {
     int flag;
     int trap_kind;
     int exports;
+    int* export_refs;
+    size_t export_count;
     int errors;
     int tables;
     int drain;
@@ -113,10 +115,17 @@ static void* allocate(void* userdata, void* pointer, size_t old_size, size_t new
 static void* allocate_record(ulua_vm* vm, void* pointer, size_t old_size, size_t new_size) {
     void* result = allocate(vm, pointer, old_size, new_size);
 #ifdef ULUA_FAULT_INJECTION
-    // Count owned allocations independently of the request and task lists.
+    // Count owned allocations independently of the record lists.
     if (!pointer && result) ++vm->fault.snapshot.records;
     if (pointer && !new_size) --vm->fault.snapshot.records;
 #endif
     return result;
 }
+static inline void release_export_refs(ulua_vm* vm) {
+    if (!vm->export_refs) return;
+    allocate_record(vm, vm->export_refs, vm->export_count * sizeof(int), 0);
+    vm->export_refs = nullptr;
+    vm->export_count = 0;
+}
+
 #endif

@@ -5,6 +5,7 @@
 #include "lgc.h"
 #include <algorithm>
 #include <cstdint>
+static const char* const export_names[] = {"main"};
 
 struct Observation {
     ulua_vm* vm;
@@ -52,7 +53,7 @@ extern "C" int ulua_internal_probe_capture_memory(const char* bytecode, size_t l
     ulua_host host = {};
     host.struct_size = sizeof(host);
     ulua_vm* vm = nullptr;
-    int status = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, limits, &vm, error);
+    int status = ulua_internal_shim_new(bytecode, length, &host, nullptr, 0, export_names, 1, limits, &vm, error);
     if (status) return status;
     auto* global = vm->state->global;
     values[0] = vm->used;
@@ -65,7 +66,7 @@ extern "C" int ulua_internal_probe_capture_memory(const char* bytecode, size_t l
     if (goal > 0) lua_gc(vm->state, LUA_GCSETGOAL, goal);
     if (goal < 0) lua_gc(vm->state, LUA_GCSETSTEPMUL, -goal);
     ulua_value result = {};
-    status = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
+    status = ulua_internal_shim_call(vm, 0, nullptr, 0, ULUA_TYPE_NUMBER, &result, error);
     values[3] = vm->used;
     values[4] = global->totalbytes;
     values[5] = global->GCthreshold;
@@ -77,6 +78,7 @@ extern "C" int ulua_internal_probe_capture_memory(const char* bytecode, size_t l
     values[12] = vm->used;
     values[13] = global->totalbytes;
     global->frealloc = sample.allocator;
+    release_export_refs(vm);
     lua_close(vm->state);
     vm->state = nullptr;
     values[14] = vm->used;

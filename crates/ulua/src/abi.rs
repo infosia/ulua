@@ -521,6 +521,16 @@ pub unsafe extern "C" fn ulua_instance_new(
                 })
                 .collect();
             let native_grants: Vec<_> = grants.iter_mut().map(|b| b.native()).collect();
+            let export_names: Result<Vec<_>, _> = (*module)
+                .exports
+                .iter()
+                .map(|export| CString::new(export.name.as_str()))
+                .collect();
+            let Ok(export_names) = export_names else {
+                write_run_diagnostic(diagnostic, "internal", "Export name contains NUL");
+                return ULUA_INTERNAL;
+            };
+            let export_pointers: Vec<_> = export_names.iter().map(|name| name.as_ptr()).collect();
             let host = shim_host(&mut callback);
             let mut vm = ptr::null_mut();
             let mut error = [0; 256];
@@ -530,6 +540,8 @@ pub unsafe extern "C" fn ulua_instance_new(
                 &host,
                 native_grants.as_ptr(),
                 native_grants.len(),
+                export_pointers.as_ptr(),
+                export_pointers.len(),
                 &limits,
                 &mut vm,
                 error.as_mut_ptr(),
@@ -660,19 +672,12 @@ pub(crate) unsafe fn call_entry(
             {
                 return ULUA_INVALID_ARGUMENT;
             }
-            let name = match CString::new(export.name.as_str()) {
-                Ok(name) => name,
-                Err(_) => {
-                    write_run_diagnostic(diagnostic, "internal", "Export name contains NUL");
-                    return ULUA_INTERNAL;
-                }
-            };
             let mut error = [0; 256];
             let mut value = Value::default();
             let code = if task.is_null() {
                 native::ulua_internal_shim_call(
                     (*instance).vm,
-                    name.as_ptr(),
+                    export_index,
                     arguments,
                     argument_count,
                     export.result,
@@ -682,7 +687,7 @@ pub(crate) unsafe fn call_entry(
             } else {
                 native::ulua_internal_shim_call_start(
                     (*instance).vm,
-                    name.as_ptr(),
+                    export_index,
                     arguments,
                     argument_count,
                     export.result,

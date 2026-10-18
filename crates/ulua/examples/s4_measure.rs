@@ -25,13 +25,17 @@ unsafe extern "C" {
         code: *const c_char,
         length: usize,
         host: *const Host,
+        grants: *const c_void,
+        grant_count: usize,
+        export_names: *const *const c_char,
+        export_count: usize,
         limits: *const RunLimits,
         out: *mut *mut c_void,
         error: *mut c_char,
     ) -> i32;
     fn ulua_internal_shim_call(
         vm: *mut c_void,
-        name: *const c_char,
+        export_index: u32,
         args: *const Value,
         count: usize,
         result_type: u32,
@@ -77,6 +81,10 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
                 bytecode,
                 size,
                 &Host::default(),
+                ptr::null(),
+                0,
+                [c"main".as_ptr()].as_ptr(),
+                1,
                 &limits,
                 &mut vm,
                 error.as_mut_ptr()
@@ -88,7 +96,7 @@ fn measure_budget(label: &str, setup: &str, body: &str, iterations: usize, steps
         let start = Instant::now();
         let status = ulua_internal_shim_call(
             vm,
-            c"main".as_ptr(),
+            0,
             ptr::null(),
             0,
             ULUA_TYPE_VOID,

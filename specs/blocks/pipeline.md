@@ -322,8 +322,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     - The references are in the Luau registry and are charged to
       `max_memory_bytes`, as the export table is. The array is a shim
       record of `export_count` references, allocated through the
-      budget allocator. `ulua_instance_free` releases them with the
-      state.
+      budget allocator. `ulua_instance_free` and each failure of
+      creation release the array before `lua_close`; the references
+      end with the state. So every charged byte is returned when
+      `lua_close` returns (`native/probes/capture_memory.cpp`).
     - The other steps of a call stay the same and in the same order:
       the argument count and type checks, the `async_failed` reset,
       the protected call, the promise mark, the drain, the result

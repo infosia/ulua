@@ -16,7 +16,7 @@ pub struct Snapshot {
     pub live_bytes: usize,
     /// Live completion string bytes outside the instance budget.
     pub host_bytes: usize,
-    /// Native request and task allocations that remain owned.
+    /// Native record allocations that remain owned.
     pub records: usize,
 }
 // SAFETY: These declarations match the feature-only native functions and their C layouts.

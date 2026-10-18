@@ -7,6 +7,7 @@
 //! One rejected example has no native runtime allocation. The total ABI run count includes replay and recovery.
 //! Programs above 20,000 indices use stride ceil(n/20,000), plus 64 indices beside every phase boundary.
 //! The summary prints baseline and injection runs, eligible allocations, and cost. No time assertion applies.
+mod export_path;
 mod fixture;
 mod programs;
 use fixture::{Fixture, MARKER, TRY_MARKER, assert_clean, code};

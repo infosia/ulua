@@ -11,6 +11,7 @@ struct Boundary {
     lua_State* state = nullptr;
     ulua_vm charges = {};
     ulua_vm* shim = nullptr;
+    int function_ref = 0;
     int direction = 0;
     int level = 0;
     ulua_host_fn callback = nullptr;
@@ -72,10 +73,7 @@ struct Call { Boundary* b; double a; double sum; ulua_value args[2]; ulua_value 
 static int protected_call(lua_State* state) {
     auto* c = static_cast<Call*>(lua_tolightuserdata(state, 1));
     Boundary* b = c->b;
-    // Stack slot 1 retains exports outside this protected C frame.
-    lua_getref(state, b->charges.exports);
-    lua_getfield(state, -1, "f");
-    if (!lua_isfunction(state, -1)) luaL_error(state, "Missing export");
+    lua_getref(state, b->function_ref);
     if (b->direction == 0) {
         if (b->level >= 3) {
             for (int i = 0; i < 2; ++i) {
@@ -137,7 +135,8 @@ extern "C" Boundary* ulua_boundary_new(int direction, int level, ulua_host_fn ca
             limits.max_steps = b->charges.max_steps;
             limits.max_memory_bytes = b->charges.budget;
             limits.max_open_requests = 256;
-            int code = ulua_internal_shim_new(bytecode, length, &host, &b->cap, direction ? 1 : 0, &limits, &b->shim, error);
+            const char* const export_names[] = {"f"};
+            int code = ulua_internal_shim_new(bytecode, length, &host, &b->cap, direction ? 1 : 0, export_names, 1, &limits, &b->shim, error);
             std::free(bytecode);
             bytecode = nullptr;
             if (code) { ulua_boundary_free(b); return nullptr; }
@@ -169,6 +168,12 @@ extern "C" Boundary* ulua_boundary_new(int direction, int level, ulua_host_fn ca
         }
         b->charges.exports = lua_ref(state, 1);
         lua_getfield(state, 1, "f");
+        if (!lua_isfunction(state, -1)) {
+            std::strcpy(error, "Missing export");
+            ulua_boundary_free(b);
+            return nullptr;
+        }
+        b->function_ref = lua_ref(state, -1);
         // Slot 1 is exports; slot 2 is the function, for the direct floor.
         if (level >= 1) lua_callbacks(state)->interrupt = interrupt;
         return b;
@@ -210,7 +215,7 @@ extern "C" int ulua_boundary_region(Boundary* b) noexcept {
         }
         int code;
         if (b->level == 5) {
-            code = ulua_internal_shim_call(b->shim, "f", c.args, b->direction == 0 ? 2 : 0,
+            code = ulua_internal_shim_call(b->shim, 0, c.args, b->direction == 0 ? 2 : 0,
                 ULUA_TYPE_NUMBER, &c.result, b->error);
             c.sum = c.result.number;
         } else {

@@ -5,6 +5,7 @@
 #include "lualib.h"
 #include <algorithm>
 #include <cstring>
+static const char* const export_names[] = {"main"};
 struct AsyncStats { ulua_vm* vm; size_t bytes; size_t jobs; };
 extern "C" size_t ulua_internal_test_async_bytes(const ulua_vm* vm) {
     return vm->used;
@@ -166,7 +167,7 @@ extern "C" int ulua_internal_probe_async_queue(const char* source, size_t length
     int status = ulua_internal_shim_compile(source, length, &bytecode, &size, error);
     if (status) return status;
     ulua_vm* vm = nullptr;
-    status = ulua_internal_shim_new(bytecode, size, host, nullptr, 0, limits, &vm, error);
+    status = ulua_internal_shim_new(bytecode, size, host, nullptr, 0, export_names, 1, limits, &vm, error);
     ulua_internal_shim_bytecode_free(bytecode);
     if (status) return status;
     QueueIndices indices = {vm};
@@ -176,7 +177,7 @@ extern "C" int ulua_internal_probe_async_queue(const char* source, size_t length
         error[255] = '\0';
     } else {
         ulua_value result = {};
-        status = ulua_internal_shim_call(vm, "main", nullptr, 0, ULUA_TYPE_VOID, &result, error);
+        status = ulua_internal_shim_call(vm, 0, nullptr, 0, ULUA_TYPE_VOID, &result, error);
     }
     *largest = indices.largest;
     *rebases = indices.rebases;
