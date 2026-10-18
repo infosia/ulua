@@ -196,11 +196,11 @@ Its header states its measured cost. No test runs the 100,000-pair probe or a ti
 
 <!-- boundary:start -->
 
-Session: 2026-10-16T03:14:34Z. Host ID: `host-7a4047f4a0ca82c1`.
+Session: 2026-10-18T02:06:22Z. Host ID: `host-7a4047f4a0ca82c1`.
 
 Machine: Darwin 27.0.0 arm64; MacBook Air. CPU: Apple M2; 8 (4 Performance and 4 Efficiency) cores. Power: Now drawing from 'AC Power'.
 
-Luau: `c54f558b4d5748ab0658610b8ce0c432053e41eb`. Ulua: `a65b01d90365f491d4bbdc959f56744920a8ad68`; worktree dirty: false.
+Luau: `c54f558b4d5748ab0658610b8ce0c432053e41eb`. Ulua: `e233a7c8f73b2c55435a52fe65d5edb80d9217c0`; worktree dirty: false.
 
 Rust: rustc 1.95.0 (59807616e 2026-04-14). Release; O1; max_steps = 10000000000; max_memory_bytes = 1073741824; max_open_requests = 256.
 
@@ -208,53 +208,53 @@ Each region has 1,000 boundary calls. Clock: std::time::Instant. Quantum: minimu
 
 | Boundary | Variant | ns/call | Quantum ns | IQR/median | Status |
 |---|---|---:|---:|---:|---|
-| host-into-script | floor | 24.625 | 41 | 0.25% | ok |
-| host-into-script | accounting | 26.833 | 41 | 4.50% | ok |
-| host-into-script | protected | 68.250 | 41 | 12.00% | ok |
-| host-into-script | conversion | 69.042 | 41 | 6.28% | ok |
-| host-into-script | shim | 71.708 | 41 | 11.45% | ok |
-| host-into-script | ulua | 110.292 | 41 | 10.01% | ok |
-| script-into-host | floor | 27.709 | 41 | 5.86% | ok |
-| script-into-host | accounting | 21.709 | 41 | 0.77% | ok |
-| script-into-host | protected | 22.000 | 41 | 0.57% | ok |
-| script-into-host | conversion | 23.917 | 41 | 2.62% | ok |
-| script-into-host | trampoline | 33.250 | 41 | 5.20% | ok |
-| script-into-host | shim | 33.041 | 41 | 6.12% | ok |
-| script-into-host | ulua | 56.917 | 41 | 0.66% | ok |
+| host-into-script | floor | 22.708 | 41 | 0.18% | ok |
+| host-into-script | accounting | 24.500 | 41 | 0.34% | ok |
+| host-into-script | protected | 53.459 | 41 | 9.08% | ok |
+| host-into-script | conversion | 54.125 | 41 | 11.47% | ok |
+| host-into-script | shim | 62.458 | 41 | 5.97% | ok |
+| host-into-script | ulua | 73.167 | 41 | 5.89% | ok |
+| script-into-host | floor | 26.584 | 41 | 1.25% | ok |
+| script-into-host | accounting | 21.250 | 41 | 0.69% | ok |
+| script-into-host | protected | 21.417 | 41 | 0.59% | ok |
+| script-into-host | conversion | 22.459 | 41 | 1.30% | ok |
+| script-into-host | trampoline | 31.125 | 41 | 0.93% | ok |
+| script-into-host | shim | 31.417 | 41 | 10.54% | ok |
+| script-into-host | ulua | 32.250 | 41 | 0.26% | ok |
 
 Layer prices use signed adjacent differences. Shares use the full product median as denominator. Negative prices retain process noise and interactions.
 
 | Boundary | Layer | ns/call | Product share |
 |---|---|---:|---:|
-| host-into-script | VM floor | 24.625 | 22.33% |
-| host-into-script | step interrupts and charging allocator | 2.208 | 2.00% |
-| host-into-script | protected wrapper and export lookup | 41.417 | 37.55% |
-| host-into-script | numeric ABI conversion and direct typed callback (script only) | 0.792 | 0.72% |
-| host-into-script | remaining native shim | 2.666 | 2.42% |
-| host-into-script | rest: Rust ABI, guards and product setup/helpers | 38.584 | 34.98% |
-| script-into-host | VM floor | 27.709 | 48.68% |
-| script-into-host | step interrupts and charging allocator | -6.000 | -10.54% |
-| script-into-host | protected wrapper and export lookup | 0.291 | 0.51% |
-| script-into-host | numeric ABI conversion and direct typed callback (script only) | 1.917 | 3.37% |
-| script-into-host | host trampoline, callback dispatch and call charge | 9.333 | 16.40% |
-| script-into-host | remaining native shim | -0.209 | -0.37% |
-| script-into-host | rest: Rust ABI, guards and product setup/helpers | 23.876 | 41.95% |
+| host-into-script | VM floor | 22.708 | 31.04% |
+| host-into-script | step interrupts and charging allocator | 1.792 | 2.45% |
+| host-into-script | protected wrapper | 28.959 | 39.58% |
+| host-into-script | numeric ABI conversion and direct typed callback (script only) | 0.666 | 0.91% |
+| host-into-script | remaining native shim | 8.333 | 11.39% |
+| host-into-script | rest: Rust ABI, guards and product setup/helpers | 10.709 | 14.64% |
+| script-into-host | VM floor | 26.584 | 82.43% |
+| script-into-host | step interrupts and charging allocator | -5.334 | -16.54% |
+| script-into-host | protected wrapper | 0.167 | 0.52% |
+| script-into-host | numeric ABI conversion and direct typed callback (script only) | 1.042 | 3.23% |
+| script-into-host | host trampoline, callback dispatch and call charge | 8.666 | 26.87% |
+| script-into-host | remaining native shim | 0.292 | 0.91% |
+| script-into-host | rest: Rust ABI, guards and product setup/helpers | 0.833 | 2.58% |
 
-host-into-script: shrink candidate: protected wrapper and export lookup, 37.55% of the product call. This is a probe estimate.
-- host-into-script / floor: warm-up 200.022 ms, 8075 iterations; observed median 24.625 ns/call; ok.
-- host-into-script / accounting: warm-up 200.024 ms, 7375 iterations; observed median 26.833 ns/call; ok.
-- host-into-script / protected: warm-up 200.044 ms, 2938 iterations; observed median 68.250 ns/call; ok.
-- host-into-script / conversion: warm-up 200.034 ms, 2902 iterations; observed median 69.042 ns/call; ok.
-- host-into-script / shim: warm-up 200.068 ms, 2671 iterations; observed median 71.708 ns/call; ok.
-- host-into-script / ulua: warm-up 200.049 ms, 1802 iterations; observed median 110.292 ns/call; ok.
+host-into-script: shrink candidate: protected wrapper, 39.58% of the product call. This is a probe estimate.
+- host-into-script / floor: warm-up 200.020 ms, 8802 iterations; observed median 22.708 ns/call; ok.
+- host-into-script / accounting: warm-up 200.014 ms, 8144 iterations; observed median 24.500 ns/call; ok.
+- host-into-script / protected: warm-up 200.009 ms, 3760 iterations; observed median 53.459 ns/call; ok.
+- host-into-script / conversion: warm-up 200.036 ms, 3739 iterations; observed median 54.125 ns/call; ok.
+- host-into-script / shim: warm-up 200.007 ms, 3297 iterations; observed median 62.458 ns/call; ok.
+- host-into-script / ulua: warm-up 200.023 ms, 2811 iterations; observed median 73.167 ns/call; ok.
 
-script-into-host: shrink candidate: rest: Rust ABI, guards and product setup/helpers, 41.95% of the product call. This is a probe estimate.
-- script-into-host / floor: warm-up 200.020 ms, 7370 iterations; observed median 27.709 ns/call; ok.
-- script-into-host / accounting: warm-up 200.016 ms, 9164 iterations; observed median 21.709 ns/call; ok.
-- script-into-host / protected: warm-up 200.005 ms, 8978 iterations; observed median 22.000 ns/call; ok.
-- script-into-host / conversion: warm-up 200.017 ms, 8319 iterations; observed median 23.917 ns/call; ok.
-- script-into-host / trampoline: warm-up 200.020 ms, 5997 iterations; observed median 33.250 ns/call; ok.
-- script-into-host / shim: warm-up 200.025 ms, 5804 iterations; observed median 33.041 ns/call; ok.
-- script-into-host / ulua: warm-up 200.035 ms, 3512 iterations; observed median 56.917 ns/call; ok.
+script-into-host: shrink candidate: host trampoline, callback dispatch and call charge, 26.87% of the product call. This is a probe estimate.
+- script-into-host / floor: warm-up 200.006 ms, 8596 iterations; observed median 26.584 ns/call; ok.
+- script-into-host / accounting: warm-up 200.005 ms, 9341 iterations; observed median 21.250 ns/call; ok.
+- script-into-host / protected: warm-up 200.007 ms, 9251 iterations; observed median 21.417 ns/call; ok.
+- script-into-host / conversion: warm-up 200.019 ms, 8702 iterations; observed median 22.459 ns/call; ok.
+- script-into-host / trampoline: warm-up 200.017 ms, 6406 iterations; observed median 31.125 ns/call; ok.
+- script-into-host / shim: warm-up 200.010 ms, 6343 iterations; observed median 31.417 ns/call; ok.
+- script-into-host / ulua: warm-up 200.013 ms, 6102 iterations; observed median 32.250 ns/call; ok.
 
 <!-- boundary:end -->

@@ -224,18 +224,17 @@ One call across the C ABI, median of 11 regions of 1,000 calls:
 
 | Direction | Luau floor | Ulua |
 |---|---:|---:|
-| host calls a script export | 24.6 ns | 110.3 ns |
-| script calls a granted host function | 27.7 ns | 56.9 ns |
+| host calls a script export | 22.7 ns | 73.2 ns |
+| script calls a granted host function | 26.6 ns | 32.3 ns |
 
 The floor is a direct `lua_pcall` or a plain `lua_CFunction` on the
-same VM. The Ulua price adds the protected call, the export lookup,
-argument checks, the revocation check of a grant, and the step charge
+same VM. The Ulua price adds the protected call, argument checks, the revocation check of a grant, and the step charge
 of a host call.
 
 This is one benchmark set on one machine; treat the ratios as
 indicative. The tables are from an Apple M2 (macOS, arm64), Release
 build, Luau at `c54f558`. The workload record is from 2026-10-18 at
-`ca20ecb`; the boundary record is from 2026-10-16 at `a65b01d`; the
+`ca20ecb`; the boundary record is from 2026-10-18 at `e233a7c`; the
 roblox-ts measurement is from 2026-10-17, before the native `%`.
 
 ## Learn more

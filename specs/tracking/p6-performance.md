@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S8 OPEN 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -472,6 +472,48 @@ Found during this slice: `gate.sh sanitize` stops in
 `p74_tables::node_differential_ten_thousand_sequences` with UBSan at
 `lvmexecute.cpp:779` for a `Map` key `-inf`, at 70479aa and after the
 change (a P7.4 defect; `tracking/p7-stdlib.md`).
+
+## Measurements (P6.S8)
+
+Before the change (`export_path` tests at 4309498): the by-index test
+of five exports (`zebra, alpha, middle, later, done`; sync and async)
+passed; a missing export and a non-function export both created the
+instance (status 0) and failed at the call (status 5). After: both
+fail at creation with `internal` and no instance; the fault sweep
+refuses each allocation of creation (1,344 injections), the new array
+included, with zero charged bytes and records after each.
+
+Boundary, 4309498 and the change in one session (ns per call):
+host-into-script 104.334 to 72.375; script-into-host 38.791 to 32.625.
+The layer "protected wrapper and export lookup" is now "protected
+wrapper": the ablations read the function through a reference taken at
+setup, as the product does. Record at e233a7c (clean tree):
+host-into-script 73.167 (floor 22.708), script-into-host 32.250
+(floor 26.584). The P6.2 record at a65b01d gave 110.292 and 56.917.
+`vm->used` in `native/probes/capture_memory.cpp` now includes
+`sizeof(int) * export_count` bytes that `totalbytes` does not
+(the array is charged, as the contract states).
+
+Workload record at 63e747f: no workload moves by more than 2% from the
+ca20ecb record except queen, 2.233 to 2.362. queen is bimodal at equal
+code: f1ab3b1 and 4309498 have identical `crates/` and `native/` and
+gave 1027.9, 963.8, 967.6, and 965.2 ms in alternate runs; 63e747f gave
+1019.8 and 1011.8 ms. The cause is not measured. Consequence: a queen
+change below 7% is not evidence.
+
+Review: 0 CRITICAL, 0 MAJOR, 4 MINOR. Fixed: the ablation layers still
+did the name lookup; the release check after a malformed export ran in
+no gate (moved to the `faults` target, which `gate.sh sanitize` runs);
+a declaration above the purpose comment in four probes. Recorded: the
+`vm->used` difference above. Found, not caused by this slice: the
+`s4_measure` example declared `ulua_internal_shim_new` without the
+grant arguments since P3 (now fixed); `cargo check -p ulua --example
+s4_measure --features measurements` fails with E0063 in
+`ulua_compiler` (`Module` lacks `field_names`, `json`, `math`); no gate
+builds that feature (MINOR, open).
+
+Gates at 63e747f: `gate.sh full` PASS; `gate.sh timing` PASS (16 of
+16).
 
 ## Measurements: Windows x86_64 (benchmarks.md Rev 5)
 
