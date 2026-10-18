@@ -199,32 +199,34 @@ What the numbers show:
 [roblox-ts](https://github.com/roblox-ts/roblox-ts) (v3.0.0 at
 `68648b0c`) also compiles TypeScript to Luau. Its output of the same
 ten workloads ran in the same harness, after mechanical source changes
-(`null` to `undefined`, `.length` to `.size()`). This measurement used
-an earlier Ulua (before the native `%`), so its Ulua column is slower
-than the table above on primes, fib-loop, sort, and callbacks.
+(`null` to `undefined`, `.length` to `.size()`). All three columns
+come from one session at `ec1abc0`, so the Ulua column differs from
+the table above by run-to-run variation only.
 
-| Workload | roblox-ts / hand | Ulua / hand (earlier) |
+| Workload | roblox-ts / hand | Ulua / hand |
 |---|---:|---:|
-| mandelbrot | 1.00× | 1.19× |
-| fib-recursive | 1.01× | 1.75× |
-| sort | 0.99× | 3.64× |
-| primes | 1.15× | 3.10× |
-| queen | 1.15× | 3.16× |
-| particles | 1.16× | 3.46× |
-| callbacks | 1.33× | 3.19× |
-| collect | 1.36× | 2.10× |
-| fib-loop | 1.71× | 2.26× |
-| tree | 1.87× | 2.33× |
+| fib-recursive | 1.00× | 1.75× |
+| mandelbrot | 1.01× | 1.21× |
+| sort | 1.02× | 2.67× |
+| particles | 1.14× | 2.72× |
+| queen | 1.14× | 2.37× |
+| primes | 1.15× | 1.20× |
+| callbacks | 1.33× | 1.40× |
+| collect | 1.35× | 1.99× |
+| fib-loop | 1.75× | 2.16× |
+| tree | 1.87× | 2.31× |
 
 roblox-ts is faster on every row, and the reason is in its output: an
 element access has no index check, a loop has no interrupt point and
 no step or allocation charge, and `%` is the native Luau `%`, which
 differs from JavaScript for a negative operand. That output fits code
 that the developer writes and trusts. Ulua is for code that the host
-does not trust, and it pays for each of these checks. Where roblox-ts
+does not trust, and it pays for each of these checks. The gap is
+smallest where few of these checks run: primes and callbacks are
+within 5% of roblox-ts. Where roblox-ts
 emits a slower form (a `while true` loop with a flag for a `for` loop
 with a computed bound, a metatable constructor for a class), it is
-slower than hand Luau too: fib-loop 1.71×, tree 1.87×.
+slower than hand Luau too: fib-loop 1.75×, tree 1.87×.
 
 ### Boundary calls
 
@@ -243,7 +245,7 @@ This is one benchmark set on one machine; treat the ratios as
 indicative. The tables are from an Apple M2 (macOS, arm64), Release
 build, Luau at `c54f558`. The workload record is from 2026-10-18 at
 `787092a`; the boundary record is from 2026-10-18 at `e233a7c`; the
-roblox-ts measurement is from 2026-10-17, before the native `%`.
+roblox-ts measurement is from 2026-10-18 at `ec1abc0`.
 
 ## Learn more
 

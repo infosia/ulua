@@ -751,3 +751,29 @@ Gates at 787092a: `gate.sh full` PASS; `gate.sh timing` PASS (23 of
 
 Open: the sort pivot `(lo + hi - (lo + hi) % 2) / 2` keeps the full
 test (a division has no mark), once per call of `quick`.
+
+## Measurements: roblox-ts comparison (after P6.S12)
+
+Measurement only; no production change; `git status` clean after the
+run. The same roblox-ts output and method as the first comparison
+above; the workloads are unchanged since 7cca876. The `bench` binary
+is the build of ec1abc0 (the crates equal 787092a). One session;
+checksums equal; no cell withheld; largest IQR 2.14% of the median.
+
+| Workload | hand Luau ms | roblox-ts ms | Ulua ms | roblox-ts / hand | Ulua / hand | Ulua / roblox-ts |
+|---|---:|---:|---:|---:|---:|---:|
+| fib-recursive | 61.1 | 61.0 | 106.8 | 1.00 | 1.75 | 1.75 |
+| fib-loop | 112.5 | 196.8 | 243.2 | 1.75 | 2.16 | 1.24 |
+| mandelbrot | 491.5 | 495.7 | 593.8 | 1.01 | 1.21 | 1.20 |
+| primes | 85.3 | 97.7 | 102.0 | 1.15 | 1.20 | 1.04 |
+| sort | 59.5 | 61.0 | 159.1 | 1.02 | 2.67 | 2.61 |
+| tree | 31.8 | 59.4 | 73.4 | 1.87 | 2.31 | 1.24 |
+| queen | 425.7 | 483.9 | 1008.3 | 1.14 | 2.37 | 2.08 |
+| particles | 83.6 | 94.9 | 227.0 | 1.14 | 2.72 | 2.39 |
+| callbacks | 100.2 | 133.3 | 139.9 | 1.33 | 1.40 | 1.05 |
+| collect | 127.4 | 171.8 | 253.9 | 1.35 | 1.99 | 1.48 |
+
+`Ulua / roblox-ts` against the first comparison: primes 2.71 to 1.04,
+callbacks 2.40 to 1.05, sort 3.66 to 2.61, queen 2.74 to 2.08,
+particles 2.99 to 2.39, fib-loop 1.32 to 1.24; other rows within 0.07. The roblox-ts column
+is within 0.04 of the first comparison on each row.
