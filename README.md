@@ -150,26 +150,26 @@ in [`crates/ulua_bench/`](crates/ulua_bench/README.md).
 
 | Workload | hand Luau | Ulua | Ulua / hand |
 |---|---:|---:|---:|
-| mandelbrot | 496.1 ms | 585.8 ms | **1.18×** |
-| primes | 84.7 ms | 100.8 ms | **1.19×** |
-| callbacks | 99.8 ms | 140.9 ms | **1.41×** |
-| fib-recursive | 61.3 ms | 106.9 ms | 1.74× |
-| collect | 128.7 ms | 252.9 ms | 1.96× |
-| fib-loop | 112.1 ms | 240.0 ms | 2.14× |
-| queen | 434.0 ms | 1012.1 ms | 2.33× |
-| tree | 31.6 ms | 74.0 ms | 2.34× |
-| particles | 81.8 ms | 225.4 ms | 2.76× |
-| sort | 60.9 ms | 180.8 ms | 2.97× |
+| mandelbrot | 494.7 ms | 585.9 ms | **1.18×** |
+| primes | 84.4 ms | 101.1 ms | **1.20×** |
+| callbacks | 100.2 ms | 139.3 ms | **1.39×** |
+| fib-recursive | 60.8 ms | 106.6 ms | 1.75× |
+| collect | 126.0 ms | 251.8 ms | 2.00× |
+| fib-loop | 113.0 ms | 231.7 ms | 2.05× |
+| queen | 432.6 ms | 976.7 ms | 2.26× |
+| tree | 31.6 ms | 73.0 ms | 2.31× |
+| sort | 60.8 ms | 160.1 ms | 2.63× |
+| particles | 82.6 ms | 234.1 ms | 2.83× |
 
 What the numbers show:
 
 - **Numeric loops are near hand Luau.** mandelbrot is 1.18× and primes
-  is 1.19×. The compiler emits counted loops as numeric `for`, and it
+  is 1.20×. The compiler emits counted loops as numeric `for`, and it
   emits the native Luau `%` where it can prove that both operands are
   non-negative integers. Other `%` sites use `math.fmod`, which agrees
   with JavaScript for a negative operand.
-- **The cost is the safety that a hostile script needs.** sort (2.97×),
-  particles (2.76×), and queen (2.33×) read and write arrays in their
+- **The cost is the safety that a hostile script needs.** particles (2.83×),
+  sort (2.63×), and queen (2.26×) read and write arrays in their
   inner loops. Each access checks its index, because a read outside an
   array stops the run where JavaScript gives `undefined`. Where the
   compiler proves that the index is a non-negative integer (a loop
@@ -177,19 +177,20 @@ What the numbers show:
   3.12× to 2.2× to 2.4× (queen varies with the build) and particles
   from 3.49× to 2.8×. sort indexes with function parameters. The
   compiler proves a parameter from the arguments of each call when only
-  direct calls reach the function: this took sort from 3.62× to 2.97×.
-  Its index `j` counts down and can be `-1`, so the sites of `j` keep
-  the full check.
+  direct calls reach the function. Its index `j` counts down and can
+  be `-1`, so the sites of `j` keep the test `j >= 0`; the compiler
+  proves that `j` is an integer and omits only the integer test.
+  Together these took sort from 3.62× to 2.63×.
   Each loop also has an interrupt point that charges steps, so the host
   can stop a script that does not end.
 - **Array methods with arrow literals compile to plain loops.**
-  callbacks (1.41×; 3.12× before) uses `map`, `filter`, and `reduce`
+  callbacks (1.39×; 3.12× before) uses `map`, `filter`, and `reduce`
   with arrow literals; the hand version uses plain loops. The compiler
   writes such a call as a loop in place, with no call per element.
   It also proves that the elements of an array that never leaves its
   function are integers, so the `%` in the callbacks is native.
 - **Calls and allocation cost less than array traffic.** fib-recursive
-  (1.74×), tree (2.34×), and collect (1.96×) pay for the call frame
+  (1.75×), tree (2.31×), and collect (2.00×) pay for the call frame
   and for the allocator that charges each allocation to the memory
   limit of the instance.
 
@@ -241,7 +242,7 @@ of a host call.
 This is one benchmark set on one machine; treat the ratios as
 indicative. The tables are from an Apple M2 (macOS, arm64), Release
 build, Luau at `c54f558`. The workload record is from 2026-10-18 at
-`afcb926`; the boundary record is from 2026-10-18 at `e233a7c`; the
+`787092a`; the boundary record is from 2026-10-18 at `e233a7c`; the
 roblox-ts measurement is from 2026-10-17, before the native `%`.
 
 ## Learn more
@@ -284,7 +285,7 @@ and async with host requests. P5 (hardening) is complete:
 sanitizers, fuzzing, fault injection, the compiler memory bound, a
 run-time bound on the work of one step, and `gate.sh full` on macOS
 arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
-complete: Ulua runs at 1.18 to 2.97 times the time of hand-written
+complete: Ulua runs at 1.18 to 2.83 times the time of hand-written
 Luau on the same VM (see [Performance](#performance)). P7 (the
 standard library) is complete: `Math`, `Number`, `find`, `Map`, `Set`,
 string case, and `JSON`. The ABI has no compatibility

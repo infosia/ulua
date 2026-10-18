@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S12 COMPLETE 2026-10-18 (integral marks). Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -717,3 +717,37 @@ boolean-template ratio 6.03 against the bound 6, while the
 implementation agent was still active; `p55_ratio` alone then passed.
 The shape has no element access; its only parameter belongs to an
 exported function, which §5.29 excludes.
+
+## Measurements (P6.S12)
+
+Before the change: the first 32 tests of `remainder::mark_tests` gave
+10 passed, 22 failed; after: 32 passed. The generated Luau of the
+corpus and the workloads differs from 881a851 in 5 files: `a13`,
+`a87`, `a92`, `t20`, and sort (two reads and one write of `j`). Each
+changed line is an index test that loses only the floor test. No `%`
+form and no proven site changes.
+
+Review: 0 CRITICAL, 1 MAJOR, 4 MINOR. Fixed: no test failed without
+the operand edge of unary minus (a test with `-p`, `p` called with
+`0.5`, added); no test failed without rule 1 (a test with a mark from
+an element fact only); an internal diagnostic without its location;
+three missing comments. Rule 7 of the contract named only `length`,
+and the code also marks `size` and `Utf8.byteLength`, which are
+non-negative integers (Rev 66). Each new test fails with its condition
+removed. The reviewer compiled 36 probe scripts; none reaches the
+integral form with a finite non-integer.
+
+`bench --only sort`, d2d2726 and 787092a in one session, separate
+target directories, checksums equal: 180.552 and 186.218 ms (2.969,
+3.066) before; 159.510 and 160.376 ms (2.621, 2.634) after.
+
+Record at 787092a (clean tree), `ulua / luau`: sort 2.97 to 2.63;
+fib-loop 2.14 to 2.05 and queen 2.33 to 2.26 with byte-identical Luau
+(run-to-run variation; queen in its lower mode); others within 2.8% of
+the afcb926 record. Largest IQR 3.66% of the median; no cell withheld.
+
+Gates at 787092a: `gate.sh full` PASS; `gate.sh timing` PASS (23 of
+23).
+
+Open: the sort pivot `(lo + hi - (lo + hi) % 2) / 2` keeps the full
+test (a division has no mark), once per call of `quick`.
