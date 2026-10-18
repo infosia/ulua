@@ -63,6 +63,7 @@ Rev 58: §4 item 12 export call path (P6.S8).
 Rev 59: §5.27 inline callbacks (P6.S9).
 Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters. Rev 62: §5.27 an inline callback is not a closure. Rev 63: §5.28 the counter fact uses the structural test of item 24.
 Rev 64: §5.29 parameter facts; §5.25 one fact graph for the module (P6.S11).
+Rev 65: §5.30 integral marks; §5.26 the integral index form (P6.S12).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -933,7 +934,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       binding, no write, and no edge, so the facts of item 25 and the
       cost bound of item 25 stay the same. The compiler stores the
       result in the IR: each element read and element write carries
-      its index form, proven or checked (principle 8). The emitter
+      its index form, proven, integral (item 30), or checked
+      (principle 8). The emitter
       reads the form and computes no fact.
     - Out of scope: the deferred read of an optional chain
       (`__ulua_get`), the receiver of a nested access, the array
@@ -1147,6 +1149,79 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       with each index site proven; hand Luau 59.1 ms. The sites of `j`
       stay checked: `j--` has no fact under item 25, and `j` can be
       `-1` after the last swap.
+
+30. **Integral marks (P6.S12).** An index without a fact of item 25
+    can have an integral mark. An element read or write of item 20
+    with a marked index omits the test `floor(i) == i`. The test
+    `i >= 0` and the bound test stay, before the table access.
+    - **Mark.** An integral mark of an expression states that no value
+      of the expression is a finite non-integer. A value can be an
+      integer, `+0`, `-0`, NaN, or an infinity.
+    - **Index proof.** The floor test of item 20 fails only for a
+      finite non-integer. NaN and `-Infinity` fail `i >= 0`.
+      `Infinity` fails the bound test. So the trap set and the C12
+      order stay the same. A value that passes both tests is an
+      integer in `[0, #a]` or `-0`, so the `int(indexd)` conversion of
+      item 20 stays defined, and `-0` reads slot 1 as before.
+    - **Expression marks.** Only these forms have a mark:
+      1. An expression that has a fact of item 25.
+      2. A number literal whose double value is an integer, and the
+         references `Infinity` and `NaN`.
+      3. A read of a binding or a parameter that has a binding mark.
+      4. `a + b`, `a - b`, `a * b`, and unary `-a`, when each operand
+         has a mark.
+      5. `a % b` when both operands have a mark.
+      6. `Math.floor(e)`, `Math.ceil(e)`, `Math.trunc(e)`, and
+         `Math.round(e)` for any `e`; `Math.abs(e)` when `e` has a
+         mark.
+      7. `x.length` of an array or a string.
+      8. A parenthesized expression whose content has a mark.
+    - **Proof of the forms.** Rule 4: the exact sum, difference, or
+      product of two integers is an integer. If its magnitude is at
+      most `2^53`, it is a double. Otherwise the rounded value has a
+      magnitude of at least `2^53`, and each double at or above `2^53`
+      is an integer. An overflow gives an infinity. An infinite or NaN
+      operand gives an infinity or NaN. Rule 5: `fmod` of two finite
+      integers is exact, with an integer result (C4.3); a NaN or
+      infinite first operand or a zero second operand gives NaN; an
+      infinite second operand gives the first operand. Rule 6: ECMA-262
+      states each result as an integer, a zero, NaN, or an infinity;
+      the corpus rows of `stdlib.md` §5 pin the lowering to `node`.
+      Rule 7: a length is a non-negative integer.
+    - **Binding marks.** The bindings of item 25 and the parameters of
+      item 29 can have a mark, with the writes of those items. A
+      binding has a mark when each of its writes has a mark. A
+      binding without an initializer, a binding that `for…of`,
+      `catch`, or a pattern declares, and a parameter without a fact
+      of item 29 for another reason than its writes (a default, an
+      exported, `async`, or value-used function, no call) have no
+      mark.
+    - **Fixed point.** The mark pass starts with a mark on each binding
+      that can have one, then removes the mark of each binding that
+      has an unmarked write, with a work list, until no mark changes.
+      Each binding loses its mark at most once, so the pass is linear
+      in the writes and edges. Proof: at run time each value of a
+      binding comes from one of its writes. Each write maps marked
+      values to a marked value, so by induction on the run each value
+      of the binding is marked. The pass does not use the rounds, the
+      thresholds, or the unset rule of item 25.
+    - The compiler stores the mark in the IR as the index form of
+      item 26 (principle 8). The emitter reads the form and computes
+      no mark.
+    - **Out of scope.** The `%` form of item 25: a mark is not a fact.
+      The elements of an array, a field, a call result other than
+      rule 6, and the deferred read of an optional chain have no mark.
+    - **Shadow check.** At each integral index, the test-only option
+      of item 25 emits a test before the other tests. The test stops
+      the run as `internal` when the index is a finite non-integer
+      (`i == i and floor(i) ~= i`). `gate.sh full` runs the corpus and
+      the workloads under it.
+    - The weight of an integral index test is at most the weight of
+      the full test. The ratio test of §5.19 passes.
+    - Measured before the rule (P6.S11 measurement round, `luau -O1`,
+      hand-edited Luau of the sort workload): 166.6 ms with the sites
+      of `i` proven (the reach of item 29); 147.2 ms when the sites of
+      `j` also omit the floor test (the reach of this item).
 
 ## 6. Limits
 
