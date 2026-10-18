@@ -8,6 +8,9 @@ mod elements;
 #[cfg(test)]
 mod index_tests;
 #[cfg(test)]
+mod mark_tests;
+mod marks;
+#[cfg(test)]
 mod parameter_tests;
 mod parameters;
 #[cfg(test)]
@@ -433,6 +436,7 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
         walk.statements(&mut f.initializers, &mut build, 0)?;
         walk.statements(&mut f.body, &mut build, 0)?;
     }
+    let indices = std::mem::take(&mut build.indices);
     let mut bindings: Vec<_> = eligible
         .iter()
         .map(|e| if *e { Fact::Unset } else { Fact::None })
@@ -458,5 +462,6 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
         }
     }
     visit_module(module, &mut Mark(&native))?;
+    marks::analyze(module, &parameters, &indices, &values)?;
     Ok(report)
 }

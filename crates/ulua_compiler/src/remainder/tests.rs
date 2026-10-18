@@ -214,6 +214,7 @@ fn report_corpus_and_workload_facts() {
                 .lines()
                 .filter(|line| {
                     (line.contains(" < #__ulua_") || line.contains(" <= #__ulua_"))
+                        && !line.contains(">= 0")
                         && !line.contains("__ulua_floor")
                         && (line.contains("then __ulua_trap(1) end")
                             || line.contains(": boolean = not ("))

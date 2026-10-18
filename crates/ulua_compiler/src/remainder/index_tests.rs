@@ -1,7 +1,7 @@
 //! Index consumers use the existing expression facts.
 use crate::{Limits, compile};
 
-fn form(body: &str, proven: bool, checks: usize) {
+fn form(body: &str, proven: bool, checks: usize, integral: bool) {
     let source = format!(
         "export function main(p:number):number{{let a=[1,2,3,4,5];let k=0;let h=2;let r={{i:0}};{body}}}"
     );
@@ -16,13 +16,17 @@ fn form(body: &str, proven: bool, checks: usize) {
     assert_eq!(tests.len(), checks, "{source}\n{code}");
     for test in tests {
         assert_eq!(test.contains(">= 0"), !proven, "{source}\n{test}");
-        assert_eq!(test.contains("__ulua_floor"), !proven, "{source}\n{test}");
+        assert_eq!(
+            test.contains("__ulua_floor"),
+            !proven && !integral,
+            "{source}\n{test}"
+        );
     }
 }
 
 macro_rules! forms {
-    ($($name:ident: $body:literal, $proven:literal, $checks:literal;)*) => {$ (
-        #[test] fn $name() { form($body, $proven, $checks); }
+    ($($name:ident: $body:literal, $proven:literal, $checks:literal $(, $integral:literal)?;)*) => {$ (
+        #[test] fn $name() { form($body, $proven, $checks, false $(|| $integral)?); }
     )*};
 }
 // Cost: 20 small compiles, 0.01 s in Debug; no VM or external process.
@@ -42,10 +46,10 @@ forms! {
     field: "return a[r.i];", false, 1;
     parameter_write: "a[p]=2;return 0;", false, 1;
     parameter_compound_write: "a[p]+=2;return 0;", false, 2;
-    negative_zero: "return a[-0];", false, 1;
+    negative_zero: "return a[-0];", false, 1, true;
     fractional: "return a[h-0.5];", false, 1;
     closure_counter: "const f=():void=>{k++;};f();return a[k];", true, 1;
-    closure_invalidates: "const f=():void=>{k=-1;};f();return a[k];", false, 1;
+    closure_invalidates: "const f=():void=>{k=-1;};f();return a[k];", false, 1, true;
     saturation: "let n=9007199254740992;n++;return a[n];", true, 1;
 }
 

@@ -14,7 +14,10 @@ fn forms(source: &str, proven: bool) {
         .filter(|line| line.contains(" < #__ulua_") && line.contains("then __ulua_trap(1) end"))
         .collect();
     assert_eq!(tests.len(), 1, "{code}");
-    assert_eq!(tests[0].contains("__ulua_floor"), !proven, "{code}");
+    assert_eq!(tests[0].contains(">= 0"), !proven, "{code}");
+    if proven {
+        assert!(!tests[0].contains("__ulua_floor"), "{code}");
+    }
 }
 
 const BODY: &str = "const a=[1];return a[p]+p%3;";

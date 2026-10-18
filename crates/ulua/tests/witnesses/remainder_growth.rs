@@ -1,4 +1,4 @@
-//! The full ABI measures scalar, element, and parameter fact shapes at 4, 16, and 64 KiB.
+//! The full ABI measures fact and integral mark shapes at 4, 16, and 64 KiB.
 #[path = "../support/remainder_growth.rs"]
 mod shape;
 #[allow(dead_code)]
@@ -24,6 +24,10 @@ fn many_direct_calls_keep_linear_pipeline_growth() {
 #[test]
 fn nested_direct_calls_keep_bounded_pipeline_growth() {
     measure("parameter-nested-calls");
+}
+#[test]
+fn integral_marks_keep_linear_pipeline_growth() {
+    measure("integral-marks");
 }
 fn measure(shape: &str) {
     assert!(shape::KEYS.contains(&shape));

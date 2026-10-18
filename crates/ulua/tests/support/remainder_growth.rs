@@ -1,11 +1,12 @@
-//! Fact growth covers eight-round scalar and element cycles, call chains, repeated calls, and nested parameter calls.
-/// Shapes for scalar, element, and parameter fact growth checks.
+//! Fact and mark growth covers cycles, call chains, repeated calls, and nested calls.
+/// Shapes for scalar, element, parameter facts, and integral marks.
 pub const KEYS: &[&str] = &[
     "fact-rounds",
     "element-fact-rounds",
     "parameter-call-chain",
     "parameter-many-calls",
     "parameter-nested-calls",
+    "integral-marks",
 ];
 
 pub fn source(shape: &str, bytes: usize) -> String {
@@ -16,7 +17,11 @@ pub fn source(shape: &str, bytes: usize) -> String {
     let mut out = "export function main():void{".to_owned();
     let scalar = "{let a=1;let b=a;let c=b;let d=c;let e=d;let f=e;let g=f;a=g;if(g%3===0){}}";
     let element = "{const a=[1];const b=[a[0]];const c=[b[0]];const d=[c[0]];const e=[d[0]];const f=[e[0]];const g=[f[0]];a[0]=g[0];if(g[0]%3===0){}}";
-    let unit = if shape == "element-fact-rounds" {
+    // Both a surviving cycle and removal propagated around a cycle; neither has interval facts.
+    let marks = "{const xs=[1];let a=-1;let b=a;let c=b;a=c;xs[c]=7%3;}{const xs=[1];let a=-1;let b=a;let c=b;a=c;a=1/2;xs[c]=7%3;}";
+    let unit = if shape == "integral-marks" {
+        marks
+    } else if shape == "element-fact-rounds" {
         element
     } else {
         scalar

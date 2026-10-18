@@ -137,6 +137,13 @@ impl Emitter<'_> {
                 self.line_weighted(format!("if not ({index} >= 0 and __ulua_floor({index}) == {index}) then error(\"proven index shadow mismatch\") end"), 4);
             }
             format!("{index} {bound} #{array}")
+        } else if form == IndexForm::Integral {
+            #[cfg(feature = "remainder-shadow")]
+            if self.remainder_shadow {
+                self.capture("__ulua_floor");
+                self.line_weighted(format!("if {index} == {index} and __ulua_floor({index}) ~= {index} then error(\"integral index shadow mismatch\") end"), 4);
+            }
+            format!("{index} >= 0 and {index} {bound} #{array}")
         } else {
             self.capture("__ulua_floor");
             format!(

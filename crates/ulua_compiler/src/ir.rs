@@ -76,6 +76,7 @@ pub(crate) const NATIVE_REMAINDER: &str = "native%";
 pub(crate) enum IndexForm {
     Checked,
     Proven,
+    Integral,
 }
 
 pub(crate) enum ExprKind {
