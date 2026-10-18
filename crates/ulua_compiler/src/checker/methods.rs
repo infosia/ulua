@@ -80,6 +80,7 @@ impl Checker<'_> {
         );
         let mut args: Vec<Expr> = vec![];
         let mut arity = 0;
+        let mut inline_callback = false;
         for (index, arg) in call.arguments.iter().enumerate() {
             let arg = arg.as_expression().ok_or_else(|| {
                 self.error(call.span, "C6", "Variadic array methods are rejected")
@@ -177,6 +178,10 @@ impl Checker<'_> {
                 }
             }
             args.push(value);
+            // Decide while the callback literal is last, before checking the initial value.
+            if index == 0 {
+                inline_callback = self.inline_callback(call, method, &args);
+            }
         }
         let ty = match name {
             "indexOf" | "lastIndexOf" | "unshift" | "findIndex" | "findLastIndex" => Type::Number,
@@ -201,7 +206,9 @@ impl Checker<'_> {
             }
             _ => receiver.ty,
         };
-        self.methods.insert((method, arity));
+        if !inline_callback {
+            self.methods.insert((method, arity));
+        }
         Ok(Expr {
             flow: None,
             bare_true: false,

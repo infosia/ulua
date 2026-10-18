@@ -971,14 +971,19 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     - **Length test.** `if #a ~= n then trap(2)` stays after each
       body, unless the body is length-safe. A body is length-safe
       when each node of it is one of: a literal, a read of a binding,
-      a unary, binary, logical, or conditional operator, a
+      a unary, binary, logical, conditional, or `??` operator, a
       parenthesized expression, an element read, a field read of a
-      record or class field, `.length`, or a template literal of
-      these. A length-safe body runs no code of another function, so
+      record or class field, `.length` (with `Utf8.byteLength(s)`,
+      which lowers to it), or a template literal of these. A length-safe body runs no code of another function, so
       no array changes its length during the body.
     - **Interrupts.** The loop is a numeric `for`; `FORNLOOP` fires
       the interrupt on each iteration (§5.19). The body lines count as
       statements of the loop body.
+    - The checker computes the form once and stores it on the arrow
+      function in the IR (helper, inline with the length test, inline
+      without it); the emitter reads it through its index from
+      binding to function. The lookup costs O(1) per call site
+      (§3.10 item 10).
     - **Scope.** No other method changes. No fusion: two calls stay
       two loops in source order (the callback order of each stays the
       order of `node`). The result array of `map` and `filter` is a

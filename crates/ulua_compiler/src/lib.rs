@@ -352,6 +352,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 },
             ],
             functions: vec![Function {
+                inline_callback: None,
                 asynchronous: false,
                 initializers: vec![],
                 binding: 0,

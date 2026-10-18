@@ -119,6 +119,12 @@ pub fn all_at(bytes: usize) -> Vec<(&'static str, String)> {
             "xs.findLast((v:number,i:number):boolean=>i>9);",
             "}",
         ),
+        (
+            "inline-callbacks",
+            "export function main(b:boolean):void{const xs=[1,2,3,4];",
+            "xs.forEach((v:number,i:number)=>v+i);xs.map((v:number)=>v*2);xs.filter((v:number)=>v>1);xs.reduce((acc:number,v:number)=>acc+v,0);",
+            "}",
+        ),
         ("remainder", number, "x=x%3;", "}"),
         ("remainder-compound", number, "x%=3;", "}"),
         (

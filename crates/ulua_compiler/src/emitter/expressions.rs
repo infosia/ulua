@@ -412,6 +412,9 @@ impl Emitter<'_> {
                     self.line("end");
                 }
             }
+            E::Method(method, _, receiver, args) if self.inline_callback(args).is_some() => {
+                self.callback_loop(*method, receiver, args, dest, depth)?;
+            }
             E::Method(name, arity, receiver, arguments) => {
                 let a = self.expression(receiver, depth)?;
                 let mut slots = vec![a];

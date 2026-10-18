@@ -3,6 +3,9 @@ mod accessors;
 mod arrays;
 mod asynchronous;
 #[cfg(test)]
+mod callback_tests;
+mod callbacks;
+#[cfg(test)]
 mod condition_tests;
 mod conditions;
 mod constants;
@@ -87,6 +90,7 @@ struct Emitter<'a> {
     remainder_shadow: bool,
     module: &'a ir::Module,
     function_types: &'a types::FunctionTypes,
+    function_indices: &'a [Option<usize>],
     owner: usize,
     out: String,
     indent: usize,
@@ -143,6 +147,7 @@ impl<'a> Emitter<'a> {
             remainder_shadow,
             module,
             function_types,
+            function_indices: &[],
             owner,
             out: String::new(),
             indent: 1,

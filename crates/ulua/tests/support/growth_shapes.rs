@@ -26,6 +26,8 @@ mod strings;
 
 #[path = "p41_shapes.rs"]
 mod asynchronous;
+#[path = "callback_growth.rs"]
+mod callbacks;
 #[path = "p3_shapes.rs"]
 mod hosts;
 #[path = "protected_loops.rs"]
@@ -92,6 +94,7 @@ pub fn all() -> Vec<Shape> {
     add(&mut out, "P76", json::KEYS, json::source);
     add(&mut out, "P74", tables::KEYS, tables::source);
     add(&mut out, "P6", &["fact-rounds"], remainder::source);
+    add(&mut out, "P6", callbacks::KEYS, callbacks::source);
     add(&mut out, "S4", inputs::SOURCE_SHAPES, p1);
     add(&mut out, "S6", review::SHAPES, review::source);
     add(&mut out, "P21", functions::SHAPES, functions::source);

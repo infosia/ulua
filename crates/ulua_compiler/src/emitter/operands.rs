@@ -185,6 +185,7 @@ impl Emitter<'_> {
                 self.release(slot);
                 Some(value)
             }
+            E::Method(_, _, _, args) if self.inline_callback(args).is_some() => None,
             E::Method(method, arity, receiver, args) => {
                 let helper = methods::name(*method, *arity);
                 self.capture(&helper);

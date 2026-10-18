@@ -30,6 +30,8 @@ pub(crate) struct Module {
     pub(crate) captured: Vec<bool>,
 }
 pub(crate) struct Function {
+    // Only a qualifying literal at an array call receives this length-safety decision.
+    pub(crate) inline_callback: Option<bool>,
     pub(crate) asynchronous: bool,
     pub(crate) binding: usize,
     pub(crate) name: String,

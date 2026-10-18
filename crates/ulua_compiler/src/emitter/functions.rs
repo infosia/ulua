@@ -208,6 +208,7 @@ pub(super) fn emit_with_plan_hook(
                 #[cfg(feature = "remainder-shadow")]
                 remainder_shadow,
             );
+            probe.function_indices = &context.functions;
             probe.inline_enabled = true;
             probe.probe_accessors = Some(&context.accessors);
             probe.probe_spills = Some(&context.spilled);
@@ -351,6 +352,7 @@ pub(super) fn emit_with_plan_hook(
         #[cfg(feature = "remainder-shadow")]
         remainder_shadow,
     );
+    chunk.function_indices = &context.functions;
     chunk.context = Some(&context);
     chunk.inline_enabled = true;
     chunk.overhead = context.layouts[0].as_ref().map_or(0, |l| l.overhead);
@@ -498,6 +500,7 @@ impl Emitter<'_> {
             #[cfg(feature = "remainder-shadow")]
             self.remainder_shadow,
         );
+        child.function_indices = &context.functions;
         child.context = Some(context);
         child.inline_enabled = true;
         child.async_void =

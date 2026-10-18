@@ -105,7 +105,7 @@ fn methods_keep_exact_argument_and_callback_types() {
 fn helpers_appear_once_only_when_used_and_the_output_budget_includes_them() {
     let source = module(&format!(
         "const xs=[1];{}",
-        "xs.slice().slice().slice();xs.map((v:number):number=>v).filter((v:number):boolean=>v>0);"
+        "xs.slice().slice().slice();xs.map((v:number):number=>{return v;}).filter((v:number):boolean=>{return v>0;});"
             .repeat(10)
     ));
     let allocator = oxc_allocator::Allocator::default();

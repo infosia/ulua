@@ -1,6 +1,7 @@
 //! P1 declarations, scope, value flows, and transitive declaration order.
 mod arrays;
 mod asynchronous;
+mod callbacks;
 mod calls;
 mod captures;
 mod classes;
