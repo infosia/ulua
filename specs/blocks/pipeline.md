@@ -61,7 +61,7 @@ Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over
 Rev 57: §5.26 proven index (P6.S7).
 Rev 58: §4 item 12 export call path (P6.S8).
 Rev 59: §5.27 inline callbacks (P6.S9).
-Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters.
+Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters. Rev 62: §5.27 an inline callback is not a closure.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -985,6 +985,20 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       without it); the emitter reads it through its index from
       binding to function. The lookup costs O(1) per call site
       (§3.10 item 10).
+    - **Not a closure.** An inline callback emits no function value,
+      so a read or a write of an outer binding in its body is a read
+      or a write of the enclosing function at that point, not a
+      capture. Each rule that tests for a capture (the per-iteration
+      copy of item 21 and C9.2, the counted loop of item 24, the
+      binding facts of item 25, `CAPTURE_LOCALS` of 5a) counts only
+      the closures that the emitter writes. Reason: C9.2 copies a
+      loop binding so that a closure that runs later sees the value
+      of its own iteration; an inline body runs inside that
+      iteration, so it sees the same value without a copy. Measured
+      (P6.S10 first form): the counter `k` of the callbacks workload
+      counted as captured by its three inline bodies, so its loop
+      kept the `while` form with a per-iteration copy and item 24 did
+      not apply.
     - **Scope.** No other method changes. No fusion: two calls stay
       two loops in source order (the callback order of each stays the
       order of `node`). The result array of `map` and `filter` is a
