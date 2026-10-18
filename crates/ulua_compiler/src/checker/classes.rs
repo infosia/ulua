@@ -283,6 +283,7 @@ impl Checker<'_> {
         ];
         self.leave_function(state);
         self.functions.push(ir::Function {
+            declaration: false,
             inline_callback: None,
             asynchronous: false,
             binding: ctor,
@@ -335,6 +336,7 @@ impl Checker<'_> {
                 }
                 self.leave_function(state);
                 self.functions.push(ir::Function {
+                    declaration: false,
                     inline_callback: None,
                     asynchronous: m.value.r#async,
                     binding: id,

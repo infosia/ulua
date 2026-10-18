@@ -8,6 +8,9 @@ mod elements;
 #[cfg(test)]
 mod index_tests;
 #[cfg(test)]
+mod parameter_tests;
+mod parameters;
+#[cfg(test)]
 mod tests;
 mod walk;
 use crate::Diagnostic;
@@ -70,6 +73,7 @@ struct Graph {
 struct Build<'a> {
     source: &'a [u8],
     elements: &'a elements::Elements,
+    parameters: &'a parameters::Parameters,
     captured: &'a [bool],
     graph: &'a mut Graph,
     indices: HashMap<usize, usize>,
@@ -137,6 +141,7 @@ impl Visitor for Build<'_> {
     }
     fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
         let reduce = self.callback_call(e)?;
+        self.parameter_call(e)?;
         let id = match &e.kind {
             E::Number(n) => self.push(integer(*n).map_or(Node::None, Node::Literal)),
             E::Read(id) => self.push(Node::Read(*id)),
@@ -392,50 +397,34 @@ pub(crate) struct Report {
 }
 pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
     let elements = elements::Elements::collect(module)?;
-    let walk = walk::Walk {
-        source: &module.source,
-        limit: module.depth,
-    };
+    let parameters = parameters::Parameters::collect(module)?;
     let owners: Vec<_> = module.bindings.iter().map(|b| b.owner).collect();
-    let mut roots = vec![0; owners.len()];
-    for (id, &owner) in owners.iter().enumerate() {
-        roots[id] = if owner == 0 {
-            if elements.callbacks.contains_key(&id) {
-                0
-            } else {
-                id + 1
-            }
-        } else {
-            roots[owner - 1]
-        };
-    }
-    let mut graphs: Vec<_> = (0..=owners.len()).map(|_| Graph::default()).collect();
+    let mut graph = Graph::default();
     let mut eligible = vec![false; owners.len()];
+    for targets in parameters.0.values() {
+        for &id in targets.iter().flatten() {
+            eligible[id] = true;
+            graph.bindings.push(id);
+        }
+    }
     let mut build = Build {
         source: &module.source,
         elements: &elements,
+        parameters: &parameters,
         captured: &module.captured,
-        graph: &mut graphs[0],
+        graph: &mut graph,
         indices: HashMap::new(),
         starts: HashMap::new(),
         stack: Vec::new(),
         owners: &owners,
         eligible: &mut eligible,
     };
+    let walk = walk::Walk {
+        source: &module.source,
+        limit: module.depth,
+    };
     walk.statements(&mut module.body, &mut build, 0)?;
     for f in &mut module.functions {
-        let graph = &mut graphs[roots[f.binding]];
-        let mut build = Build {
-            source: &module.source,
-            elements: &elements,
-            captured: &module.captured,
-            graph,
-            indices: HashMap::new(),
-            starts: HashMap::new(),
-            stack: Vec::new(),
-            owners: &owners,
-            eligible: &mut eligible,
-        };
         for (_, e) in &mut f.parameters {
             if let Some(e) = e {
                 walk.expression(e, &mut build, 0)?;
@@ -451,11 +440,11 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
     let mut report = Report::default();
     let mut native = HashSet::new();
     let mut values = vec![];
-    for graph in graphs.iter_mut().filter(|s| !s.nodes.is_empty()) {
-        let (rounds, at_limit) = components::solve(graph, &mut bindings);
+    if !graph.nodes.is_empty() {
+        let (rounds, at_limit) = components::solve(&mut graph, &mut bindings);
         report.rounds = report.rounds.max(rounds);
         report.components_at_limit += at_limit;
-        evaluate(graph, &bindings, &mut values);
+        evaluate(&graph, &bindings, &mut values);
         for &(node, key, start) in &graph.sites {
             if matches!(values[node], Fact::Integer(..)) {
                 native.insert(key);

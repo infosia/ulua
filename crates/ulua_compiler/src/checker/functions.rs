@@ -193,6 +193,7 @@ impl Checker<'_> {
         }
         self.leave_function(state);
         self.functions.push(ir::Function {
+            declaration: true,
             inline_callback: None,
             asynchronous: f.r#async,
             initializers: vec![],
@@ -322,6 +323,7 @@ impl Checker<'_> {
         self.checked_type_depth(ty, a.span)?;
         self.bindings[id].ty = Some(ty);
         self.functions.push(ir::Function {
+            declaration: false,
             inline_callback: None,
             asynchronous: a.r#async,
             initializers: vec![],

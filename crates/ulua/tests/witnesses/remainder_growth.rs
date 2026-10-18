@@ -1,4 +1,4 @@
-//! The full ABI measures the eight-round fact shape at 4, 16, and 64 KiB.
+//! The full ABI measures scalar, element, and parameter fact shapes at 4, 16, and 64 KiB.
 #[path = "../support/remainder_growth.rs"]
 mod shape;
 #[allow(dead_code)]
@@ -13,7 +13,20 @@ fn eight_fact_rounds_keep_linear_pipeline_growth() {
 fn eight_element_fact_rounds_keep_linear_pipeline_growth() {
     measure("element-fact-rounds");
 }
+#[test]
+fn direct_call_chain_keeps_linear_pipeline_growth() {
+    measure("parameter-call-chain");
+}
+#[test]
+fn many_direct_calls_keep_linear_pipeline_growth() {
+    measure("parameter-many-calls");
+}
+#[test]
+fn nested_direct_calls_keep_bounded_pipeline_growth() {
+    measure("parameter-nested-calls");
+}
 fn measure(shape: &str) {
+    assert!(shape::KEYS.contains(&shape));
     let _measurement = crate::measurement_lock();
     let start = Instant::now();
     let mut times = vec![];

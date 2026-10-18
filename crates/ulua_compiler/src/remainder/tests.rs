@@ -236,9 +236,10 @@ fn report_corpus_and_workload_facts() {
             } else {
                 let id = path.file_stem().unwrap().to_str().unwrap();
                 let expected = match id {
-                    "queen" | "collect" => 3,
+                    "queen" => 4,
+                    "collect" => 3,
                     "particles" => 2,
-                    "sort" => 1,
+                    "sort" => 4,
                     _ => 0,
                 };
                 assert_eq!(checks, expected, "{id}");
@@ -491,6 +492,7 @@ fn missing_expression_node_returns_internal() {
     let mut build = Build {
         source: &[],
         elements: &elements::Elements::default(),
+        parameters: &parameters::Parameters(HashMap::new()),
         captured: &[],
         graph: &mut graph,
         indices: HashMap::new(),
@@ -574,6 +576,7 @@ fn removed_write_keys_return_internal() {
     let mut build = Build {
         source: &[],
         elements: &elements::Elements::default(),
+        parameters: &parameters::Parameters(HashMap::new()),
         captured: &[],
         graph: &mut graph,
         indices: HashMap::new(),

@@ -8,6 +8,10 @@ function rem(x: number, d: number): number {
   return x % d;
 }
 
+function pos(x: number, d: number): number {
+  return x % d;
+}
+
 function frac(x: number): number {
   return x % 2;
 }
@@ -59,6 +63,7 @@ function nested(): string {
 
 export function main(): void {
   print(`${rem(10, 7)} ${rem(9007199254740992, 7)} ${rem(-3, 7)}`);
+  print(`${pos(10, 7)} ${pos(9007199254740992, 7)} ${pos(0, 3)}`);
   print(`${frac(5)} ${frac(2.5)}`);
   print(`${zero(10)} ${zero(-0)}`);
   print(`${viaValue(7)} ${rem(0 / 0, 3)} ${rem(9007199254740993, 1000)}`);

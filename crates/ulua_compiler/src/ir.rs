@@ -32,6 +32,8 @@ pub(crate) struct Module {
     pub(crate) capture_counts: Vec<u8>,
 }
 pub(crate) struct Function {
+    // Only source FunctionDeclaration nodes can receive direct-call parameter facts.
+    pub(crate) declaration: bool,
     // Only a qualifying literal at an array call receives this length-safety decision.
     pub(crate) inline_callback: Option<bool>,
     pub(crate) asynchronous: bool,
