@@ -22,7 +22,7 @@ values (a number is a Luau number, an array is a Luau table), a script
 needs no runtime layer that imitates JavaScript. Ulua is a language
 project, not a JavaScript runtime and not a JavaScript binding.
 
-## Made for scripts you do not trust
+## What Ulua gives a host
 
 Ulua fits a native host that **owns its main loop** and **runs code
 that someone else wrote**: mods in a game, user rules in a server,
