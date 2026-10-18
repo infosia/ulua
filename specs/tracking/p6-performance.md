@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S10 OPEN 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -566,6 +566,48 @@ and 64 KiB. Both stay inside the §3.10 bounds.
 
 Gates at 909d6d9: `gate.sh full` PASS; `gate.sh timing` PASS (18 of
 18).
+
+## Measurements (P6.S10)
+
+First form (item 28 as first written): element facts correct, but
+callbacks unchanged (266.9 against 266.9 ms): `k++` took the threshold
+2^53, so `v + i + k` had no fact. Then the counted loop counter rule
+(Rev 61) did not apply either: the three inline bodies counted as
+captures of `k`, so its loop was not counted (item 24). Rev 62 (an
+inline callback is not a closure) and Rev 63 (the counter fact uses
+the structural test of item 24, also when a spill keeps the `while`
+form) closed both. The `k` loop is now a numeric `for` with the fact
+`[0, 20]` and no per-iteration copy.
+
+Native `%` sites, 531cf63 to the change: callbacks 1 to 5 (the map,
+filter, and reduce callbacks and the final sum); accept corpus 14 to
+17 (a24, a89, a90); every earlier site kept; the other workloads
+unchanged. `bench --only callbacks`, 531cf63 and the change in one
+session, alternate runs: 267.775 / 267.215 to 139.626 / 140.777 ms.
+
+Record at 801ff6d (clean tree): callbacks 2.662 to 1.399; primes 1.228
+to 1.199; queen 2.319 to 2.235 (inside its bimodal range); sort 3.522
+to 3.619. The sort Luau differs from the ca20ecb dump in two lines
+outside the hot loop (one proven index in `main`, one moved prelude
+interrupt point); sort gave 3.51 to 3.62 over the records of this
+session. Other workloads within 1%.
+
+Review: 0 CRITICAL, 0 MAJOR, 3 MINOR (fixed: the index fact reached
+every parameter after the index position in an IR-built callback; the
+accumulator field held the first parameter of every callback; test
+gaps). 1,800 random programs (confined arrays, push, element and
+compound writes, inline callbacks, counted loops, closures that push,
+edge values -1, -0, 0.5, 1e300, Infinity, 2^53) equal `node` under the
+shadow option; the first 300 emitted 494 native `%`.
+
+`gate.sh timing` at 801ff6d failed once: `p25_witness_time` gave
+`dense-array-write` 13.48 and `P41-then-chain` 18.35 against 12. The
+generated Luau of both shapes is byte-identical at 531cf63 and
+801ff6d; three alternate rounds at each commit gave 6.40 to 6.70 and
+3.79 to 3.83. The failed run overlapped a gate run that the primary
+agent had started with a trailing `&` (a detached process, against
+the workflow rule); its process list could not be read in the
+sandbox. The rerun alone: `gate.sh timing` PASS (19 of 19).
 
 ## Measurements: Windows x86_64 (benchmarks.md Rev 5)
 
