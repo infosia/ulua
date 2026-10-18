@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S7 OPEN 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -408,6 +408,69 @@ and 4.192; §5.19 largest 5.828; P6.3 within every bound.
 Open: the analyzer ratio of `P22-array-wide-function-product` moves
 from 11.2 to 12.0 between runs (its 4 KiB base is 22 ms), so the bound
 12 can fail on noise (MINOR, flake risk).
+
+## Measurements (P6.S7)
+
+Proven sites (`IndexForm::Proven` in the IR; emitted proven tests,
+where a compound write has 2): queen 3, particles 2, collect 2; the
+other seven workloads 0; corpus accept and trap 44 sites, 48 tests.
+sort has none: its indices are the parameters `lo`, `hi` and the
+bindings written from them. The facts of §5.25 are unchanged: the
+remainder fact report (118 lines) equals the report at 70479aa.
+
+Before the change: `cargo test -p ulua_compiler remainder::index_tests`
+12 failed, 8 passed (the full test at each site); after: 20 passed.
+
+`bench --only`, 70479aa and the change in one session, separate
+target directories, checksums equal:
+
+| Workload | Ulua ms before | Ulua ms after | Ulua / Luau before | after |
+|---|---:|---:|---:|---:|
+| queen | 1354.391 | 966.577 | 3.126 | 2.231 |
+| particles | 281.056 | 227.358 | 3.421 | 2.734 |
+| sort | 220.081 | 220.093 | 3.611 | 3.613 |
+
+Record at ca20ecb (clean tree), `ulua / luau` against 535f2fe: queen
+3.12 to 2.23, particles 3.49 to 2.79, collect 2.06 to 2.01; mandelbrot
+1.15 to 1.19, primes 1.19 to 1.23, tree 2.33 to 2.39, sort 3.53 to
+3.57; fib-recursive, fib-loop, callbacks within 1.5%. Largest IQR
+2.97% of the median; no cell withheld. The generated Luau of
+mandelbrot, primes, tree, sort, fib-loop, fib-recursive, and callbacks
+is byte-identical at 70479aa and ca20ecb. In one session, 70479aa gave
+mandelbrot 1.184 and primes 1.166 and 1.182; ca20ecb gave mandelbrot
+1.184 and primes 1.237 and 1.188. These rises are run-to-run
+variation, not a change of the generated code.
+
+Review of the first form: 0 CRITICAL, 0 MAJOR, 6 MINOR, all fixed: a
+nested receiver was marked Proven but emitted the full test (now
+Checked in the IR); the site and test counts used different units;
+the shadow reports printed a fixed "stops=0" text (now measured, with
+counts > 0 asserted); the instruction-bound test did not assert the
+proven form (proven 6388 < checked 8186 instructions); the false-flag
+shadow tests ran in no gate (now `gate.sh full`); four contexts had no
+direct test (module body, closure body, parameter default, nested
+receiver).
+
+Failure at the first close: `gate.sh timing` gave
+`compile_memory_bound` derived factor 1139 > 1115 (nested-empty-blocks
+ratio 911.09; P5.4: 891.25). Cause: the form field in
+`Statement::Element` made `Statement` 336 bytes (328 at 70479aa).
+The form now uses padding of the index operand `Expr`; `Statement` is
+328 bytes again, the factor 1115, the ratio 891.25. A unit test bounds
+the sizes of `Statement`, `Expr`, and `ExprKind`.
+
+Gates at ca20ecb: `gate.sh full` PASS (shadow: corpus 104 entries,
+workloads 10, false flags 2; no stop). `gate.sh timing`: 15 of 16;
+`p55_ratio` gave `boolean-template` 6.26 > 6. The shape is
+`` s=`${b}` `` and has no element access, so its generated code does
+not change. Three runs of the test alone: one failure, then
+`boolean-template` 5.91 and 5.86, both passes. The same shape gave 5.83
+to 5.86 at P6.S6. MINOR flake risk, as the analyzer bound 12.
+
+Found during this slice: `gate.sh sanitize` stops in
+`p74_tables::node_differential_ten_thousand_sequences` with UBSan at
+`lvmexecute.cpp:779` for a `Map` key `-inf`, at 70479aa and after the
+change (a P7.4 defect; `tracking/p7-stdlib.md`).
 
 ## Measurements: Windows x86_64 (benchmarks.md Rev 5)
 

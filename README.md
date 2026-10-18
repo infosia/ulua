@@ -150,36 +150,39 @@ in [`crates/ulua_bench/`](crates/ulua_bench/README.md).
 
 | Workload | hand Luau | Ulua | Ulua / hand |
 |---|---:|---:|---:|
-| mandelbrot | 496.9 ms | 571.4 ms | **1.15×** |
-| primes | 85.8 ms | 101.7 ms | **1.19×** |
-| fib-recursive | 61.4 ms | 107.3 ms | 1.75× |
-| collect | 128.5 ms | 265.1 ms | 2.06× |
-| fib-loop | 117.3 ms | 244.0 ms | 2.08× |
-| tree | 31.5 ms | 73.6 ms | 2.33× |
-| callbacks | 100.1 ms | 311.8 ms | 3.12× |
-| queen | 433.5 ms | 1354.2 ms | 3.12× |
-| particles | 83.0 ms | 289.9 ms | 3.49× |
-| sort | 61.1 ms | 215.6 ms | 3.53× |
+| mandelbrot | 494.3 ms | 590.1 ms | **1.19×** |
+| primes | 85.5 ms | 105.4 ms | **1.23×** |
+| fib-recursive | 60.8 ms | 106.1 ms | 1.74× |
+| collect | 126.8 ms | 255.3 ms | 2.01× |
+| fib-loop | 113.4 ms | 239.6 ms | 2.11× |
+| queen | 433.2 ms | 967.4 ms | 2.23× |
+| tree | 31.5 ms | 75.4 ms | 2.39× |
+| particles | 83.0 ms | 231.9 ms | 2.79× |
+| callbacks | 100.0 ms | 313.1 ms | 3.13× |
+| sort | 61.0 ms | 217.5 ms | 3.57× |
 
 What the numbers show:
 
-- **Numeric loops are near hand Luau.** mandelbrot is 1.15× and primes
-  is 1.19×. The compiler emits counted loops as numeric `for`, and it
+- **Numeric loops are near hand Luau.** mandelbrot is 1.19× and primes
+  is 1.23×. The compiler emits counted loops as numeric `for`, and it
   emits the native Luau `%` where it can prove that both operands are
   non-negative integers. Other `%` sites use `math.fmod`, which agrees
   with JavaScript for a negative operand.
-- **The cost is the safety that a hostile script needs.** sort (3.53×),
-  particles (3.49×), and queen (3.12×) read and write arrays in their
+- **The cost is the safety that a hostile script needs.** sort (3.57×),
+  particles (2.79×), and queen (2.23×) read and write arrays in their
   inner loops. Each access checks its index, because a read outside an
-  array stops the run where JavaScript gives `undefined`. Each loop
-  also has an interrupt point that charges steps, so the host can stop
-  a script that does not end. In a measurement of the separate layers,
-  the index check was 77% to 85% of the difference on sort and queen.
-- **`callbacks` (3.12×) is the cost of the idiom.** The Ulua version
+  array stops the run where JavaScript gives `undefined`. Where the
+  compiler proves that the index is a non-negative integer (a loop
+  counter), the check is only the bound test: this took queen from
+  3.12× to 2.23× and particles from 3.49× to 2.79×. sort indexes with
+  function parameters, which have no proof, so it keeps the full check.
+  Each loop also has an interrupt point that charges steps, so the host
+  can stop a script that does not end.
+- **`callbacks` (3.13×) is the cost of the idiom.** The Ulua version
   uses `map`, `filter`, and `reduce` with a closure call per element;
   the hand version uses plain loops.
 - **Calls and allocation cost less than array traffic.** fib-recursive
-  (1.75×), tree (2.33×), and collect (2.06×) pay for the call frame
+  (1.74×), tree (2.39×), and collect (2.01×) pay for the call frame
   and for the allocator that charges each allocation to the memory
   limit of the instance.
 
@@ -231,9 +234,9 @@ of a host call.
 
 This is one benchmark set on one machine; treat the ratios as
 indicative. The tables are from an Apple M2 (macOS, arm64), Release
-build, Luau at `c54f558`. The workload record is from 2026-10-17 at
-`535f2fe`; the boundary record is from 2026-10-16 at `a65b01d`; the
-roblox-ts measurement is from 2026-10-17, before `535f2fe`.
+build, Luau at `c54f558`. The workload record is from 2026-10-18 at
+`ca20ecb`; the boundary record is from 2026-10-16 at `a65b01d`; the
+roblox-ts measurement is from 2026-10-17, before the native `%`.
 
 ## Learn more
 
@@ -275,7 +278,7 @@ and async with host requests. P5 (hardening) is complete:
 sanitizers, fuzzing, fault injection, the compiler memory bound, a
 run-time bound on the work of one step, and `gate.sh full` on macOS
 arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
-complete: Ulua runs at 1.15 to 3.53 times the time of hand-written
+complete: Ulua runs at 1.19 to 3.57 times the time of hand-written
 Luau on the same VM (see [Performance](#performance)). P7 (the
 standard library) is complete: `Math`, `Number`, `find`, `Map`, `Set`,
 string case, and `JSON`. The ABI has no compatibility
