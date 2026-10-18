@@ -59,6 +59,7 @@ Rev 54: §5.25 an unset binding at the end voids its system (P6.S6 review).
 Rev 55: §5.25 thresholds per binding, walks without recursion, the shadow check in gate full; "component" for the solved unit (P6.S6 Phase Review).
 Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over the measured targets.
 Rev 57: §5.26 proven index (P6.S7).
+Rev 58: §4 item 12 export call path (P6.S8).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -301,6 +302,40 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    Each `await` lowers to a yield through the private channel; the
    resumed value carries a type assertion to `T` at that one point
    (M3). The witness time of await shapes follows §3.10.
+12. **Export call path (P6.S8).** At instance creation, after the
+    chunk returns its export table, the shim reads each export
+    function once, in the order of the export list, and keeps one
+    registry reference per export in an array of the instance. A
+    call of `ulua_call` or `ulua_call_start` passes the export index
+    to the shim. The shim reads the function through its reference.
+    A call does not build a C string and does not look up a name.
+    - The export table is generated code. The chunk builds it once,
+      as its last statement, from the exported function bindings, and
+      returns it; no generated statement writes it after that, and no
+      closure captures it. No script and no host reaches it: no public
+      API accepts Luau (invariant 6), and the table is not a global.
+      So the function of each export does not change after creation,
+      and one read at creation equals a read at each call.
+    - A missing export or a value that is not a function at creation
+      gives `internal`, and the instance is not created. The check
+      moves from each call to creation.
+    - The references are in the Luau registry and are charged to
+      `max_memory_bytes`, as the export table is. The array is a shim
+      record of `export_count` references, allocated through the
+      budget allocator. `ulua_instance_free` releases them with the
+      state.
+    - The other steps of a call stay the same and in the same order:
+      the argument count and type checks, the `async_failed` reset,
+      the protected call, the promise mark, the drain, the result
+      conversion, panic containment, and the step and memory charges.
+    - The export index is checked against the export count in Rust,
+      before the shim call, as before.
+    - Measured before the rule (P6.2 boundary record): the complete
+      host-into-script call is 110.3 ns; the protected wrapper and
+      export lookup together are 41.4 ns; the Rust ABI, guards, and
+      setup together are 38.6 ns. These are grouped deltas. They do
+      not give the cost of the C string or of the lookup. The
+      tracking note records the boundary record before and after.
 
 ## 5. Emission
 

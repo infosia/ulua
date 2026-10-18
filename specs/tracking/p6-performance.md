@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S8 OPEN 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -24,6 +24,7 @@ the gate bound comes from the record after the shrinks.
 | P6.S3 | Expression form (`pipeline.md` §5.22) | The corpus and goldens are unchanged; C12 entries (`a18`, `a31`, `a50`, `a66`) pass; the §5.19 tests and the analyzer stress gate pass; a new full record |
 | P6.S6 | Native remainder (`pipeline.md` §5.25, C4.3) | The corpus and goldens are unchanged; `a68` pins the fact edges; a unit test for each fact rule and each no-fact form checks the emitted form; the shadow check gives no stop over the corpus, the workloads, and the differential generator; the growth test includes a `FACT_ROUNDS` shape; the §5.19, analyzer, and P6.3 tests pass; a new full record in which primes falls and no workload rises outside the noise gate |
 | P6.S7 | Proven index (`pipeline.md` §5.26, C6) | The corpus and goldens are unchanged; `a87` and `t17` pin the proven-index edges; a unit test for each index form (read, write, compound write, literal, counter, no-fact index) checks the emitted test; the shadow check gives no stop over the corpus and the workloads; the trap-edge tests of the index check pass; the §5.19, analyzer, and P6.3 tests pass; `bench --only` before and after for queen, particles, and sort in one session; a new full record in which no workload rises outside the noise gate |
+| P6.S8 | Export call path (`pipeline.md` §4 item 12) | The C ABI tests and the corpus pass unchanged; a test calls each export of a multi-export module by index; a module whose export is missing or not a function fails at creation with `internal`; the reference array is charged to `max_memory_bytes`; `gate.sh sanitize` and the fault sweep pass; the boundary record before and after in one session (`bench --bin boundary`); the ten-workload ratios do not rise outside the noise gate |
 
 ## Carry-over into P6
 
