@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S9 OPEN 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -533,6 +533,38 @@ Consequence: inline loops without the length test take 27% off this
 workload's Luau time. The rest is `fmod`: the `%` operands read array
 elements, which have no fact (§5.25), and a run-time guard keeps most
 of the cost. No production change in this round.
+
+## Measurements (P6.S9)
+
+Before the change: the unit tests that require the inline form failed
+on the helper output. `bench --only callbacks`, 8a2e7f4 and the change
+in one session, alternate runs, 22 samples each: 311.702 to 266.139 ms
+(0.854); `ulua / luau` 3.122 to 2.669; checksums equal.
+
+Record at 909d6d9 (clean tree): callbacks 3.105 to 2.662; the other
+workloads within 2% of the 63e747f record (queen 2.362 to 2.319, inside
+its bimodal range). Largest ratio 3.522 (sort).
+
+Review: 0 CRITICAL, 1 MAJOR, 4 MINOR, all fixed.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| The call-site lookup scanned the function list (checker and emitter, 2 to 3 scans per method call): release compile of `xs.map((v:number)=>v);` repeated gave 2.81/5.92/17.14 ms at 8a2e7f4 and 2.61/7.88/45.51 ms with the first form (4/16/64 KiB); §3.10 item 10 | MAJOR | The checker keeps a direct reference; the emitter reads `Emission.functions`. After: 3.219/7.420/27.405 ms (16 to 64: 3.69) |
+| No growth shape for the densest inline form | MINOR | Inline and block shapes in the growth list: compiler 4.03/4.33, analyzer 4 to 16 4.04, ceiling 2.16 times dense-assign |
+| `&args[1]` in the emitter | MINOR | A total form gives `internal` |
+| No test pins the element read before the body (`filter`) or the length test before the store (`map`); unreachable parameter branches | MINOR | Tests; branches removed |
+| The length-safe list does not name `??` and `Utf8.byteLength` | MINOR | Rev 59 text |
+
+Analyzer growth of a long function: the time of `luau-analyze` grows
+faster than the count of numeric `for` loops in one function (review:
+1,500 against 6,000 trivial loops gave 198 against 7,845 ms;
+straight-line `x = (x + 1) :: number` grows 6.9 times for 4 times the
+input). The inline form gives analyzer 20.2/81.5/1424.5 ms at
+4/16/64 KiB; the existing `for…of` form gives 149.5 and 3401 ms at 16
+and 64 KiB. Both stay inside the §3.10 bounds.
+
+Gates at 909d6d9: `gate.sh full` PASS; `gate.sh timing` PASS (18 of
+18).
 
 ## Measurements: Windows x86_64 (benchmarks.md Rev 5)
 
