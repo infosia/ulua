@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -675,3 +675,44 @@ Consequence: parameter facts (§5.29) reach the sites of `i`: `i` reads
 `lo`, and `lo` reads the literal `0` and `i`. The sites of `j` need a
 fact that holds for a signed integer; `j - 1` has no fact under §5.25.
 No production change in this round.
+
+## Measurements (P6.S11)
+
+Before the change: the 9 required tests of `remainder::parameter_tests`
+gave 5 passed, 4 failed; after: 9 passed, and 9 more tests pass. The
+generated Luau of the corpus and the workloads differs from e2cda20 in
+5 files: `a87` (`xs[j]` in `mixed`), `a91`, `t19`, queen
+(`cols[row]`), and sort (two reads and one write of `i`). Each
+difference is an index test that changed from the full test to the
+bound test at a site that reads a parameter. The count of native `%`
+is unchanged in each file except `a91` (1, from `pos`). Largest fact
+round count: corpus 4, workloads 6.
+
+Review: 0 CRITICAL, 1 MAJOR, 5 MINOR. Fixed: `a91` had no native `%`
+that a parameter fact proves (each `%` function also had a call that
+removed the fact; `pos` added); the recursive test did not isolate the
+self-call write; no test failed without the declaration condition (a
+constructor and a method test added; each new test fails with its
+condition removed); the module doc of the growth shapes. Measured, not
+changed: a nested call chain `f(f(...f(1)...))` scans each inner
+argument once per enclosing call, quadratic in the depth, which
+`DEPTH_CEILING` (48) bounds; the 40-deep growth shape gives compile
+time ratios 3.77 (4 to 16 KiB) and 4.02 (16 to 64 KiB), analyzer 4.03.
+
+`bench --only`, e2cda20 and afcb926 in one session, separate target
+directories, checksums equal:
+
+| Workload | Ulua ms before | Ulua ms after | Ulua / Luau before | after |
+|---|---:|---:|---:|---:|
+| sort | 216.107 | 179.696 | 3.534 | 2.936 |
+| queen | 973.291 | 970.782 | 2.226 | 2.229 |
+
+Record at afcb926 (clean tree), `ulua / luau`: sort 3.62 to 2.97;
+queen 2.33 (its upper mode, 1012 ms); others within 2.1% of the
+801ff6d record. Largest IQR 2.84% of the median; no cell withheld.
+
+Gates at afcb926: `gate.sh full` PASS. `gate.sh timing`: 21 of 22, the
+boolean-template ratio 6.03 against the bound 6, while the
+implementation agent was still active; `p55_ratio` alone then passed.
+The shape has no element access; its only parameter belongs to an
+exported function, which §5.29 excludes.
