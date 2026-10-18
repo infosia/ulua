@@ -60,6 +60,7 @@ Rev 55: §5.25 thresholds per binding, walks without recursion, the shadow check
 Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over the measured targets.
 Rev 57: §5.26 proven index (P6.S7).
 Rev 58: §4 item 12 export call path (P6.S8).
+Rev 59: §5.27 inline callbacks (P6.S9).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -945,6 +946,49 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       form): the index check is 85% of the sort overhead, 77% of
       queen, and 47% of particles. The tracking note records the
       proven sites of each workload and the time before and after.
+
+27. **Inline callbacks (P6.S9).** A call `a.forEach(f)`, `a.map(f)`,
+    `a.filter(f)`, or `a.reduce(f, init)` of C6.9 emits its loop in
+    place, with no helper call and no callback call, when `f` is an
+    arrow function literal at the call that has all of these:
+    - an expression body (not a block);
+    - parameters that are plain identifiers with no default value;
+    - not `async`;
+    - no function or arrow literal in its body.
+    Any other `f` keeps the helper of §5.16.
+    - **Order.** The loop is the helper loop: `n = #a` once, then for
+      each `i` from 1 to `n` (for `reduce`, with the accumulator that
+      starts as `init`), the element read `a[i]`, the parameter
+      writes, the body, the length test, and the step of the method.
+      The receiver is evaluated first, then `init`, as before (C12);
+      the arrow literal has no effect. Each parameter is a local of
+      one iteration. The index parameter is `i - 1`.
+    - **Values.** A body that reads an outer binding reads the binding
+      itself, as the closure reads its upvalue: the same value at the
+      same point. An exception or a trap in the body leaves the loop
+      at the same point as from the helper; the helper has no
+      protected call.
+    - **Length test.** `if #a ~= n then trap(2)` stays after each
+      body, unless the body is length-safe. A body is length-safe
+      when each node of it is one of: a literal, a read of a binding,
+      a unary, binary, logical, or conditional operator, a
+      parenthesized expression, an element read, a field read of a
+      record or class field, `.length`, or a template literal of
+      these. A length-safe body runs no code of another function, so
+      no array changes its length during the body.
+    - **Interrupts.** The loop is a numeric `for`; `FORNLOOP` fires
+      the interrupt on each iteration (§5.19). The body lines count as
+      statements of the loop body.
+    - **Scope.** No other method changes. No fusion: two calls stay
+      two loops in source order (the callback order of each stays the
+      order of `node`). The result array of `map` and `filter` is a
+      fresh table, as before.
+    - Measured before the rule (P6.S9 measurement round, generated
+      Luau of the callbacks workload edited by hand, `luau -O1`, best
+      of 7): helpers 279 ms; inline with the length test 253 ms;
+      inline without the length test 205 ms; inline with native `%`
+      91 ms. The `%` of these callbacks reads array elements, which
+      have no fact (§5.25); this rule does not change that.
 
 ## 6. Limits
 
