@@ -12,49 +12,16 @@ local function __ulua_table_end_0(m: __ulua_Table): ()
     __ulua_interrupt()
     if m.active == 0 then __ulua_table_active[m] = nil end
 end
+-- Wide number keys use bytes only in the index; keys retain the script numbers.
 local function __ulua_table_slot(m: __ulua_Table, k: any): number?
     if k ~= k then return m.nan end
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        return m.index[string.pack("<d", k)]
+    end
     return m.index[k]
 end
 local function __ulua_table_changed(m: __ulua_Table): ()
     if m.active > 0 then __ulua_trap(5) end
-end
-local function __ulua_table_set_0(m: __ulua_Table, k: any, v: any): __ulua_Table
-    if k == 0 then k = 0 end
-    local slot = __ulua_table_slot(m, k)
-    local added = slot == nil
-    if added then
-        m.slots += 1
-        slot = m.slots
-        __ulua_interrupt()
-        m.live += 1
-        __ulua_interrupt()
-        if k ~= k then m.nan = slot else m.index[k] = slot end
-        __ulua_interrupt()
-        m.keys[slot] = k
-    end
-    __ulua_interrupt()
-    m.values[slot :: number] = v
-    if added then __ulua_table_changed(m) end
-    return m
-end
-local function __ulua_table_add_0(m: __ulua_Table, k: any): __ulua_Table
-    if k == 0 then k = 0 end
-    if __ulua_table_slot(m, k) == nil then __ulua_table_set_0(m, k, k) end
-    return m
-end
-local function __ulua_table_get_0(m: __ulua_Table, k: any): any
-    local slot = __ulua_table_slot(m, k)
-    if slot == nil then return nil end
-    return m.values[slot]
-end
-local function __ulua_table_getOr_0(m: __ulua_Table, k: any, fallback: any): any
-    local slot = __ulua_table_slot(m, k)
-    if slot == nil then return fallback end
-    return m.values[slot]
-end
-local function __ulua_table_has_0(m: __ulua_Table, k: any): boolean
-    return __ulua_table_slot(m, k) ~= nil
 end
 local function __ulua_table_compact(m: __ulua_Table): ()
     local keys: {any} = {}
@@ -71,7 +38,10 @@ local function __ulua_table_compact(m: __ulua_Table): ()
             __ulua_interrupt()
             values[n] = m.values[i]
             __ulua_interrupt()
-            if k ~= k then nan = n else index[k] = n end
+            if k ~= k then nan = n
+            elseif typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+                index[string.pack("<d", k)] = n
+            else index[k] = n end
         end
     end
     __ulua_interrupt()
@@ -83,8 +53,63 @@ local function __ulua_table_compact(m: __ulua_Table): ()
     __ulua_interrupt()
     m.slots = n
 end
+local function __ulua_table_set_0(m: __ulua_Table, k: any, v: any): __ulua_Table
+    if k == 0 then k = 0 end
+    local indexKey = k
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        indexKey = string.pack("<d", k)
+    end
+    local slot = if k ~= k then m.nan else m.index[indexKey]
+    local added = slot == nil
+    if added then
+        -- A trapped deletion can skip compaction. Keep slot keys inside the int range.
+        if m.slots >= 2147483647 then __ulua_table_compact(m) end
+        m.slots += 1
+        slot = m.slots
+        __ulua_interrupt()
+        m.live += 1
+        __ulua_interrupt()
+        if k ~= k then m.nan = slot else m.index[indexKey] = slot end
+        __ulua_interrupt()
+        m.keys[slot] = k
+    end
+    __ulua_interrupt()
+    m.values[slot :: number] = v
+    if added then __ulua_table_changed(m) end
+    return m
+end
+local function __ulua_table_add_0(m: __ulua_Table, k: any): __ulua_Table
+    if k == 0 then k = 0 end
+    if __ulua_table_slot(m, k) == nil then __ulua_table_set_0(m, k, k) end
+    return m
+end
+local function __ulua_table_get_0(m: __ulua_Table, k: any): any
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        k = string.pack("<d", k)
+    end
+    local slot = if k ~= k then m.nan else m.index[k]
+    if slot == nil then return nil end
+    return m.values[slot]
+end
+local function __ulua_table_getOr_0(m: __ulua_Table, k: any, fallback: any): any
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        k = string.pack("<d", k)
+    end
+    local slot = if k ~= k then m.nan else m.index[k]
+    if slot == nil then return fallback end
+    return m.values[slot]
+end
+local function __ulua_table_has_0(m: __ulua_Table, k: any): boolean
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        k = string.pack("<d", k)
+    end
+    return if k ~= k then m.nan ~= nil else m.index[k] ~= nil
+end
 local function __ulua_table_delete_0(m: __ulua_Table, k: any): boolean
-    local slot = __ulua_table_slot(m, k)
+    if typeof(k) == "number" and (k < -2147483648 or k >= 2147483648) then
+        k = string.pack("<d", k)
+    end
+    local slot = if k ~= k then m.nan else m.index[k]
     if slot == nil then return false end
     if k ~= k then m.nan = nil else m.index[k] = nil end
     __ulua_interrupt()

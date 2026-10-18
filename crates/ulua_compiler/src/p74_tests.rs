@@ -11,6 +11,7 @@ fn ordered_collection_corpus_and_rejections() {
         include_str!("../../../corpus/accept/a77-map-basics.ts"),
         include_str!("../../../corpus/accept/a78-map-order.ts"),
         include_str!("../../../corpus/accept/a79-set-basics.ts"),
+        include_str!("../../../corpus/accept/a88-map-wide-keys.ts"),
         include_str!("../../../corpus/trap/t13-map-modified.ts"),
     ] {
         compile(source.as_bytes(), Limits::default()).unwrap();

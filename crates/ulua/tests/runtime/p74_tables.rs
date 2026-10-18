@@ -17,6 +17,42 @@ fn run(body: &str) -> String {
     }
 }
 #[test]
+fn wide_number_keys_preserve_lookup_order_copy_and_compaction() {
+    assert_eq!(
+        run(r#"
+        const ks = [1/0,-1/0,1e300,-1e300,2147483648,2147483647,
+            -2147483648,-2147483649,2147483648.5,-2147483648.5,
+            9007199254740992,0.5,NaN,-0];
+        const m = new Map<number,number>();
+        for(let i=0;i<ks.length;i++){m.set(ks[i],i);}
+        const s = new Set<number>(ks);
+        const copy = new Map<number,number>(m);
+        const sc = new Set<number>(s);
+        let ok:boolean = copy.size===14 && sc.size===14;
+        let order = 0;
+        copy.forEach((v:number,k:number):void=>{
+            ok = ok && v===order && sc.has(k) && copy.has(k);
+            ok = ok && (copy.get(k)??-1)===v && copy.getOr(k,-1)===v;
+            order++;
+        });
+        for(const k of copy.keys()){copy.set(k,copy.getOr(k,-1)+100);sc.add(k);}
+        for(let i=0;i<10;i++){
+            ok = ok && copy.delete(ks[i]) && sc.delete(ks[i]);
+            ok = ok && !copy.delete(ks[i]) && !sc.has(ks[i]);
+            ok = ok && (copy.get(ks[i])??-1)===-1 && copy.getOr(ks[i],-1)===-1;
+        }
+        let tail = '';
+        for(const k of copy.keys()){tail += `${copy.getOr(k,-1)},`;}
+        let sign = 0;
+        for(const k of sc){if(k===0){sign=1/k;}}
+        copy.set(-1/0,999);sc.add(-1/0);
+        return `${ok}/${order}/${tail}/${copy.size}/${sc.size}/${sign}/${copy.getOr(-1/0,0)}`;
+    "#),
+        "true/14/110,111,112,113,/5/5/Infinity/999"
+    );
+}
+
+#[test]
 fn ordered_key_equality_and_nullable_values() {
     assert_eq!(
         run(
@@ -204,8 +240,13 @@ fn ordered_collection_operation_cost() {
     );
     let _lock = crate::measurement_lock();
     const N: usize = 100_000;
-    for key in ["number", "string"] {
-        let key_at = if key == "number" { "i" } else { "keys[i]" };
+    for key in ["number", "wide", "string"] {
+        let key_type = if key == "wide" { "number" } else { key };
+        let key_at = match key {
+            "number" => "i",
+            "wide" => "2147483648+i",
+            _ => "keys[i]",
+        };
         let setup = if key == "string" {
             format!("const keys:string[]=[];for(let i=0;i<{N};i++){{keys.push(`key${{i}}`);}}")
         } else {
@@ -221,7 +262,7 @@ fn ordered_collection_operation_cost() {
                 _ => "for(const v of m.values()){sum=sum+v;}".into(),
             };
             let source = format!(
-                "{setup}const m=new Map<{key},number>();export function reset():void{{m.clear();{fill}}}export function main():number{{let sum=0;{work}return sum;}}"
+                "{setup}const m=new Map<{key_type},number>();export function reset():void{{m.clear();{fill}}}export function main():number{{let sum=0;{work}return sum;}}"
             );
             // Module initialization only declares values; string-key setup lives in a function.
             let source = if key == "string" {
@@ -323,4 +364,67 @@ fn traversal_then_failed_export_preserves_mutation_traps() {
         assert_eq!(status, ULUA_OK);
         assert_eq!(value.number, 0.0);
     }
+}
+
+#[test]
+fn exhausted_slot_counter_compacts_before_the_next_array_access() {
+    // Failed mutations can leave holes without the normal delete compaction.
+    // Inject the reachable counter state to avoid billions of failed calls.
+    let compiled = ulua_compiler::compile(
+        b"export function main():void{const m=new Map<number,number>();m.set(1,1);}",
+        ulua_compiler::Limits::default(),
+    )
+    .unwrap();
+    let (body, _) = compiled.luau.rsplit_once("\nreturn ").unwrap();
+    let source = format!(
+        "{body}\nlocal m = __ulua_table_new_0(nil)\nm.slots = 2147483647\n__ulua_table_set_0(m, 1, 1)\nreturn {{}}"
+    );
+    // SAFETY: These declarations match the linked private compiler and VM probes.
+    unsafe extern "C" {
+        fn ulua_internal_shim_compile(
+            source: *const std::ffi::c_char,
+            length: usize,
+            out: *mut *mut std::ffi::c_char,
+            size: *mut usize,
+            error: *mut std::ffi::c_char,
+        ) -> i32;
+        fn ulua_internal_shim_bytecode_free(out: *mut std::ffi::c_char);
+        fn ulua_internal_probe_step_loop(
+            bytecode: *const u8,
+            length: usize,
+            limits: *const std::ffi::c_void,
+            error: *mut std::ffi::c_char,
+        ) -> i32;
+    }
+    let mut bytecode = std::ptr::null_mut();
+    let mut length = 0;
+    let mut error = [0; 256];
+    // SAFETY: All buffers cover their lengths. The native compiler returns one owned bytecode buffer.
+    let status = unsafe {
+        ulua_internal_shim_compile(
+            source.as_ptr().cast(),
+            source.len(),
+            &mut bytecode,
+            &mut length,
+            error.as_mut_ptr(),
+        )
+    };
+    assert_eq!(status, 0);
+    let mut limits = RunLimits::default();
+    limits.max_steps = 10_000;
+    // SAFETY: The synchronous probe reads the live bytecode and limits and owns its VM.
+    let status = unsafe {
+        ulua_internal_probe_step_loop(
+            bytecode.cast(),
+            length,
+            (&limits as *const RunLimits).cast(),
+            error.as_mut_ptr(),
+        )
+    };
+    // SAFETY: Release the compiler-owned buffer once, after the probe returns.
+    unsafe { ulua_internal_shim_bytecode_free(bytecode) };
+    assert_eq!(status, 2, "compaction must reach the step limit");
+    // SAFETY: The native probe terminates the diagnostic buffer.
+    let error = unsafe { std::ffi::CStr::from_ptr(error.as_ptr()) };
+    assert_eq!(error.to_str().unwrap(), "Step limit exceeded");
 }

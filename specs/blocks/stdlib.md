@@ -363,7 +363,10 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
     `Map<number, V>` or `Set<number>` has only number keys, so this
     string collides with no other key of the same table. The key array
     keeps the number itself (invariant 4), so iteration and `keys()`
-    are unchanged. Reason: the pinned VM converts a number key with
+    are unchanged. The slot counter stays below `2^31`: when it
+    reaches `2^31 - 1`, `set` compacts before it adds a slot (a delete
+    that traps `map-modified` skips its compaction). Reason: the
+    pinned VM converts a number key with
     `int(d)` in the `GETTABLE` and `SETTABLE` fast paths and in
     `luaH_get` (`luai_num2int`, `VM/src/lnumutils.h`); the conversion
     is undefined behaviour for NaN, an infinity, or a value outside

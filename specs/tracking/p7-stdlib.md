@@ -341,7 +341,7 @@ P6).
 
 ## P7.4 defect: number keys outside the `int` range
 
-Status: OPEN 2026-10-18. Contract: `blocks/stdlib.md` Rev 12 §8 rule 1a.
+Status: fixed 2026-10-18, review open. Contract: `blocks/stdlib.md` Rev 12 §8 rule 1a.
 
 Failure: `gate.sh sanitize` (P6.S7) stops in
 `p74_tables::node_differential_ten_thousand_sequences` with UBSan
@@ -356,3 +356,34 @@ P7 Phase Review did not run `gate.sh sanitize`.
 Corpus: `a88` (Map and Set keys: both infinities, `±1e300`, `2^31`,
 `2^31 - 1`, `-2^31`, `-2^31 - 1`, `±(2^31 + 0.5)`, `2^53`, `0.5`;
 `js-comparable: yes`; `node` and the current build agree).
+
+Before the fix (sanitizer build, a88 and a direct test): UBSan
+"inf is outside the range of representable values of type 'int'" at
+`lvmexecute.cpp:779:37`; a key at `2^31` gave the same class at
+`lvmexecute.cpp:809:37`. After: a88 equals its golden with no report;
+`gate.sh sanitize` PASS (all steps, fuzz smoke and fault sweep
+included).
+
+Fix: `get`, `getOr`, `has`, `delete`, `set`, and the compaction convert
+a key outside the `int` range to `string.pack("<d", k)` before each
+index access. Class audit (implementation notes): array element access
+runs the bound test first (pipeline §5.20); string search indices are
+bounded by the maximum string length; the async queue head and tail
+stay bounded by its reset and compaction; the Map slot counter now
+has the `2^31 - 1` compaction rule.
+
+Cost (`p74_tables::ordered_collection_operation_cost`, ns per
+operation, before and after): number keys in range `set` 142.9 to
+166.8, `get` 61.5 to 71.2, `has` 38.4 to 49.4, `delete` 265.0 to 285.1,
+iteration 35.7 to 34.8; wide keys `set` 268.8, `get` 157.8, `has`
+140.3, `delete` 426.5 (after). String keys unchanged within noise.
+Open (MINOR): the in-range number cost rises 16% to 28% from the
+per-call `typeof` and range test. A helper per key type removes the
+test for string, boolean, and object keys; it does not remove it for
+number keys.
+
+`gate.sh quick` failed once in `p3_links::c11_cpp17_static_dynamic_and_exports`
+(`libulua.a` missing in the deps directory after the sanitizer and
+release builds of the slice); the test alone and a second
+`gate.sh quick` passed. MINOR: the test depends on the artifacts of an
+earlier build.
