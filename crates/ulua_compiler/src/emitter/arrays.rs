@@ -200,9 +200,7 @@ impl Emitter<'_> {
             self.access_receiver_check_text(&array, deferred);
         }
         let result = if let (Some(op), Some(old)) = (op, old) {
-            if op == "%" {
-                self.capture("__ulua_fmod");
-            }
+            self.capture_binary(op);
             let result = self.binary(op, &self.temp(old), &self.temp(value));
             // Freeze concatenation and its allocation before the write checks.
             self.write_slot(value, result);

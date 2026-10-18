@@ -1,6 +1,11 @@
 //! Bounded integer facts select remainder and index forms before emission.
 mod components;
 #[cfg(test)]
+mod counted_tests;
+#[cfg(test)]
+mod element_tests;
+mod elements;
+#[cfg(test)]
 mod index_tests;
 #[cfg(test)]
 mod tests;
@@ -30,6 +35,7 @@ impl Fact {
 enum Node {
     None,
     Literal(u64),
+    Range(u64, u64),
     Read(usize),
     Binary(&'static str, usize, usize),
 }
@@ -39,6 +45,14 @@ enum Site {
     Assignment(usize),
     IndexRead(usize),
     IndexWrite(usize),
+    ElementAssignment(usize),
+}
+struct Counter {
+    binding: usize,
+    start: u64,
+    step: u64,
+    bound: usize,
+    strict: bool,
 }
 struct Write {
     binding: usize,
@@ -49,11 +63,14 @@ struct Write {
 struct Graph {
     nodes: Vec<Node>,
     writes: Vec<Write>,
+    counters: Vec<Counter>,
     bindings: Vec<usize>,
     sites: Vec<(usize, Site, u32)>,
 }
 struct Build<'a> {
     source: &'a [u8],
+    elements: &'a elements::Elements,
+    captured: &'a [bool],
     graph: &'a mut Graph,
     indices: HashMap<usize, usize>,
     starts: HashMap<usize, usize>,
@@ -119,9 +136,12 @@ impl Visitor for Build<'_> {
         self.stack.push(self.graph.nodes.len());
     }
     fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
+        let reduce = self.callback_call(e)?;
         let id = match &e.kind {
             E::Number(n) => self.push(integer(*n).map_or(Node::None, Node::Literal)),
             E::Read(id) => self.push(Node::Read(*id)),
+            E::Index(a, _) => self.push(self.element_node(a)),
+            _ if reduce.is_some() => self.push(reduce.map_or(Node::None, Node::Read)),
             E::Binary(op, a, b) => self.binary(
                 op,
                 self.index(a)?,
@@ -141,6 +161,16 @@ impl Visitor for Build<'_> {
             )
         })?;
         self.starts.insert(address(e), start);
+        if let Some(targets) = self.elements.returns.get(&address(e)) {
+            for &target in targets {
+                self.write_value(target, e)?;
+            }
+        }
+        if let E::Push(a, value) = &e.kind
+            && let Some(id) = self.elements.receiver(a)
+        {
+            self.write_value(id, value)?;
+        }
         Ok(())
     }
     fn index_expression(&mut self, e: &mut Expr, receiver: bool) -> Result<(), Diagnostic> {
@@ -155,7 +185,46 @@ impl Visitor for Build<'_> {
     fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
         let key = address(s);
         match s {
-            S::Element(_, i, _, _) => {
+            S::For(init, test, update, body, _) => {
+                if let Some(form) = crate::counted::select(
+                    self.captured,
+                    init,
+                    test.as_ref(),
+                    update.as_deref(),
+                    body,
+                ) && form.step > 0.0
+                    && let (Some(start), Some(step)) = (integer(form.start), integer(form.step))
+                {
+                    self.graph.counters.push(Counter {
+                        binding: form.id,
+                        start,
+                        step,
+                        bound: self.index(form.bound)?,
+                        strict: !form.adjustment.is_empty(),
+                    });
+                }
+            }
+            S::Element(a, i, op, e) => {
+                if let Some(id) = self.elements.receiver(a) {
+                    if let Some(op) = op {
+                        let start = self.lookup(&self.starts, e)?;
+                        let read = self.push(Node::Read(id));
+                        let value = self.binary(
+                            op,
+                            read,
+                            self.index(e)?,
+                            Site::ElementAssignment(key),
+                            e.start,
+                        );
+                        self.graph.writes.push(Write {
+                            binding: id,
+                            value,
+                            start,
+                        });
+                    } else {
+                        self.write_value(id, e)?;
+                    }
+                }
                 self.graph
                     .sites
                     .push((self.index(i)?, Site::IndexWrite(key), i.start));
@@ -165,11 +234,14 @@ impl Visitor for Build<'_> {
                     self.eligible[*id] = true;
                     self.graph.bindings.push(*id);
                 }
-                self.graph.writes.push(Write {
-                    binding: *id,
-                    value: self.index(e)?,
-                    start: self.lookup(&self.starts, e)?,
-                });
+                if self.elements.confined.get(*id) == Some(&true) {
+                    self.array_write(*id, e)?;
+                } else {
+                    self.write_value(*id, e)?;
+                }
+            }
+            S::Assign(id, _, e) if self.elements.confined.get(*id) == Some(&true) => {
+                self.array_write(*id, e)?
             }
             S::Assign(id, op, e) => {
                 let start = self.lookup(&self.starts, e)?;
@@ -221,6 +293,7 @@ fn evaluate_range(
         values[index] = match graph.nodes[index] {
             Node::None => Fact::None,
             Node::Literal(n) => Fact::Integer(n, n),
+            Node::Range(lo, hi) => Fact::Integer(lo, hi),
             Node::Read(id) => bindings[id],
             Node::Binary(op, a, b) => binary(
                 op,
@@ -280,6 +353,11 @@ impl Visitor for Mark<'_> {
         {
             *op = NATIVE_REMAINDER;
         }
+        if self.0.contains(&Site::ElementAssignment(address(s)))
+            && let S::Element(_, _, Some(op), _) = s
+        {
+            *op = NATIVE_REMAINDER;
+        }
         if self.0.contains(&Site::IndexWrite(address(s)))
             && let S::Element(_, i, _, _) = s
         {
@@ -313,6 +391,7 @@ pub(crate) struct Report {
     pub(crate) components_at_limit: usize,
 }
 pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
+    let elements = elements::Elements::collect(module)?;
     let walk = walk::Walk {
         source: &module.source,
         limit: module.depth,
@@ -320,12 +399,22 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
     let owners: Vec<_> = module.bindings.iter().map(|b| b.owner).collect();
     let mut roots = vec![0; owners.len()];
     for (id, &owner) in owners.iter().enumerate() {
-        roots[id] = if owner == 0 { id + 1 } else { roots[owner - 1] };
+        roots[id] = if owner == 0 {
+            if elements.callbacks.contains_key(&id) {
+                0
+            } else {
+                id + 1
+            }
+        } else {
+            roots[owner - 1]
+        };
     }
     let mut graphs: Vec<_> = (0..=owners.len()).map(|_| Graph::default()).collect();
     let mut eligible = vec![false; owners.len()];
     let mut build = Build {
         source: &module.source,
+        elements: &elements,
+        captured: &module.captured,
         graph: &mut graphs[0],
         indices: HashMap::new(),
         starts: HashMap::new(),
@@ -338,6 +427,8 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
         let graph = &mut graphs[roots[f.binding]];
         let mut build = Build {
             source: &module.source,
+            elements: &elements,
+            captured: &module.captured,
             graph,
             indices: HashMap::new(),
             starts: HashMap::new(),
@@ -369,7 +460,9 @@ pub(crate) fn analyze(module: &mut Module) -> Result<Report, Diagnostic> {
             if matches!(values[node], Fact::Integer(..)) {
                 native.insert(key);
                 match key {
-                    Site::Expression(_) | Site::Assignment(_) => report.sites.push(start),
+                    Site::Expression(_) | Site::Assignment(_) | Site::ElementAssignment(_) => {
+                        report.sites.push(start)
+                    }
                     Site::IndexRead(_) | Site::IndexWrite(_) => report.index_sites.push(start),
                 }
             }

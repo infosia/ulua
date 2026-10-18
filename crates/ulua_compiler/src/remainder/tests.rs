@@ -1,7 +1,7 @@
 //! Each source builds the fact boundary that its emitted-form assertion checks.
 use super::*;
 use crate::{Limits, compile};
-fn form(body: &str, native: usize, fmod: usize) {
+pub(super) fn form(body: &str, native: usize, fmod: usize) {
     let source = format!("export function main():number{{{body}}}");
     let code = compile(source.as_bytes(), Limits::default()).unwrap().luau;
     assert_eq!(code.matches(" % ").count(), native, "{source}\n{code}");
@@ -44,7 +44,7 @@ forms! {
     division: "return (8/2)%3;", 0, 1;
     unary_minus: "let x=8;return (-x)%3;", 0, 1;
     field: "const x={v:8};return x.v%3;", 0, 1;
-    element: "const x=[8];return x[0]%3;", 0, 1;
+    element: "const x=[8];return x[0]%3;", 1, 0;
     call_result: "const f=()=>8;return f()%3;", 0, 1;
     conditional: "const b=true;return (b?8:4)%3;", 0, 1;
     closure_invalid_write: "let c=8;const f=():void=>{c=-4;};f();return c%3;", 0, 1;
@@ -236,8 +236,9 @@ fn report_corpus_and_workload_facts() {
             } else {
                 let id = path.file_stem().unwrap().to_str().unwrap();
                 let expected = match id {
-                    "queen" => 3,
-                    "particles" | "collect" => 2,
+                    "queen" | "collect" => 3,
+                    "particles" => 2,
+                    "sort" => 1,
                     _ => 0,
                 };
                 assert_eq!(checks, expected, "{id}");
@@ -279,7 +280,7 @@ fn report_corpus_and_workload_facts() {
 }
 
 #[path = "../../../ulua/tests/support/remainder_growth.rs"]
-mod growth;
+pub(super) mod growth;
 #[test]
 fn growth_shape_reaches_eight_rounds() {
     for bytes in [4096, 16384, 65536] {
@@ -451,7 +452,7 @@ forms! {
     stable_compound_subtract: "let x=8;x-=0;return x%3;", 1, 0;
     compound_division_invalidates: "let x=8;x/=2;return x%3;", 0, 1;
     field_compound_keeps_fmod: "let x={v:8};x.v%=3;return x.v;", 0, 1;
-    element_compound_keeps_fmod: "let x=[8];x[0]%=3;return x[0];", 0, 1;
+    element_compound_native: "let x=[8];x[0]%=3;return x[0];", 1, 0;
 }
 
 #[test]
@@ -489,6 +490,8 @@ fn missing_expression_node_returns_internal() {
     let mut eligible = [];
     let mut build = Build {
         source: &[],
+        elements: &elements::Elements::default(),
+        captured: &[],
         graph: &mut graph,
         indices: HashMap::new(),
         starts: HashMap::new(),
@@ -570,6 +573,8 @@ fn removed_write_keys_return_internal() {
     let mut eligible = [false];
     let mut build = Build {
         source: &[],
+        elements: &elements::Elements::default(),
+        captured: &[],
         graph: &mut graph,
         indices: HashMap::new(),
         starts: HashMap::new(),

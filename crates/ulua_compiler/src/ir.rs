@@ -27,7 +27,9 @@ pub(crate) struct Module {
     pub(crate) body: Vec<Statement>,
     pub(crate) depth: u32,
     pub(crate) source: Vec<u8>,
+    // Final capture flags and distinct emitted-closure counts exclude inline callbacks.
     pub(crate) captured: Vec<bool>,
+    pub(crate) capture_counts: Vec<u8>,
 }
 pub(crate) struct Function {
     // Only a qualifying literal at an array call receives this length-safety decision.
@@ -213,12 +215,6 @@ fn loop_jump(body: &Statement, kinds: u8) -> bool {
 
 // Read identities prove liveness when a pending join reaches the next statement.
 pub(crate) fn reads(statement: &Statement) -> Vec<usize> {
-    binding_uses(statement, false)
-}
-pub(crate) fn references(statement: &Statement) -> Vec<usize> {
-    binding_uses(statement, true)
-}
-fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
     let mut statements = vec![statement];
     let mut expressions = vec![];
     let mut ids = Vec::new();
@@ -226,7 +222,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
         match s.form() {
             Statement::Declare(_, e) | Statement::Eval(e) => expressions.push(e),
             Statement::Assign(id, op, e) => {
-                if writes || op.is_some() {
+                if op.is_some() {
                     ids.push(*id);
                 }
                 expressions.push(e);

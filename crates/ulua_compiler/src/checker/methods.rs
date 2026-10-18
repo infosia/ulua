@@ -260,7 +260,7 @@ mod tests {
                     assignments: vec![],
                     suspensions: HashMap::new(),
                     source_owner: u32::MAX,
-                    captured_writes: Default::default(),
+                    deferred_writes: Default::default(),
                     binding_starts: Default::default(),
                     json: vec![],
                     json_literals: vec![],

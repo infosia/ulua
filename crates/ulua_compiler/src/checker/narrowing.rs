@@ -89,7 +89,7 @@ impl Checker<'_> {
                 if let E::Read(id) = reference.kind {
                     let binding = &self.bindings[id];
                     if !binding.mutable
-                        || (binding.owner != 0 && !self.captured_writes.contains(&binding.start))
+                        || (binding.owner != 0 && !self.deferred_writes.contains(&binding.start))
                     {
                         let old = self.facts.get(id);
                         let mark = self.facts.mark();
@@ -277,7 +277,7 @@ impl Checker<'_> {
             return Type::Error;
         }
         let binding = &self.bindings[id];
-        if binding.mutable && (binding.owner == 0 || self.captured_writes.contains(&binding.start))
+        if binding.mutable && (binding.owner == 0 || self.deferred_writes.contains(&binding.start))
         {
             return ty;
         }

@@ -103,6 +103,17 @@ pub(super) fn solve(graph: &mut Graph, bindings: &mut [Fact]) -> (usize, usize) 
             }
         }
     }
+    let mut counters = vec![None; positions.len()];
+    for counter in &graph.counters {
+        if let Some(&pos) = positions.get(&counter.binding) {
+            counters[pos] = Some(counter);
+            if let Node::Read(id) = graph.nodes[counter.bound]
+                && let Some(&dependency) = positions.get(&id)
+            {
+                edges[pos].push(dependency);
+            }
+        }
+    }
     let components = components(&edges);
     let mut membership = vec![0; positions.len()];
     for (component, members) in components.iter().enumerate() {
@@ -145,6 +156,21 @@ pub(super) fn solve(graph: &mut Graph, bindings: &mut [Fact]) -> (usize, usize) 
             for &member in members {
                 let id = graph.bindings[member];
                 let candidate = &mut next[member];
+                if let Some(counter) = counters[member] {
+                    evaluate_range(graph, bindings, &mut values, counter.bound..=counter.bound);
+                    if let Fact::Integer(_, hi) = values[counter.bound] {
+                        // For a strict zero bound, L is -1. The positive step makes L+c nonnegative.
+                        let end = if counter.strict {
+                            hi + counter.step - 1
+                        } else {
+                            hi + counter.step
+                        };
+                        // A reversed interval cannot represent a fact. Keep the write join in that case.
+                        if counter.start <= end && end <= super::MAX {
+                            *candidate = Fact::Integer(counter.start, end);
+                        }
+                    }
+                }
                 if let (Fact::Integer(lo, hi), Fact::Integer(old_lo, old_hi)) =
                     (*candidate, bindings[id])
                 {

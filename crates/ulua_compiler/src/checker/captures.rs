@@ -22,7 +22,7 @@ struct Write {
     owner: u32,
 }
 pub(super) struct Writes {
-    pub(super) captured: std::collections::HashSet<u32>,
+    pub(super) deferred: std::collections::HashSet<u32>,
     pub(super) assignments: Vec<(u32, u32)>,
     pub(super) suspensions: HashMap<u32, Vec<u32>>,
 }
@@ -302,7 +302,7 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
     events.sort_unstable();
     let mut scopes = HashMap::<&str, Vec<usize>>::new();
     let mut result = Writes {
-        captured: Default::default(),
+        deferred: Default::default(),
         assignments: vec![],
         suspensions,
     };
@@ -321,7 +321,7 @@ pub(super) fn resolve<'a>(program: &'a Program<'a>) -> Writes {
                     if n.mutable {
                         result.assignments.push((n.start, w.offset));
                         if n.scope.owner != w.owner {
-                            result.captured.insert(n.start);
+                            result.deferred.insert(n.start);
                         }
                     }
                 }
@@ -382,4 +382,34 @@ fn call<'a>(c: &'a CallExpression<'a>, scope: Scope, pending: &mut Vec<Work<'a>>
             .filter_map(|a| a.as_expression())
             .map(|e| Work::Expr(e, scope)),
     );
+}
+
+// Inline expression bodies cannot assign bindings. The AST precheck records deferred writes,
+// not closure captures. Capture consumers use only this final checked-IR summary.
+pub(super) fn finalize(
+    bindings: &[ir::Binding],
+    functions: &[ir::Function],
+    references: &[(usize, usize, u32)],
+) -> (Vec<bool>, Vec<u8>) {
+    let mut inline = vec![false; bindings.len() + 1];
+    for f in functions {
+        inline[f.binding + 1] = f.inline_callback.is_some();
+    }
+    let mut owners: Vec<_> = (0..=bindings.len()).collect();
+    for (id, binding) in bindings.iter().enumerate() {
+        if inline[id + 1] {
+            owners[id + 1] = owners[binding.owner];
+        }
+    }
+    let mut captured: Vec<_> = bindings.iter().map(|b| b.declaration).collect();
+    let mut counts = vec![0u8; bindings.len()];
+    let mut pairs = std::collections::HashSet::new();
+    for &(owner, id, _) in references {
+        let owner = owners[owner];
+        if owner != owners[bindings[id].owner] && pairs.insert((owner, id)) {
+            captured[id] = true;
+            counts[id] = counts[id].saturating_add(1);
+        }
+    }
+    (captured, counts)
 }

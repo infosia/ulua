@@ -6,19 +6,9 @@ pub(super) fn name(id: usize) -> String {
 }
 
 pub(super) fn select(module: &ir::Module) -> Vec<bool> {
-    let mut counts = vec![0u8; module.bindings.len()];
     let mut copies = std::collections::HashSet::new();
     for f in &module.functions {
-        let mut ids = std::collections::HashSet::new();
         let mut work: Vec<_> = f.initializers.iter().chain(&f.body).collect();
-        for s in &work {
-            ids.extend(ir::references(s));
-        }
-        for id in ids {
-            if module.bindings[id].owner != f.binding + 1 {
-                counts[id] = counts[id].saturating_add(1);
-            }
-        }
         while let Some(s) = work.pop() {
             use ir::Statement as S;
             match s.form() {
@@ -43,7 +33,8 @@ pub(super) fn select(module: &ir::Module) -> Vec<bool> {
             }
         }
     }
-    counts
+    module
+        .capture_counts
         .iter()
         .enumerate()
         .map(|(id, count)| *count > 1 && module.bindings[id].mutable && !copies.contains(&id))

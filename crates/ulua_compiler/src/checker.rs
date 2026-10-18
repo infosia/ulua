@@ -55,7 +55,7 @@ pub(crate) struct Checker<'s> {
     assignments: Vec<(u32, u32)>,
     suspensions: HashMap<u32, Vec<u32>>,
     source_owner: u32,
-    captured_writes: std::collections::HashSet<u32>,
+    deferred_writes: std::collections::HashSet<u32>,
     binding_starts: HashMap<u32, usize>,
     json: Vec<(bool, Type)>,
     json_literals: Vec<(Type, Vec<usize>, Span)>,
@@ -367,7 +367,7 @@ pub(crate) fn check_with_grants(
         assignments: writes.assignments,
         suspensions: writes.suspensions,
         source_owner: u32::MAX,
-        captured_writes: writes.captured,
+        deferred_writes: writes.deferred,
         binding_starts: HashMap::new(),
         json: vec![],
         json_literals: vec![],
@@ -496,10 +496,7 @@ pub(crate) fn check_with_grants(
     }
     c.tdz()?;
     c.json_order()?;
-    let mut captured: Vec<_> = c.bindings.iter().map(|b| b.declaration).collect();
-    for &(owner, id, _) in &c.references {
-        captured[id] |= owner != c.bindings[id].owner;
-    }
+    let (captured, capture_counts) = captures::finalize(&c.bindings, &c.functions, &c.references);
     Ok(ir::Module {
         json: c.json,
         field_names: c.fields.into_iter().map(|(name, id)| (id, name)).collect(),
@@ -510,6 +507,7 @@ pub(crate) fn check_with_grants(
         methods: c.methods,
         types: c.types,
         captured,
+        capture_counts,
         bindings: c.bindings,
         functions: c.functions,
         body,

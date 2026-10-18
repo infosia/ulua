@@ -4,6 +4,7 @@
 
 mod bounds;
 mod checker;
+mod counted;
 mod depth;
 mod emitter;
 mod host_names;
