@@ -64,6 +64,7 @@ Rev 59: §5.27 inline callbacks (P6.S9).
 Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters. Rev 62: §5.27 an inline callback is not a closure. Rev 63: §5.28 the counter fact uses the structural test of item 24.
 Rev 64: §5.29 parameter facts; §5.25 one fact graph for the module (P6.S11).
 Rev 65: §5.30 integral marks; §5.26 the integral index form (P6.S12).
+Rev 66: §5.30 rule 7 names `size` and `Utf8.byteLength` (P6.S12 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1174,7 +1175,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       6. `Math.floor(e)`, `Math.ceil(e)`, `Math.trunc(e)`, and
          `Math.round(e)` for any `e`; `Math.abs(e)` when `e` has a
          mark.
-      7. `x.length` of an array or a string.
+      7. `x.length` of an array or a string, `m.size` of a `Map` or a
+         `Set`, and `Utf8.byteLength(s)`.
       8. A parenthesized expression whose content has a mark.
     - **Proof of the forms.** Rule 4: the exact sum, difference, or
       product of two integers is an integer. If its magnitude is at
@@ -1187,7 +1189,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       infinite second operand gives the first operand. Rule 6: ECMA-262
       states each result as an integer, a zero, NaN, or an infinity;
       the corpus rows of `stdlib.md` §5 pin the lowering to `node`.
-      Rule 7: a length is a non-negative integer.
+      Rule 7: a length, a size, and a byte count are non-negative
+      integers.
     - **Binding marks.** The bindings of item 25 and the parameters of
       item 29 can have a mark, with the writes of those items. A
       binding has a mark when each of its writes has a mark. A
