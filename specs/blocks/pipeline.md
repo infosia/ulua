@@ -61,6 +61,7 @@ Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over
 Rev 57: §5.26 proven index (P6.S7).
 Rev 58: §4 item 12 export call path (P6.S8).
 Rev 59: §5.27 inline callbacks (P6.S9).
+Rev 60: §5.28 element facts (P6.S10).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -994,6 +995,64 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       inline without the length test 205 ms; inline with native `%`
       91 ms. The `%` of these callbacks reads array elements, which
       have no fact (§5.25); this rule does not change that.
+
+28. **Element facts (P6.S10).** The fact pass of item 25 also gives
+    facts to the elements of a confined array binding and to the
+    parameters of an inline callback (item 27). A `%` that reads them
+    can then be native. The compiler proves each fact; it adds no run
+    time test. A value without a proof keeps `fmod`.
+    - **Confined binding.** A `let` or `const` binding `x` of type
+      `number[]` that a function body declares (as item 25) is confined when
+      both hold:
+      1. Each write of `x` (its initializer and each assignment) is an
+         array literal or the result of an inline `map` or `filter`
+         call (item 27). Each of these makes a fresh array.
+      2. Each read of `x`, in the function and in each closure inside
+         it, is one of: the receiver of an element read `x[i]`; the
+         target of an element write `x[i] = e` or `x[i] op= e`;
+         `x.length`; the receiver of `push(e)` or `pop()`; the
+         receiver of an inline `forEach`, `map`, `filter`, or
+         `reduce`; the subject of `for…of`.
+      Then no other name reaches the array that `x` holds: the array
+      is fresh, and no read passes it on. A binding that fails one
+      condition is not confined and its elements have no fact.
+    - **Element writes.** The values that can become an element of a
+      confined `x` are: each entry of an array literal written to
+      `x`; each `e` of `x.push(e)`; each `e` of `x[i] = e`; each
+      `x[i] op e` of `x[i] op= e` (as `x[i] = x[i] op e`); each body
+      value of an inline `map` written to `x`; each element of the
+      receiver of an inline `filter` written to `x`. The element fact
+      of `x` is the join of the facts of these values, as a binding
+      fact joins its writes. A value without a fact gives `x` no
+      element fact. `pop()` and `x.length` add no value.
+    - **Element reads.** An element read `x[i]` of a confined `x` has
+      the element fact of `x`: the bound test of item 20 runs before
+      the access, so the value is one that a write stored. The
+      parameter `v` of an inline callback whose receiver is a
+      confined `x` has the element fact of `x`.
+    - **Inline callback parameters.** The index parameter of an
+      inline callback has the fact `[0, 2^27 - 1]`: the pinned VM
+      holds at most `2^26` keys in the array part and `2^26` in the
+      hash part of a table (`MAXBITS 26`, `VM/src/ltable.cpp:40-42`;
+      `table overflow` above), and an Ulua array has no hole, so its
+      length is at most `2^27`. The accumulator of an inline `reduce`
+      is a binding whose writes are `init` and the body value. The
+      result of an inline `reduce` has the fact of its accumulator.
+      Other parameters have no fact.
+    - **Fixed point.** Each element fact and each callback parameter
+      is a node of the fact graph of item 25, with its writes and
+      edges. Components, rounds, thresholds, and the unset rule are
+      those of item 25. The thresholds of an element fact are those
+      of its write values.
+    - **Out of scope.** An array that a function receives as a
+      parameter, an array in a field or in another array, an array
+      that a closure returns, any other array method on `x`, and the
+      binding of `for…of` (it keeps no fact, as item 25 states).
+    - **Shadow check.** The shadow option of item 25 covers each
+      native `%` that this item proves.
+    - Measured before the rule (P6.S9 measurement round): with inline
+      callbacks and native `%`, the callbacks workload took 91 ms
+      against 205 ms with `fmod` (`luau -O1`, hand-edited Luau).
 
 ## 6. Limits
 

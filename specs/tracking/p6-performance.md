@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S10 OPEN 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -26,6 +26,7 @@ the gate bound comes from the record after the shrinks.
 | P6.S7 | Proven index (`pipeline.md` §5.26, C6) | The corpus and goldens are unchanged; `a87` and `t17` pin the proven-index edges; a unit test for each index form (read, write, compound write, literal, counter, no-fact index) checks the emitted test; the shadow check gives no stop over the corpus and the workloads; the trap-edge tests of the index check pass; the §5.19, analyzer, and P6.3 tests pass; `bench --only` before and after for queen, particles, and sort in one session; a new full record in which no workload rises outside the noise gate |
 | P6.S8 | Export call path (`pipeline.md` §4 item 12) | The C ABI tests and the corpus pass unchanged; a test calls each export of a multi-export module by index; a module whose export is missing or not a function fails at creation with `internal`; the reference array is charged to `max_memory_bytes`; `gate.sh sanitize` and the fault sweep pass; the boundary record before and after in one session (`bench --bin boundary`); the ten-workload ratios do not rise outside the noise gate |
 | P6.S9 | Inline callbacks (`pipeline.md` §5.27, C6.9) | The corpus and goldens are unchanged; `a89` and `t18` pin the edges; a unit test for each method and each condition of §5.27 checks the emitted form (inline or helper; length test kept or omitted); `t05` and `t18` trap `array-modified`; the §5.19, analyzer, and P6.3 tests pass; `bench --only callbacks` before and after in one session; a new full record in which no workload rises outside the noise gate |
+| P6.S10 | Element facts (`pipeline.md` §5.28, C4.3) | The corpus and goldens are unchanged; `a90` pins the fact edges; a unit test for each confinement condition, each element write form, the callback parameters, and the reduce accumulator checks the emitted `%` form; the facts of §5.25 that do not involve arrays are unchanged; the shadow check gives no stop over the corpus and the workloads; the growth test includes an element-fact shape; `bench --only callbacks` before and after in one session; a new full record |
 
 ## Carry-over into P6
 
