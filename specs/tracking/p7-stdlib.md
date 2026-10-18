@@ -341,7 +341,7 @@ P6).
 
 ## P7.4 defect: number keys outside the `int` range
 
-Status: fixed 2026-10-18, review open. Contract: `blocks/stdlib.md` Rev 12 §8 rule 1a.
+Status: COMPLETE 2026-10-18 (review: 0 CRITICAL, 0 MAJOR). Contract: `blocks/stdlib.md` Rev 12 §8 rule 1a.
 
 Failure: `gate.sh sanitize` (P6.S7) stops in
 `p74_tables::node_differential_ten_thousand_sequences` with UBSan
@@ -379,11 +379,36 @@ iteration 35.7 to 34.8; wide keys `set` 268.8, `get` 157.8, `has`
 140.3, `delete` 426.5 (after). String keys unchanged within noise.
 Open (MINOR): the in-range number cost rises 16% to 28% from the
 per-call `typeof` and range test. A helper per key type removes the
-test for string, boolean, and object keys; it does not remove it for
-number keys.
+whole test for string, boolean, and object keys, and the `typeof`
+call for number keys. Measured (review, `luau -O2`, 5e6 `get` calls,
+in-range integer keys): 17.3 to 17.5 ns before the fix, 35.8 ns with
+the committed form, 24.7 to 25.2 ns with the range test only.
 
 `gate.sh quick` failed once in `p3_links::c11_cpp17_static_dynamic_and_exports`
 (`libulua.a` missing in the deps directory after the sanitizer and
 release builds of the slice); the test alone and a second
 `gate.sh quick` passed. MINOR: the test depends on the artifacts of an
 earlier build.
+
+Review of 82ad9a0 and f1ab3b1: 0 CRITICAL, 0 MAJOR. Probes under ASan
+and UBSan with halt_on_error: the string, array, and `Math` members
+with `±Infinity`, `±1e300`, `2^31`, `-2^31 - 1`, `2^32`, NaN, `-0`,
+and `±(2^31 ± 0.5)`; element access, `at`, `charCodeAt`,
+`codePointAt`, `repeat`; Map and Set keys incl. `±5e-324` and
+`2^53 + 2` (output equal to `node`). Each ends in a value, a named
+trap, or `limit:memory`; no sanitizer report. The class audit found a
+bound before each script-number access in the prelude, the emitter,
+and the native shim.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| In-range number keys pay `typeof` and the range test; one helper set per key type keeps only the range test for numbers (measured above) | MINOR | open |
+| `add` of a new wide key packs it twice (`slot`, then `set`) | MINOR | open |
+| The slot-counter test asserts only the step limit, not the state after compaction (the 2^31 iterations make a state check impractical) | MINOR | accepted |
+| Rule 1a packs `-2^31 - 0.5`, which the cast represents; conservative and harmless | MINOR | accepted |
+| `Math.fround(1e300)` converts double to float in `string.pack("<f")`; outside the int class; measured Infinity, no report | MINOR | accepted |
+
+A root fix is a pinned VM fork with a range test in `luai_num2int`
+users (`luaH_get`, `arrayindex`, the `GETTABLE` and `SETTABLE` fast
+paths). It removes the prelude cost and closes the class for every
+table access. It needs an owner decision on a fork.
