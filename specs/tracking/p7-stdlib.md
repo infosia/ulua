@@ -338,3 +338,21 @@ analyzer largest 11.638).
 Open: m1; the analyzer ratio of `P22-array-wide-function-product`
 stays from 11.44 to 11.91 against the bound 12 (one run gave 12.023 in
 P6).
+
+## P7.4 defect: number keys outside the `int` range
+
+Status: OPEN 2026-10-18. Contract: `blocks/stdlib.md` Rev 12 §8 rule 1a.
+
+Failure: `gate.sh sanitize` (P6.S7) stops in
+`p74_tables::node_differential_ten_thousand_sequences` with UBSan
+"is outside the range of representable values of type 'int'" at
+`lvmexecute.cpp:779`. The key is `-inf`. It reproduces at 70479aa (before
+P6.S7). Cause: `__ulua_table_slot` and `__ulua_table_set_0` index
+`m.index` with the script key; the pinned VM converts a number key with
+`int(d)` in `GETTABLE`, `SETTABLE`, and `luaH_get`. Severity: CRITICAL
+(a script reaches undefined behaviour in the VM, invariant 2). The
+P7 Phase Review did not run `gate.sh sanitize`.
+
+Corpus: `a88` (Map and Set keys: both infinities, `±1e300`, `2^31`,
+`2^31 - 1`, `-2^31`, `-2^31 - 1`, `±(2^31 + 0.5)`, `2^53`, `0.5`;
+`js-comparable: yes`; `node` and the current build agree).

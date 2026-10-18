@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 11, 2026-10-17. Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 12, 2026-10-18. Rev 12: §8 rule 1a number keys outside the `int` range (P7.4 defect). Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -356,6 +356,24 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
    Measured cost against a plain table (M3): `set` 1.3 to 1.5 times,
    `get` 1.2 to 1.3, `delete` 2.4 to 2.8 (with compaction), iteration
    1.5.
+1a. **Number keys of the index table.** The index table never gets a
+    number key `k` outside `-2^31 <= k < 2^31`. Such a key (an
+    infinity, `1e300`, `2^31`, `-2^31 - 1`, `2^31 + 0.5`) is stored in
+    the index table as the 8-byte string `string.pack("<d", k)`. A
+    `Map<number, V>` or `Set<number>` has only number keys, so this
+    string collides with no other key of the same table. The key array
+    keeps the number itself (invariant 4), so iteration and `keys()`
+    are unchanged. Reason: the pinned VM converts a number key with
+    `int(d)` in the `GETTABLE` and `SETTABLE` fast paths and in
+    `luaH_get` (`luai_num2int`, `VM/src/lnumutils.h`); the conversion
+    is undefined behaviour for NaN, an infinity, or a value outside
+    the `int` range (pipeline §5.20). Measured (P6.S7):
+    `gate.sh sanitize` gave UBSan "is outside the range of
+    representable values of type 'int'" at `lvmexecute.cpp:779` in
+    `p74_tables::node_differential_ten_thousand_sequences` for the key
+    `-inf`, at 70479aa and after P6.S7. The same class covers every
+    other prelude table access with a key that a script supplies
+    (pipeline §5.20); the implementation lists each such access.
 2. **Key types.** `number` (SameValueZero: NaN is one key, `-0` is
    stored as `+0`), `string` (content), `boolean`, and a class, record,
    or array type (identity, as `node` compares object keys). A
@@ -404,7 +422,8 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
 8. **Limits.** Each prelude loop (compaction, copy, traversal) has the
    interrupt points of §5.19 and its allocations are charged.
 9. **Corpus.** `a77` (map battery with number and string keys, NaN and
-   `-0`, `getOr`, `size`, `clear`), `a78` (insertion order with
+   `-0`, `getOr`, `size`, `clear`), `a88` (number keys outside the
+   `int` range, rule 1a), `a78` (insertion order with
    overwrite, delete, re-insert; `keys()`, `values()`, `forEach`), `a79`
    (set battery, array source, identity keys of a class), `a82` (a
    `set` on a present key during a traversal), all `js-comparable:
