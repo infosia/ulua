@@ -61,7 +61,7 @@ Rev 56: §6 item 4 compiler memory: each constant is the largest derivation over
 Rev 57: §5.26 proven index (P6.S7).
 Rev 58: §4 item 12 export call path (P6.S8).
 Rev 59: §5.27 inline callbacks (P6.S9).
-Rev 60: §5.28 element facts (P6.S10).
+Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1039,6 +1039,20 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       is a binding whose writes are `init` and the body value. The
       result of an inline `reduce` has the fact of its accumulator.
       Other parameters have no fact.
+    - **Counted loop counters.** A counter of a `for` loop that
+      lowers to a counted loop (item 24) with a positive step `c` and
+      the test `i < b` or `i <= b` has the fact `[s, L + c]` in place
+      of the join of its writes, when its start `s` and `b` have facts:
+      `L` is `hi_b - 1` for `i < b` and `hi_b` for `i <= b`, and
+      `L + c <= 2^53`. Reason: item 24 states that the body does not
+      write the counter and that no closure captures it, so each value
+      of the counter is `s`, or a value that passed the test plus `c`.
+      Without this rule, `k++` takes the threshold `2^53` (item 25),
+      and a sum that reads `k` has no fact. Measured (P6.S10 first
+      form): in the callbacks workload, `for (let k = 0; k < 20; k++)`
+      gave `k` the fact `[0, 2^53]`, so `(v + i + k) % 4294967296`
+      stayed `fmod` and the time did not change (266.9 against 266.9
+      ms).
     - **Fixed point.** Each element fact and each callback parameter
       is a node of the fact graph of item 25, with its writes and
       edges. Components, rounds, thresholds, and the unset rule are
