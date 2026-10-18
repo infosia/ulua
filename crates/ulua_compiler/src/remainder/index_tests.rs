@@ -58,14 +58,14 @@ fn shadow_rejects_false_index_forms() {
     struct Force;
     impl Visitor for Force {
         fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
-            if let E::Index(_, _, form) = &mut e.kind {
-                *form = crate::ir::IndexForm::Proven;
+            if let E::Index(_, i) = &mut e.kind {
+                i.index_form = crate::ir::IndexForm::Proven;
             }
             Ok(())
         }
         fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
-            if let S::Element(_, _, _, _, form) = s {
-                *form = crate::ir::IndexForm::Proven;
+            if let S::Element(_, i, _, _) = s {
+                i.index_form = crate::ir::IndexForm::Proven;
             }
             Ok(())
         }
@@ -117,11 +117,15 @@ pub(super) fn index_counts(module: &mut super::Module) -> (usize, usize) {
     }
     impl Visitor for Counts {
         fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
-            self.sites += usize::from(matches!(e.kind, E::Index(_, _, Proven)));
+            if let E::Index(_, i) = &e.kind {
+                self.sites += usize::from(i.index_form == Proven);
+            }
             Ok(())
         }
         fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
-            if let S::Element(_, _, op, _, Proven) = s {
+            if let S::Element(_, i, op, _) = s
+                && i.index_form == Proven
+            {
                 self.sites += 1;
                 self.compound += usize::from(op.is_some());
             }
@@ -139,8 +143,8 @@ fn context_form(source: &str, proven: usize, checked: usize, tests: usize) -> St
     struct Forms(Vec<IndexForm>);
     impl Visitor for Forms {
         fn expression(&mut self, e: &mut Expr) -> Result<(), Diagnostic> {
-            if let E::Index(_, _, form) = e.kind {
-                self.0.push(form);
+            if let E::Index(_, i) = &e.kind {
+                self.0.push(i.index_form);
             }
             Ok(())
         }

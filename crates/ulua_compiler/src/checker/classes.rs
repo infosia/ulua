@@ -490,6 +490,7 @@ pub(super) fn value(ty: Type, kind: E, start: u32) -> Expr {
     Expr {
         flow: None,
         bare_true: false,
+        index_form: crate::ir::IndexForm::Checked,
         start,
         ty,
         kind,

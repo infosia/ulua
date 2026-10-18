@@ -145,7 +145,7 @@ impl Visitor for Build<'_> {
     }
     fn index_expression(&mut self, e: &mut Expr, receiver: bool) -> Result<(), Diagnostic> {
         self.expression(e)?;
-        if !receiver && let E::Index(_, i, _) = &e.kind {
+        if !receiver && let E::Index(_, i) = &e.kind {
             self.graph
                 .sites
                 .push((self.index(i)?, Site::IndexRead(address(e)), e.start));
@@ -155,7 +155,7 @@ impl Visitor for Build<'_> {
     fn statement(&mut self, s: &mut S) -> Result<(), Diagnostic> {
         let key = address(s);
         match s {
-            S::Element(_, i, _, _, _) => {
+            S::Element(_, i, _, _) => {
                 self.graph
                     .sites
                     .push((self.index(i)?, Site::IndexWrite(key), i.start));
@@ -268,9 +268,9 @@ impl Visitor for Mark<'_> {
             *op = NATIVE_REMAINDER;
         }
         if self.0.contains(&Site::IndexRead(address(e)))
-            && let E::Index(_, _, form) = &mut e.kind
+            && let E::Index(_, i) = &mut e.kind
         {
-            *form = crate::ir::IndexForm::Proven;
+            i.index_form = crate::ir::IndexForm::Proven;
         }
         Ok(())
     }
@@ -281,9 +281,9 @@ impl Visitor for Mark<'_> {
             *op = NATIVE_REMAINDER;
         }
         if self.0.contains(&Site::IndexWrite(address(s)))
-            && let S::Element(_, _, _, _, form) = s
+            && let S::Element(_, i, _, _) = s
         {
-            *form = crate::ir::IndexForm::Proven;
+            i.index_form = crate::ir::IndexForm::Proven;
         }
         Ok(())
     }

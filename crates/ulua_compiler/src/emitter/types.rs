@@ -57,7 +57,7 @@ impl FunctionTypes {
             match statement.form() {
                 S::Declare(_, e) | S::Assign(_, _, e) | S::Eval(e) => expressions.push(e),
                 S::Field(a, _, _, e) | S::ErrorField(a, _, _, e) => expressions.extend([a, e]),
-                S::Element(a, i, _, e, _) => expressions.extend([a, i, e]),
+                S::Element(a, i, _, e) => expressions.extend([a, i, e]),
                 S::ForOf(_, a, b) => {
                     expressions.push(a);
                     statements.push(b);
@@ -107,7 +107,7 @@ impl FunctionTypes {
                 | E::Coalesce(a, b)
                 | E::Binary(_, a, b)
                 | E::Logical(_, a, b)
-                | E::Index(a, b, _)
+                | E::Index(a, b)
                 | E::Push(a, b) => {
                     expressions.push(a);
                     expressions.push(b);

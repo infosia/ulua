@@ -118,6 +118,7 @@ impl Checker<'_> {
                     return Ok(Expr {
                         flow: None,
                         bare_true: false,
+                        index_form: crate::ir::IndexForm::Checked,
                         start: call.span.start,
                         ty: Type::Void,
                         kind: ExprKind::Push(Box::new(receiver), Box::new(value)),
@@ -138,6 +139,7 @@ impl Checker<'_> {
                 field_callee = Some(Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: m.span.start,
                     ty,
                     kind: ExprKind::Field(Box::new(receiver), key),
@@ -226,6 +228,7 @@ impl Checker<'_> {
                 Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: call.callee.span().start,
                     ty: self.types.intern(vec![p], r, 1),
                     kind: ExprKind::Builtin(name),
@@ -235,6 +238,7 @@ impl Checker<'_> {
                 Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: n.span.start,
                     ty: self.bindings[id]
                         .ty

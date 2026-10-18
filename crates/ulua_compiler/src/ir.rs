@@ -56,6 +56,8 @@ pub(crate) struct Expr {
     pub(crate) flow: Option<Flow>,
     // Return coverage needs the original test syntax after parentheses disappear.
     pub(crate) bare_true: bool,
+    // The owning element read or write stores its form on this index operand.
+    pub(crate) index_form: IndexForm,
     pub(crate) start: u32,
     pub(crate) ty: Type,
     pub(crate) kind: ExprKind,
@@ -100,7 +102,7 @@ pub(crate) enum ExprKind {
     ClassCall(Box<Expr>, Box<Expr>, Vec<Expr>, bool),
     Template(Vec<Expr>),
     Array(Vec<Expr>),
-    Index(Box<Expr>, Box<Expr>, IndexForm),
+    Index(Box<Expr>, Box<Expr>),
     Length(Box<Expr>),
     Push(Box<Expr>, Box<Expr>),
     Method(Method, usize, Box<Expr>, Vec<Expr>),
@@ -112,7 +114,7 @@ pub(crate) enum Statement {
     Declare(usize, Expr),
     Assign(usize, Option<&'static str>, Expr),
     Field(Expr, usize, Option<&'static str>, Expr),
-    Element(Expr, Expr, Option<&'static str>, Expr, IndexForm),
+    Element(Expr, Expr, Option<&'static str>, Expr),
     ForOf(usize, Expr, Box<Statement>),
     Eval(Expr),
     Block(Vec<Statement>),
@@ -230,7 +232,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             Statement::Field(a, _, _, e) | Statement::ErrorField(a, _, _, e) => {
                 expressions.extend([a, e])
             }
-            Statement::Element(a, i, _, e, _) => expressions.extend([a, i, e]),
+            Statement::Element(a, i, _, e) => expressions.extend([a, i, e]),
             Statement::ForOf(_, a, b) => {
                 expressions.push(a);
                 statements.push(b);
@@ -281,7 +283,7 @@ fn binding_uses(statement: &Statement, writes: bool) -> Vec<usize> {
             | ExprKind::Coalesce(a, b)
             | ExprKind::Binary(_, a, b)
             | ExprKind::Logical(_, a, b)
-            | ExprKind::Index(a, b, _)
+            | ExprKind::Index(a, b)
             | ExprKind::Push(a, b) => {
                 expressions.push(a);
                 expressions.push(b);
@@ -338,4 +340,19 @@ pub(crate) fn abrupt(s: &Statement, jumps: bool) -> bool {
         }
         _ => false,
     }
+}
+
+// Cost: three size queries; no compiler or VM run.
+#[cfg(test)]
+#[test]
+fn compile_memory_ir_layout_bound() {
+    // Measured at 70479aa on aarch64 for compile memory (pipeline section 6, item 4):
+    // Statement = 328, Expr = 104, ExprKind = 48 bytes.
+    let statement = std::mem::size_of::<Statement>();
+    let expression = std::mem::size_of::<Expr>();
+    let kind = std::mem::size_of::<ExprKind>();
+    eprintln!("IR layout: Statement={statement} Expr={expression} ExprKind={kind}");
+    assert!(statement <= 328, "Statement={statement}");
+    assert!(expression <= 104, "Expr={expression}");
+    assert!(kind <= 48, "ExprKind={kind}");
 }

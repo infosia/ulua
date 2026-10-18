@@ -256,8 +256,9 @@ impl Emitter<'_> {
     ) -> Result<(), Diagnostic> {
         // The checked local value can target the binding without a reusable result slot.
         if self.local_binding(id)
-            && let E::Index(a, i, form) = &expr.kind
+            && let E::Index(a, i) = &expr.kind
         {
+            let form = i.index_form;
             self.offset = expr.start as usize;
             let depth = self.guard(depth)?;
             let (a, deferred) = self.access_receiver(a, depth)?;
@@ -268,7 +269,7 @@ impl Emitter<'_> {
                 expr.ty,
                 a,
                 &self.operand_text(&i),
-                *form,
+                form,
             )?;
             self.release(a);
             self.release_operand(i);
@@ -329,7 +330,7 @@ fn contains_call(expr: &Expr) -> bool {
             | E::Coalesce(a, b)
             | E::Binary(_, a, b)
             | E::Logical(_, a, b)
-            | E::Index(a, b, _)
+            | E::Index(a, b)
             | E::Push(a, b) => work.extend([a.as_ref(), b.as_ref()]),
             E::Conditional(t, a, b) => work.extend([t.as_ref(), a.as_ref(), b.as_ref()]),
             E::Object(fields) => work.extend(fields.iter().map(|(_, e)| e)),

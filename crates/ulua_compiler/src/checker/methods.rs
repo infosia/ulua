@@ -205,6 +205,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: call.span.start,
             ty,
             kind: ExprKind::Method(method, arity, Box::new(receiver), args),
@@ -304,6 +305,7 @@ mod tests {
                 let receiver = Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: 0,
                     ty: c.types.array(Type::Number),
                     kind: ExprKind::Array(vec![]),

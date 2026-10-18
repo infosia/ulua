@@ -375,6 +375,7 @@ fn unset_member_invalidates_the_whole_component() {
                     let read = |id| Expr {
                         flow: None,
                         bare_true: false,
+                        index_form: crate::ir::IndexForm::Checked,
                         start: e.start,
                         ty: e.ty,
                         kind: E::Read(id),
@@ -408,6 +409,7 @@ fn missing_initializer_and_unset_cycles_have_no_binding_fact() {
                 let replacement = Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: e.start,
                     ty: e.ty,
                     kind: E::Number(8.0),
@@ -497,6 +499,7 @@ fn missing_expression_node_returns_internal() {
     let mut expression = Expr {
         flow: None,
         bare_true: false,
+        index_form: crate::ir::IndexForm::Checked,
         start: 0,
         ty: crate::ir::Type::Number,
         kind: E::Number(1.0),
@@ -530,6 +533,7 @@ fn deep_ir_expression_returns_nesting_depth() {
     let expression = || Expr {
         flow: None,
         bare_true: false,
+        index_form: crate::ir::IndexForm::Checked,
         start: 37,
         ty: crate::ir::Type::Number,
         kind: E::Number(1.0),
@@ -579,6 +583,7 @@ fn removed_write_keys_return_internal() {
         Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: 0,
             ty: crate::ir::Type::Number,
             kind: E::Number(1.0),

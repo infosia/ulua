@@ -265,6 +265,7 @@ impl Checker<'_> {
             return Ok(Expr {
                 flow: None,
                 bare_true: false,
+                index_form: crate::ir::IndexForm::Checked,
                 start: chain.span.start,
                 ty,
                 kind: ExprKind::OptionalLength(Box::new(receiver)),
@@ -276,6 +277,7 @@ impl Checker<'_> {
             return Ok(Expr {
                 flow: None,
                 bare_true: false,
+                index_form: crate::ir::IndexForm::Checked,
                 start: chain.span.start,
                 ty: self.types.nullable(Type::String),
                 kind: ExprKind::OptionalErrorField(Box::new(receiver), key),
@@ -291,6 +293,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: chain.span.start,
             ty,
             kind: ExprKind::OptionalField(Box::new(receiver), key),
@@ -345,6 +348,7 @@ impl Checker<'_> {
                 return Ok(Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: chain.span.start,
                     ty: Type::Void,
                     kind: ExprKind::OptionalPush(Box::new(receiver), Box::new(value)),
@@ -373,6 +377,7 @@ impl Checker<'_> {
             return Ok(Expr {
                 flow: None,
                 bare_true: false,
+                index_form: crate::ir::IndexForm::Checked,
                 start: chain.span.start,
                 ty: Type::Void,
                 kind: ExprKind::OptionalMethod(method, arity, receiver, args),
@@ -414,6 +419,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: chain.span.start,
             ty: Type::Void,
             kind: ExprKind::OptionalCall(Box::new(receiver), key, args),

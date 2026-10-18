@@ -305,6 +305,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
         parts.push(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: 0,
             ty: Type::String,
             kind: ExprKind::String(format!("x{i}")),
@@ -314,6 +315,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
             parts.push(Expr {
                 flow: None,
                 bare_true: false,
+                index_form: crate::ir::IndexForm::Checked,
                 start: 0,
                 ty: Type::Number,
                 kind: ExprKind::Number(i as f64),
@@ -364,6 +366,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                         Expr {
                             flow: None,
                             bare_true: false,
+                            index_form: crate::ir::IndexForm::Checked,
                             start: 0,
                             ty: Type::String,
                             kind: ExprKind::Template(parts),

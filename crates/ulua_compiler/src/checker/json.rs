@@ -102,6 +102,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: call.span.start,
             ty: if parse { ty } else { Type::String },
             kind: ExprKind::Json(id, Box::new(value)),

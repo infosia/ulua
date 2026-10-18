@@ -412,10 +412,7 @@ impl Checker<'_> {
                     ));
                 }
                 let (a, i, element) = self.index(&m.object, &m.expression, depth, m.span)?;
-                (
-                    element,
-                    ExprKind::Index(Box::new(a), Box::new(i), crate::ir::IndexForm::Checked),
-                )
+                (element, ExprKind::Index(Box::new(a), Box::new(i)))
             }
             Expression::StaticMemberExpression(m) => {
                 if m.optional {
@@ -542,6 +539,7 @@ impl Checker<'_> {
                     parts.push(Expr {
                         flow: None,
                         bare_true: false,
+                        index_form: crate::ir::IndexForm::Checked,
                         start: q.span.start,
                         ty: Type::String,
                         kind: ExprKind::String(text.as_str().into()),
@@ -650,6 +648,7 @@ impl Checker<'_> {
         let value = Expr {
             flow,
             bare_true: matches!(e, Expression::BooleanLiteral(b) if b.value),
+            index_form: crate::ir::IndexForm::Checked,
             start: e.span().start,
             ty,
             kind,

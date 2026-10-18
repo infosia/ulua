@@ -167,7 +167,7 @@ impl Paths<'_, '_> {
                 E::Coalesce(a, b)
                 | E::Binary(_, a, b)
                 | E::Logical(_, a, b)
-                | E::Index(a, b, _)
+                | E::Index(a, b)
                 | E::Push(a, b)
                 | E::OptionalPush(a, b) => pending.extend([a.as_ref(), b.as_ref()]),
                 E::Conditional(t, a, b) => pending.extend([t.as_ref(), a.as_ref(), b.as_ref()]),
@@ -215,7 +215,7 @@ impl Paths<'_, '_> {
                 self.expression(a, state)?;
                 self.expression(b, state)?;
             }
-            S::Element(a, i, _, b, _) => {
+            S::Element(a, i, _, b) => {
                 for e in [a, i, b] {
                     self.expression(e, state)?;
                 }

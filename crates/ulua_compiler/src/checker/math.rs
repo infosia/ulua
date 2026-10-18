@@ -40,6 +40,7 @@ impl Checker<'_> {
         let callee = Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: member.span.start,
             ty: self
                 .types

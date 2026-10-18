@@ -12,7 +12,7 @@ impl Emitter<'_> {
         receiver: &Expr,
         depth: u32,
     ) -> Result<(usize, bool), Diagnostic> {
-        if let E::Index(a, i, _) = &receiver.kind {
+        if let E::Index(a, i) = &receiver.kind {
             self.offset = receiver.start as usize;
             let depth = self.guard(depth)?;
             let (a, deferred) = self.access_receiver(a, depth)?;

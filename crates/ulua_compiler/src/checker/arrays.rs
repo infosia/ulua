@@ -117,6 +117,7 @@ impl Checker<'_> {
         let zero_or_exhausted = Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: f.span.start,
             ty: Type::Boolean,
             kind: crate::ir::ExprKind::Boolean(false),

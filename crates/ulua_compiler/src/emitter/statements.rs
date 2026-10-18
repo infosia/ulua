@@ -145,7 +145,7 @@ impl Emitter<'_> {
                     self.release(slot);
                 }
             }
-            S::Element(a, i, op, e, form) => self.element(a, i, *op, e, *form, depth)?,
+            S::Element(a, i, op, e) => self.element(a, i, *op, e, i.index_form, depth)?,
             S::ForOf(id, a, body) => self.for_of(*id, a, body, depth)?,
             S::Eval(e) => {
                 let v = self.expression(e, depth)?;

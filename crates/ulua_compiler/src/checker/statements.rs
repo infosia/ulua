@@ -184,13 +184,7 @@ impl Checker<'_> {
                         ));
                     }
                     self.flow(&value.ty, Some(&element), a.span)?;
-                    return Ok(S::Element(
-                        array,
-                        index,
-                        op,
-                        value,
-                        crate::ir::IndexForm::Checked,
-                    ));
+                    return Ok(S::Element(array, index, op, value));
                 }
                 if let AssignmentTarget::StaticMemberExpression(m) = &a.left {
                     if m.optional {
@@ -208,6 +202,7 @@ impl Checker<'_> {
                             return Ok(S::Eval(Expr {
                                 flow: None,
                                 bare_true: false,
+                                index_form: crate::ir::IndexForm::Checked,
                                 start: a.span.start,
                                 ty: Type::Void,
                                 kind: ExprKind::Method(
@@ -343,6 +338,7 @@ impl Checker<'_> {
                 let value = Expr {
                     flow: None,
                     bare_true: false,
+                    index_form: crate::ir::IndexForm::Checked,
                     start: u.span.start,
                     ty: Type::Number,
                     kind: ExprKind::Number(1.0),
@@ -630,6 +626,7 @@ fn string_value(value: Expr) -> Expr {
         flow: None,
         start: value.start,
         bare_true: false,
+        index_form: crate::ir::IndexForm::Checked,
         ty: Type::String,
         kind: ExprKind::Template(vec![value]),
     }

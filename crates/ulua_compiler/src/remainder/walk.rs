@@ -67,7 +67,7 @@ impl Walk<'_> {
                 self.expression(a, visitor, depth)?;
                 self.expression(e, visitor, depth)?;
             }
-            S::Element(a, i, _, e, _) => {
+            S::Element(a, i, _, e) => {
                 self.expression_context(a, visitor, depth, true)?;
                 self.expression(i, visitor, depth)?;
                 self.expression(e, visitor, depth)?;
@@ -147,7 +147,7 @@ impl Walk<'_> {
             | E::Unary(_, a)
             | E::Length(a) => self.expression(a, visitor, depth)?,
             E::Field(a, _) => self.expression_context(a, visitor, depth, true)?,
-            E::Index(a, b, _) => {
+            E::Index(a, b) => {
                 self.expression_context(a, visitor, depth, true)?;
                 self.expression(b, visitor, depth)?;
             }

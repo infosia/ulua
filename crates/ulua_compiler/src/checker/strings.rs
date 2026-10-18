@@ -79,6 +79,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start: call.span.start,
             ty,
             kind: ExprKind::Method(method, 0, Box::new(receiver), args),
@@ -94,6 +95,7 @@ impl Checker<'_> {
         let callee = Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start,
             ty: self.types.intern(vec![argument.ty], Type::String, 1),
             kind: ExprKind::Builtin(helper),
@@ -101,6 +103,7 @@ impl Checker<'_> {
         Ok(Expr {
             flow: None,
             bare_true: false,
+            index_form: crate::ir::IndexForm::Checked,
             start,
             ty: Type::String,
             kind: ExprKind::Call(Box::new(callee), vec![argument]),

@@ -440,7 +440,8 @@ impl Emitter<'_> {
             E::Array(entries) => {
                 self.array_literal(dest, entries, depth)?;
             }
-            E::Index(a, i, form) => {
+            E::Index(a, i) => {
+                let form = i.index_form;
                 let (a, deferred) = self.access_receiver(a, depth)?;
                 let i = self.expression(i, depth)?;
                 self.access_receiver_check(a, deferred);
@@ -449,7 +450,7 @@ impl Emitter<'_> {
                     expr.ty,
                     a,
                     &self.temp(i),
-                    *form,
+                    form,
                 )?;
                 self.release(a);
                 self.release(i);
