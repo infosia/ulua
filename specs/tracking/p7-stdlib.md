@@ -412,3 +412,14 @@ A root fix is a pinned VM fork with a range test in `luai_num2int`
 users (`luaH_get`, `arrayindex`, the `GETTABLE` and `SETTABLE` fast
 paths). It removes the prelude cost and closes the class for every
 table access. It needs an owner decision on a fork.
+
+## P7.4 helpers per key type
+
+Status: OPEN 2026-10-18. Contract: `blocks/stdlib.md` Rev 13 §8 rule 1a.
+Problem: the two open MINOR items of the review above (the `typeof` and
+range test on every key; `add` packs a new wide key twice). Exit: the
+corpus (`a77` to `a79`, `a82`, `a88`, `t13`) unchanged; a unit test
+for each key type checks the emitted helper (number: range test, no
+`typeof`; string, boolean, object: no test); `gate.sh sanitize` PASS;
+`ordered_collection_operation_cost` before and after for number,
+wide, and string keys.

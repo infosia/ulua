@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 12, 2026-10-18. Rev 12: §8 rule 1a number keys outside the `int` range (P7.4 defect). Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 13, 2026-10-18. Rev 13: §8 rule 1a helpers per key type. Rev 12: §8 rule 1a number keys outside the `int` range (P7.4 defect). Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -363,7 +363,11 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
     `Map<number, V>` or `Set<number>` has only number keys, so this
     string collides with no other key of the same table. The key array
     keeps the number itself (invariant 4), so iteration and `keys()`
-    are unchanged. The slot counter stays below `2^31`: when it
+    are unchanged. The emitter selects the helpers by the key type
+    `K`, which the call site knows: for `K = number` each helper tests
+    the range of the key with no `typeof` test; for another `K` the
+    helpers do no range test and no conversion. A key is converted at
+    most once per operation (`add` included). The slot counter stays below `2^31`: when it
     reaches `2^31 - 1`, `set` compacts before it adds a slot (a delete
     that traps `map-modified` skips its compaction). Reason: the
     pinned VM converts a number key with
