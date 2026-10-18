@@ -62,6 +62,7 @@ Rev 57: §5.26 proven index (P6.S7).
 Rev 58: §4 item 12 export call path (P6.S8).
 Rev 59: §5.27 inline callbacks (P6.S9).
 Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters. Rev 62: §5.27 an inline callback is not a closure. Rev 63: §5.28 the counter fact uses the structural test of item 24.
+Rev 64: §5.29 parameter facts; §5.25 one fact graph for the module (P6.S11).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -835,12 +836,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       7. `a % b` when `lo_b >= 1`: `[0, min(hi_a, hi_b - 1)]`. This
          `%` is native.
       8. A parenthesized expression: the fact of its content.
-      Every other form has no fact: a parameter, a field, an element,
-      a call result, `/`, unary `-`, a conditional, a non-integer or
+      Every other form has no fact: a parameter outside item 29, a
+      field, an element outside item 28, a call result, `/`, unary `-`, a conditional, a non-integer or
       negative literal.
     - **Binding facts.** A `let` or `const` binding that a function
       body declares (a loop head included) can have a binding fact. A
-      parameter and a module-level binding have none. The writes of
+      module-level binding has none. A parameter has a fact only under
+      item 29. The writes of
       the binding are its initializer, each assignment `x = e`, each
       compound assignment `x op= e` (as `x = x op e`), and each update
       `x++` and `x--` (as `x = x + 1` and `x = x - 1`), in the
@@ -850,9 +852,10 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       no fact. A binding that `for…of`, `catch`, or a pattern declares
       has no fact.
     - **Fixed point.** A binding `x` depends on a binding `y` when a
-      write of `x` reads `y`. The bindings of one outermost function
-      (its closures included) and these edges form the fact graph of
-      that function. Each strongly connected component of the graph is
+      write of `x` reads `y`. The bindings of the module, the nodes of
+      items 28 and 29, and these edges form one fact graph. Without
+      item 29, no edge joins two outermost functions, so each
+      component stays inside one outermost function. Each strongly connected component of the graph is
       solved as one unit, in dependency order: a component reads the
       final facts of the components that it depends on. The component
       walk and every walk of the pass use work lists or a depth counter
@@ -934,8 +937,9 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       reads the form and computes no fact.
     - Out of scope: the deferred read of an optional chain
       (`__ulua_get`), the receiver of a nested access, the array
-      helpers, and each test of the upper bound. A parameter, a
-      field, and an element have no fact (item 25).
+      helpers, and each test of the upper bound. A field has no fact.
+      A parameter and an element have a fact only under items 29 and
+      28.
     - **Shadow check.** At each proven index, the test-only option of
       item 25 emits the two omitted tests before the bound test. A
       failed test stops the run as `internal`. `gate.sh full` runs
@@ -1086,6 +1090,63 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
     - Measured before the rule (P6.S9 measurement round): with inline
       callbacks and native `%`, the callbacks workload took 91 ms
       against 205 ms with `fmod` (`luau -O1`, hand-edited Luau).
+
+29. **Parameter facts (P6.S11).** The fact pass of item 25 gives facts
+    to the parameters of a direct function. A native `%` (item 25) and
+    a proven index (item 26) can then read a parameter. The compiler
+    proves each fact; it adds no run time test.
+    - **Direct function.** A `FunctionDeclaration` is direct when all
+      of these hold:
+      1. It is not `export`ed. The host calls an exported function
+         through the C ABI with any arguments (§4 item 12).
+      2. It is not `async`.
+      3. Each `IdentifierReference` of its name, in the whole module,
+         is the callee of a `CallExpression`. A reference in any other
+         position (an initializer, an argument, a return value, an
+         operand) makes the function a value, and a value can be
+         called with any arguments.
+      A function declaration is never an assignment target
+      (`surface.md` §4), so each call of a direct function is one of
+      these call expressions.
+    - **Parameter writes.** A parameter `p` at position `k` of a
+      direct function has a fact when it has no default. Its writes
+      are the argument at position `k` of each call of the function,
+      and the writes of item 25 in the function body (`p = e`,
+      `p op= e`, `p++`, `p--`). The argument count equals the
+      parameter count (`surface.md` §4), and no call has a spread
+      argument, so each call writes each parameter once. The parameter
+      fact is the join of the facts of these writes, as for a binding.
+      A parameter of a direct function with no call has no write and
+      has no fact.
+    - **Proof.** A call evaluates each argument in the caller and
+      passes the value unchanged (invariant 4). The calls above are the
+      only entry to the function. So each value of `p` at entry is the
+      value of one argument, and each later value is a value of a body
+      write.
+    - **Fixed point.** Each parameter of a direct function is a node of
+      the fact graph of item 25. An argument that reads a binding or a
+      parameter adds an edge from `p` to that node, across functions.
+      Components, rounds, thresholds, and the unset rule are those of
+      item 25. An argument that is an integer literal `k` gives `p`
+      the threshold `k`, as a write `p = k`.
+    - **Out of scope.** A parameter with a default, a parameter of an
+      exported or `async` function, of a method or a constructor, of an
+      arrow function or a function expression (item 28 states the
+      inline callback parameters), and an array parameter as a
+      confined binding (item 28).
+    - **Cost.** Each call adds one write per parameter, so the writes
+      stay linear in the source size, and the cost bound of item 25
+      holds. The growth test includes a shape with a long chain of
+      direct calls and a shape with many calls of one function.
+    - **Shadow check.** The shadow options of items 25 and 26 cover
+      each native `%` and each proven index that this item proves.
+    - Measured before the rule (P6.S11 measurement round, `luau -O1`,
+      hand-edited Luau of the sort workload, best of 7, checksum
+      3135319498 in each): 200.2 ms as emitted; 166.6 ms with the index
+      sites of `i` and `lo` proven (the reach of this item); 128.5 ms
+      with each index site proven; hand Luau 59.1 ms. The sites of `j`
+      stay checked: `j--` has no fact under item 25, and `j` can be
+      `-1` after the last swap.
 
 ## 6. Limits
 

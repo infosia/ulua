@@ -27,6 +27,7 @@ the gate bound comes from the record after the shrinks.
 | P6.S8 | Export call path (`pipeline.md` §4 item 12) | The C ABI tests and the corpus pass unchanged; a test calls each export of a multi-export module by index; a module whose export is missing or not a function fails at creation with `internal`; the reference array is charged to `max_memory_bytes`; `gate.sh sanitize` and the fault sweep pass; the boundary record before and after in one session (`bench --bin boundary`); the ten-workload ratios do not rise outside the noise gate |
 | P6.S9 | Inline callbacks (`pipeline.md` §5.27, C6.9) | The corpus and goldens are unchanged; `a89` and `t18` pin the edges; a unit test for each method and each condition of §5.27 checks the emitted form (inline or helper; length test kept or omitted); `t05` and `t18` trap `array-modified`; the §5.19, analyzer, and P6.3 tests pass; `bench --only callbacks` before and after in one session; a new full record in which no workload rises outside the noise gate |
 | P6.S10 | Element facts (`pipeline.md` §5.28, C4.3) | The corpus and goldens are unchanged; `a90` pins the fact edges; a unit test for each confinement condition, each element write form, the callback parameters, and the reduce accumulator checks the emitted `%` form; the facts of §5.25 that do not involve arrays are unchanged; the shadow check gives no stop over the corpus and the workloads; the growth test includes an element-fact shape; `bench --only callbacks` before and after in one session; a new full record |
+| P6.S11 | Parameter facts (`pipeline.md` §5.29, §5.25, C4.3, C6) | The corpus and goldens are unchanged; `a91` and `t19` pin the fact edges; a unit test for each direct-function condition (export, `async`, a value use, no call), a default, a body write, a recursive call, and an argument across two outermost functions checks the emitted `%` form and index form; the facts of §5.25 without a parameter are unchanged; the shadow check gives no stop over the corpus and the workloads; the growth test includes a direct call chain and a many-calls shape; `bench --only sort` before and after in one session; a new full record |
 
 ## Carry-over into P6
 
@@ -653,3 +654,24 @@ times 1.25.
 - [x] Workspace gates stay green; the crate is not in `gate.sh full`
   except a build and a unit test of the runner's statistics.
 - [x] Phase Review of the slice.
+
+## Measurements: sort (P6.S11 measurement round)
+
+The generated Luau of the sort workload at 2d1375a, edited by hand,
+`luau -O1`, best of 7 runs, checksum 3135319498 in each. Index sites of
+`quick`: the pivot, two reads and one write of `i`, two reads and one
+write of `j`.
+
+| Form | ms |
+|---|---:|
+| As emitted (each site has the full test) | 200.2, 202.5, 200.0 |
+| Sites of `i` proven (bound test only) | 165.6, 166.6 |
+| Sites of `i` proven, sites of `j` without the floor test | 147.3, 147.2 |
+| Each site proven | 128.4, 128.5, 129.6 |
+| Each site proven, native `(lo + hi) % 2` | 125.9 |
+| Hand Luau | 59.1 |
+
+Consequence: parameter facts (§5.29) reach the sites of `i`: `i` reads
+`lo`, and `lo` reads the literal `0` and `i`. The sites of `j` need a
+fact that holds for a signed integer; `j - 1` has no fact under §5.25.
+No production change in this round.
