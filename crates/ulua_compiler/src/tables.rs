@@ -17,6 +17,18 @@ pub(crate) enum TableMethod {
     Values,
 }
 impl TableMethod {
+    /// The helper discriminator is zero for numbers and one for all other admitted keys.
+    pub(crate) fn key_kind(key: crate::types::Type) -> usize {
+        usize::from(key != crate::types::Type::Number)
+    }
+
+    pub(crate) fn keyed(self) -> bool {
+        !matches!(
+            self,
+            Self::Begin | Self::End | Self::Clear | Self::Each | Self::Keys | Self::Values
+        )
+    }
+
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Begin => "table_begin",

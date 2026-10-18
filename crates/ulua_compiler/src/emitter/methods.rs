@@ -91,10 +91,9 @@ pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize),
             name(method, arity)
         ));
     }
-    let table = methods.iter().any(|(m, _)| matches!(m, M::Table(_)));
-    if table {
-        out.push_str(super::tables::PRELUDE);
-    }
+    let table = super::tables::prelude(methods);
+    let table_locals = table.lines().filter(|l| l.starts_with("local ")).count();
+    out.push_str(&table);
     Ok((
         out,
         methods
@@ -103,14 +102,7 @@ pub(crate) fn prelude(methods: &BTreeSet<(M, usize)>) -> Result<(String, usize),
             .count()
             + utilities
             + string_locals
-            + if table {
-                super::tables::PRELUDE
-                    .lines()
-                    .filter(|l| l.starts_with("local "))
-                    .count()
-            } else {
-                0
-            },
+            + table_locals,
     ))
 }
 

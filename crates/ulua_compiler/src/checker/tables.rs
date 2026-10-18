@@ -35,7 +35,8 @@ impl Checker<'_> {
         } else {
             None
         };
-        self.methods.insert((ir::Method::Table(M::New), 0));
+        self.methods
+            .insert((ir::Method::Table(M::New), M::key_kind(k)));
         let ty = self.types.table(k, v);
         self.checked_type_depth(ty, span)
     }
@@ -46,12 +47,18 @@ impl Checker<'_> {
         ty: Type,
         span: Span,
     ) -> Result<Expr, Diagnostic> {
-        let name = match method {
-            M::New => "__ulua_table_new_0",
-            M::FromArray => "__ulua_table_fromArray_0",
+        let (key, _) = self.types.table_parts(ty).ok_or_else(|| {
+            self.error(span, "internal", "Missing collection constructor key type")
+        })?;
+        let kind = M::key_kind(key);
+        let name = match (method, kind) {
+            (M::New, 0) => "__ulua_table_new_0",
+            (M::New, _) => "__ulua_table_new_1",
+            (M::FromArray, 0) => "__ulua_table_fromArray_0",
+            (M::FromArray, _) => "__ulua_table_fromArray_1",
             _ => return Err(self.error(span, "internal", "Missing collection constructor helper")),
         };
-        self.methods.insert((ir::Method::Table(method), 0));
+        self.methods.insert((ir::Method::Table(method), kind));
         let signature = self
             .types
             .intern(args.iter().map(|a| a.ty).collect(), ty, args.len());
@@ -222,10 +229,11 @@ impl Checker<'_> {
             }
             args.push(v);
         }
-        self.methods.insert((ir::Method::Table(method), 0));
+        let kind = if method.keyed() { M::key_kind(key) } else { 0 };
+        self.methods.insert((ir::Method::Table(method), kind));
         Ok(super::classes::value(
             result,
-            E::Method(ir::Method::Table(method), 0, Box::new(receiver), args),
+            E::Method(ir::Method::Table(method), kind, Box::new(receiver), args),
             call.span.start,
         ))
     }

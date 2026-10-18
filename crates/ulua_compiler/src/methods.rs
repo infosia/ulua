@@ -105,7 +105,7 @@ impl Method {
 
     pub(crate) fn arities(self) -> std::ops::RangeInclusive<usize> {
         match self {
-            Self::Table(_) => 0..=0,
+            Self::Table(m) => 0..=usize::from(m.keyed()),
             Self::String(_) => 0..=0,
             Self::IndexOf
             | Self::LastIndexOf

@@ -410,12 +410,12 @@ and the native shim.
 
 A root fix is a pinned VM fork with a range test in `luai_num2int`
 users (`luaH_get`, `arrayindex`, the `GETTABLE` and `SETTABLE` fast
-paths). It removes the prelude cost and closes the class for every
-table access. It needs an owner decision on a fork.
+paths). Owner decision 2026-10-18: no fork. The prelude keeps the
+range test; the helpers per key type below reduce its cost.
 
 ## P7.4 helpers per key type
 
-Status: OPEN 2026-10-18. Contract: `blocks/stdlib.md` Rev 13 §8 rule 1a.
+Status: COMPLETE 2026-10-18. Contract: `blocks/stdlib.md` Rev 13 §8 rule 1a.
 Problem: the two open MINOR items of the review above (the `typeof` and
 range test on every key; `add` packs a new wide key twice). Exit: the
 corpus (`a77` to `a79`, `a82`, `a88`, `t13`) unchanged; a unit test
@@ -423,3 +423,28 @@ for each key type checks the emitted helper (number: range test, no
 `typeof`; string, boolean, object: no test); `gate.sh sanitize` PASS;
 `ordered_collection_operation_cost` before and after for number,
 wide, and string keys.
+
+Before the change: 7 emitted-text tests (a helper per key type; one
+`string.pack` per `add`) failed at 6594099. After: pass.
+`ordered_collection_operation_cost` (release, ns per operation, median
+of 5 x 100000, 6594099 in a separate worktree and the change in one
+session):
+
+| Key | set | get | has | delete | iteration |
+|---|---:|---:|---:|---:|---:|
+| number | 185.0 to 164.3 | 78.9 to 61.5 | 53.3 to 37.1 | 300.2 to 270.3 | 34.8 to 34.6 |
+| wide | 281.8 to 265.5 | 162.0 to 146.3 | 141.5 to 129.9 | 435.0 to 413.1 | 33.8 to 33.6 |
+| string | 218.4 to 190.4 | 97.6 to 79.0 | 79.1 to 62.0 | 277.8 to 239.9 | 33.4 to 34.0 |
+
+The number `get` equals the cost before the P7.4 defect fix (61.5 ns).
+
+Found by `gate.sh sanitize` (fuzz stage, a new seed): the fuzz trap list
+lacked `trap:json-number` (P7.6) and `limit:json-depth`; a
+`JSON.stringify(NaN)` input gave a finding. Fix: the fuzz list is read
+from the `corpus.md` §6 table that the corpus witness reads, and a test
+compares it with the runtime trap kinds. `cargo test -p ulua_fuzz`
+2 new tests failed before, 36 pass after.
+
+Gates: `cargo test -p ulua_compiler` 292 passed; `p74_tables` 11
+passed (the 10^4 `node` differential); `gate.sh quick`, `gate.sh
+sanitize`, and `gate.sh timing` (18 of 18) PASS.

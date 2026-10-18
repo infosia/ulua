@@ -1,5 +1,5 @@
 //! Failures, diagnostic decoding, and the documented statuses and codes of abi.md.
-use std::ffi::c_char;
+use std::{collections::BTreeSet, ffi::c_char, sync::LazyLock};
 use ulua::*;
 
 /// One property failure of one input. `key` names the property and the observed fact;
@@ -116,15 +116,27 @@ pub fn decode(d: &Diagnostic) -> Result<Decoded, String> {
     })
 }
 
-/// The trap kinds of corpus.md §6.
-pub const TRAPS: &[&str] = &[
-    "trap:index-out-of-range",
-    "trap:array-modified",
-    "trap:map-modified",
-    "trap:string-boundary",
-    "trap:invalid-argument",
-    "trap:uncaught-exception",
-];
+/// The trap kinds from the same specification table that the corpus witness reads.
+pub static TRAPS: LazyLock<BTreeSet<String>> =
+    LazyLock::new(|| trap_codes(include_str!("../../../specs/blocks/corpus.md")));
+
+fn trap_codes(spec: &str) -> BTreeSet<String> {
+    let section = spec
+        .split_once("\n## 6. Trap kinds\n")
+        .map_or("", |(_, rest)| rest)
+        .split("\n## ")
+        .next()
+        .unwrap_or("");
+    section
+        .lines()
+        .filter_map(|line| line.strip_prefix("| `")?.split_once("` |"))
+        .map(|(kind, _)| kind)
+        .filter(|kind| {
+            !kind.is_empty() && kind.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
+        })
+        .map(|kind| format!("trap:{kind}"))
+        .collect()
+}
 
 /// The C15 bounds of pipeline.md §6 and the two input limits.
 pub const COMPILE_LIMITS: &[&str] = &[
@@ -160,10 +172,15 @@ pub fn compile_code(code: &str, rules: &[String]) -> bool {
 
 /// The `ULUA_FAILED` codes of a run (abi.md §3, §4.7, §6.4).
 pub fn run_failed_code(code: &str) -> bool {
-    TRAPS.contains(&code)
+    TRAPS.contains(code)
         || matches!(
             code,
-            "limit:memory" | "limit:steps" | "limit:stack" | "limit:requests" | "async:pending"
+            "limit:memory"
+                | "limit:steps"
+                | "limit:stack"
+                | "limit:requests"
+                | "limit:json-depth"
+                | "async:pending"
         )
 }
 
@@ -245,6 +262,58 @@ mod tests {
         assert!(run_failed_code("trap:array-modified") && !run_failed_code("internal"));
         assert!(host_code("host:request") && !host_code("host:resources"));
     }
+    // Cost: three small source scans; no VM or external process.
+    #[test]
+    fn trap_allowlist_equals_the_specification_and_runtime() {
+        use std::collections::BTreeSet;
+        let spec = include_str!("../../../specs/blocks/corpus.md");
+        let section = spec
+            .split("## 6. Trap kinds")
+            .nth(1)
+            .unwrap()
+            .split("\n## ")
+            .next()
+            .unwrap();
+        let documented: BTreeSet<String> = section
+            .lines()
+            .filter(|line| line.starts_with("| `"))
+            .map(|line| format!("trap:{}", line.split('`').nth(1).unwrap()))
+            .collect();
+        let runtime: BTreeSet<String> = include_str!("../../ulua/src/objects.rs")
+            .split('"')
+            .filter(|text| text.starts_with("trap:"))
+            .map(str::to_owned)
+            .collect();
+        let allowed: BTreeSet<String> = TRAPS.iter().map(|code| code.to_string()).collect();
+        assert_eq!(allowed, documented);
+        assert_eq!(allowed, runtime);
+        for code in &documented {
+            assert!(run_failed_code(code), "{code}");
+        }
+        assert!(!run_failed_code("trap:unknown"));
+    }
+
+    #[test]
+    fn runtime_failed_codes_are_admitted() {
+        let missing: Vec<_> = include_str!("../../ulua/src/objects.rs")
+            .lines()
+            .filter_map(|line| line.split("(crate::ULUA_FAILED, \"").nth(1))
+            .filter_map(|rest| rest.split('"').next())
+            .filter(|code| !run_failed_code(code))
+            .collect();
+        assert!(missing.is_empty(), "{missing:?}");
+    }
+
+    #[test]
+    fn trap_table_parser_excludes_other_sections_and_invalid_rows() {
+        let spec = "\n## 5. Other\n| `before` | rule |\n\n## 6. Trap kinds\n| `sample-trap` | rule |\n| `sample-trap` | duplicate |\n| `INVALID` | rule |\n| `trap:invalid` | rule |\n\n## 7. Other\n| `after` | rule |\n";
+        assert_eq!(
+            trap_codes(spec),
+            BTreeSet::from(["trap:sample-trap".into()])
+        );
+        assert!(trap_codes("no trap table").is_empty());
+    }
+
     #[test]
     fn line_column_counts_each_terminator() {
         let s = "a\nb\r\nc\rd\u{2028}e".as_bytes();
