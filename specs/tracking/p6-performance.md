@@ -777,3 +777,48 @@ checksums equal; no cell withheld; largest IQR 2.14% of the median.
 callbacks 2.40 to 1.05, sort 3.66 to 2.61, queen 2.74 to 2.08,
 particles 2.99 to 2.39, fib-loop 1.32 to 1.24; other rows within 0.07. The roblox-ts column
 is within 0.04 of the first comparison on each row.
+
+## Measurements: particles (P6.S13 measurement round)
+
+Measurement only; every production change reverted; `git status`
+clean after the round. Rule under test: `STORE_WEIGHT` 8 of
+`pipeline.md` §5.19 for each table store.
+
+Hand-edited generated Luau of particles, `target/luau-tools/luau -O1`
+(no interrupt callback), best of 7, checksums equal:
+
+| Variant of the inner loop | ms |
+|---|---:|
+| as emitted (two `__ulua_interrupt()` calls) | 196.0 to 201.9 |
+| `#a` read once before the loop | 178.2 to 181.0 |
+| no receiver copy (`p.x` read from the local of `p`) | 183.5 |
+| one call | 164.9 |
+| no call | 146.7 |
+| no bound test | 164.7 |
+| one call, `#a` before the loop, no receiver copy | 151.3 to 158.1 |
+| no call and no bound test | 108.9 |
+| hand Luau | 84.2 to 85.6 |
+
+Prototype: a separate weight W for a store of a number or boolean
+value into a field of a record or class instance (`Emitter::write_field`,
+IR types); other stores keep 8. Three temporary ratio shapes at the
+source ceiling: updates of 16 number fields of one instance, the same
+with boolean fields, and fresh 64-field records per pass. `p55_ratio`
+and `bench --only particles`, one session, sequential:
+
+| W | number updates | boolean updates | fresh records | largest ratio (shape) | particles ulua / luau | calls per pass |
+|---:|---:|---:|---:|---|---:|---:|
+| 8 | 1.442 | 1.415 | 2.574 | 5.790 (boolean-template) | 2.750 | 2 |
+| 4 | 1.830 | 1.776 | 5.474 | 5.921 (computed-object) | 2.722 | 2 |
+| 2 | 2.140 | 2.083 | 7.402 | 7.402 (fresh records) | 2.672 | 2 |
+| 1 | 2.345 | 2.308 | 10.319 | 10.319 (fresh records) | 2.680 | 2 |
+
+Baseline 0.005428 to 0.005458 s per one million steps.
+
+Consequence: the store weight alone does not remove a call from the
+particles loop; the index test (4), the loop header (4), and the
+receiver copies fill the count. A store into a new key needs weight 4
+or more; an update of an existing number or boolean field stays at
+2.35 with weight 1. The first call of the loop body comes from the
+count before the loop: the rule of P6.S4 moves a point before the
+loop only when the first statement of the body needs it.
