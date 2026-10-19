@@ -1,6 +1,6 @@
-//! Five C11 builds and ten runs, plus one stock tsc batch for nine accepted scripts.
+//! Five C11 builds and twenty runs, plus one stock tsc batch for nineteen scripts.
 //! The test prints build, run, tsc, and total costs. It has no time assertion.
-//! Measured Debug cost: 3.242 seconds for all five hosts and ten runs.
+//! Measured Debug cost: 3.356 seconds for five builds, twenty runs, and one tsc batch.
 #[path = "../support/host.rs"]
 mod host;
 use std::{
@@ -37,6 +37,48 @@ fn expected(path: &std::path::Path) -> Vec<u8> {
             .collect()
     } else {
         bytes
+    }
+}
+
+// Check both directions so neither a script nor an expected file can escape the gate.
+fn typescript_cases(directory: &std::path::Path) -> Vec<(PathBuf, PathBuf)> {
+    let mut cases = Vec::new();
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        if let Some(stem) = name.strip_suffix(".ts") {
+            let expected = directory.join(format!("expected-{stem}.txt"));
+            assert!(path.is_file(), "not a script file: {}", path.display());
+            assert!(
+                expected.is_file(),
+                "missing expected file: {}",
+                expected.display()
+            );
+            cases.push((path, expected));
+        } else if let Some(stem) = name
+            .strip_prefix("expected-")
+            .and_then(|name| name.strip_suffix(".txt"))
+        {
+            let script = directory.join(format!("{stem}.ts"));
+            assert!(path.is_file(), "not an expected file: {}", path.display());
+            assert!(script.is_file(), "missing script: {}", script.display());
+        }
+    }
+    cases.sort();
+    assert!(!cases.is_empty(), "no scripts in {}", directory.display());
+    cases
+}
+
+fn expected_exit(bytes: &[u8]) -> i32 {
+    if bytes.starts_with(b"error ") {
+        1
+    } else if bytes
+        .split(|&byte| byte == b'\n')
+        .any(|line| line.starts_with(b"stopped "))
+    {
+        2
+    } else {
+        0
     }
 }
 
@@ -82,7 +124,16 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
         ("init-trap.ts", "expected-init-trap.txt", 2),
     ];
 
-    // All scripts are modules. One batch avoids four loads of the ES2022 library.
+    let typescript_cases = typescript_cases(&root.join("examples/typescript"));
+    let run_count = examples.len() + runner_cases.len() + typescript_cases.len();
+    let tsc_count = examples.len()
+        + runner_cases
+            .iter()
+            .filter(|(_, _, code)| *code != 1)
+            .count()
+        + typescript_cases.len();
+
+    // All scripts are modules. One batch shares one load of the ES2022 library.
     let mut tsc = Command::new("node");
     tsc.current_dir(&root).args([
         "node_modules/typescript/bin/tsc",
@@ -108,6 +159,10 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
         if code != 1 {
             tsc.arg(root.join("examples/run").join(script));
         }
+    }
+    // These include rejected.ts: Ulua rejects it, but stock TypeScript accepts it.
+    for (script, _) in &typescript_cases {
+        tsc.arg(script);
     }
     let tsc_start = Instant::now();
     let output = checked(&mut tsc);
@@ -151,36 +206,46 @@ fn c_hosts_match_expected_and_scripts_pass_tsc() {
             eprintln!("example {name}: C11 static host and tsc PASS");
         }
     }
+    let runner_cases = runner_cases
+        .into_iter()
+        .map(|(script, expected, code)| {
+            let directory = root.join("examples/run");
+            (directory.join(script), directory.join(expected), code)
+        })
+        .chain(typescript_cases.into_iter().map(|(script, expected)| {
+            let code = expected_exit(&std::fs::read(&expected).unwrap());
+            (script, expected, code)
+        }));
     for (script, expected, code) in runner_cases {
-        let directory = root.join("examples/run");
         let run_start = Instant::now();
         let output = Command::new(
             scratch
                 .0
                 .join(format!("run{}", std::env::consts::EXE_SUFFIX)),
         )
-        .arg(directory.join(script))
+        .arg(&script)
         .output()
         .unwrap();
         run_cost += run_start.elapsed().as_secs_f64();
-        let expected = self::expected(&directory.join(expected));
+        let expected = self::expected(&expected);
+        let label = script.strip_prefix(&root).unwrap().display();
         if output.status.code() != Some(code)
             || !output.stderr.is_empty()
             || output.stdout != expected
         {
             failures.push(format!(
-                "run/{script}: status={} expected_exit={code} stdout_matches={}\nstdout:\n{}stderr:\n{}",
+                "{label}: status={} expected_exit={code} stdout_matches={}\nstdout:\n{}stderr:\n{}",
                 output.status,
                 output.stdout == expected,
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             ));
         } else {
-            eprintln!("runner {script}: exit={code} stdout PASS");
+            eprintln!("runner {label}: exit={code} stdout PASS");
         }
     }
     eprintln!(
-        "examples hosts=5 runs=10 tsc_scripts=9 tsc_batches=1 build_cost={build_cost:.3}s \
+        "examples hosts=5 runs={run_count} tsc_scripts={tsc_count} tsc_batches=1 build_cost={build_cost:.3}s \
          run_cost={run_cost:.3}s tsc_cost={tsc_cost:.3}s total_cost={:.3}s",
         start.elapsed().as_secs_f64()
     );

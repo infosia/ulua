@@ -608,6 +608,8 @@ wrote before the stop stay in the output.
 
 ## Reading on
 
+- [`examples/typescript/`](../examples/typescript/): one commented
+  script for each difference on this page, with its expected output.
 - [Ulua for C and C++ developers](tutorial-c-cpp.md): the host side.
 - [`specs/blocks/surface.md`](../specs/blocks/surface.md): the closed
   list of accepted syntax.

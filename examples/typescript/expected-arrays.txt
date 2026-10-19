@@ -1,0 +1,6 @@
+10,20,30,40,50
+3,4,5 150
+20,30 3 false
+50 4
+no score at 10
+stopped trap:index-out-of-range: Index out of range

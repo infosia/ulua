@@ -1,0 +1,1 @@
+error C4 at 13:15: Numeric operator has no lowering

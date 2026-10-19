@@ -4,12 +4,18 @@
    Linux:
    cc -std=c11 -Wall -Wextra -Wpedantic -Werror <host.c> -I <include-dir> <libulua.a> -o <host> -lstdc++ -lpthread -ldl -lm
 */
+/* A host that grants host functions to a script. A script can reach the host only
+   through the functions that the host grants. This host grants `damage` and `log` to
+   game.ts, writes their TypeScript declarations, and revokes one grant at the end. */
 #include "ulua.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* Each example stands alone. No private runtime header is required. */
+/* Each example stands alone. No private runtime header is required.
+   Every function of ulua.h returns a status, and ULUA_OK means success. CHECK stops at
+   the first other status and prints the diagnostic that the library wrote. REQUIRE
+   checks a fact of this program. RELEASE turns a failed free into exit code 1. */
 #define CHECK(call) do { \
     ulua_status status_ = (call); \
     if (status_ != ULUA_OK) { \
@@ -29,6 +35,8 @@
     if ((call) != ULUA_OK) exit_code = 1; \
 } while (0)
 
+/* The library takes the source as bytes and a length, not as a C string. The host
+   reads the whole file into memory. The terminator is for C code only. */
 static char* read_file(const char* path, size_t* length) {
     FILE* file = fopen(path, "rb");
     char* bytes = NULL;
@@ -58,6 +66,11 @@ done:
     return bytes;
 }
 
+/* A host function. The script calls `damage(power)`, and the library calls this
+   function during that call, with the script arguments in source order. The host
+   writes the value for the script into `result`, which starts as VOID. A return of 0
+   gives the value to the script. A non-zero return stops the run with ULUA_HOST_ERROR
+   and the code host:capability, and no `catch` of the script sees that stop. */
 static int32_t damage(void* userdata, const ulua_value* arguments,
                       size_t count, ulua_value* result) {
     (void)userdata;
@@ -67,6 +80,9 @@ static int32_t damage(void* userdata, const ulua_value* arguments,
     return 0;
 }
 
+/* The script calls `log(text)`. The string argument is bytes and a length, and the
+   bytes are valid only until this function returns. `log` returns void, so the
+   result stays VOID. A failed write gives a non-zero return and stops the run. */
 static int32_t log_text(void* userdata, const ulua_value* arguments,
                         size_t count, ulua_value* result) {
     (void)userdata;
@@ -88,9 +104,19 @@ int main(int argc, char** argv) {
     ulua_module* module = NULL;
     ulua_instance* instance = NULL;
     ulua_capability* grants[2] = {NULL, NULL};
+    /* Each struct that the host gives to the library starts with `struct_size`. The
+       library compares it with the size that it expects, and a different value gives
+       ULUA_INVALID_ARGUMENT. The other fields start at zero, as the reserved fields
+       must. */
     ulua_diagnostic diagnostic = {.struct_size = sizeof(diagnostic)};
+    /* This script writes through `log`, not through `print`, so the host gives no
+       output function. */
     ulua_host host = {.struct_size = sizeof(host)};
     uint32_t number_type = ULUA_TYPE_NUMBER, string_type = ULUA_TYPE_STRING;
+    /* A capability descriptor describes one host function. `name` is the identifier
+       that the script calls. `parameter_types` has one type per parameter, and
+       `result_type` is the type of the value for the script. `function` is the C
+       function that runs at each script call. */
     ulua_capability_desc damage_desc = {
         .struct_size = sizeof(damage_desc), .name = "damage", .name_length = 6,
         .parameter_types = &number_type, .parameter_count = 1,
@@ -121,32 +147,50 @@ int main(int argc, char** argv) {
     strcpy(declaration_path + path_length - 3, ".d.ts");
     expected = read_file(declaration_path, &expected_length);
     REQUIRE(expected != NULL);
+    /* Make the capabilities. A capability belongs to the context that made it. The host
+       grants it later, when it compiles the script. */
     CHECK(ulua_context_new(&context));
     puts("create damage and log capabilities");
     CHECK(ulua_capability_new(context, &damage_desc, &grants[0]));
     CHECK(ulua_capability_new(context, &log_desc, &grants[1]));
+    /* Write the declarations. ulua_declarations writes the TypeScript declarations of
+       the grants. The host saves them as game.d.ts beside the script, so `tsc` and the
+       editor of the script author know `damage` and `log`. This example prints the text
+       and compares it with the game.d.ts file in its directory. */
     CHECK(ulua_declarations(grants, 2, declarations, sizeof(declarations), &declaration_length));
     puts("write declarations");
     REQUIRE(fwrite(declarations, 1, declaration_length, stdout) == declaration_length);
     REQUIRE(declaration_length == expected_length);
     REQUIRE(memcmp(declarations, expected, expected_length) == 0);
     puts("declarations match");
+    /* Compile with the grants. The compiler checks each script call of a host function
+       against the signature of its grant. A call to a function that the host did not
+       grant is a compile error with the code C18. */
     puts("compile game with grants");
     CHECK(ulua_compile(context, source, source_length, grants, 2, NULL, &module, &diagnostic));
+    /* Make an instance. It runs the module-level statements, so `health` starts at 100.
+       NULL selects the default run limits. */
     puts("create instance");
     CHECK(ulua_instance_new(context, module, &host, NULL, &instance, &diagnostic));
     CHECK(ulua_module_find_export(module, "hit", 3, &hit_index));
     CHECK(ulua_module_find_export(module, "heal", 4, &heal_index));
+    /* Find the exports by name, then call `hit` twice. `health` is a module-level
+       binding, so it keeps its value between the calls: the second hit starts at 80.
+       Each call of `damage` and `log` in the script runs a host function above. */
     for (int i = 0; i < 2; ++i) {
         puts("call hit(10)");
         CHECK(ulua_call(instance, hit_index, &argument, 1, &result, &diagnostic));
         REQUIRE(result.type == ULUA_TYPE_NUMBER);
         printf("hit result: %.0f\n", result.number);
     }
+    /* A boolean result comes in the `boolean` field of the result. */
     puts("call heal");
     CHECK(ulua_call(instance, heal_index, NULL, 0, &result, &diagnostic));
     REQUIRE(result.type == ULUA_TYPE_BOOLEAN);
     printf("heal result: %s\n", result.boolean ? "true" : "false");
+    /* Revoke a grant. After ulua_capability_revoke returns, no script call reaches
+       `damage`. The next call of `hit` stops with ULUA_HOST_ERROR and the code
+       host:revoked, and the host function does not run. The instance stays usable. */
     puts("revoke damage");
     CHECK(ulua_capability_revoke(grants[0]));
     puts("call hit(10)");
@@ -155,6 +199,9 @@ int main(int argc, char** argv) {
     printf("hit status: ULUA_HOST_ERROR, code: %s\n", diagnostic.code);
     puts("free resources");
     exit_code = 0;
+    /* Clean up. Each free function accepts NULL, so this code is correct after a failure
+       at any step. The free of a capability also revokes it. The context goes last:
+       its free invalidates every object that it made, capabilities included. */
 cleanup:
     RELEASE(ulua_instance_free(instance));
     RELEASE(ulua_module_free(module));

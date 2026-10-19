@@ -1,0 +1,6 @@
+ada@example.com
+bob has no email
+forest
+none
+no age for bob
+36 0

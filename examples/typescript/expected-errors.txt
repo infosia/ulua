@@ -1,0 +1,7 @@
+checked "42"
+age 42
+checked "-1"
+out of range: negative age: -1
+checked "old"
+TypeError: not a number: old
+stopped trap:uncaught-exception: RangeError: negative age: -5

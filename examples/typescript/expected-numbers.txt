@@ -1,0 +1,8 @@
+average price 2.5833333333333335
+0.30000000000000004 1 -1
+Infinity NaN
+1024
+8 3
+255 42 2.5
+NaN true
+true 3.14

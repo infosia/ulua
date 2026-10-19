@@ -1,0 +1,12 @@
+a starts
+double 1
+b starts
+double 2
+both started
+a continues with 2
+b continues with 4
+results 3 5
+double 1
+double 2
+double 3
+total 12
