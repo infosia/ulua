@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S13 COMPLETE 2026-10-19 (receiver operands, loop-invariant length). Status: P6.S12 COMPLETE 2026-10-18 (integral marks). Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S14 COMPLETE 2026-10-19 (update weight, the point before a loop). Status: P6.S13 COMPLETE 2026-10-19 (receiver operands, loop-invariant length). Status: P6.S12 COMPLETE 2026-10-18 (integral marks). Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -874,3 +874,60 @@ Open: the particles inner loop keeps two `__ulua_interrupt()` calls
 per pass (the index test weight 4, the counted loop header weight 4,
 the store weight 8, and the first-pass count of P6.S4; measurement
 round above). Next: P6.S14.
+
+## Measurements (P6.S14)
+
+Before the change: the fixtures at d7d383a gave 31 points for 32
+primitive field updates (6 after), 31 for 32 compound updates (10
+after), a local point for a later statement (before the loop after),
+and 2 calls per pass of the particles inner loop (1 after). The
+generated Luau of 37 corpus entries and 7 workloads differs from
+d7d383a in the place of `__ulua_interrupt()` lines only. The outputs
+of every corpus entry are unchanged.
+
+Review: 0 CRITICAL, 2 MAJOR, 2 MINOR. MAJOR 1: `headers()` asked the
+counter for a move, wrote the point in the loop body, and kept the
+reduced count; a zero-trip path ran 18 and 19 statements against 16
+(`lua_singlestep`). Fixed with Rev 70: the header lines use the one
+counted path that writes the move. MAJOR 2: the runtime witness
+asserted the statement run only for `exit-` shapes; it now asserts it
+for every compiler-generated shape (290 shapes, 546 executions;
+largest run 16, gap 49 of 579, statement 36 of 36). Red: runs 19, 18,
+and 19 on the unfixed tree. MINOR: the update cost ignored the value
+cost (`%=`; Rev 70, 10 to 12 points for 32 updates); no fixture for a
+spilled receiver (added). 456 compiler tests pass.
+
+Ratio test: 97 shapes; largest 5.941 (`boolean-template`, unchanged
+form); new shapes 1.98 to 4.01 (`moved-local-point`), `%=` updates
+2.675.
+
+`bench --only particles`, d7d383a and f66c2e2 in one session,
+separate target directories, checksums equal: 196.8 and 196.9 ms
+before; 167.4 and 161.9 ms after.
+
+Record at f66c2e2 (clean tree), `ulua / luau`: particles 2.37 to
+2.07; sort 2.62 to 2.55; mandelbrot 1.19 to 1.13; queen 2.05 to 2.11;
+fib-loop 2.12 to 2.18; tree 2.18 to 2.16; collect 2.04 to 2.00;
+others within 0.02. Largest IQR 2.54% of the median; no cell
+withheld.
+
+`luau -O1`, best of 7, generated Luau of d7d383a and f66c2e2: queen
+856 to 880 ms (three runs each); fib-loop 184 to 194 against 197 to
+211 ms. In fib-loop the calls per outer pass fall from 2 to 1; the
+moved point stands before the inner loop. Hand-edited variants: the
+point after the inner loop gives 187 to 194 ms; the point before the
+inner loop, before its limit local, or before its block gives 201 to
+210 ms. The cost follows the place of the call, not the count.
+
+roblox-ts comparison rerun at f66c2e2, `ulua / hand`: fib-recursive
+1.75, fib-loop 2.21, mandelbrot 1.18, primes 1.20, sort 2.54, tree
+2.19, queen 2.09, particles 2.02, callbacks 1.39, collect 1.99.
+Largest IQR 2.62%.
+
+Gates at f66c2e2: `gate.sh full` PASS. `gate.sh timing`: 23 of 24 in
+the first run; `p63_performance` gave fib-recursive 2.567 against the
+bound 2.18 with byte-identical Luau; the test alone then passed
+(1.739).
+
+Open: the place of the moved point before an inner loop costs 4 to
+11% in fib-loop under `luau -O1` (above); the cause is not measured.
