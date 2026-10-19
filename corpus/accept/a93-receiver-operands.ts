@@ -1,5 +1,5 @@
 // corpus: accept/a93-receiver-operands
-// purpose: Field and element receivers that are locals, captured bindings, and module bindings, with a call in the index or the right side.
+// purpose: Field and element receivers that are locals, captured bindings, module bindings, and narrowed bindings, with a call in the index or the right side.
 // rule: C12
 // phase: P6
 // tsc: accepts
@@ -68,4 +68,20 @@ export function main(): void {
   const oldR = r;
   r.x = swapR().y;
   print(`${oldR.x} ${r.x}`);
+
+  let n: P | null = new P(1, 1);
+  let ns: number[] | null = [0, 0];
+  if (n !== null && ns !== null) {
+    n.x = 2;
+    n.y = 3;
+    n.x += n.y;
+    n.y = 4;
+    n.x = n.x + n.y;
+    n.y = 5;
+    n.x += 1;
+    ns[0] = n.x;
+    ns[1] += n.y;
+    ns[0] += ns[1];
+    print(`${n.x} ${n.y} ${ns[0]} ${ns[1]}`);
+  }
 }

@@ -66,6 +66,7 @@ Rev 64: §5.29 parameter facts; §5.25 one fact graph for the module (P6.S11).
 Rev 65: §5.30 integral marks; §5.26 the integral index form (P6.S12).
 Rev 66: §5.30 rule 7 names `size` and `Utf8.byteLength` (P6.S12 review).
 Rev 67: §5.31 receiver operands; §5.32 loop-invariant length (P6.S13).
+Rev 68: §5.31 a receiver with a type assertion keeps its temporary (P6.S13 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1245,6 +1246,13 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       receiver has the value that JavaScript reads at the start of the
       access, and the C12 order and the C12.7 trap points stay.
     - A spilled binding keeps its temporary.
+    - A receiver whose read needs a type assertion (a narrowed binding,
+      item 10) keeps its temporary. An inline receiver is a bare Luau
+      name. No generated Luau line starts with `(`: Luau rejects
+      `(b :: T).f = e` after a call as "Ambiguous syntax", and the
+      store weight of item 19 reads the target of the statement
+      (P6.S13 review: an accepted program with seven narrowed field
+      stores ended as `internal`).
     - Measured before the rule (P6.S13 measurement round, `luau -O1`,
       hand-edited Luau of particles): 196.0 to 201.9 ms as emitted;
       183.5 ms without the receiver copies of `p`.
