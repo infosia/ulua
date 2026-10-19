@@ -10,44 +10,27 @@ pub fn compile(
 ) -> Command {
     if cfg!(target_env = "msvc") {
         // MSVC needs its SDK environment even outside a developer shell.
-        let tool = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "cl.exe").unwrap();
-        let mut cmd = tool.to_command();
+        let mut cmd = ulua_toolchain::msvc_command().unwrap();
         cmd.current_dir(executable.parent().unwrap())
             // The examples use standard C functions that MSVC marks as deprecated.
-            .args(["/nologo", "/W4", "/WX", "/MD", "/D_CRT_SECURE_NO_WARNINGS"])
-            .args(if cpp {
-                vec!["/TP", "/std:c++17", "/permissive-"]
-            } else {
-                vec!["/TC", "/std:c11"]
-            })
+            .args(ulua_toolchain::MSVC_FLAGS)
+            .args(ulua_toolchain::language_flags(true, cpp))
             .arg(source)
             .arg("/I")
             .arg(root.join("include"))
             .arg(format!("/Fe:{}", executable.display()))
             .arg("/link")
             .arg(library)
-            .args([
-                "advapi32.lib",
-                "bcrypt.lib",
-                "ntdll.lib",
-                "userenv.lib",
-                "ws2_32.lib",
-            ]);
+            .args(ulua_toolchain::system_libraries());
         cmd
     } else {
         let mut cmd = Command::new(if cpp { "c++" } else { "cc" });
         if cfg!(ulua_sanitize) {
             cmd.arg("-fsanitize=address,undefined");
         }
-        cmd.arg(if cpp { "-std=c++17" } else { "-std=c11" })
-            .args([
-                "-Wall",
-                "-Wextra",
-                "-Wpedantic",
-                "-Werror",
-                "-x",
-                if cpp { "c++" } else { "c" },
-            ])
+        cmd.args(ulua_toolchain::language_flags(false, cpp))
+            .args(ulua_toolchain::UNIX_FLAGS)
+            .args(["-x", if cpp { "c++" } else { "c" }])
             .arg(source)
             .arg("-I")
             .arg(root.join("include"))
@@ -55,18 +38,7 @@ pub fn compile(
             .arg(library)
             .arg("-o")
             .arg(executable);
-        if cfg!(target_os = "macos") {
-            cmd.args([
-                "-lc++",
-                "-liconv",
-                "-framework",
-                "Security",
-                "-framework",
-                "CoreFoundation",
-            ]);
-        } else {
-            cmd.args(["-lstdc++", "-lpthread", "-ldl", "-lm"]);
-        }
+        cmd.args(ulua_toolchain::system_libraries());
         cmd
     }
 }

@@ -42,6 +42,15 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror examples/hello/host.c -I include \
 On Linux the tail of the link line is `-lstdc++ -lpthread -ldl -lm`.
 The comment at the top of each `host.c` holds both lines.
 
+The [`ulua` command](../README.md#the-ulua-command) holds these flags
+for the current OS. `ulua link-flags` prints the include directory,
+the library, and the system libraries, one on each line. `ulua build`
+compiles and links a host with the flags of the gate:
+
+```sh
+ulua build --host examples/hello/host.c --run -- examples/hello/hello.ts
+```
+
 ## The objects
 
 | Object | Made by | Holds |

@@ -2,6 +2,9 @@
 
 Status: contracted (D35). Evidence: `specs/tracking/p8-cli.md`.
 
+Rev 1: §2, §2.1, §2.4, §3, §4 after the P8 review round 1.
+Rev 2: §2, §3, §4 rules 4, 6, 7 after the P8 review round 2.
+
 ## 1. Purpose and boundary
 
 Each example host and the gate test helper (`crates/ulua/tests/support/host.rs`)
@@ -24,14 +27,21 @@ calls the same functions as a host, with the same defaults.
 One binary, `ulua`, in the crate `crates/ulua_cli` (package
 `ulua_cli`). The library of the crate has the entry
 `execute(args, stdout, stderr) -> i32` that `main` calls; the tests
-call it in process. The subcommands are §2.1 to §2.4. `ulua help`,
+call it in process. `execute` writes each stream of the command to
+these writers. The one exception is the host of `build --run`, which
+inherits the streams of the process (§2.4 rule 8). The subcommands are §2.1 to §2.4. `ulua help`,
 `ulua --help`, and no arguments print the usage text to stdout and give
-exit 0. Each other form is a usage error.
+exit 0. Each other form is a usage error. A usage error prints one line
+`ulua: <reason>` that names the wrong or missing argument, then the
+usage text, both to stderr.
 
 ### 2.1 `ulua check <file.ts>`
 
 Compiles the file with `ulua_compile`, no grants, and the default
-compile limits. A clean compile prints one line to stderr,
+compile limits. The command reads at most `max_source_bytes` + 1 bytes
+of the default compile limits. A longer file gets the compiler
+diagnostic `limit:source-bytes`; the command never holds more of the
+file. A clean compile prints one line to stderr,
 `check: <file as given>: no errors`, and nothing to stdout. A rejected
 file prints the diagnostic of §4 to stderr. No artifact.
 
@@ -88,13 +98,16 @@ Compiles and links the host sources with the static library into
 5. The include directories are the directory of each `--host` file and
    the include directory of §5.
 6. The C compiler is `$CC` if set, else `cc`. The C++ compiler is
-   `$CXX` if set, else `c++`. On MSVC, the command finds `cl.exe` as
+   `$CXX` if set, else `c++`. The value splits at ASCII white space:
+   the first word is the program, and each other word is an argument
+   before the flags of rule 4. On MSVC, the command finds `cl.exe` as
    the gate test helper does.
 7. The compiler output goes to stderr only when the compile or the
    link fails.
-8. `--run` runs the result with each `<arg>` after `--`. It gives the
-   exit code of the host and does not change its stdout or stderr.
-   A host that a signal stops gives exit 1.
+8. `--run` runs the result with each `<arg>` after `--`. The host
+   inherits the stdin, stdout, and stderr of the command, so its
+   output appears while it runs. The command gives the exit code of
+   the host. A host that a signal stops gives exit 1.
 
 The flags and the system libraries of §2.3 and §2.4 have one
 definition. The gate test helper and the command both read it.
@@ -108,7 +121,11 @@ definition. The gate test helper and the command both read it.
 | 2 | A usage error, an I/O error, or an environment error (§5) |
 
 - `build --run` gives the exit code of the host (§2.4 rule 8).
-- Each error is one clear message on stderr. No panic (core principle 5).
+- Each error is one clear message on stderr. An I/O error names the
+  path or the program and the OS error. No panic (core principle 5).
+- A library status without a diagnostic code prints
+  `error[abi:status]: <status name> (<value>)`, for example
+  `error[abi:status]: ULUA_BUSY (5)`.
 - The command works offline and headless. It starts no download.
 - stdout carries only the script output (`run`), the requested answer
   (`link-flags`, the usage text), or the host output (`build --run`).
@@ -128,28 +145,65 @@ error[C6]: <message>
   = rule: C6 Arrays
 ```
 
+With a line number of two digits:
+
+```text
+error[C4]: <message>
+  --> <file>:12:21
+   |
+12 |   const x: number = 2 ** 3;
+   |                     ^
+   = rule: C4 Numbers
+```
+
 1. The first line is `error[<code>]: <message>`, with the code and the
    message of `ulua_diagnostic`.
 2. The `-->` line, the source line, and the caret line follow when the
    line is not zero and the source has that line. Else the diagnostic
    has the first line and the rule line only. A run diagnostic has no
    source position (abi.md §3).
-3. The width of the gutter is the number of digits of the line number.
-4. The diagnostic column counts bytes (abi.md §3). The caret goes
-   below the character that starts at that byte. Each tab before it
+3. The width `w` of the gutter is the number of digits of the line
+   number. The `-->` line starts with `w` spaces. The `|` lines without
+   a number and the rule line start with `w` + 1 spaces.
+4. The diagnostic column counts bytes of the source as read
+   (abi.md §3). The command finds the line and the caret on these
+   bytes. Each byte that is not part of valid UTF-8 renders as one
+   U+FFFD character at its own byte. The caret goes below the
+   character that starts at the column byte. Each tab before it
    in the source line is a tab in the caret line. Each other
    character before it is one space.
 5. A line ends at a line feed, a carriage return, U+2028, or U+2029, as
    the compiler counts lines. The rendered source line holds no line
    ending.
-6. The rule line names the cause of the code:
+6. The rendered source line holds at most 120 source characters,
+   before the escapes of rule 7. A longer
+   line shows the 120 characters that start 60 characters before the
+   caret character, or at the start of the line if fewer characters
+   come before it. The window does not go past the end of the line:
+   a window that reaches the end starts 120 characters before the
+   end. Each cut side gets `...`. The caret line follows the window.
+7. The message and the rendered source line come from the script.
+   Each control character in them (U+0000 to U+001F, U+007F to
+   U+009F) and each format character (Unicode general category Cf,
+   for example U+202E and U+200B) prints as `\u{h}`: the code point
+   in lowercase hex, with at least two digits. A tab in the source
+   line is the one exception (rule 4). So a message prints on one line, and
+   no script byte reaches the terminal as a control code or changes
+   the order in which the line shows. Each file name that the
+   command prints, on each line of §2 to §4, gets the same escape. The caret
+   counts each `\u{hh}` as its printed characters.
+8. The rule line names the cause of the code:
    - a code `C<n>` gives `= rule: C<n> <title>`, with the title of
      section C<n> of `collisions.md`;
+   - a code `trap:<kind>` gives `= rule: <cause> (<rule>)`, with the
+     rule of the kind in corpus.md §6, for example
+     `= rule: an index outside the array (C6)`;
    - each other code that the compiler or the runtime gives (`syntax`,
-     `parse`, `unsupported`, `limit:<kind>`, `trap:<kind>`,
-     `host:<kind>`, `async:pending`, `internal`) has a one-line text.
+     `parse`, `unsupported`, `limit:<kind>`, `host:<kind>`,
+     `async:pending`, `internal`) has a one-line text that states
+     the cause, not the code again. Two codes do not share a text.
    A code without a text gives no rule line.
-7. No color. The output is the same bytes on each run.
+9. No color. The output is the same bytes on each run.
 
 ## 5. Path of the static library and the include directory
 
@@ -184,14 +238,21 @@ that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
 
 ## 7. Exit criteria (pre-registered)
 
-1. `ulua check` on each accept entry gives exit 0, the clean line on
+1. This criterion covers each corpus entry without a `grants` header
+   (corpus.md §7). The command has no grants (§2.2 rule 6), so an
+   entry with grants is outside it.
+   `ulua check` on each accept entry gives exit 0, the clean line on
    stderr, and empty stdout. On each reject entry it gives exit 1 and
-   stderr that starts with `error[<code>]: <message>`, where the code
-   and the message are the `expected-error` header of the entry.
+   stderr that starts with `error[<code>]: `, where the code is the
+   rule id of the `expected-error` header of the entry. The text of
+   the header is a description; the corpus compares only the code
+   (corpus.md §2).
 2. `ulua run` on each script of `examples/typescript/` and
    `examples/run/` gives the stdout of its expected file without the
    last line of the runner (`error ...` or `stopped ...`). The exit
-   code is 0 for an expected file without such a line, else 1.
+   code is 0 for an expected file without such a line, else 1. For
+   such a line, the code in the first stderr line equals the code in
+   that line (`error <code> at ...` or `stopped <code>: ...`).
 3. `ulua run` on a trap entry gives the lines before the trap on
    stdout, the trap code on stderr, and exit 1. A trap entry without
    output before the trap gives empty stdout.
@@ -206,8 +267,14 @@ that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
    environment before the repository), and each rule of §4: a snippet
    with its caret, a tab and a multi-byte character before the caret,
    a CRLF source, the line 0 form, a line past the end of the source,
-   and a code without a rule text. A test reads the `C<n>` headings of
-   `collisions.md` and compares them with the rule titles. A test
+   a code without a rule text, a two-digit gutter, a long line cut on
+   each side, and a control character in a message and in a source
+   line. A test reads the trap table of corpus.md §6 and finds the
+   rule of each kind in its rule line. A test finds no two codes with
+   one text. A test checks that a file larger than the source limit
+   gives `limit:source-bytes` and stderr of a bounded size. A test
+   reads the `C<n>` headings of `collisions.md` and compares them with
+   the rule titles. A test
    gives each code of the reject corpus and of `corpus.md` §6 to the
    renderer and finds a rule line.
 7. `sh tools/gate.sh full` and `sh tools/hygiene.sh` pass. No golden

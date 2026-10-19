@@ -70,6 +70,11 @@ hello from Ulua
 The runner exits with 0 when the run ends, 1 when the compiler
 rejects the script, and 2 when the run stops.
 
+The [`ulua` command](../README.md#the-ulua-command) runs a script
+without the C build: `ulua run hello.ts` prints the same lines. It
+writes a rejection or a stop to stderr, with the source line and the
+rule, and exits with 1 for both.
+
 `print` writes one line to an output function that the host owns.
 There is no `console`.
 

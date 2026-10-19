@@ -38,5 +38,13 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror examples/run/host.c -I include \
 target/examples/run examples/typescript/numbers.ts
 ```
 
+The [`ulua` command](../README.md#the-ulua-command) does both steps
+with the same flags, and it runs a script without the runner:
+
+```sh
+ulua build --host examples/run/host.c --run -- examples/typescript/numbers.ts
+ulua run examples/typescript/numbers.ts
+```
+
 The [C and C++ tutorial](../docs/tutorial-c-cpp.md) walks through the
 hosts step by step.

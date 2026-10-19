@@ -286,6 +286,41 @@ sh tools/gate.sh full     # also fmt, clippy, tests, luau-analyze, the VM, the d
 sh tools/hygiene.sh
 ```
 
+## The `ulua` command
+
+The `ulua` command checks and runs a script without a host of your
+own. It also tells a host build what to link, and it builds a small
+host. Build it with the library:
+
+```sh
+cargo build --release -p ulua -p ulua_cli
+alias ulua=target/release/ulua
+```
+
+```sh
+ulua check game.ts         # compile only; prints "check: game.ts: no errors"
+ulua run game.ts           # compile, then call the export main
+ulua link-flags            # the include directory, libulua.a, and the system libraries
+ulua build --host host.c --run -- game.ts
+```
+
+`run` writes only the lines of the script to stdout. A rejection or a
+stop goes to stderr, with the source line and the rule:
+
+```text
+error[C4]: Numeric operator has no lowering
+ --> game.ts:2:21
+  |
+2 |   const x: number = 2 ** 3;
+  |                     ^
+  = rule: C4 Numbers
+```
+
+The exit status is 0 for success, 1 when the library rejects or stops
+the script, and 2 for a usage or file error. `check` and `run` grant no
+host functions; a script that calls one needs its host.
+[`specs/blocks/cli.md`](specs/blocks/cli.md) is the contract.
+
 ## Status
 
 P0 to P4 are complete: the language core, arrays, strings, nullable
@@ -297,8 +332,10 @@ arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
 complete: Ulua runs at 1.13 to 2.55 times the time of hand-written
 Luau on the same VM (see [Performance](#performance)). P7 (the
 standard library) is complete: `Math`, `Number`, `find`, `Map`, `Set`,
-string case, and `JSON`. The ABI has no compatibility
-promise yet.
+string case, and `JSON`. P8 (the developer command) is complete:
+[`ulua`](#the-ulua-command) checks and runs a script, prints the link
+flags, and builds a host; its Linux and Windows runs are open. The ABI
+has no compatibility promise yet.
 
 Design and phase records live in [`specs/`](specs/): `specs/plan.md`
 holds the plan and the decisions, `specs/blocks/` the area contracts,

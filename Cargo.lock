@@ -658,6 +658,7 @@ dependencies = [
  "cc",
  "libm",
  "ulua_compiler",
+ "ulua_toolchain",
 ]
 
 [[package]]
@@ -666,6 +667,14 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "ulua",
+]
+
+[[package]]
+name = "ulua_cli"
+version = "0.1.0"
+dependencies = [
+ "ulua",
+ "ulua_toolchain",
 ]
 
 [[package]]
@@ -692,6 +701,13 @@ version = "0.1.0"
 dependencies = [
  "ulua",
  "ulua_compiler",
+]
+
+[[package]]
+name = "ulua_toolchain"
+version = "0.1.0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
