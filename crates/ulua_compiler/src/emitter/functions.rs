@@ -14,6 +14,7 @@ pub(super) const EMPTY_EXPORT_TABLE_BYTES: usize =
     EXPORT_TABLE_PREFIX.len() + EXPORT_TABLE_SUFFIX.len();
 
 pub(super) struct Layout {
+    pub(super) length_capacity: usize,
     pub(super) headers: String,
     pub(super) entries: HashMap<usize, String>,
     pub(super) entry_locals: HashMap<usize, std::collections::HashSet<String>>,

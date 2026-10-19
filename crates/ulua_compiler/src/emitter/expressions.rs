@@ -97,10 +97,10 @@ impl Emitter<'_> {
                 self.write_slot(dest, format!("{} :: any", self.temp(dest)));
             }
             E::Field(receiver, key) => {
-                let (slot, deferred) = self.access_receiver(receiver, depth)?;
-                self.access_receiver_check(slot, deferred);
-                self.write_slot(dest, format!("{}.__ulua_k{key}", self.temp(slot)));
-                self.release(slot);
+                let (slot, deferred) = self.receiver_operand(receiver, depth, false)?;
+                self.access_operand_check(&slot, deferred);
+                self.write_slot(dest, format!("{}.__ulua_k{key}", self.operand_text(&slot)));
+                self.release_operand(slot);
             }
             E::OptionalField(receiver, key) => {
                 let slot = self.expression(receiver, depth)?;
@@ -445,17 +445,18 @@ impl Emitter<'_> {
             }
             E::Index(a, i) => {
                 let form = i.index_form;
-                let (a, deferred) = self.access_receiver(a, depth)?;
+                let length = self.invariant_length(a);
+                let (a, deferred) = self.receiver_operand(a, depth, operands::contains_call(i))?;
                 let i = self.expression(i, depth)?;
-                self.access_receiver_check(a, deferred);
+                self.access_operand_check(&a, deferred);
                 self.element_read(
                     super::arrays::ElementTarget::Slot(dest),
                     expr.ty,
-                    a,
+                    (&self.operand_text(&a), length.as_deref()),
                     &self.temp(i),
                     form,
                 )?;
-                self.release(a);
+                self.release_operand(a);
                 self.release(i);
             }
             E::Length(a) if self.module.types.table_parts(a.ty).is_some() => {

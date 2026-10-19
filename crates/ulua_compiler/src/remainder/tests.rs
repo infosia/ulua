@@ -213,7 +213,10 @@ fn report_corpus_and_workload_facts() {
             let checks = code
                 .lines()
                 .filter(|line| {
-                    (line.contains(" < #__ulua_") || line.contains(" <= #__ulua_"))
+                    (line.contains(" < #__ulua_")
+                        || line.contains(" <= #__ulua_")
+                        || line.contains(" < __ulua_g")
+                        || line.contains(" <= __ulua_g"))
                         && !line.contains(">= 0")
                         && !line.contains("__ulua_floor")
                         && (line.contains("then __ulua_trap(1) end")

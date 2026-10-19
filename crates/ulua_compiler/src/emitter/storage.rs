@@ -101,6 +101,7 @@ impl Emitter<'_> {
         }
         let available = (capacity - table_count).min(eligible);
         let mut layout = Layout {
+            length_capacity: 0,
             overhead,
             headers: String::new(),
             entries: HashMap::new(),
@@ -187,6 +188,10 @@ impl Emitter<'_> {
                 }
             }
         }
+        let binding_locals: usize = layout.entry_locals.values().map(|ids| ids.len()).sum();
+        layout.length_capacity = LOCAL_BUDGET
+            .saturating_sub(fixed + binding_locals)
+            .min(TEMPORARY_BOUND.saturating_sub(self.slots.len() + self.generated_peak + overhead));
         for (i, slot) in self.slots.iter().enumerate() {
             let _ = writeln!(
                 layout.headers,

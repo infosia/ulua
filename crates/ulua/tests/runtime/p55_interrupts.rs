@@ -71,6 +71,11 @@ fn check_gaps<S: AsRef<str>>(sources: Vec<(S, String)>) {
         let luau = ulua_compiler::compile(source.as_bytes(), Limits::default())
             .unwrap_or_else(|error| panic!("{name}: {error:?}"))
             .luau;
+        // Reuse this emission to check the statement form at no extra compile cost.
+        assert!(
+            !luau.lines().any(|line| line.trim_start().starts_with('(')),
+            "{name}: a generated statement starts with a parenthesis"
+        );
         let mut worst = 0;
         for branch in [0, 1] {
             if branch == 0 && (name.starts_with("exit-break") || name.starts_with("exit-nested")) {

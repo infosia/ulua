@@ -29,6 +29,10 @@ fn nested_direct_calls_keep_bounded_pipeline_growth() {
 fn integral_marks_keep_linear_pipeline_growth() {
     measure("integral-marks");
 }
+#[test]
+fn many_element_reads_keep_linear_pipeline_growth() {
+    measure("invariant-length");
+}
 fn measure(shape: &str) {
     assert!(shape::KEYS.contains(&shape));
     let _measurement = crate::measurement_lock();
@@ -45,6 +49,11 @@ fn measure(shape: &str) {
         }
         let compiled = ulua_compiler::compile(source.as_bytes(), Default::default()).unwrap();
         assert!(compiled.luau.contains(" % "));
+        if shape == "invariant-length" {
+            let length = compiled.luau.find("number = #").expect("hoisted length");
+            assert!(length < compiled.luau.find("for __ulua_g").unwrap());
+            assert_eq!(source.len(), bytes);
+        }
         assert!(
             compiled.luau.len()
                 <= ulua_compiler::OUTPUT_PRELUDE_BYTES + bytes * ulua_compiler::OUTPUT_FACTOR

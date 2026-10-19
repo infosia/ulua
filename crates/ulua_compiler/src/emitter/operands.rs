@@ -169,10 +169,10 @@ impl Emitter<'_> {
                 Some(text)
             }
             E::Field(receiver, key) => {
-                let (slot, deferred) = self.access_receiver(receiver, depth)?;
-                self.access_receiver_check(slot, deferred);
-                let value = format!("{}.__ulua_k{key}", self.temp(slot));
-                self.release(slot);
+                let (slot, deferred) = self.receiver_operand(receiver, depth, false)?;
+                self.access_operand_check(&slot, deferred);
+                let value = format!("{}.__ulua_k{key}", self.operand_text(&slot));
+                self.release_operand(slot);
                 Some(value)
             }
             E::Length(receiver) => {
@@ -262,17 +262,18 @@ impl Emitter<'_> {
             let form = i.index_form;
             self.offset = expr.start as usize;
             let depth = self.guard(depth)?;
-            let (a, deferred) = self.access_receiver(a, depth)?;
+            let length = self.invariant_length(a);
+            let (a, deferred) = self.receiver_operand(a, depth, contains_call(i))?;
             let i = self.operand(i, depth, false, 1)?;
-            self.access_receiver_check(a, deferred);
+            self.access_operand_check(&a, deferred);
             self.element_read(
                 super::arrays::ElementTarget::Binding(id),
                 expr.ty,
-                a,
+                (&self.operand_text(&a), length.as_deref()),
                 &self.operand_text(&i),
                 form,
             )?;
-            self.release(a);
+            self.release_operand(a);
             self.release_operand(i);
             return Ok(());
         }
@@ -307,7 +308,7 @@ impl Emitter<'_> {
 }
 
 // Calls in any later subtree can change a captured or module binding.
-fn contains_call(expr: &Expr) -> bool {
+pub(super) fn contains_call(expr: &Expr) -> bool {
     let mut work = vec![expr];
     while let Some(expr) = work.pop() {
         match &expr.kind {

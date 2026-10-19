@@ -120,10 +120,11 @@ impl Emitter<'_> {
                 }
             }
             S::Field(a, key, op, e) => {
-                let (receiver, deferred) = self.access_receiver(a, depth)?;
-                let target = format!("{}.__ulua_k{key}", self.temp(receiver));
+                let (receiver, deferred) =
+                    self.receiver_operand(a, depth, operands::contains_call(e))?;
+                let target = format!("{}.__ulua_k{key}", self.operand_text(&receiver));
                 let old = if op.is_some() {
-                    self.access_receiver_check(receiver, deferred);
+                    self.access_operand_check(&receiver, deferred);
                     let slot = self.slot(&e.ty)?;
                     self.write_slot(slot, &target);
                     Some(slot)
@@ -132,7 +133,7 @@ impl Emitter<'_> {
                 };
                 let value = self.expression(e, depth)?;
                 if op.is_none() {
-                    self.access_receiver_check(receiver, deferred);
+                    self.access_operand_check(&receiver, deferred);
                 }
                 let result = if let (Some(op), Some(old)) = (op, old) {
                     self.capture_binary(op);
@@ -141,7 +142,8 @@ impl Emitter<'_> {
                     self.temp(value)
                 };
                 self.write(&target, result, &self.function_types.luau(&e.ty));
-                for slot in [Some(receiver), Some(value), old].into_iter().flatten() {
+                self.release_operand(receiver);
+                for slot in [Some(value), old].into_iter().flatten() {
                     self.release(slot);
                 }
             }

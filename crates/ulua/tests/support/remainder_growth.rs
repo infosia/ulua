@@ -7,10 +7,14 @@ pub const KEYS: &[&str] = &[
     "parameter-many-calls",
     "parameter-nested-calls",
     "integral-marks",
+    "invariant-length",
 ];
 
 pub fn source(shape: &str, bytes: usize) -> String {
     assert!(KEYS.contains(&shape));
+    if shape == "invariant-length" {
+        return invariant_length(bytes);
+    }
     if shape.starts_with("parameter-") {
         return parameters(shape, bytes);
     }
@@ -68,6 +72,29 @@ fn parameters(shape: &str, bytes: usize) -> String {
             "export function main():number{{return f{last}(1);}}"
         ));
     }
+    out.extend(std::iter::repeat_n(' ', bytes - out.len()));
+    out
+}
+
+// One counted body reads many arrays repeatedly. No write or call blocks the IR query.
+fn invariant_length(bytes: usize) -> String {
+    let arrays = (bytes / 256).min(64);
+    let mut out = "export function main():number{let s=0;".to_owned();
+    for i in 0..arrays {
+        out.push_str(&format!("const a{i}=[1];"));
+    }
+    out.push_str("for(let i=0;i<1;i++){");
+    let tail = "}return s;}";
+    let mut next = 0;
+    loop {
+        let read = format!("s+=a{next}[i]%3;");
+        if out.len() + read.len() + tail.len() > bytes {
+            break;
+        }
+        out.push_str(&read);
+        next = (next + 1) % arrays;
+    }
+    out.push_str(tail);
     out.extend(std::iter::repeat_n(' ', bytes - out.len()));
     out
 }

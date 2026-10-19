@@ -39,6 +39,7 @@ impl Emitter<'_> {
         self.joins.enter();
         let live = self.generated_live;
         self.line("do");
+        let lengths = self.begin_invariant_lengths(body)?;
         let bound = self.operand(form.bound, depth, false, 2)?;
         let limit = self.generated()?;
         self.capture(form.round);
@@ -98,6 +99,9 @@ impl Emitter<'_> {
         self.indent -= 1;
         self.line("end");
         self.line("end");
+        for id in lengths {
+            self.invariant_lengths.remove(&id);
+        }
         self.generated_live = live;
         self.joins.leave();
         Ok(())

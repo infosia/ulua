@@ -6,6 +6,24 @@ pub(super) enum ElementTarget {
     Binding(usize),
 }
 impl Emitter<'_> {
+    pub(super) fn receiver_operand(
+        &mut self,
+        receiver: &Expr,
+        depth: u32,
+        later_call: bool,
+    ) -> Result<(operands::Operand, bool), Diagnostic> {
+        // A receiver with an assertion cannot start a Luau store statement.
+        if matches!(receiver.kind, E::Read(id) if self.module.bindings[id].ty == Some(receiver.ty))
+            && self.inline_tree(receiver, later_call, 1).is_some()
+        {
+            return Ok((self.operand(receiver, depth, later_call, 1)?, false));
+        }
+        let (slot, deferred) = self.access_receiver(receiver, depth)?;
+        Ok((operands::Operand::Temporary(slot), deferred))
+    }
+    pub(super) fn access_operand_check(&mut self, receiver: &operands::Operand, deferred: bool) {
+        self.access_receiver_check_text(&self.operand_text(receiver), deferred);
+    }
     // An element that supplies an access object keeps its value until that access checks it.
     pub(super) fn access_receiver(
         &mut self,
@@ -15,24 +33,25 @@ impl Emitter<'_> {
         if let E::Index(a, i) = &receiver.kind {
             self.offset = receiver.start as usize;
             let depth = self.guard(depth)?;
-            let (a, deferred) = self.access_receiver(a, depth)?;
+            let (a, deferred) = self.receiver_operand(a, depth, operands::contains_call(i))?;
             let i = self.expression(i, depth)?;
-            self.access_receiver_check(a, deferred);
+            self.access_operand_check(&a, deferred);
             self.offset = receiver.start as usize;
             let slot = self.slot(&receiver.ty)?;
             self.capture("__ulua_get");
             self.write_slot(
                 slot,
-                format!("__ulua_get({}, {}, true)", self.temp(a), self.temp(i)),
+                format!(
+                    "__ulua_get({}, {}, true)",
+                    self.operand_text(&a),
+                    self.temp(i)
+                ),
             );
-            self.release(a);
+            self.release_operand(a);
             self.release(i);
             return Ok((slot, true));
         }
         Ok((self.expression(receiver, depth)?, false))
-    }
-    pub(super) fn access_receiver_check(&mut self, receiver: usize, deferred: bool) {
-        self.access_receiver_check_text(&self.temp(receiver), deferred);
     }
     fn access_receiver_check_text(&mut self, receiver: &str, deferred: bool) {
         if deferred {
@@ -97,21 +116,12 @@ impl Emitter<'_> {
         &mut self,
         dest: ElementTarget,
         ty: Type,
-        array: usize,
-        index: &str,
-        form: IndexForm,
-    ) -> Result<(), Diagnostic> {
-        self.element_read_text(dest, ty, &self.temp(array), index, form)
-    }
-    fn element_read_text(
-        &mut self,
-        dest: ElementTarget,
-        ty: Type,
-        array: &str,
+        array: (&str, Option<&str>),
         index: &str,
         form: IndexForm,
     ) -> Result<(), Diagnostic> {
         let test = self.index_test(array, index, "<", form);
+        let array = array.0;
         self.capture("__ulua_trap");
         // Reject unsafe numeric keys before the VM converts a table index to an integer.
         // A fresh scoped local bounds analyzer growth across repeated element checks.
@@ -129,25 +139,35 @@ impl Emitter<'_> {
         self.generated_live -= 1;
         Ok(())
     }
-    fn index_test(&mut self, array: &str, index: &str, bound: &str, form: IndexForm) -> String {
+    fn index_test(
+        &mut self,
+        array: (&str, Option<&str>),
+        index: &str,
+        bound: &str,
+        form: IndexForm,
+    ) -> String {
+        let length = array
+            .1
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("#{}", array.0));
         if form == IndexForm::Proven {
             #[cfg(feature = "remainder-shadow")]
             if self.remainder_shadow {
                 self.capture("__ulua_floor");
                 self.line_weighted(format!("if not ({index} >= 0 and __ulua_floor({index}) == {index}) then error(\"proven index shadow mismatch\") end"), 4);
             }
-            format!("{index} {bound} #{array}")
+            format!("{index} {bound} {length}")
         } else if form == IndexForm::Integral {
             #[cfg(feature = "remainder-shadow")]
             if self.remainder_shadow {
                 self.capture("__ulua_floor");
                 self.line_weighted(format!("if {index} == {index} and __ulua_floor({index}) ~= {index} then error(\"integral index shadow mismatch\") end"), 4);
             }
-            format!("{index} >= 0 and {index} {bound} #{array}")
+            format!("{index} >= 0 and {index} {bound} {length}")
         } else {
             self.capture("__ulua_floor");
             format!(
-                "{index} >= 0 and {index} {bound} #{array} and __ulua_floor({index}) == {index}"
+                "{index} >= 0 and {index} {bound} {length} and __ulua_floor({index}) == {index}"
             )
         }
     }
@@ -158,7 +178,7 @@ impl Emitter<'_> {
         bound: &str,
         form: IndexForm,
     ) -> Result<(), Diagnostic> {
-        let test = self.index_test(array, index, bound, form);
+        let test = self.index_test((array, None), index, bound, form);
         let checked = self.generated()?;
         self.line("do");
         self.line_weighted(format!("local {checked}: boolean = not ({test})"), 4);
@@ -176,28 +196,20 @@ impl Emitter<'_> {
         form: IndexForm,
         depth: u32,
     ) -> Result<(), Diagnostic> {
-        // Stable receivers need no mutable snapshot across index and RHS calls.
-        let receiver_type = self.function_types.luau(&a.ty);
-        let (a, deferred) = if self.inline_enabled && self.inline_tree(a, true, 1).is_some() {
-            (self.operand(a, depth, true, 1)?, false)
-        } else {
-            let (slot, deferred) = self.access_receiver(a, depth)?;
-            (operands::Operand::Temporary(slot), deferred)
-        };
-        // Each write gets a receiver definition; repeated stores cannot join its refinement graph.
-        let array = self.generated()?;
+        let (a, deferred) = self.receiver_operand(
+            a,
+            depth,
+            operands::contains_call(i) || operands::contains_call(e),
+        )?;
+        let array = self.operand_text(&a);
         self.line("do");
-        self.line(format!(
-            "local {array}: {receiver_type} = {}",
-            self.operand_text(&a)
-        ));
         // Keep stable operands inline; snapshot an index that a later call can change.
         let i = self.operand(i, depth, true, 1)?;
         let index = self.operand_text(&i);
         let old = if op.is_some() {
             self.access_receiver_check_text(&array, deferred);
             let old = self.slot(&e.ty)?;
-            self.element_read_text(ElementTarget::Slot(old), e.ty, &array, &index, form)?;
+            self.element_read(ElementTarget::Slot(old), e.ty, (&array, None), &index, form)?;
             Some(old)
         } else {
             None
@@ -223,7 +235,6 @@ impl Emitter<'_> {
             &self.function_types.luau(&e.ty),
         );
         self.line("end");
-        self.generated_live -= 1;
         self.release_operand(i);
         self.release_operand(a);
         for slot in [Some(value), old].into_iter().flatten() {

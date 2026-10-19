@@ -18,6 +18,7 @@ mod expression_tests;
 mod expressions;
 mod functions;
 mod interrupts;
+mod invariant;
 mod joins;
 mod json;
 #[cfg(test)]
@@ -27,6 +28,10 @@ pub(crate) mod methods;
 mod operands;
 mod output;
 mod prelude;
+#[cfg(test)]
+mod receiver_length_tests;
+#[cfg(test)]
+mod receiver_review_tests;
 #[cfg(test)]
 mod shrink_tests;
 #[cfg(test)]
@@ -108,6 +113,7 @@ struct Emitter<'a> {
     output: Option<&'a output::Output>,
     credited: usize,
     copies: HashMap<usize, String>,
+    invariant_lengths: HashMap<usize, String>,
     generated_count: usize,
     generated_live: usize,
     generated_peak: usize,
@@ -165,6 +171,7 @@ impl<'a> Emitter<'a> {
             output: None,
             credited: 0,
             copies: HashMap::new(),
+            invariant_lengths: HashMap::new(),
             generated_count: 0,
             generated_live: 0,
             generated_peak: 0,
