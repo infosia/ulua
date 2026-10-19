@@ -167,7 +167,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D32 | Where `node` gives `undefined` for a missing result, Ulua gives `null`, as the owner's prior project does: `find`, `findLast`, and `Map.get` are accepted for a result type without `null`; `== null` and `??` agree with `node`; `=== null` on such a result is a named divergence. The source keeps no `undefined`. Revises the library part of D16 | 2026-10-17 | `stdlib.md` §1; owner decision at the P7 plan |
 | D33 | `Math` members whose Luau builtin differs from `node` or is absent use Rust `libm` 0.2.16 as a native helper: one result on every host OS; the 1- or 2-ulp difference from `node` is a named divergence | 2026-10-17 | `stdlib.md` §2, §5; collisions.md C4.9; owner decision after P7.0 M1 |
 | D34 | An object literal whose type reaches `JSON.stringify` lists its fields in the declaration order of the type, so the output order equals `node` | 2026-10-17 | `stdlib.md` §2; owner decision after P7.0 M4 |
-| D35 | A developer command `ulua` checks and runs a script through the product C ABI, prints the link flags, and builds a small host. It has no form that shows generated Luau (invariant 6) | 2026-10-20 | `cli.md`; owner request |
+| D35 | A developer command `ulua` checks and runs a script through the product C ABI, prints the link flags, and builds a small host. `ulua emit` prints the generated Luau for a developer to read; no C ABI function returns it, and nothing accepts Luau (invariant 6). Revised the same day: the first form had no `emit` | 2026-10-20 | `cli.md` §2.5; owner request |
 
 ## 9. Corrections and revisions
 
@@ -211,3 +211,7 @@ Each entry records what changed, the evidence, and the consequence.
   D35. Evidence: the owner request; `cli.md` §6 lists each difference
   from the prior command and its reason. Consequence: the host flags
   of the gate test helper get one definition that the command shares.
+- **Rev 8 (2026-10-20).** D35 adds `ulua emit` (owner request). Evidence:
+  the corpus runner already writes the generated Luau for a developer
+  (`pipeline.md` §8) with no C ABI accessor; `emit` keeps that line.
+  Consequence: `cli.md` Rev 3 §2.5 and §7 criterion 8.

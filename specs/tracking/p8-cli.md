@@ -1,7 +1,7 @@
 # P8 developer command
 
-Status: P8 COMPLETE 2026-10-20 (Phase Review rounds 1 and 2).
-Contract: `blocks/cli.md` Rev 2.
+Status: P8 open for `emit` (§2.5, owner request). §2.1 to §2.4 complete
+2026-10-20 (Phase Review rounds 1 and 2). Contract: `blocks/cli.md` Rev 3.
 
 ## Exit checklist
 
@@ -14,6 +14,7 @@ Contract: `blocks/cli.md` Rev 2.
 - [x] 5. `link-flags` names an existing library; the flags come from `crates/ulua_toolchain`
 - [x] 6. Unit tests of §2 to §5 (`crates/ulua_cli`: 18 tests)
 - [x] 7. `gate.sh full` and `hygiene.sh` pass; no golden changes
+- [ ] 8. `emit` equals the Luau that `ulua_compile` compiles
 - [x] Phase Review
 
 ## Measurements

@@ -4,6 +4,7 @@ Status: contracted (D35). Evidence: `specs/tracking/p8-cli.md`.
 
 Rev 1: §2, §2.1, §2.4, §3, §4 after the P8 review round 1.
 Rev 2: §2, §3, §4 rules 4, 6, 7 after the P8 review round 2.
+Rev 3: §2.5 `emit` (owner request); §1, §2, §3, §6, §7.
 
 ## 1. Purpose and boundary
 
@@ -15,7 +16,8 @@ command holds it once. A script author also needs a way to check and
 run a script without a host of their own.
 
 The host owns its build (invariant 1). The command gives answers and
-artifacts: a check result, the output of a script run, the link flags,
+artifacts: a check result, the output of a script run, the generated
+Luau to read, the link flags,
 and, as a convenience, a small host built whole. It writes no build
 system files and does not watch files.
 
@@ -29,7 +31,7 @@ One binary, `ulua`, in the crate `crates/ulua_cli` (package
 `execute(args, stdout, stderr) -> i32` that `main` calls; the tests
 call it in process. `execute` writes each stream of the command to
 these writers. The one exception is the host of `build --run`, which
-inherits the streams of the process (§2.4 rule 8). The subcommands are §2.1 to §2.4. `ulua help`,
+inherits the streams of the process (§2.4 rule 8). The subcommands are §2.1 to §2.5. `ulua help`,
 `ulua --help`, and no arguments print the usage text to stdout and give
 exit 0. Each other form is a usage error. A usage error prints one line
 `ulua: <reason>` that names the wrong or missing argument, then the
@@ -112,6 +114,28 @@ Compiles and links the host sources with the static library into
 The flags and the system libraries of §2.3 and §2.4 have one
 definition. The gate test helper and the command both read it.
 
+### 2.5 `ulua emit <file.ts> [-o <file>]`
+
+Prints the generated Luau of the file, for a developer to read.
+
+1. The text is the Luau that `ulua_compile` gives to the Luau compiler
+   for the same source, no grants, and the default compile limits,
+   byte for byte. The command calls the compiler of `ulua_compiler`
+   with the same limits, on a thread with the same stack size
+   (`COMPILER_STACK_BYTES`), as the corpus runner does for
+   `--emit-luau` (pipeline.md §8).
+2. Without `-o`, the text goes to stdout. With `-o`, the command
+   writes the text to that file only, and prints
+   `emit: <file as given>: <output as given>` to stderr.
+3. A rejected file prints the diagnostic of §4 to stderr. stdout stays
+   empty, and the command creates or changes no `-o` file.
+4. The text is an output only. The C ABI has no function that returns
+   it, and no function or command accepts Luau (invariant 6). The
+   text is not a stable interface: a compiler change can change any
+   byte of it. It does not run alone: the product gives the chunk its
+   arguments (the prelude and the grants, pipeline.md).
+5. The text is not escaped: it is an artifact, as the source file is.
+
 ## 3. Exit codes and streams
 
 | Exit | Meaning |
@@ -128,7 +152,8 @@ definition. The gate test helper and the command both read it.
   `error[abi:status]: ULUA_BUSY (5)`.
 - The command works offline and headless. It starts no download.
 - stdout carries only the script output (`run`), the requested answer
-  (`link-flags`, the usage text), or the host output (`build --run`).
+  (`link-flags`, `emit` without `-o`, the usage text), or the host
+  output (`build --run`).
   Each other line goes to stderr.
 
 ## 4. Diagnostic rendering
@@ -227,7 +252,7 @@ that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
 | Prior command | Here | Reason |
 |---|---|---|
 | `check`, `run`, `link-flags`, `build` | §2.1 to §2.4 | Same purpose |
-| `emit` (the generated C) | Not present | Generated Luau stays internal (invariant 6) |
+| `emit` (the generated C) | §2.5, the generated Luau | An output for a developer only; no C ABI function returns it or accepts Luau (invariant 6), as for the corpus runner |
 | `boundary` (the crossing plan of each foreign call) | Not present | A value crosses the ABI only as `ulua_value` (abi.md §4); no plan exists |
 | `bind` (a mirror from a C header) | Not present | The grant list is the only record of a host function; the library writes the `.d.ts` (D20) |
 | `run --watch` (reload) | Not present | Reload is outside the current phases (D31) |
@@ -279,3 +304,10 @@ that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
    renderer and finds a rule line.
 7. `sh tools/gate.sh full` and `sh tools/hygiene.sh` pass. No golden
    changes.
+8. `emit`: for each accept entry without a `grants` header, a test
+   captures the Luau that `ulua_compile` gives to the Luau compiler
+   (the `CompileEvent::Rust` observation of `compile_measurement`) and
+   compares it with the `emit` output, byte for byte. On each reject
+   entry, `emit` gives the same stderr and exit code as `check`, and
+   empty stdout. With `-o`, a rejected file leaves an existing output
+   file unchanged.
