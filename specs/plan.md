@@ -106,6 +106,11 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
   Contract: `specs/blocks/stdlib.md`; slices in
   `specs/tracking/p7-stdlib.md`. Exit: each slice of `stdlib.md` §3
   meets its exit; Phase Review.
+- **P8 — developer command.** The `ulua` command: `check`, `run`,
+  `link-flags`, and `build`, after the command of the owner's prior
+  project, changed where an Ulua rule forces it (D35). Contract:
+  `specs/blocks/cli.md`; evidence in `specs/tracking/p8-cli.md`. Exit:
+  `cli.md` §7; Phase Review.
 
 ## 7. Measurement items (P0.5)
 
@@ -162,6 +167,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D32 | Where `node` gives `undefined` for a missing result, Ulua gives `null`, as the owner's prior project does: `find`, `findLast`, and `Map.get` are accepted for a result type without `null`; `== null` and `??` agree with `node`; `=== null` on such a result is a named divergence. The source keeps no `undefined`. Revises the library part of D16 | 2026-10-17 | `stdlib.md` §1; owner decision at the P7 plan |
 | D33 | `Math` members whose Luau builtin differs from `node` or is absent use Rust `libm` 0.2.16 as a native helper: one result on every host OS; the 1- or 2-ulp difference from `node` is a named divergence | 2026-10-17 | `stdlib.md` §2, §5; collisions.md C4.9; owner decision after P7.0 M1 |
 | D34 | An object literal whose type reaches `JSON.stringify` lists its fields in the declaration order of the type, so the output order equals `node` | 2026-10-17 | `stdlib.md` §2; owner decision after P7.0 M4 |
+| D35 | A developer command `ulua` checks and runs a script through the product C ABI, prints the link flags, and builds a small host. It has no form that shows generated Luau (invariant 6) | 2026-10-20 | `cli.md`; owner request |
 
 ## 9. Corrections and revisions
 
@@ -201,3 +207,7 @@ Each entry records what changed, the evidence, and the consequence.
   measurements. Evidence: `tracking/p7-stdlib.md` M1, M4. Consequence:
   P7.1 adds native helpers and a seed field to the C ABI; P7.6 adds a
   literal-order rule.
+- **Rev 7 (2026-10-20).** §6 adds P8, the developer command. §8 adds
+  D35. Evidence: the owner request; `cli.md` §6 lists each difference
+  from the prior command and its reason. Consequence: the host flags
+  of the gate test helper get one definition that the command shares.
