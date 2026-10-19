@@ -34,7 +34,12 @@ fn source_ceiling_instruction_gaps() {
     std::thread::Builder::new()
         .stack_size(COMPILER_STACK_BYTES)
         .spawn(|| {
-            check_gaps(shapes::all());
+            check_gaps(
+                shapes::all()
+                    .into_iter()
+                    .chain(shapes::updates::all(65536))
+                    .collect(),
+            );
         })
         .unwrap()
         .join()
@@ -76,6 +81,26 @@ fn check_gaps<S: AsRef<str>>(sources: Vec<(S, String)>) {
             !luau.lines().any(|line| line.trim_start().starts_with('(')),
             "{name}: a generated statement starts with a parenthesis"
         );
+        if name == "moved-point" || name == "moved-nested" {
+            let mut heads = luau.match_indices("    for __ulua_g");
+            let head = if name == "moved-nested" {
+                heads.nth(1)
+            } else {
+                heads.next()
+            }
+            .expect("numeric witness loop")
+            .0;
+            assert!(
+                luau[..head].ends_with("    __ulua_interrupt()\n"),
+                "{name}: the later point must move before the loop"
+            );
+            let body = luau[head..].split("\n    end\n").next().unwrap();
+            assert_eq!(
+                body.matches("__ulua_interrupt()").count(),
+                1,
+                "{name}: the body must also need a local point"
+            );
+        }
         let mut worst = 0;
         for branch in [0, 1] {
             if branch == 0 && (name.starts_with("exit-break") || name.starts_with("exit-nested")) {
@@ -128,9 +153,7 @@ fn check_gaps<S: AsRef<str>>(sources: Vec<(S, String)>) {
             eprintln!(
                 "interrupt shape {name} branch={branch}: gap={gap} statement={statement} line={statement_line} instructions={total} interrupts={interrupts} run={run}"
             );
-            if (name.starts_with("exit-") || name == "prelude-numeric-arrows")
-                && run > ulua_compiler::INTERRUPT_STATEMENTS as u64
-            {
+            if run > ulua_compiler::INTERRUPT_STATEMENTS as u64 {
                 violations.push(format!("{name}: executed statement run {run} exceeds 16"));
             }
             if statement > ulua_compiler::STATEMENT_INSTRUCTIONS {
@@ -258,6 +281,11 @@ fn statement_probe_separates_caller_and_callee() {
         };
         assert_eq!(status, 0);
         assert_eq!(result, 48.0, "the callee must execute all additions");
+        // This hand-written calibration bypasses the compiler's counted path:
+        // its 48 additions intentionally have no points. Compiler-generated
+        // shapes above always assert the run bound, with no shape exemptions.
+        eprintln!("interrupt handwritten calibration arguments={arguments}: run={run}");
+        assert!(run > ulua_compiler::INTERRUPT_STATEMENTS as u64);
         // O1 writes the result directly: argument moves, the callee move, and CALL.
         assert_eq!(
             statement,
@@ -274,4 +302,15 @@ fn statement_probe_separates_caller_and_callee() {
 // The instruction probe uses the product C closure and an independent Rust libm reference.
 extern "C" fn math_reference(op: u32, a: f64, _b: f64) -> f64 {
     if op == 18 { libm::sin(a) } else { f64::NAN }
+}
+
+#[test]
+fn review_header_zero_trip_instruction_runs() {
+    let _measurement = crate::measurement_lock();
+    std::thread::Builder::new()
+        .stack_size(COMPILER_STACK_BYTES)
+        .spawn(|| check_gaps(shapes::updates::headers(65536)))
+        .unwrap()
+        .join()
+        .unwrap();
 }

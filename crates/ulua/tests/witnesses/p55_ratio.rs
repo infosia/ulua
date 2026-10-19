@@ -30,6 +30,7 @@ fn all_interrupt_shape_step_time_ratios() {
             shapes::all_at(65536 - 256)
                 .into_iter()
                 .chain(shapes::conditions(65536 - 256))
+                .chain(shapes::updates::all(65536 - 256))
                 .map(|(name, source)| {
                     (
                         name.to_owned(),

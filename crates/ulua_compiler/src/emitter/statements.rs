@@ -62,12 +62,7 @@ impl Emitter<'_> {
                         .as_ref()
                         .and_then(|l| l.entries.get(&key))
                     {
-                        let headers = self.headers(headers);
-                        if let Some(output) = self.output {
-                            output.charge(headers.len(), self.statement_offset);
-                            output.check(self.module)?;
-                        }
-                        self.out.push_str(&headers);
+                        self.headers(headers);
                     }
                 }
             }
@@ -141,7 +136,23 @@ impl Emitter<'_> {
                 } else {
                     self.temp(value)
                 };
-                self.write(&target, result, &self.function_types.luau(&e.ty));
+                let construction = matches!(a.kind, ir::ExprKind::Read(id)
+                    if Some(id) == self.construction_receiver);
+                let value_cost = if matches!(op, Some("%" | ir::NATIVE_REMAINDER)) {
+                    3
+                } else {
+                    1
+                };
+                let cost =
+                    updates::weight(&self.module.types, a.ty, *key, construction).max(value_cost);
+                self.line_counted(
+                    format!(
+                        "{target} = ({result}) :: {}",
+                        self.function_types.luau(&e.ty)
+                    ),
+                    cost,
+                    Some(cost),
+                );
                 self.release_operand(receiver);
                 for slot in [Some(value), old].into_iter().flatten() {
                     self.release(slot);

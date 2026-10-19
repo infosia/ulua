@@ -16,7 +16,15 @@ impl Flow {
 pub(super) struct Interrupts {
     flow: Flow,
     frames: Vec<Frame>,
+    #[cfg(test)]
     hoisted: Option<usize>,
+}
+/// A counting decision is consumed by the line writer that can insert its point.
+#[must_use]
+#[derive(Clone, Copy)]
+pub(super) enum Point {
+    Here,
+    Before(usize),
 }
 struct Frame {
     entry: Flow,
@@ -34,14 +42,17 @@ enum Kind {
 impl Interrupts {
     // This classifies fixed emitter delimiters, never user source or expression contents.
     // Execution lines count as statements. Closure arguments belong to their enclosing call.
+    #[cfg(test)]
     pub(super) fn before(&mut self, text: &str, minimum_cost: usize) -> bool {
         self.before_at(text, minimum_cost, 0)
     }
+    #[cfg(test)]
     pub(super) fn take_hoisted(&mut self) -> Option<usize> {
         self.hoisted.take()
     }
     pub(super) fn checkpoint(&mut self) {
         self.flow = Flow::default();
+        self.clear_heads();
     }
     pub(super) fn shift_heads(&mut self, position: usize, bytes: usize) {
         for frame in &mut self.frames {
@@ -52,35 +63,63 @@ impl Interrupts {
             }
         }
     }
-    // Pending loop delimiters carry their output position and counted header work.
-    fn hoist_head(&mut self, cost: usize) -> usize {
+    fn clear_heads(&mut self) {
+        for frame in self.frames.iter_mut().rev() {
+            if matches!(frame.kind, Kind::Function) {
+                break;
+            }
+            frame.head = None;
+        }
+    }
+    // Heads retain the pre-header forward count across ordinary statements.
+    // A constant-true header reserves a boundary but executes no forward work;
+    // its removable count includes that reservation, as in the first-statement rule.
+    fn hoist_head(&mut self, cost: usize) -> Option<(usize, usize)> {
         let function = self
             .frames
             .iter()
-            .rposition(|frame| matches!(frame.kind, Kind::Function))
-            .map_or(0, |index| index + 1);
-        let Some(index) =
-            (function..self.frames.len()).find(|index| self.frames[*index].head.is_some())
-        else {
-            return 0;
-        };
-        let headers: usize = self.frames[index..]
-            .iter()
-            .filter_map(|frame| frame.head.map(|(_, cost)| cost))
-            .sum();
-        if headers + cost > INTERRUPT_STATEMENTS {
-            return 0;
+            .rposition(|f| matches!(f.kind, Kind::Function))
+            .map_or(0, |i| i + 1);
+        let index = (function..self.frames.len()).rfind(|i| self.frames[*i].head.is_some())?;
+        let (position, before) = self.frames[index].head?;
+        let reduced = self.flow.count.checked_sub(before)?;
+        if reduced + cost > INTERRUPT_STATEMENTS {
+            return None;
         }
-        self.hoisted = self.frames[index].head.map(|(position, _)| position);
-        let mut count = 0;
         for frame in &mut self.frames[index..] {
-            count += frame.head.map_or(0, |(_, cost)| cost);
-            frame.entry = Flow { count };
+            frame.entry.count = frame.entry.count.saturating_sub(before);
+            frame.largest.count = frame.largest.count.saturating_sub(before);
         }
-        count
+        Some((reduced, position))
     }
-    pub(super) fn before_at(&mut self, text: &str, minimum_cost: usize, position: usize) -> bool {
-        self.hoisted = None;
+    // Test adapters preserve the compact flow-state fixtures. Production has one
+    // decision consumer, line_counted; no pending move survives a call to count.
+    #[cfg(test)]
+    pub(super) fn before_at(&mut self, text: &str, cost: usize, position: usize) -> bool {
+        self.before_store_at(text, cost, position, None)
+    }
+    #[cfg(test)]
+    pub(super) fn before_store_at(
+        &mut self,
+        text: &str,
+        cost: usize,
+        position: usize,
+        store: Option<usize>,
+    ) -> bool {
+        let point = self.count(text, cost, position, store);
+        self.hoisted = match point {
+            Some(Point::Before(position)) => Some(position),
+            _ => None,
+        };
+        point.is_some()
+    }
+    pub(super) fn count(
+        &mut self,
+        text: &str,
+        minimum_cost: usize,
+        position: usize,
+        store_cost: Option<usize>,
+    ) -> Option<Point> {
         let text = text.trim();
         if text == "else" {
             if let Some(frame) = self.frames.last_mut() {
@@ -88,7 +127,7 @@ impl Interrupts {
                 frame.largest = frame.largest.join(self.flow);
                 self.flow = frame.entry;
             }
-            return false;
+            return None;
         }
         if text == "end" || text == "until true" {
             if let Some(frame) = self.frames.pop() {
@@ -99,15 +138,15 @@ impl Interrupts {
                     Kind::Branch | Kind::Loop => self.flow.join(frame.entry).join(frame.largest),
                 };
             }
-            return false;
+            return None;
         }
         if text == "," || text == "nil" {
-            return false;
+            return None;
         }
         if text == ")" || text == ")), 0)" {
             // Protected closure arguments are complete. The enclosing call always executes.
-            self.flow = Flow::default();
-            return false;
+            self.checkpoint();
+            return None;
         }
         let argument_function = text.starts_with("function(");
         let function = argument_function || text.starts_with("local function ");
@@ -116,7 +155,7 @@ impl Interrupts {
         let branch = text.starts_with("if ") && text.ends_with(" then");
         let loop_head =
             (text.starts_with("while ") || text.starts_with("for ")) && text.ends_with(" do");
-        let mut insert = false;
+        let mut point = None;
         // Reserve work for inline branches and pure groups. Storage paths also need VM field reads.
         let value = text.split_once(" = (").map_or("", |(_, value)| value);
         let base = if value.contains(" and ") || value.contains(" or ") {
@@ -135,24 +174,30 @@ impl Interrupts {
         } else {
             1
         };
-        let cost = (base + value.matches(".__ulua_").count())
-            .max(weight)
-            .max(minimum_cost)
-            .min(INTERRUPT_STATEMENTS);
+        let cost = store_cost.unwrap_or_else(|| {
+            (base + value.matches(".__ulua_").count())
+                .max(weight)
+                .max(minimum_cost)
+                .min(INTERRUPT_STATEMENTS)
+        });
         // Reserve loop boundaries before split conditions. Constant true headers add no forward work.
         let executable = !block && !repeat && !argument_function;
-        let forward = executable && text != "while true do";
+        let mut before_head = self.flow.count;
         if executable {
             if self.flow.count + cost > INTERRUPT_STATEMENTS {
-                insert = true;
-                self.flow.count = self.hoist_head(cost);
+                if let Some((count, position)) = self.hoist_head(cost) {
+                    self.flow.count = count;
+                    point = Some(Point::Before(position));
+                } else {
+                    self.flow.count = 0;
+                    point = Some(Point::Here);
+                }
+                self.clear_heads();
+                before_head = self.flow.count;
             }
             self.flow.count += cost;
-            for frame in self.frames.iter_mut().rev() {
-                if matches!(frame.kind, Kind::Function) {
-                    break;
-                }
-                frame.head = None;
+            if text == "while true do" {
+                before_head = self.flow.count;
             }
         }
         if function || block || repeat || branch || loop_head {
@@ -160,7 +205,7 @@ impl Interrupts {
                 entry: self.flow,
                 largest: Flow::default(),
                 has_else: false,
-                head: (loop_head || repeat).then_some((position, if forward { cost } else { 0 })),
+                head: (loop_head || repeat).then_some((position, before_head)),
                 kind: if function {
                     Kind::Function
                 } else if block {
@@ -176,7 +221,7 @@ impl Interrupts {
             }
         } else if always_calls(text) || text.starts_with("return ") || text.starts_with("do return")
         {
-            self.flow = Flow::default();
+            self.checkpoint();
         }
         if text == "do break end"
             || text == "do continue end"
@@ -194,7 +239,7 @@ impl Interrupts {
                 }
             }
         }
-        insert
+        point
     }
 }
 
@@ -337,7 +382,8 @@ mod loop_head_tests {
             assert!(!count.before("local first = 1", 1));
             assert!(count.before("local later = 2", 1));
             assert!(!count.before("end", 1));
-            assert!(count.before("local after = 3", 2));
+            assert!(!count.before("local after = 3", 2));
+            assert_eq!(count.flow.count, 9);
         }
     }
 
@@ -376,10 +422,11 @@ mod loop_head_tests {
         assert!(!count.before_at("repeat", 1, 120));
         assert!(!count.before("do", 1));
         assert!(count.before("local first = 1", 1));
-        assert_eq!(count.take_hoisted(), Some(100));
+        assert_eq!(count.take_hoisted(), Some(120));
         for line in ["end", "until true", "end"] {
             assert!(!count.before(line, 1));
         }
+        assert!(count.before("local after = 0", 1));
         for _ in 0..15 {
             assert!(!count.before("local after = 0", 1));
         }
@@ -402,9 +449,147 @@ mod loop_head_tests {
             assert!(!count.before("local first = 1", 1));
             assert!(!count.before(exit, 1));
             assert!(count.before("local later = 2", 1));
-            assert_eq!(count.take_hoisted(), None);
+            assert_eq!(count.take_hoisted(), Some(100));
             assert!(!count.before("end", 1));
-            assert!(count.before("local after = 3", 1));
+            assert!(!count.before("local after = 3", 1));
+            assert_eq!(count.flow.count, 4);
+        }
+    }
+}
+
+#[cfg(test)]
+mod later_tests {
+    use super::Interrupts;
+    #[test]
+    fn later_statement_moves_point_and_reduces_exit_counts() {
+        let mut c = Interrupts::default();
+        for _ in 0..12 {
+            assert!(!c.before("local x = 0", 1));
+        }
+        assert!(!c.before_at("while true do", 1, 100));
+        assert!(!c.before("local first = 0", 1));
+        assert!(!c.before("if done then break end", 1));
+        assert!(c.before("local later = 0", 3));
+        assert_eq!(c.take_hoisted(), Some(100));
+        assert!(!c.before("end", 1));
+        assert_eq!(c.flow.count, 5);
+    }
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::Interrupts;
+    #[test]
+    fn explicit_store_weight_is_authoritative() {
+        for (cost, text) in [
+            (2, "__ulua_b0.__ulua_k0 = (x) :: number"),
+            (8, "object.field = (x) :: number"),
+        ] {
+            let mut c = Interrupts::default();
+            for _ in 0..16 / cost {
+                assert!(!c.before_store_at(text, 1, 0, Some(cost)));
+            }
+            assert!(c.before("local next = 0", 1));
+        }
+    }
+    #[test]
+    fn element_and_spill_stores_keep_eight() {
+        for target in ["__ulua_b0[1]", "__ulua_spill0.__ulua_b1"] {
+            let mut c = Interrupts::default();
+            for _ in 0..2 {
+                assert!(!c.before(&format!("{target} = (x) :: number"), 1));
+            }
+            assert!(c.before("local next = 0", 1));
+        }
+    }
+    #[test]
+    fn resets_block_later_hoists_including_at_branch_joins() {
+        for reset in ["__ulua_b0()", "return x", "do return x end", "point"] {
+            for branch in [false, true] {
+                let mut c = Interrupts::default();
+                for _ in 0..10 {
+                    c.before("local x = 0", 1);
+                }
+                c.before_at("while true do", 1, 100);
+                c.before("local first = 0", 1);
+                if branch {
+                    c.before("if b then", 1);
+                }
+                if reset == "point" {
+                    // The reduced body would not fit; this point must remain local.
+                    assert!(c.before("local big = 0", 16));
+                    assert_eq!(c.take_hoisted(), None);
+                } else {
+                    c.before(reset, 1);
+                }
+                if branch {
+                    c.before("else", 1);
+                    c.before("local other = 0", 1);
+                    c.before("end", 1);
+                }
+                // Fill the remaining count without introducing another reset.
+                while c.flow.count < 16 {
+                    assert!(!c.before("local x = 0", 1));
+                }
+                assert!(c.before("local last = 0", 1));
+                assert_eq!(c.take_hoisted(), None, "{reset}, branch={branch}");
+            }
+        }
+    }
+    #[test]
+    fn nested_move_reduces_every_inner_frame_and_saved_exit() {
+        let mut c = Interrupts::default();
+        for _ in 0..10 {
+            c.before("local x = 0", 1);
+        }
+        c.before_at("for i = 1, 2 do", 1, 100);
+        c.before_at("for j = 1, 2 do", 1, 200);
+        c.before("if b then", 1);
+        c.before("if done then break end", 1);
+        assert!(c.before("local later = 0", 3));
+        assert_eq!(c.take_hoisted(), Some(200));
+        assert_eq!(c.flow.count, 6);
+        assert_eq!(c.frames[1].entry.count, 1);
+        assert_eq!(c.frames[1].largest.count, 3);
+        assert_eq!(c.frames[2].entry.count, 2);
+        c.before("else", 1);
+        assert_eq!(c.flow.count, 2);
+        c.before("end", 1);
+        c.before("end", 1);
+        assert_eq!(c.flow.count, 6);
+        c.before("end", 1);
+        assert_eq!(c.flow.count, 11); // The outer zero-trip path retains its count.
+    }
+}
+
+#[cfg(test)]
+mod exit_tests {
+    use super::Interrupts;
+
+    #[test]
+    fn moved_point_and_later_local_points_preserve_each_saved_exit() {
+        for exit in [
+            "do break end",
+            "do continue end",
+            "if not done then break end",
+        ] {
+            let mut c = Interrupts::default();
+            for _ in 0..13 {
+                c.before("local x = 0", 1);
+            }
+            c.before_at("while true do", 1, 100);
+            c.before("do", 1);
+            c.before("local first = 0", 1);
+            c.before(exit, 1);
+            assert!(c.before("local later = 0", 1));
+            assert_eq!(c.take_hoisted(), Some(100));
+            assert_eq!(c.frames[1].entry.count, 0);
+            assert!(c.before("local large = 0", 16));
+            assert_eq!(c.take_hoisted(), None);
+            assert!(c.before("local tail = 0", 1));
+            c.before("end", 1);
+            c.before("end", 1);
+            assert_eq!(c.flow.count, 2, "{exit}");
         }
     }
 }

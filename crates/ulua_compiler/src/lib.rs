@@ -80,11 +80,18 @@ pub const CONDITION_NODES: usize = 15;
 /// Further bindings use the existing typed spill tables to bound reference-capture searches.
 pub const CAPTURE_LOCALS: usize = 10;
 
-/// Minimum statement weight of a table store in the interrupt count.
+/// Statement weight of a table store other than an existing primitive field update.
 /// Stores cost more time per instruction. P5.5 measurements select 8; weights 2 and 4 exceed a ratio of 6.
 /// Each weight permits at most `INTERRUPT_STATEMENTS / STORE_WEIGHT` consecutive stores between interrupt points.
 /// This weight only tightens the count; it does not change the derived instruction bound.
 pub const STORE_WEIGHT: usize = 8;
+
+/// Minimum statement weight of an existing, non-null number or boolean field update.
+/// The declared IR field type and construction context prove that the key already exists.
+/// The update retains any larger cost of its value, including the remainder operator.
+/// Each weight permits at most `INTERRUPT_STATEMENTS / UPDATE_WEIGHT` consecutive updates between interrupt points.
+/// P6.S14 measurements at weight 2 keep the step-time ratio below 6.
+pub const UPDATE_WEIGHT: usize = 2;
 /// Maximum executed VM instructions in one generated statement under production O1.
 /// C15 permits 32 arguments. A method adds its receiver: 34 moves, CALL, and one result move.
 /// Ordinary calls need 33 moves, CALL, and at most one result move (35 instructions).

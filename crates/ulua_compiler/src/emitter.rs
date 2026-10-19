@@ -41,6 +41,9 @@ mod storage;
 mod strings;
 mod tables;
 mod types;
+#[cfg(test)]
+mod update_tests;
+mod updates;
 use crate::{
     Diagnostic, LOCAL_BUDGET, TEMPORARY_BOUND,
     ir::{self, Type},
@@ -97,6 +100,7 @@ struct Emitter<'a> {
     function_types: &'a types::FunctionTypes,
     function_indices: &'a [Option<usize>],
     owner: usize,
+    construction_receiver: Option<usize>,
     out: String,
     indent: usize,
     interrupts: interrupts::Interrupts,
@@ -155,6 +159,7 @@ impl<'a> Emitter<'a> {
             function_types,
             function_indices: &[],
             owner,
+            construction_receiver: None,
             out: String::new(),
             indent: 1,
             interrupts: Default::default(),
@@ -209,20 +214,23 @@ impl<'a> Emitter<'a> {
         self.line_weighted(text, 1);
     }
     fn line_weighted(&mut self, text: impl AsRef<str>, cost: usize) {
+        self.line_counted(text, cost, None);
+    }
+    fn line_counted(&mut self, text: impl AsRef<str>, cost: usize, store: Option<usize>) {
         // The storage probe needs slots and joins, but it discards emitted text.
         if self.context.is_none() {
             return;
         }
         let text = text.as_ref();
         let mut after = false;
-        if self.interrupts.before_at(text, cost, self.out.len()) {
+        if let Some(point) = self.interrupts.count(text, cost, self.out.len(), store) {
             let credited = std::mem::take(&mut self.credited);
             // A shared empty function avoids an analyzer loop join at each checkpoint.
             // Production O1 retains its CALL and RETURN interrupts.
             self.capture("__ulua_interrupt");
             let end = self.out.len();
             self.raw_line("__ulua_interrupt()");
-            if let Some(position) = self.interrupts.take_hoisted() {
+            if let interrupts::Point::Before(position) = point {
                 let point = self.out.split_off(end);
                 self.out.insert_str(position, &point);
                 self.interrupts.shift_heads(position, point.len());
@@ -432,17 +440,10 @@ impl<'a> Emitter<'a> {
         }
         Ok(name)
     }
-    fn headers(&mut self, declarations: &str) -> String {
-        let mut out = String::new();
-        let indent = if self.indent == 0 { "" } else { "    " };
+    fn headers(&mut self, declarations: &str) {
         for text in declarations.lines() {
-            if self.interrupts.before(text, 1) {
-                self.capture("__ulua_interrupt");
-                let _ = writeln!(out, "{indent}__ulua_interrupt()");
-            }
-            let _ = writeln!(out, "{indent}{text}");
+            self.line(text);
         }
-        out
     }
 }
 

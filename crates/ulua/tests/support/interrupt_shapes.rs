@@ -2,6 +2,8 @@
 use ulua_compiler::{Limits, SOURCE_CEILING, compile};
 #[path = "interrupt_round2.rs"]
 pub mod round2;
+#[path = "interrupt_updates.rs"]
+pub mod updates;
 
 #[allow(dead_code)]
 #[path = "p25_shapes.rs"]

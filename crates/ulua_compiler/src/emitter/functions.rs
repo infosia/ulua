@@ -381,9 +381,10 @@ pub(super) fn emit_with_plan_hook(
     out.push_str(&prelude::checkpoint(&method_prelude));
     out.push_str(&types.declarations);
     out.push_str(&prelude::checkpoint(&json::prelude(module, bound)?));
-    out.push_str(&chunk.headers(&context.numeric_arrows.declarations));
+    chunk.out = out;
+    chunk.headers(&context.numeric_arrows.declarations);
     if let Some(layout) = &context.layouts[0] {
-        out.push_str(&chunk.headers(&layout.headers));
+        chunk.headers(&layout.headers);
     }
     let output = output::Output::new(bound);
     let first_offset = module
@@ -394,7 +395,7 @@ pub(super) fn emit_with_plan_hook(
             _ => None,
         })
         .unwrap_or(0);
-    output.charge(out.len(), first_offset);
+    output.charge(chunk.out.len(), first_offset);
     output.check(module)?;
     chunk.output = Some(&output);
     if let Some(entry) = module.body.first() {
@@ -430,9 +431,8 @@ pub(super) fn emit_with_plan_hook(
     if repeat_exports {
         chunk.line("end");
     }
-    out.push_str(&chunk.out);
-    output.finish(module, out.len())?;
-    Ok(out)
+    output.finish(module, chunk.out.len())?;
+    Ok(chunk.out)
 }
 
 impl Emitter<'_> {
@@ -501,6 +501,14 @@ impl Emitter<'_> {
             #[cfg(feature = "remainder-shadow")]
             self.remainder_shadow,
         );
+        child.construction_receiver = f
+            .initializers
+            .iter()
+            .find_map(|s| match s.form() {
+                ir::Statement::Declare(id, e) if self.module.types.is_class(e.ty) => Some(*id),
+                _ => None,
+            })
+            .or(self.construction_receiver);
         child.function_indices = &context.functions;
         child.context = Some(context);
         child.inline_enabled = true;
@@ -568,12 +576,10 @@ impl Emitter<'_> {
             format!("    local __ulua_p: __ulua_Promise<{ty}> = {{state = 0, value = nil :: any, handled = false, fulfilled = {{}}, rejected = {{}}}}\n    __ulua_promises[__ulua_p] = true\n    return __ulua_start(__ulua_p, function(): ({ty} | __ulua_Promise<{ty}>)\n")
         });
         let prefix = format!(
-            "function({}): {}\n{}{}{}",
+            "function({}): {}\n{}",
             parameters.join(", "),
             self.function_types.luau(&f.result),
-            async_prefix,
-            child.headers(&parameter_locals),
-            child.headers(&layout.headers)
+            async_prefix
         );
         child.output = self.output;
         child.statement_offset = self.statement_offset;
@@ -581,6 +587,8 @@ impl Emitter<'_> {
             output.charge(prefix.len(), self.statement_offset);
             output.check(self.module)?;
         }
+        child.headers(&parameter_locals);
+        child.headers(&layout.headers);
         child.statements(&f.initializers, depth)?;
         child.defaults(f)?;
         child.statements(&f.body, depth)?;
@@ -627,5 +635,63 @@ impl Emitter<'_> {
             text: value,
             cost: 1 + child.upvalues.len(),
         })
+    }
+}
+
+#[cfg(test)]
+mod header_tests {
+    use super::*;
+
+    #[test]
+    fn header_writer_consumes_moves_with_active_loop_heads() {
+        let source = "export function main():void{}";
+        let allocator = oxc_allocator::Allocator::default();
+        let parsed = oxc_parser::Parser::new(
+            &allocator,
+            source,
+            oxc_span::SourceType::ts().with_module(true),
+        )
+        .parse();
+        let module =
+            crate::checker::check(&parsed.program, source.as_bytes(), crate::DEPTH_CEILING)
+                .unwrap();
+        let types = types::FunctionTypes::new(&module).unwrap();
+        let context = Emission {
+            layouts: vec![],
+            functions: vec![],
+            locals: vec![Default::default()],
+            accessors: vec![],
+            spilled: Default::default(),
+            numeric_arrows: constants::numeric_arrows(&module, &types).unwrap(),
+        };
+        let locations = HashMap::new();
+        for nested in [false, true] {
+            let mut emitter = Emitter::new(
+                &module,
+                0,
+                &locations,
+                &[],
+                &types,
+                #[cfg(feature = "remainder-shadow")]
+                false,
+            );
+            emitter.context = Some(&context);
+            emitter.indent = 0;
+            for _ in 0..15 - usize::from(nested) {
+                emitter.line("local padding = 0");
+            }
+            if nested {
+                emitter.line("while true do");
+            }
+            let head = emitter.out.len();
+            emitter.line("while true do");
+            emitter.headers("local captured: number = 0\nlocal other: number = 0\n");
+            assert!(
+                emitter.out[head..].starts_with("__ulua_interrupt()\nwhile true do\n"),
+                "nested={nested}: {}",
+                emitter.out
+            );
+            assert_eq!(emitter.out.matches("__ulua_interrupt()").count(), 1);
+        }
     }
 }
