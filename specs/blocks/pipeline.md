@@ -65,6 +65,7 @@ Rev 60: §5.28 element facts (P6.S10). Rev 61: §5.28 counted loop counters. Rev
 Rev 64: §5.29 parameter facts; §5.25 one fact graph for the module (P6.S11).
 Rev 65: §5.30 integral marks; §5.26 the integral index form (P6.S12).
 Rev 66: §5.30 rule 7 names `size` and `Utf8.byteLength` (P6.S12 review).
+Rev 67: §5.31 receiver operands; §5.32 loop-invariant length (P6.S13).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1225,6 +1226,56 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       hand-edited Luau of the sort workload): 166.6 ms with the sites
       of `i` proven (the reach of item 29); 147.2 ms when the sites of
       `j` also omit the floor test (the reach of this item).
+
+31. **Receiver operands (P6.S13).** The receiver of a field read
+    `o.f`, a field write `o.f = e` or `o.f op= e`, an element read
+    `a[i]`, and an element write `a[i] = e` or `a[i] op= e` is an
+    operand of item 22. The emitter writes a receiver that is a read
+    of a binding inline, with no temporary, under the operand rules of
+    item 22:
+    - A read of an uncaptured Luau local of the function is always
+      inline.
+    - A read of a captured or a module-level binding is inline when
+      the rest of the access contains no call. The rest is the index
+      `i`, and for a write the right side `e`.
+    - Otherwise the receiver keeps its temporary (C12.3, C12.4,
+      C12.5: `o.f += g()` where `g` writes `o`).
+    - Proof: only a call can write a binding inside an expression, and
+      only a captured or a module-level binding (item 22). So an inline
+      receiver has the value that JavaScript reads at the start of the
+      access, and the C12 order and the C12.7 trap points stay.
+    - A spilled binding keeps its temporary.
+    - Measured before the rule (P6.S13 measurement round, `luau -O1`,
+      hand-edited Luau of particles): 196.0 to 201.9 ms as emitted;
+      183.5 ms without the receiver copies of `p`.
+
+32. **Loop-invariant length (P6.S13).** In a counted loop of item 24,
+    the bound test of an element read or write `a[i]` (item 20, item
+    26, item 30) reads `#a` from a local. The emitter writes that
+    local once, before the loop, when all of these are true:
+    1. `a` is a read of a binding, and the loop body contains no write
+       of that binding. A declaration in the body is a write.
+    2. The loop body contains no call and no `new` expression, except
+       a call that lowers to a builtin alias of item 20.
+    3. The loop body contains no element write and no array method
+       call.
+    - Proof: only a call, a `new` expression, an element write, and an
+      array method change the length of an array. Rules 2 and 3 remove
+      each of them from the body. Rule 1 keeps the same array. So `#a`
+      has the same value at each pass, and each test of item 20 gives
+      the same result at the same point (C12, C6).
+    - `a` has an array type that is not nullable, so the read of `#a`
+      before the loop cannot fail when the body never runs.
+    - The rules apply to the body of the loop that the emitter writes,
+      nested loops included. For nested counted loops, the emitter
+      writes the local before the outermost loop that satisfies the
+      rules for `a`.
+    - The local counts toward the local budget of item 7. When the
+      budget has no free local, the test keeps `#a`.
+    - Measured before the rule (P6.S13 measurement round, `luau -O1`,
+      hand-edited Luau of particles): 178.2 to 181.0 ms with `#a`
+      read once before the loop; 151.3 to 158.1 ms with this item,
+      item 31, and one interrupt call per pass.
 
 ## 6. Limits
 
