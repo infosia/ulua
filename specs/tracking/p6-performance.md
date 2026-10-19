@@ -1,6 +1,6 @@
 # P6 performance
 
-Status: P6.S12 COMPLETE 2026-10-18 (integral marks). Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
+Status: P6.S13 COMPLETE 2026-10-19 (receiver operands, loop-invariant length). Status: P6.S12 COMPLETE 2026-10-18 (integral marks). Status: P6.S11 COMPLETE 2026-10-18 (parameter facts). Status: P6.S10 COMPLETE 2026-10-18 (element facts). P6.S9 COMPLETE 2026-10-18 (inline callbacks). P6.S8 COMPLETE 2026-10-18 (export call path). P6.S7 COMPLETE 2026-10-18 (proven index). P6.S6 COMPLETE 2026-10-17 (native remainder, after the roblox-ts comparison). P6 COMPLETE 2026-10-16 (reload left P6, D31); P6.1, P6.S1, P6.2, P6.S2, P6.S3, P6.4, P6.S4, P6.S5, P6.3 COMPLETE 2026-10-16. Contract: `blocks/benchmarks.md` Rev 1 (Luau and Ulua only, owner decision 2026-10-16).
 
 ## Slices
 
@@ -823,3 +823,53 @@ or more; an update of an existing number or boolean field stays at
 2.35 with weight 1. The first call of the loop body comes from the
 count before the loop: the rule of P6.S4 moves a point before the
 loop only when the first statement of the body needs it.
+
+## Measurements (P6.S13)
+
+Before the change: the 29 tests of `receiver_length_tests` at 6a3b3e6
+gave 16 passed, 13 failed; after: 29 passed. The generated Luau of 41
+corpus entries and 5 workloads (collect, particles, queen, sort,
+tree) differs from 6a3b3e6: receiver copies removed, length locals
+before loops, temporaries renumbered, interrupt points moved by the
+§5.19 count. The outputs of every corpus entry are the same on both
+binaries.
+
+Review: 0 CRITICAL, 1 MAJOR, 2 MINOR. MAJOR: an inline receiver of a
+narrowed binding emitted `(b :: T).f = e` as a statement; after
+`__ulua_interrupt()` Luau gave "Ambiguous syntax", and the store lost
+`STORE_WEIGHT` (`table_store` reads the target). Seven narrowed field
+stores ended an accepted program as `internal`. Fixed with Rev 68 (a
+receiver with a type assertion keeps its temporary), narrowed
+receivers in `a93`, and a test that no generated line starts with
+`(` (Red on the unfixed tree: 10 lines of `a93`; 116 entries and the
+interrupt shapes). MINOR: an `unreachable!()` on `S::Located` in the
+length query (now a walk); missing tests for the `for…of` and `catch`
+writes, the optional call, method, push, and JSON exclusions, the
+`while`, `try`, and `if` walks, an index-only call, a nested receiver
+with a call, and narrowed receivers. 23 tests added; each fails with
+its condition removed (16 mutations). 437 compiler tests pass.
+
+`bench --only particles`, 6a3b3e6 and 772071e in one session, separate
+target directories, checksums equal: 228.2 and 232.3 ms before; 196.4
+and 196.3 ms after.
+
+Record at 772071e (clean tree), `ulua / luau`: particles 2.83 to 2.37;
+queen 2.26 to 2.05 and tree 2.31 to 2.18 (generated Luau changed);
+fib-loop 2.05 to 2.12 with byte-identical Luau (run-to-run variation,
+see P6.S12); collect 2.00 to 2.04; others within 0.01. Largest IQR
+2.12% of the median; no cell withheld.
+
+roblox-ts comparison rerun at 772071e (method above), `ulua / hand`:
+fib-recursive 1.75, fib-loop 2.11, mandelbrot 1.19, primes 1.23, sort
+2.61, tree 2.19, queen 2.05, particles 2.39, callbacks 1.39, collect
+2.00; roblox-ts / hand within 0.02 of the run at ec1abc0. Largest IQR
+2.34%.
+
+Gates at 772071e: `gate.sh full` PASS; `gate.sh timing` PASS (24 of
+24). Ratio test of §5.19: largest 5.69 and 5.81 (`boolean-template`)
+in two isolated runs; `catch-body` 5.19 and 5.28.
+
+Open: the particles inner loop keeps two `__ulua_interrupt()` calls
+per pass (the index test weight 4, the counted loop header weight 4,
+the store weight 8, and the first-pass count of P6.S4; measurement
+round above). Next: P6.S14.

@@ -150,26 +150,26 @@ in [`crates/ulua_bench/`](crates/ulua_bench/README.md).
 
 | Workload | hand Luau | Ulua | Ulua / hand |
 |---|---:|---:|---:|
-| mandelbrot | 494.7 ms | 585.9 ms | **1.18×** |
-| primes | 84.4 ms | 101.1 ms | **1.20×** |
-| callbacks | 100.2 ms | 139.3 ms | **1.39×** |
-| fib-recursive | 60.8 ms | 106.6 ms | 1.75× |
-| collect | 126.0 ms | 251.8 ms | 2.00× |
-| fib-loop | 113.0 ms | 231.7 ms | 2.05× |
-| queen | 432.6 ms | 976.7 ms | 2.26× |
-| tree | 31.6 ms | 73.0 ms | 2.31× |
-| sort | 60.8 ms | 160.1 ms | 2.63× |
-| particles | 82.6 ms | 234.1 ms | 2.83× |
+| mandelbrot | 496.0 ms | 587.7 ms | **1.19×** |
+| primes | 84.4 ms | 101.3 ms | **1.20×** |
+| callbacks | 100.0 ms | 139.6 ms | **1.40×** |
+| fib-recursive | 60.9 ms | 106.5 ms | 1.75× |
+| collect | 126.9 ms | 258.3 ms | 2.04× |
+| queen | 434.1 ms | 890.0 ms | 2.05× |
+| fib-loop | 112.5 ms | 239.1 ms | 2.12× |
+| tree | 31.6 ms | 68.9 ms | 2.18× |
+| particles | 83.1 ms | 196.9 ms | 2.37× |
+| sort | 60.9 ms | 159.7 ms | 2.62× |
 
 What the numbers show:
 
-- **Numeric loops are near hand Luau.** mandelbrot is 1.18× and primes
+- **Numeric loops are near hand Luau.** mandelbrot is 1.19× and primes
   is 1.20×. The compiler emits counted loops as numeric `for`, and it
   emits the native Luau `%` where it can prove that both operands are
   non-negative integers. Other `%` sites use `math.fmod`, which agrees
   with JavaScript for a negative operand.
-- **The cost is the safety that a hostile script needs.** particles (2.83×),
-  sort (2.63×), and queen (2.26×) read and write arrays in their
+- **The cost is the safety that a hostile script needs.** sort (2.62×),
+  particles (2.37×), and queen (2.05×) read and write arrays in their
   inner loops. Each access checks its index, because a read outside an
   array stops the run where JavaScript gives `undefined`. Where the
   compiler proves that the index is a non-negative integer (a loop
@@ -180,7 +180,11 @@ What the numbers show:
   direct calls reach the function. Its index `j` counts down and can
   be `-1`, so the sites of `j` keep the test `j >= 0`; the compiler
   proves that `j` is an integer and omits only the integer test.
-  Together these took sort from 3.62× to 2.63×.
+  Together these took sort from 3.62× to 2.63×. In a loop whose body
+  cannot change the length of an array, the compiler reads the length
+  once before the loop, and an access reads its object directly from
+  the local: this took particles from 2.83× to 2.37× and queen from
+  2.26× to 2.05×.
   Each loop also has an interrupt point that charges steps, so the host
   can stop a script that does not end.
 - **Array methods with arrow literals compile to plain loops.**
@@ -190,7 +194,7 @@ What the numbers show:
   It also proves that the elements of an array that never leaves its
   function are integers, so the `%` in the callbacks is native.
 - **Calls and allocation cost less than array traffic.** fib-recursive
-  (1.75×), tree (2.31×), and collect (2.00×) pay for the call frame
+  (1.75×), tree (2.18×), and collect (2.04×) pay for the call frame
   and for the allocator that charges each allocation to the memory
   limit of the instance.
 
@@ -200,21 +204,21 @@ What the numbers show:
 `68648b0c`) also compiles TypeScript to Luau. Its output of the same
 ten workloads ran in the same harness, after mechanical source changes
 (`null` to `undefined`, `.length` to `.size()`). All three columns
-come from one session at `ec1abc0`, so the Ulua column differs from
+come from one session at `772071e`, so the Ulua column differs from
 the table above by run-to-run variation only.
 
 | Workload | roblox-ts / hand | Ulua / hand |
 |---|---:|---:|
 | fib-recursive | 1.00× | 1.75× |
-| mandelbrot | 1.01× | 1.21× |
-| sort | 1.02× | 2.67× |
-| particles | 1.14× | 2.72× |
-| queen | 1.14× | 2.37× |
-| primes | 1.15× | 1.20× |
-| callbacks | 1.33× | 1.40× |
-| collect | 1.35× | 1.99× |
-| fib-loop | 1.75× | 2.16× |
-| tree | 1.87× | 2.31× |
+| mandelbrot | 1.00× | 1.19× |
+| sort | 1.00× | 2.61× |
+| queen | 1.14× | 2.05× |
+| particles | 1.15× | 2.39× |
+| primes | 1.15× | 1.23× |
+| callbacks | 1.33× | 1.39× |
+| collect | 1.35× | 2.00× |
+| fib-loop | 1.77× | 2.11× |
+| tree | 1.88× | 2.19× |
 
 roblox-ts is faster on every row, and the reason is in its output: an
 element access has no index check, a loop has no interrupt point and
@@ -223,10 +227,10 @@ differs from JavaScript for a negative operand. That output fits code
 that the developer writes and trusts. Ulua is for code that the host
 does not trust, and it pays for each of these checks. The gap is
 smallest where few of these checks run: primes and callbacks are
-within 5% of roblox-ts. Where roblox-ts
+within 7% of roblox-ts. Where roblox-ts
 emits a slower form (a `while true` loop with a flag for a `for` loop
 with a computed bound, a metatable constructor for a class), it is
-slower than hand Luau too: fib-loop 1.75×, tree 1.87×.
+slower than hand Luau too: fib-loop 1.77×, tree 1.88×.
 
 ### Boundary calls
 
@@ -243,9 +247,9 @@ of a host call.
 
 This is one benchmark set on one machine; treat the ratios as
 indicative. The tables are from an Apple M2 (macOS, arm64), Release
-build, Luau at `c54f558`. The workload record is from 2026-10-18 at
-`787092a`; the boundary record is from 2026-10-18 at `e233a7c`; the
-roblox-ts measurement is from 2026-10-18 at `ec1abc0`.
+build, Luau at `c54f558`. The workload record is from 2026-10-19 at
+`772071e`; the boundary record is from 2026-10-18 at `e233a7c`; the
+roblox-ts measurement is from 2026-10-19 at `772071e`.
 
 ## Learn more
 
@@ -287,7 +291,7 @@ and async with host requests. P5 (hardening) is complete:
 sanitizers, fuzzing, fault injection, the compiler memory bound, a
 run-time bound on the work of one step, and `gate.sh full` on macOS
 arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
-complete: Ulua runs at 1.18 to 2.83 times the time of hand-written
+complete: Ulua runs at 1.19 to 2.62 times the time of hand-written
 Luau on the same VM (see [Performance](#performance)). P7 (the
 standard library) is complete: `Math`, `Number`, `find`, `Map`, `Set`,
 string case, and `JSON`. The ABI has no compatibility
