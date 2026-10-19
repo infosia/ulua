@@ -68,6 +68,7 @@ Rev 66: §5.30 rule 7 names `size` and `Utf8.byteLength` (P6.S12 review).
 Rev 67: §5.31 receiver operands; §5.32 loop-invariant length (P6.S13).
 Rev 68: §5.31 a receiver with a type assertion keeps its temporary (P6.S13 review).
 Rev 69: §5.19 the update weight and the point before a loop for a later statement (P6.S14).
+Rev 70: §5.19 an update store counts its value cost; one counted path moves a point (P6.S14 review).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -591,6 +592,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       emitter emits the point before that loop and keeps the reduced
       count, for the loop frame and each frame inside it. Otherwise
       it emits the point at the statement, as before.
+      - Each emitted line goes through one counted path, and only that
+        path can move a point. A move that the path does not write is
+        a compiler defect (P6.S14 review: the block header lines of a
+        loop body asked for a move, wrote the point in the body, and
+        kept the reduced count; a zero-trip path then ran 18 and 19
+        statements).
       - Proof: the point before the loop sets the real count to zero
         at the loop head. On the first pass each later count is the
         reduced count. A later pass starts after the back-edge
@@ -630,7 +637,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       on P25-logical-wrapped-tests at 16 KiB (P5.5).
     - A table store counts `STORE_WEIGHT` (8) statements, so two
       stores follow an interrupt point at most. An update store counts
-      `UPDATE_WEIGHT` (2) (P6.S14). An update store is a field store
+      the larger of `UPDATE_WEIGHT` (2) and the cost of its value (an
+      operator such as `%=` keeps its cost) (P6.S14). An update store is a field store
       `o.f = e` or `o.f op= e` where all of these are true:
       1. The type of `o` is a class or a record, and the declared type
          of `f` is `number` or `boolean`.
