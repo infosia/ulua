@@ -67,6 +67,7 @@ Rev 65: §5.30 integral marks; §5.26 the integral index form (P6.S12).
 Rev 66: §5.30 rule 7 names `size` and `Utf8.byteLength` (P6.S12 review).
 Rev 67: §5.31 receiver operands; §5.32 loop-invariant length (P6.S13).
 Rev 68: §5.31 a receiver with a type assertion keeps its temporary (P6.S13 review).
+Rev 69: §5.19 the update weight and the point before a loop for a later statement (P6.S14).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -580,7 +581,27 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       is emitted before the loop: the back-edge interrupts each later
       pass, so only the first pass starts with the entry count (P6.S4;
       the point at the head ran on each pass, 11 to 20% of the
-      overhead of primes, particles, collect). A closure creation at
+      overhead of primes, particles, collect).
+    - The same applies to a later statement of the body (P6.S14). When
+      a statement needs a point, the emitter takes the nearest
+      enclosing loop of the function whose head has no call, return,
+      or interrupt point after it on the current path. It subtracts
+      the count before that loop head from the count. If the result
+      plus the statement cost is at most `INTERRUPT_STATEMENTS`, the
+      emitter emits the point before that loop and keeps the reduced
+      count, for the loop frame and each frame inside it. Otherwise
+      it emits the point at the statement, as before.
+      - Proof: the point before the loop sets the real count to zero
+        at the loop head. On the first pass each later count is the
+        reduced count. A later pass starts after the back-edge
+        interrupt, with a count of at most the first-pass count. A
+        call, a return, or a point after the head on the path resets
+        the count of that path to a value that the subtraction does
+        not bound, so such a loop is not taken.
+      - Measured before the rule (P6.S13 measurement round): the
+        first point of the particles loop body comes from the count
+        before the loop; one call per pass gave 151.3 to 158.1 ms
+        against 196.0 to 201.9 ms with two (`luau -O1`, hand-edited). A closure creation at
       the start of a body keeps a point right after it: without it
       the capture ratio of §5.14.5a rose to 6.84 against the bound 6
       (3.48 with it). The
@@ -608,7 +629,29 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       `luau-analyze` failed with "Code is too complex to typecheck"
       on P25-logical-wrapped-tests at 16 KiB (P5.5).
     - A table store counts `STORE_WEIGHT` (8) statements, so two
-      stores follow an interrupt point at most. A store does few
+      stores follow an interrupt point at most. An update store counts
+      `UPDATE_WEIGHT` (2) (P6.S14). An update store is a field store
+      `o.f = e` or `o.f op= e` where all of these are true:
+      1. The type of `o` is a class or a record, and the declared type
+         of `f` is `number` or `boolean`.
+      2. The store is not in the construction of the value: not a
+         field of an object literal, not a field initializer, and not
+         a store with the receiver `this` in a constructor body.
+      - Proof: the key `f` exists in the table before the store, so
+        the store creates no key and does not grow the table. A class
+        value exists only after its constructor assigns each field
+        (C13.1, C13.3: `this` cannot escape before). A record value
+        has each declared field: an object literal assigns each one,
+        and `JSON.parse` checks the target (C20.5). A `number` or
+        `boolean` value is never `nil`, so no store removes the key.
+      - The classification uses the IR types at the emitter call
+        site, not the output text.
+      - Measured (P6.S13 measurement round, `p55_ratio`): updates of
+        16 `number` fields of one instance gave ratios 2.345, 2.140,
+        1.830, and 1.442 at weights 1, 2, 4, and 8; `boolean` fields
+        2.308, 2.083, 1.776, and 1.415. Stores into new keys (fresh
+        64-field records) gave 10.319, 7.402, 5.474, and 2.574, so a
+        store in a construction keeps `STORE_WEIGHT`. A store does few
       instructions but costs more time per instruction: without the
       weight the largest ratio (below) was 10.59 (S4-function-
       bindings); weights 2, 4, 8 gave 7.98, 6.38, 4.77 (Release). The
