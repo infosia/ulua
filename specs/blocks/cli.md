@@ -6,6 +6,8 @@ Rev 1: §2, §2.1, §2.4, §3, §4 after the P8 review round 1.
 Rev 2: §2, §3, §4 rules 4, 6, 7 after the P8 review round 2.
 Rev 3: §2.5 `emit` (owner request); §1, §2, §3, §6, §7.
 Rev 4: §2.5 rules 2 and 3 after the emit review.
+Rev 5: §5.1 plain paths on Windows, after the review of the Windows
+change.
 
 ## 1. Purpose and boundary
 
@@ -254,6 +256,33 @@ exit 2 with a message that names the three sources and the build
 command `cargo build --release -p ulua`. The command does not start
 that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
 
+### 5.1 Plain paths on Windows
+
+On Windows, the canonical form of a path has a verbatim prefix
+(`\\?\`), and `cl.exe` rejects it (tracking/p8-cli.md).
+
+1. The command gives a derived path in plain form. A derived path is
+   the canonical form of the library, the include directory, a
+   `--host` file, or the `build` output. Each `link-flags` line and
+   each argument that `build` gives to a compiler is a derived path.
+2. The plain form of `\\?\C:\<rest>` is `C:\<rest>`. The plain form of
+   `\\?\UNC\<server>\<share>\<rest>` is `\\<server>\<share>\<rest>`.
+   A path without a verbatim prefix does not change.
+3. If a derived path has another verbatim prefix (for example
+   `\\?\Volume{...}\`), the command gives exit 2. The message names
+   the path as given and states that the path has no plain form.
+4. Text that the user gives prints as given, with the escape of §4
+   rule 7: each argument, each file name, and each value of `--lib`,
+   `--include`, `ULUA_LIB`, `ULUA_INCLUDE`, `CC`, and `CXX`. The
+   command does not convert it.
+5. The words of `CC` and `CXX` go to the operating system unchanged
+   (§2.4 rule 6).
+6. `emit` compares the input and the output in canonical form (§2.5
+   rule 2). It prints neither form.
+
+On other platforms, the canonical form has no prefix, and §5.1 changes
+nothing.
+
 ## 6. Differences from the owner's prior project
 
 | Prior command | Here | Reason |
@@ -308,7 +337,9 @@ that build: the build needs `LUAU_SOURCE_DIR` and takes minutes.
    reads the `C<n>` headings of `collisions.md` and compares them with
    the rule titles. A test
    gives each code of the reject corpus and of `corpus.md` §6 to the
-   renderer and finds a rule line.
+   renderer and finds a rule line. On Windows, tests cover each rule
+   of §5.1. An expected path in a test resolves short names and links
+   as the command does.
 7. `sh tools/gate.sh full` and `sh tools/hygiene.sh` pass. No golden
    changes.
 8. `emit`: for each accept entry without a `grants` header, a test
