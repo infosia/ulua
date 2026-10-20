@@ -1,11 +1,12 @@
 //! The offline Ulua developer command.
 #![warn(missing_docs)]
 mod diagnostic;
+mod emit;
 mod native;
 mod script;
 use std::{ffi::OsString, io::Write};
 
-const USAGE: &str = "usage: ulua check <file.ts>\n       ulua run <file.ts>\n       ulua link-flags [--cc unix|msvc] [--lib <file>] [--include <dir>]\n       ulua build --host <file>... [-o <dir>] [--lib <file>] [--include <dir>] [--run [-- <arg>...]]\n       ulua help\n";
+const USAGE: &str = "usage: ulua check <file.ts>\n       ulua run <file.ts>\n       ulua emit <file.ts> [-o <file>]\n       ulua link-flags [--cc unix|msvc] [--lib <file>] [--include <dir>]\n       ulua build --host <file>... [-o <dir>] [--lib <file>] [--include <dir>] [--run [-- <arg>...]]\n       ulua help\n";
 
 type Failure = (i32, String);
 type Result<T> = std::result::Result<T, Failure>;
@@ -49,6 +50,7 @@ where
         {
             script::execute(command, &args[1], stdout, stderr)
         }
+        Some("emit") => emit::execute(&args, stdout, stderr),
         Some("link-flags" | "build") => native::execute(&args, stdout, stderr),
         Some(command @ ("check" | "run")) => Err(usage_error(if args.len() == 1 {
             format!("{command}: missing <file.ts>")

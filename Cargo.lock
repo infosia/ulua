@@ -674,6 +674,7 @@ name = "ulua_cli"
 version = "0.1.0"
 dependencies = [
  "ulua",
+ "ulua_compiler",
  "ulua_toolchain",
 ]
 

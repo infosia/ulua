@@ -1,7 +1,7 @@
 # P8 developer command
 
-Status: P8 open for `emit` (§2.5, owner request). §2.1 to §2.4 complete
-2026-10-20 (Phase Review rounds 1 and 2). Contract: `blocks/cli.md` Rev 3.
+Status: P8 COMPLETE 2026-10-20 (Phase Review rounds 1 and 2; `emit`
+review round 1). Contract: `blocks/cli.md` Rev 4.
 
 ## Exit checklist
 
@@ -14,7 +14,7 @@ Status: P8 open for `emit` (§2.5, owner request). §2.1 to §2.4 complete
 - [x] 5. `link-flags` names an existing library; the flags come from `crates/ulua_toolchain`
 - [x] 6. Unit tests of §2 to §5 (`crates/ulua_cli`: 18 tests)
 - [x] 7. `gate.sh full` and `hygiene.sh` pass; no golden changes
-- [ ] 8. `emit` equals the Luau that `ulua_compile` compiles
+- [x] 8. `emit` equals the Luau that `ulua_compile` compiles: 90 accept entries; 143 reject entries agree with `check`
 - [x] Phase Review
 
 ## Measurements
@@ -28,6 +28,8 @@ macOS arm64.
 | Host builds in the tests (5) | 1.54 s |
 | `gate.sh full` at the round 2 tree | 304.22 s |
 | `ulua check` on a 1,000,000-byte one-line file, stderr | 409 bytes |
+| gate step `emit-comparison`, test body (90 entries) | 0.72 to 1.32 s |
+| the same step: warm / after a compiler change / first build | 1 s / 4 s / 28 s |
 
 ## Failures before the fix
 
@@ -54,6 +56,19 @@ Review round 2 (MINOR 6):
 - Two contract texts were wrong: the 120-character count and the
   `execute` stream exception.
 
+`emit` review round 1 (MINOR 7):
+
+- `emit` stopped after the Rust compiler, so a native-stage rejection
+  gave exit 0 where `check` gives 1. Fix: §2.5 rule 3 compiles with
+  `ulua_compile` first.
+- `-o` wrote in place and could name the input: `ulua emit ok.ts -o
+  ok.ts` replaced the source. Fix: §2.5 rule 2, a new file and a
+  rename; the input as output is a usage error.
+- The comparison workspace had no fmt, clippy, or `--locked` check,
+  no Windows suffix, and an understated cost. Fix: `tools/gate.sh`.
+- An assertion that could not fail; a misplaced `-o` gave a wrong
+  reason.
+
 Corpus: the `expected-error` text is a description, so §7.1 compares
 the code only. The 9 entries with `grants` are outside §7.1, because
 the command has no grants.
@@ -65,3 +80,7 @@ the command has no grants.
 - `tools/docs-runner.sh` holds its own copy of the host flags and
   system libraries. It does not read `crates/ulua_toolchain`.
 - The Linux and Windows runs of the command are open (D28).
+- The CLI copies the mapping of the default compile limits from
+  `crates/ulua/src/abi.rs`. The comparison of §7.8 finds a drift only
+  where it changes accepted text; rule 3 compiles with `ulua_compile`
+  first, so a rejection cannot drift.

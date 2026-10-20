@@ -82,6 +82,26 @@ if [ "$shape" = full ]; then
     step remainder-shadow-workloads env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua_bench --features remainder-shadow --bin bench tests::shadow_ten_workloads -- --exact
     # A false native or proven flag must stop under the shadow check (§5.25, §5.26).
     step remainder-shadow-false env ULUA_REMAINDER_SHADOW=1 cargo test --quiet -p ulua_compiler --features remainder-shadow shadow_rejects_false -- --ignored
+    # cli.md §7.8: `ulua emit` against the Luau that ulua_compile compiles.
+    # A separate workspace keeps the timing feature out of the other builds,
+    # so fmt, clippy, and --locked check it here. It runs the ulua binary
+    # that cargo-test built. Cost: about 1 s; about 4 s after a compiler
+    # change; about 28 s for a first build of its target.
+    case "${CARGO_TARGET_DIR:-target}" in
+        /*) cli_target=${CARGO_TARGET_DIR} ;;
+        *) cli_target="$repo_root/${CARGO_TARGET_DIR:-target}" ;;
+    esac
+    case "$(uname -s)" in
+        MINGW* | MSYS* | CYGWIN*) cli_exe=.exe ;;
+        *) cli_exe= ;;
+    esac
+    emit_manifest=crates/ulua_cli/tests/emit_comparison/Cargo.toml
+    step emit-comparison-fmt cargo fmt --manifest-path "$emit_manifest" --check
+    step emit-comparison-clippy env CARGO_TARGET_DIR="$repo_root/target/emit-comparison" \
+        cargo clippy --quiet --locked --offline --all-targets --manifest-path "$emit_manifest" -- -D warnings
+    step emit-comparison env ULUA_CLI_EMIT_BINARY="$cli_target/debug/ulua$cli_exe" \
+        CARGO_TARGET_DIR="$repo_root/target/emit-comparison" \
+        cargo test --quiet --locked --offline --manifest-path "$emit_manifest"
     step hygiene sh tools/hygiene.sh
 fi
 printf 'gate %s: PASS\n' "$shape"

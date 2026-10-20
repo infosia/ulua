@@ -1,0 +1,19 @@
+# A separate workspace keeps timing out of every normal CLI build and test graph.
+# Run this test against the existing CLI binary; do not depend on ulua_cli here.
+[workspace]
+
+[package]
+name = "ulua_cli_emit_comparison"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+publish = false
+autotests = false
+
+[dev-dependencies]
+ulua = { path = "../../../ulua", features = ["timing"] }
+
+[[test]]
+name = "comparison"
+path = "comparison.rs"

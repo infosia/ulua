@@ -1,4 +1,6 @@
 //! Contract checks use the product ABI and existing fixtures. No nested Cargo build runs.
+#[path = "emit_tests.rs"]
+mod emit_tests;
 use super::*;
 use std::{
     path::{Path, PathBuf},

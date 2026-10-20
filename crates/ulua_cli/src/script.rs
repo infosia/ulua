@@ -52,47 +52,16 @@ pub(crate) fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<i32> {
-    let mut limits = CompileLimits::default();
-    // SAFETY: The initialized limits descriptor is live and writable.
-    let status = unsafe { ulua_default_compile_limits(&mut limits) };
-    if status != ULUA_OK {
-        return Err(status_failure(status, &Diagnostic::default(), file, b""));
-    }
-    let source = read_source(
-        std::fs::File::open(file).map_err(|e| crate::path_error(std::path::Path::new(file), e))?,
-        limits.max_source_bytes,
-    )
-    .map_err(|e| crate::path_error(std::path::Path::new(file), e))?;
+    let (source, _) = read_file(file)?;
     // Declare userdata before its owner so every exit frees the instance first.
     let mut out = Output { writer: stdout };
-    let mut objects = Objects {
-        context: ptr::null_mut(),
-        module: ptr::null_mut(),
-        instance: ptr::null_mut(),
-    };
+    let mut objects = compile(file, &source)?;
     let mut diag = Diagnostic::default();
     let fail = |status, diag: &Diagnostic| -> Result<i32> {
         Err(status_failure(status, diag, file, &source))
     };
     // SAFETY: All descriptors have ABI defaults. Objects remain live and calls are serialized.
     unsafe {
-        let status = ulua_context_new(&mut objects.context);
-        if status != ULUA_OK {
-            return fail(status, &diag);
-        }
-        let status = ulua_compile(
-            objects.context,
-            source.as_ptr().cast(),
-            source.len(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            &mut objects.module,
-            &mut diag,
-        );
-        if status != ULUA_OK {
-            return fail(status, &diag);
-        }
         if command == "check" {
             writeln!(stderr, "check: {}: no errors", diagnostic::filename(file))
                 .map_err(|e| io_error(format!("stderr: {e}")))?;
@@ -186,6 +155,57 @@ pub(crate) fn execute(
         }
     }
     Ok(0)
+}
+
+/// Validate through the complete product compile path without creating an instance.
+pub(crate) fn validate(file: &OsStr, source: &[u8]) -> Result<()> {
+    compile(file, source).map(drop)
+}
+
+fn compile(file: &OsStr, source: &[u8]) -> Result<Objects> {
+    let mut objects = Objects {
+        context: ptr::null_mut(),
+        module: ptr::null_mut(),
+        instance: ptr::null_mut(),
+    };
+    let mut diag = Diagnostic::default();
+    // SAFETY: The source and output pointers are live. Null descriptors select ABI defaults.
+    unsafe {
+        let status = ulua_context_new(&mut objects.context);
+        if status != ULUA_OK {
+            return Err(status_failure(status, &diag, file, source));
+        }
+        let status = ulua_compile(
+            objects.context,
+            source.as_ptr().cast(),
+            source.len(),
+            ptr::null(),
+            0,
+            ptr::null(),
+            &mut objects.module,
+            &mut diag,
+        );
+        if status != ULUA_OK {
+            return Err(status_failure(status, &diag, file, source));
+        }
+    }
+    Ok(objects)
+}
+
+/// Read a script with the ABI default limits and one sentinel byte.
+pub(crate) fn read_file(file: &OsStr) -> Result<(Vec<u8>, CompileLimits)> {
+    let mut limits = CompileLimits::default();
+    // SAFETY: The initialized limits descriptor is live and writable.
+    let status = unsafe { ulua_default_compile_limits(&mut limits) };
+    if status != ULUA_OK {
+        return Err(status_failure(status, &Diagnostic::default(), file, b""));
+    }
+    let source = read_source(
+        std::fs::File::open(file).map_err(|e| crate::path_error(std::path::Path::new(file), e))?,
+        limits.max_source_bytes,
+    )
+    .map_err(|e| crate::path_error(std::path::Path::new(file), e))?;
+    Ok((source, limits))
 }
 
 /// Read no more than the source ceiling and one sentinel byte.

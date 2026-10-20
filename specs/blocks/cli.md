@@ -5,6 +5,7 @@ Status: contracted (D35). Evidence: `specs/tracking/p8-cli.md`.
 Rev 1: §2, §2.1, §2.4, §3, §4 after the P8 review round 1.
 Rev 2: §2, §3, §4 rules 4, 6, 7 after the P8 review round 2.
 Rev 3: §2.5 `emit` (owner request); §1, §2, §3, §6, §7.
+Rev 4: §2.5 rules 2 and 3 after the emit review.
 
 ## 1. Purpose and boundary
 
@@ -125,10 +126,16 @@ Prints the generated Luau of the file, for a developer to read.
    (`COMPILER_STACK_BYTES`), as the corpus runner does for
    `--emit-luau` (pipeline.md §8).
 2. Without `-o`, the text goes to stdout. With `-o`, the command
-   writes the text to that file only, and prints
-   `emit: <file as given>: <output as given>` to stderr.
-3. A rejected file prints the diagnostic of §4 to stderr. stdout stays
-   empty, and the command creates or changes no `-o` file.
+   writes the text to a new file in the directory of the output, then
+   renames it to the output, and prints
+   `emit: <file as given>: <output as given>` to stderr. A failure
+   removes the new file and leaves the output unchanged. An output
+   that names the input file is a usage error.
+3. The command first compiles the file with `ulua_compile`, as `check`
+   does. A file that `ulua_compile` rejects, at any stage, gives the
+   stderr and the exit code of `check`. stdout stays empty, and the
+   command creates or changes no `-o` file. So `emit` and `check`
+   agree on each file.
 4. The text is an output only. The C ABI has no function that returns
    it, and no function or command accepts Luau (invariant 6). The
    text is not a stable interface: a compiler change can change any

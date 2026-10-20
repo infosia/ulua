@@ -262,6 +262,9 @@ roblox-ts measurement is from 2026-10-19 at `f66c2e2`.
 - [Ulua for C and C++ developers](docs/tutorial-c-cpp.md): the
   language from the host's side, and a step-by-step embedding
   walkthrough with the programs in [`examples/`](examples/).
+- [`specs/`](specs/): the design. `specs/plan.md` holds the plan and
+  the decisions, `specs/blocks/` the area contracts, and
+  `specs/tracking/` the evidence.
 
 Every command and every output in the tutorials was run against the
 repository as committed.
@@ -300,6 +303,7 @@ alias ulua=target/release/ulua
 ```sh
 ulua check game.ts         # compile only; prints "check: game.ts: no errors"
 ulua run game.ts           # compile, then call the export main
+ulua emit game.ts          # print the generated Luau, to read
 ulua link-flags            # the include directory, libulua.a, and the system libraries
 ulua build --host host.c --run -- game.ts
 ```
@@ -317,29 +321,13 @@ error[C4]: Numeric operator has no lowering
 ```
 
 The exit status is 0 for success, 1 when the library rejects or stops
-the script, and 2 for a usage or file error. `check` and `run` grant no
-host functions; a script that calls one needs its host.
+the script, and 2 for a usage or file error. `check`, `run`, and
+`emit` grant no host functions; a script that calls one needs its
+host.
+`emit` shows the Luau that the library compiles. It is for reading:
+the text is not a stable interface, it does not run alone, and no
+function of the library accepts Luau.
 [`specs/blocks/cli.md`](specs/blocks/cli.md) is the contract.
-
-## Status
-
-P0 to P4 are complete: the language core, arrays, strings, nullable
-values, records, classes, exceptions, host interop with capabilities,
-and async with host requests. P5 (hardening) is complete:
-sanitizers, fuzzing, fault injection, the compiler memory bound, a
-run-time bound on the work of one step, and `gate.sh full` on macOS
-arm64, Linux x86_64, and Windows (MSVC). P6 (performance) is
-complete: Ulua runs at 1.13 to 2.55 times the time of hand-written
-Luau on the same VM (see [Performance](#performance)). P7 (the
-standard library) is complete: `Math`, `Number`, `find`, `Map`, `Set`,
-string case, and `JSON`. P8 (the developer command) is complete:
-[`ulua`](#the-ulua-command) checks and runs a script, prints the link
-flags, and builds a host; its Linux and Windows runs are open. The ABI
-has no compatibility promise yet.
-
-Design and phase records live in [`specs/`](specs/): `specs/plan.md`
-holds the plan and the decisions, `specs/blocks/` the area contracts,
-and `specs/tracking/` the evidence of each phase.
 
 ## License
 
