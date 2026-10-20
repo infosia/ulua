@@ -30,10 +30,19 @@ fn paths(output: Output) -> Vec<String> {
         .collect()
 }
 fn expected_path(path: &Path) -> PathBuf {
+    let resolved = std::fs::canonicalize(path).unwrap();
     #[cfg(windows)]
-    return std::path::absolute(path).unwrap();
-    #[cfg(not(windows))]
-    std::fs::canonicalize(path).unwrap()
+    {
+        let text = resolved.to_str().unwrap();
+        if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{rest}"));
+        }
+        if let Some(rest) = text.strip_prefix(r"\\?\") {
+            assert_eq!(rest.as_bytes().get(1), Some(&b':'));
+            return PathBuf::from(rest);
+        }
+    }
+    resolved
 }
 #[test]
 fn options_environment_and_repository() {
@@ -126,4 +135,31 @@ fn options_environment_and_repository() {
         "cli environment processes=6 cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn missing_verbatim_library_option_and_environment_print_as_given() {
+    let missing = format!(
+        "\\\\?\\C:\\ulua-missing-{}\\libulua\u{202e}.a",
+        std::process::id()
+    );
+    assert!(!Path::new(&missing).exists());
+    let shown = missing.replace('\u{202e}', r"\u{202e}");
+    for environment in [false, true] {
+        let mut cmd = command(&std::env::temp_dir());
+        cmd.arg("link-flags");
+        if environment {
+            cmd.env("ULUA_LIB", &missing);
+        } else {
+            cmd.arg("--lib").arg(&missing);
+        }
+        let output = cmd.output().unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.starts_with(&format!("{shown}: ")), "{error}");
+        assert_eq!(error.lines().count(), 1);
+        assert!(!error.contains('\u{202e}'), "{error}");
+    }
 }

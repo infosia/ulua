@@ -66,21 +66,22 @@ fn paths(lib: Option<PathBuf>, include: Option<PathBuf>) -> Result<(PathBuf, Pat
     Ok((canonical(&library)?, canonical(&include)?))
 }
 fn canonical(path: &Path) -> Result<PathBuf> {
+    canonical_as(path, path)
+}
+fn canonical_as(path: &Path, given: &Path) -> Result<PathBuf> {
     let resolved = std::fs::canonicalize(path).map_err(|e| crate::path_error(path, e))?;
-    flags::plain_path(resolved).map_err(|e| crate::path_error(path, e))
+    plain_derived_path(given, resolved)
+}
+fn plain_derived_path(path: &Path, resolved: PathBuf) -> Result<PathBuf> {
+    flags::plain_path(resolved).map_err(|_| no_plain_form(path))
+}
+fn no_plain_form(given: &Path) -> crate::Failure {
+    io_error(format!(
+        "{}: path has no plain form",
+        crate::diagnostic::filename(given.as_os_str())
+    ))
 }
 
-#[cfg(all(test, windows))]
-mod path_tests {
-    use super::*;
-
-    #[test]
-    fn canonical_removes_verbatim_prefix() {
-        let plain = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let verbatim = PathBuf::from(format!(r"\\?\{}", plain.display()));
-        assert_eq!(canonical(&verbatim).unwrap(), plain);
-    }
-}
 /// Split a compiler setting at ASCII white space, without a shell.
 pub(crate) fn compiler_value(value: &OsStr, variable: &str) -> Result<Command> {
     let value = value
@@ -92,8 +93,6 @@ pub(crate) fn compiler_value(value: &OsStr, variable: &str) -> Result<Command> {
     let program = words
         .next()
         .ok_or_else(|| (2, format!("{variable}: compiler setting is empty")))?;
-    let program = flags::plain_path(PathBuf::from(program))
-        .map_err(|e| crate::path_error(Path::new(program), e))?;
     let mut cmd = Command::new(program);
     cmd.args(words);
     Ok(cmd)
@@ -285,6 +284,7 @@ pub(crate) fn execute(
             crate::diagnostic::filename(first.as_os_str())
         ))
     })?;
+    let directory_given = directory.clone().unwrap_or_else(|| first.clone());
     let directory =
         directory.unwrap_or_else(|| first.parent().unwrap_or(Path::new(".")).join("ulua-build"));
     let host_includes = sources
@@ -294,7 +294,7 @@ pub(crate) fn execute(
                 .parent()
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or(Path::new("."));
-            canonical(parent)
+            canonical_as(parent, source)
         })
         .collect::<Result<Vec<_>>>()?;
     // Resolve inputs before the compiler changes its working directory.
@@ -303,7 +303,7 @@ pub(crate) fn execute(
         .map(|source| canonical(source))
         .collect::<Result<Vec<_>>>()?;
     std::fs::create_dir_all(&directory).map_err(|e| crate::path_error(&directory, e))?;
-    let directory = canonical(&directory)?;
+    let directory = canonical_as(&directory, &directory_given)?;
     let mut name = stem.to_os_string();
     name.push(std::env::consts::EXE_SUFFIX);
     let executable = directory.join(name);
@@ -363,4 +363,66 @@ pub(crate) fn execute(
         return Ok(status.code().unwrap_or(1));
     }
     Ok(0)
+}
+
+#[cfg(all(test, windows))]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_removes_verbatim_prefix() {
+        let verbatim = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let plain = PathBuf::from(verbatim.to_str().unwrap().strip_prefix(r"\\?\").unwrap());
+        assert_eq!(canonical(&verbatim).unwrap(), plain);
+    }
+
+    #[test]
+    fn unsupported_derived_path_names_original_and_has_no_plain_form() {
+        let given = Path::new("given\u{202e}");
+        let resolved = PathBuf::from(r"\\?\Volume{x}\y");
+        let error = plain_derived_path(given, resolved).unwrap_err();
+        assert_eq!(error, (2, r"given\u{202e}: path has no plain form".into()));
+    }
+
+    #[test]
+    fn unsupported_host_directories_name_host_argument() {
+        let given = Path::new("\\\\?\\Volume{x}\\d\\host\u{202e}.c");
+        for resolved in [r"\\?\Volume{x}\d", r"\\?\Volume{x}\d\ulua-build"] {
+            assert_eq!(
+                plain_derived_path(given, PathBuf::from(resolved)).unwrap_err(),
+                (
+                    2,
+                    r"\\?\Volume{x}\d\host\u{202e}.c: path has no plain form".into()
+                )
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod compiler_tests {
+    use super::*;
+
+    #[test]
+    fn no_plain_form_names_given_path_and_escapes_it() {
+        assert_eq!(
+            no_plain_form(Path::new("given\u{202e}")),
+            (2, r"given\u{202e}: path has no plain form".into())
+        );
+    }
+
+    #[test]
+    fn compiler_value_preserves_program_and_arguments() {
+        for variable in ["CC", "CXX"] {
+            for program in [r"\\?\C:\tools\cc.exe", r"\\?\Volume{test}\cc.exe"] {
+                let value = format!("{program}\t-DVALUE=1 {}", r"\\?\C:\input.c");
+                let command = compiler_value(OsStr::new(&value), variable).unwrap();
+                assert_eq!(command.get_program(), OsStr::new(program));
+                assert_eq!(
+                    command.get_args().collect::<Vec<_>>(),
+                    [OsStr::new("-DVALUE=1"), OsStr::new(r"\\?\C:\input.c")]
+                );
+            }
+        }
+    }
 }

@@ -73,13 +73,47 @@ Corpus: the `expected-error` text is a description, so §7.1 compares
 the code only. The 9 entries with `grants` are outside §7.1, because
 the command has no grants.
 
+## Windows (3668f24, cli.md Rev 5 §5.1)
+
+- On Windows, `std::fs::canonicalize` gives a verbatim path
+  (`\\?\C:\...`). `cl.exe` rejects it. The same `host.c` compiled with a
+  plain path (exit 0) and failed with the verbatim path (C1083, exit 2).
+  So `build_hosts_and_link_flags` failed.
+- 3668f24 adds `ulua_toolchain::plain_path`. `gate.sh full` on Windows
+  passed on one machine. Not run: a real UNC share, a volume without a
+  drive letter, and Linux.
+- The review of 3668f24 found 5 MINOR items:
+  - User text printed in plain form, not as given.
+  - An unsupported verbatim prefix gave a message without the path.
+  - `CC` was converted.
+  - The Windows test expected value did not resolve short names.
+  - Tracking was not updated.
+  Fix: cli.md Rev 5 §5.1 and the commit that implements it.
+- The review of that fix found 1 MAJOR item and 4 MINOR items:
+  - MAJOR: the rule 3 test gave the same value as the given path and
+    the resolved path, so it could not fail.
+  - A `--host` failure named the derived parent directory.
+  - Rule 4 had no test for `--lib` and the environment values.
+  - Two tests derived the expected path in different ways.
+  - This note did not state the Windows runs of the fix.
+- The §5.1 fix changes behaviour only on Windows. Its Windows tests did
+  not compile or run: this machine is macOS.
+- `ulua_fuzz` gives its root to `tsc` and `luau-analyze` in plain form
+  (3668f24). The fuzz smoke run on Windows is not run. The gate runs
+  `fuzz-smoke` only in `gate.sh sanitize`.
+
 ## Gaps
 
 - `run` and `check` take no grants. A script that calls a host
   function needs its host.
 - `tools/docs-runner.sh` holds its own copy of the host flags and
   system libraries. It does not read `crates/ulua_toolchain`.
-- The Linux and Windows runs of the command are open (D28).
+- The Linux run of the command is open (D28). Windows: `gate.sh full`
+  passed on one machine at 3668f24. The §5.1 fix is not run on
+  Windows.
+- Rule 1 of §5.1 for `--host` files and the output directory has no
+  direct test. The evidence is the `cl.exe` build of
+  `build_hosts_and_link_flags` with verbatim arguments, on Windows.
 - The CLI copies the mapping of the default compile limits from
   `crates/ulua/src/abi.rs`. The comparison of §7.8 finds a drift only
   where it changes accepted text; rule 3 compiles with `ulua_compile`

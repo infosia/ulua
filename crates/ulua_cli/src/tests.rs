@@ -644,6 +644,37 @@ fn unicode_format_ranges_and_escaping() {
     );
 }
 #[test]
+#[cfg(windows)]
+fn verbatim_user_text_keeps_prefix_and_escapes_format_characters() {
+    for argument in [r"\\?\C:\input.ts", r"\\?\Volume{test}\x"] {
+        let argument = format!("{argument}\u{202e}");
+        let shown = argument.replace('\u{202e}', r"\u{202e}");
+        assert_eq!(
+            crate::diagnostic::filename(std::ffi::OsStr::new(&argument)),
+            shown
+        );
+        let (code, out, err) = call(&[&argument]);
+        assert_eq!(code, 2);
+        assert!(out.is_empty());
+        assert!(
+            err.starts_with(&format!("ulua: unknown command {shown}\n")),
+            "{err}"
+        );
+    }
+    let scratch = Scratch::new("verbatim-user-text");
+    let file = scratch.script("input.ts", "export function setup():void{}");
+    let file = std::fs::canonicalize(file).unwrap().into_os_string();
+    let shown = file.to_string_lossy();
+    assert!(shown.starts_with(r"\\?\"));
+    for (command, message) in [("check", "no errors"), ("run", "no export main")] {
+        assert_eq!(
+            invoke(&[command.into(), file.clone()]),
+            (0, String::new(), format!("{command}: {shown}: {message}\n"))
+        );
+    }
+}
+
+#[test]
 fn filenames_escape_on_success_errors_usage_and_native_answers() {
     let scratch = Scratch::new("filenames");
     // Cf is valid in file names on each supported OS. LF is also tested on Unix.
@@ -705,10 +736,24 @@ fn filenames_escape_on_success_errors_usage_and_native_answers() {
     let (code, out, err) = invoke(&args);
     assert_eq!(code, 0, "{err}");
     assert!(err.is_empty());
+    let expected_name = |path: &Path| {
+        let resolved = std::fs::canonicalize(path).unwrap();
+        let name = resolved.to_string_lossy().into_owned();
+        #[cfg(windows)]
+        let name = if let Some(rest) = name.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{rest}")
+        } else if let Some(rest) = name.strip_prefix(r"\\?\") {
+            assert_eq!(rest.as_bytes().get(1), Some(&b':'));
+            rest.to_owned()
+        } else {
+            name
+        };
+        crate::diagnostic::escape(&name, false)
+    };
     assert!(out.starts_with(&format!(
         "-I{}\n{}\n",
-        crate::diagnostic::filename(std::fs::canonicalize(&include).unwrap().as_os_str()),
-        crate::diagnostic::filename(std::fs::canonicalize(&library).unwrap().as_os_str())
+        expected_name(&include),
+        expected_name(&library)
     )));
     std::fs::remove_file(&library).unwrap();
     let (code, _, err) = invoke(&args);

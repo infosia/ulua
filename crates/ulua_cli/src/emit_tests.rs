@@ -167,12 +167,17 @@ fn input_alias_and_rename_failure_preserve_files() {
         outputs
     };
     for output in outputs {
+        let expected = format!(
+            "ulua: emit: output {} names input {}\n",
+            output.to_string_lossy(),
+            file.to_string_lossy()
+        );
         let (code, out, err) = invoke(&["emit".into(), file.clone(), "-o".into(), output]);
         assert_eq!(code, 2);
         assert!(out.is_empty());
         assert!(err.starts_with("ulua: emit: output "));
         assert!(err.contains(" names input "));
-        assert!(!err.contains(r"\\?\"));
+        assert!(err.starts_with(&expected), "{err}");
         assert_eq!(std::fs::read(&file).unwrap(), source.as_bytes());
     }
     #[cfg(unix)]
