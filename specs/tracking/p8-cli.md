@@ -97,7 +97,9 @@ the command has no grants.
   - Two tests derived the expected path in different ways.
   - This note did not state the Windows runs of the fix.
 - The §5.1 fix changes behaviour only on Windows. Its Windows tests did
-  not compile or run: this machine is macOS.
+  not compile or run on the machine of the fix (macOS).
+- Windows x86_64 (owner's run, MSVC, 15b9cd9): `gate.sh full` passes;
+  `cargo-test` 123 s, with the Windows tests of §5.1.
 - `ulua_fuzz` gives its root to `tsc` and `luau-analyze` in plain form
   (3668f24). The fuzz smoke run on Windows is not run. The gate runs
   `fuzz-smoke` only in `gate.sh sanitize`.
@@ -109,8 +111,7 @@ the command has no grants.
 - `tools/docs-runner.sh` holds its own copy of the host flags and
   system libraries. It does not read `crates/ulua_toolchain`.
 - The Linux run of the command is open (D28). Windows: `gate.sh full`
-  passed on one machine at 3668f24. The §5.1 fix is not run on
-  Windows.
+  passed on one machine at 15b9cd9, with the §5.1 fix.
 - Rule 1 of §5.1 for `--host` files and the output directory has no
   direct test. The evidence is the `cl.exe` build of
   `build_hosts_and_link_flags` with verbatim arguments, on Windows.

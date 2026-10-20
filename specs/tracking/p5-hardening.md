@@ -97,6 +97,17 @@ targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
   file names normalized before the prelude filter (TS2304 on 199
   entries before); `luau-analyze` in batches of 64 files (error 206
   before); CRLF output compared exactly.
+- Windows after P6 and P7 (owner's run, MSVC): at 7e08e23
+  `gate.sh full` passes. Fixes: `ulua_bench` had `native/shim` on the
+  include path, so `<cstdlib>` read `native/shim/math.h`
+  (`/showIncludes`); the compiler memory probe passed gcc arguments to
+  `cl.exe` and wrote an object into `crates/ulua`; `docs-runner.sh`
+  wrote `docs-run.exe.exe` (`cygpath -w` adds `.exe` to an existing
+  executable), so the docs witness ran a stale runner. At dcaae63
+  `gate.sh timing` passes after pipeline.md Rev 56 and benchmarks.md
+  Rev 5 (section "Compiler memory on x86_64" above;
+  `p6-performance.md`). At 15b9cd9 `gate.sh full` passes
+  (`p8-cli.md`). `gate.sh sanitize` is not run on Windows.
 - macOS arm64 after 4c1bb2c: `gate.sh full` passes in 166 s warm
   (`cargo-test` 98 s, `luau-witnesses` 63 s); `gate.sh timing`
   passes. A first run after the pull took 442 s with a cold build.
