@@ -12,3 +12,4 @@ path = "src/main.rs"
 [dependencies]
 ulua = { path = "../ulua" }
 ulua_compiler = { path = "../ulua_compiler" }
+ulua_toolchain = { path = "../ulua_toolchain" }

@@ -14,7 +14,10 @@ fn io_error(e: impl std::fmt::Display) -> Failure {
     (2, diagnostic::escape(&e.to_string(), false))
 }
 fn path_error(path: &std::path::Path, error: std::io::Error) -> Failure {
-    io_error(format!("{}: {error}", path.display()))
+    io_error(format!(
+        "{}: {error}",
+        diagnostic::filename(path.as_os_str())
+    ))
 }
 fn usage_error(reason: impl std::fmt::Display) -> Failure {
     (
@@ -57,16 +60,16 @@ where
         } else {
             format!(
                 "{command}: unexpected argument {}",
-                args[if args.len() > 2 { 2 } else { 1 }].display()
+                diagnostic::filename(&args[if args.len() > 2 { 2 } else { 1 }])
             )
         })),
         Some("help" | "--help") => Err(usage_error(format!(
             "unexpected argument {}",
-            args[1].display()
+            diagnostic::filename(&args[1])
         ))),
         _ => Err(usage_error(format!(
             "unknown command {}",
-            args[0].display()
+            diagnostic::filename(&args[0])
         ))),
     };
     match result {

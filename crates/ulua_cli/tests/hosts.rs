@@ -8,6 +8,12 @@ use std::{
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
+fn tool_path(path: PathBuf) -> OsString {
+    #[cfg(windows)]
+    return format!(r"\\?\{}", std::path::absolute(path).unwrap().display()).into();
+    #[cfg(not(windows))]
+    path.into_os_string()
+}
 fn invoke(args: &[OsString]) -> (i32, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_ulua"))
         .args(args)
@@ -58,9 +64,9 @@ fn build_hosts_and_link_flags() {
     );
     let common = vec![
         OsString::from("--lib"),
-        library.into_os_string(),
+        tool_path(library),
         "--include".into(),
-        root().join("include").into_os_string(),
+        tool_path(root().join("include")),
     ];
     for cc in ["unix", "msvc"] {
         let mut args = vec!["link-flags".into(), "--cc".into(), cc.into()];
@@ -68,6 +74,7 @@ fn build_hosts_and_link_flags() {
         let (code, out, err) = invoke(&args);
         assert_eq!(code, 0, "{err}");
         assert!(err.is_empty());
+        assert!(!out.contains(r"\\?\"), "{out}");
         let lines: Vec<_> = out.lines().collect();
         assert!(lines[0].starts_with(if cc == "unix" { "-I" } else { "/I" }));
         assert!(Path::new(lines[1]).is_file());
@@ -78,11 +85,9 @@ fn build_hosts_and_link_flags() {
         let mut args = vec![
             "build".into(),
             "--host".into(),
-            root()
-                .join(format!("examples/{example}/host.c"))
-                .into_os_string(),
+            tool_path(root().join(format!("examples/{example}/host.c"))),
             "-o".into(),
-            scratch.0.join(example).into_os_string(),
+            tool_path(scratch.0.join(example)),
         ];
         args.extend(common.clone());
         args.extend([

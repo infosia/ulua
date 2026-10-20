@@ -185,6 +185,13 @@ pub(crate) fn escape(text: &str, source: bool) -> String {
 }
 /// Render an operating-system file name with the diagnostic escape rules.
 pub(crate) fn filename(name: &std::ffi::OsStr) -> String {
+    #[cfg(windows)]
+    let normalized = ulua_toolchain::plain_path(std::path::PathBuf::from(name));
+    #[cfg(windows)]
+    let name = match &normalized {
+        Ok(path) => path.as_os_str(),
+        Err(_) => std::ffi::OsStr::new("<unsupported verbatim path>"),
+    };
     escape(&name.to_string_lossy(), false)
 }
 

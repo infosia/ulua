@@ -21,8 +21,8 @@ pub(crate) fn execute(
             Ok(path) if path == input => {
                 return Err(usage_error(format!(
                     "emit: output {} names input {}",
-                    output.display(),
-                    file.display()
+                    diagnostic::filename(output),
+                    diagnostic::filename(file)
                 )));
             }
             Ok(_) => {}
@@ -82,7 +82,7 @@ fn arguments(args: &[OsString]) -> Result<(&OsStr, Option<&OsStr>)> {
         } else {
             return Err(usage_error(format!(
                 "emit: unexpected argument {}",
-                argument.display()
+                diagnostic::filename(argument)
             )));
         }
     }

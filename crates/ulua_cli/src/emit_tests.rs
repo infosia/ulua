@@ -159,12 +159,20 @@ fn input_alias_and_rename_failure_preserve_files() {
     let source = "export function main():void{}";
     let file = scratch.script("input.ts", source);
     let alias = scratch.0.join(".").join("input.ts").into_os_string();
-    for output in [file.clone(), alias] {
+    let outputs = vec![file.clone(), alias];
+    #[cfg(windows)]
+    let outputs = {
+        let mut outputs = outputs;
+        outputs.push(std::fs::canonicalize(&file).unwrap().into_os_string());
+        outputs
+    };
+    for output in outputs {
         let (code, out, err) = invoke(&["emit".into(), file.clone(), "-o".into(), output]);
         assert_eq!(code, 2);
         assert!(out.is_empty());
         assert!(err.starts_with("ulua: emit: output "));
         assert!(err.contains(" names input "));
+        assert!(!err.contains(r"\\?\"));
         assert_eq!(std::fs::read(&file).unwrap(), source.as_bytes());
     }
     #[cfg(unix)]

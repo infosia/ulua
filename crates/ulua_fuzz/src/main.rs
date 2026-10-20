@@ -119,7 +119,9 @@ fn parse() -> Result<Args, String> {
 
 fn root() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    std::fs::canonicalize(&root).unwrap_or(root)
+    std::fs::canonicalize(&root)
+        .and_then(ulua_toolchain::plain_path)
+        .unwrap_or(root)
 }
 
 fn env(root: &Path) -> Result<compile_target::Env, String> {

@@ -50,8 +50,12 @@ fn paths(lib: Option<PathBuf>, include: Option<PathBuf>) -> Result<(PathBuf, Pat
         (&library, lib_help),
         (&include.join("ulua.h"), include_help),
     ] {
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| io_error(format!("{}: {e}; {help}", path.display())))?;
+        let metadata = std::fs::metadata(path).map_err(|e| {
+            io_error(format!(
+                "{}: {e}; {help}",
+                crate::diagnostic::filename(path.as_os_str())
+            ))
+        })?;
         if !metadata.is_file() {
             return Err(crate::path_error(
                 path,
@@ -62,7 +66,20 @@ fn paths(lib: Option<PathBuf>, include: Option<PathBuf>) -> Result<(PathBuf, Pat
     Ok((canonical(&library)?, canonical(&include)?))
 }
 fn canonical(path: &Path) -> Result<PathBuf> {
-    std::fs::canonicalize(path).map_err(|e| crate::path_error(path, e))
+    let resolved = std::fs::canonicalize(path).map_err(|e| crate::path_error(path, e))?;
+    flags::plain_path(resolved).map_err(|e| crate::path_error(path, e))
+}
+
+#[cfg(all(test, windows))]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_removes_verbatim_prefix() {
+        let plain = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let verbatim = PathBuf::from(format!(r"\\?\{}", plain.display()));
+        assert_eq!(canonical(&verbatim).unwrap(), plain);
+    }
 }
 /// Split a compiler setting at ASCII white space, without a shell.
 pub(crate) fn compiler_value(value: &OsStr, variable: &str) -> Result<Command> {
@@ -75,6 +92,8 @@ pub(crate) fn compiler_value(value: &OsStr, variable: &str) -> Result<Command> {
     let program = words
         .next()
         .ok_or_else(|| (2, format!("{variable}: compiler setting is empty")))?;
+    let program = flags::plain_path(PathBuf::from(program))
+        .map_err(|e| crate::path_error(Path::new(program), e))?;
     let mut cmd = Command::new(program);
     cmd.args(words);
     Ok(cmd)
@@ -122,7 +141,7 @@ fn write_compiler_output(command: &Command, bytes: &[u8], stderr: &mut dyn Write
 fn run_compiler(mut command: Command, stderr: &mut dyn Write) -> Result<bool> {
     let output = command
         .output()
-        .map_err(|e| io_error(format!("{}: {e}", command.get_program().display())))?;
+        .map_err(|e| crate::path_error(Path::new(command.get_program()), e))?;
     if output.status.success() {
         return Ok(true);
     }
@@ -163,7 +182,7 @@ pub(crate) fn execute(
                 if value.is_empty() || value.to_string_lossy().starts_with('-') {
                     return Err(crate::usage_error(format!(
                         "missing value for {option}; found {}",
-                        value.display()
+                        crate::diagnostic::filename(value)
                     )));
                 }
                 match option {
@@ -177,7 +196,7 @@ pub(crate) fn execute(
                             _ => {
                                 return Err(crate::usage_error(format!(
                                     "invalid --cc value {}; expected unix or msvc",
-                                    value.display()
+                                    crate::diagnostic::filename(value)
                                 )));
                             }
                         }
@@ -211,7 +230,7 @@ pub(crate) fn execute(
             _ => {
                 return Err(crate::usage_error(format!(
                     "unexpected argument {}",
-                    args[i].display()
+                    crate::diagnostic::filename(&args[i])
                 )));
             }
         }
@@ -227,7 +246,7 @@ pub(crate) fn execute(
             Some("cc" | "cpp" | "cxx") => Ok(true),
             _ => Err(crate::usage_error(format!(
                 "unsupported --host extension: {}",
-                s.display()
+                crate::diagnostic::filename(s.as_os_str())
             ))),
         })
         .collect::<Result<_>>()?;
@@ -261,7 +280,10 @@ pub(crate) fn execute(
     }
     let first = &sources[0];
     let stem = first.file_stem().ok_or_else(|| {
-        crate::usage_error(format!("--host file has no stem: {}", first.display()))
+        crate::usage_error(format!(
+            "--host file has no stem: {}",
+            crate::diagnostic::filename(first.as_os_str())
+        ))
     })?;
     let directory =
         directory.unwrap_or_else(|| first.parent().unwrap_or(Path::new(".")).join("ulua-build"));

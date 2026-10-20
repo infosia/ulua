@@ -29,6 +29,12 @@ fn paths(output: Output) -> Vec<String> {
         .map(str::to_owned)
         .collect()
 }
+fn expected_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    return std::path::absolute(path).unwrap();
+    #[cfg(not(windows))]
+    std::fs::canonicalize(path).unwrap()
+}
 #[test]
 fn options_environment_and_repository() {
     let start = std::time::Instant::now();
@@ -41,11 +47,8 @@ fn options_environment_and_repository() {
     std::fs::create_dir_all(&include).unwrap();
     std::fs::write(include.join("ulua.h"), b"").unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let header_arg = format!("-I{}", std::fs::canonicalize(&include).unwrap().display());
-    let library_arg = std::fs::canonicalize(&library)
-        .unwrap()
-        .display()
-        .to_string();
+    let header_arg = format!("-I{}", expected_path(&include).display());
+    let library_arg = expected_path(&library).display().to_string();
     let result = paths(
         command(&scratch.0)
             .args(["link-flags", "--cc", "unix", "--lib"])
@@ -77,12 +80,7 @@ fn options_environment_and_repository() {
     );
     assert_eq!(
         result[0],
-        format!(
-            "-I{}",
-            std::fs::canonicalize(root.join("include"))
-                .unwrap()
-                .display()
-        )
+        format!("-I{}", expected_path(&root.join("include")).display())
     );
     let result = command(&scratch.0)
         .arg("link-flags")
@@ -119,10 +117,7 @@ fn options_environment_and_repository() {
     if default.is_file() {
         assert_eq!(
             paths(result)[1],
-            std::fs::canonicalize(default)
-                .unwrap()
-                .display()
-                .to_string()
+            expected_path(&default).display().to_string()
         );
     } else {
         assert_eq!(result.status.code(), Some(2));
