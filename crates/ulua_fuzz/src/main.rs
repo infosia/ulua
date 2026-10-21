@@ -352,7 +352,7 @@ fn fuzz(
 fn run() -> Result<bool, String> {
     let a = parse()?;
     if a.worker {
-        worker(&a)?;
+        on_run_stack(|| worker(&a))?;
         return Ok(true);
     }
     if let Some(path) = &a.emit {
@@ -364,7 +364,7 @@ fn run() -> Result<bool, String> {
         return Ok(true);
     }
     if a.replay.is_some() {
-        replay(&a)?;
+        on_run_stack(|| replay(&a))?;
         return Ok(true);
     }
     if a.smoke {
@@ -378,6 +378,20 @@ fn run() -> Result<bool, String> {
         "usage: ulua-fuzz --target <compiler|run|abi|requests> [--seed N] [--inputs N | --seconds N] | --smoke",
     )?;
     Ok(fuzz(target, a.seed, a.inputs, a.seconds)? == 0)
+}
+
+// Exercise each ABI target at the minimum host stack, including replay.
+// Witness compilation uses its own compiler stack in compile_target::luau.
+fn on_run_stack(f: impl FnOnce() -> Result<(), String> + Send) -> Result<(), String> {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("ulua-fuzz-worker".into())
+            .stack_size(ulua::ULUA_MIN_RUN_STACK)
+            .spawn_scoped(scope, f)
+            .map_err(|e| format!("worker thread: {e}"))?
+            .join()
+            .map_err(|_| "worker thread panicked".to_owned())?
+    })
 }
 
 fn main() {
@@ -394,6 +408,41 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deep_witness_forms_use_the_compiler_stack() {
+        // Build the two recursive expression forms from the Windows smoke crashes.
+        // The ABI still runs with 512 KiB; only the Rust witness gets 2 MiB.
+        let sum = vec!["1"; 43].join("+");
+        let array = format!("{}1{}", "[".repeat(40), "]".repeat(40));
+        for expression in [sum, array] {
+            let source = format!("export function main():void {{const a={expression};}}");
+            on_run_stack(|| {
+                let env = env(&root())?;
+                for target in [Target::Compiler, Target::Run] {
+                    let mut out = vec![];
+                    let mut samples = vec![];
+                    one(
+                        &mut out,
+                        target,
+                        &env,
+                        source.as_bytes(),
+                        SMOKE_SEED,
+                        1277,
+                        true,
+                        &mut samples,
+                    );
+                    let text = String::from_utf8(out).unwrap();
+                    assert!(!text.contains("F "), "{text}");
+                    assert!(text.contains("R 1277 1 "), "{text}");
+                    assert_eq!(samples.len(), 1, "{text}");
+                    assert!(samples[0].luau.starts_with("--!strict\n"));
+                }
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+
     #[test]
     fn a_panic_in_an_input_is_a_failure() {
         let env = env(&root()).unwrap();

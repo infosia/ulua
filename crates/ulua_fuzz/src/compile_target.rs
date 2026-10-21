@@ -317,9 +317,27 @@ unsafe fn exports(module: *mut Module, report: &mut Report) {
 /// The generated Luau of an accepted source, from the Rust API (as `ulua-corpus
 /// --emit-luau` does). A disagreement with the ABI result is a failure.
 pub fn luau(c: &Compiled, source: &[u8], report: &mut Report) -> Option<String> {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        ulua_compiler::compile_with_grants(source, c.limits, &c.signatures)
-    }));
+    let limits = c.limits;
+    let signatures = &c.signatures;
+    // Windows MSVC Debug witness replay overflowed the 1 MiB main stack.
+    // /STACK:1638400 failed; /STACK:1654784 passed for smoke input 1277.
+    // Match the C ABI compiler stack without enlarging the ABI run stack.
+    let result = std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("ulua-fuzz-compiler".into())
+            .stack_size(ulua_compiler::COMPILER_STACK_BYTES)
+            .spawn_scoped(scope, || {
+                ulua_compiler::compile_with_grants(source, limits, signatures)
+            })
+            .map(|thread| thread.join())
+    });
+    let result = match result {
+        Ok(result) => result,
+        Err(e) => {
+            report.fail("harness:compiler-thread", e.to_string());
+            return None;
+        }
+    };
     match result {
         Ok(Ok(compiled)) => Some(compiled.luau),
         Ok(Err(d)) => {

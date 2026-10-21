@@ -356,7 +356,8 @@ pub fn reduce(
             continue;
         }
         let input = targets::input(rec.target, rec.pool, rec.seed, *index);
-        let witness = failure.key.starts_with("witness:");
+        // A sampled input can crash during witness preparation before a witness key exists.
+        let witness = rec.target.source() && targets::sampled(rec.seed, *index);
         let probe = dir.join("candidate.bin");
         let mut timed_out = false;
         let mut test = |candidate: &[u8]| {
@@ -504,6 +505,39 @@ mod tests {
             input_deadline: INPUT_DEADLINE,
         }
     }
+    #[test]
+    fn reduction_repeats_a_sampled_crash_with_the_witness() {
+        // The stub fails only when replay preserves the campaign witness selection.
+        let w = sh(
+            "for arg do if [ \"$arg\" = --witness ]; then printf 'F 1277 crash:fixture\\twitness preparation\\n'; fi; done; echo D",
+        );
+        let pool = Pool::load(&root()).unwrap();
+        let scratch = std::env::temp_dir().join(format!(
+            "ulua-fuzz-reduction-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let rec = Recorder {
+            root: &scratch,
+            pool: &pool,
+            target: Target::Compiler,
+            seed: crate::SMOKE_SEED,
+        };
+        let failure = Failure {
+            key: "crash:fixture".into(),
+            detail: "witness preparation".into(),
+        };
+        let dir = rec.failure(1277, &failure).unwrap();
+        let summary = Summary {
+            failures: vec![(1277, failure)],
+            ..Summary::default()
+        };
+        reduce(&w, &rec, &summary, 0, None).unwrap();
+        let text = std::fs::read_to_string(dir.join("reduction.txt")).unwrap();
+        std::fs::remove_dir_all(&scratch).unwrap();
+        assert!(text.starts_with("reduction=stopped"), "{text}");
+    }
+
     #[test]
     fn an_input_that_never_ends_is_a_hang_and_the_run_continues() {
         // A seeded hang: the stub worker starts input 7 and never ends it.
