@@ -69,6 +69,7 @@ Rev 67: §5.31 receiver operands; §5.32 loop-invariant length (P6.S13).
 Rev 68: §5.31 a receiver with a type assertion keeps its temporary (P6.S13 review).
 Rev 69: §5.19 the update weight and the point before a loop for a later statement (P6.S14).
 Rev 70: §5.19 an update store counts its value cost; one counted path moves a point (P6.S14 review).
+Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -110,6 +111,11 @@ the C ABI. `collisions.md` states the lowering of each form.
    normal build. `sh tools/gate.sh sanitize` runs the tests, the Luau
    witnesses, the examples, and the docs witness on that build; any
    sanitizer report fails the gate.
+   The sanitizer build and `gate.sh sanitize` are for macOS and Linux
+   (clang or gcc). Windows is outside them (`plan.md` D36): MSVC has
+   AddressSanitizer and no UndefinedBehaviorSanitizer, and its flags
+   and runtime differ. On Windows, `gate.sh sanitize` exits 2 with a
+   message that names this rule.
 
 ## 3. Compiler
 

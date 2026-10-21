@@ -4,7 +4,8 @@
 #   full:  quick, then the remainder shadow checks and the hygiene scan.
 #   sanitize: the tests, the Luau witnesses, the examples, and the docs
 #   witness on the ASan and UBSan build (pipeline.md §2.6), in
-#   target/sanitize. Any sanitizer report fails it.
+#   target/sanitize. Any sanitizer report fails it. macOS and Linux
+#   only (plan.md D36); on Windows it exits 2.
 #   timing: the tests that assert time ratios (the `witnesses` test
 #   binary, feature `timing`; pipeline.md §3.10). Run it at the close
 #   of a slice and with each change to the checker or the emitter.
@@ -42,6 +43,12 @@ if [ "$shape" = timing ]; then
     exit 0
 fi
 if [ "$shape" = sanitize ]; then
+    case "$(uname -s)" in
+        MINGW* | MSYS* | CYGWIN*)
+            echo 'gate sanitize: Windows is outside the sanitizer build (pipeline.md §2 item 6, plan.md D36)' >&2
+            exit 2
+            ;;
+    esac
     export ULUA_SANITIZE=1
     export CARGO_TARGET_DIR="$repo_root/target/sanitize"
     # LeakSanitizer is not available on every platform; leaks are a

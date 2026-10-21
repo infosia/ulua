@@ -108,6 +108,17 @@ targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
   Rev 5 (section "Compiler memory on x86_64" above;
   `p6-performance.md`). At 15b9cd9 `gate.sh full` passes
   (`p8-cli.md`). `gate.sh sanitize` is not run on Windows.
+- Windows `gate.sh sanitize` at 56ca47e: `cargo-test` fails to link.
+  `build/sanitize.rs` passes `-fsanitize=address,undefined` to
+  `link.exe` (LNK4044, ignored) and links `asan` (LNK1181, no
+  `asan.lib`). Owner decision D36: Windows is outside the sanitizer
+  build; `gate.sh sanitize` exits 2 on Windows.
+- Windows, the steps of `gate.sh sanitize` that do not need the
+  sanitizer build, on the normal build at 56ca47e: the fault sweep
+  passes (5 tests, 38 s). `ulua_fuzz --smoke` exits 1: target `run`
+  gives 2 failures with the key `crash:exit:-1073741571`
+  (0xC00000FD, `STATUS_STACK_OVERFLOW`); targets `abi` and `requests`
+  give 0. The cause is open.
 - macOS arm64 after 4c1bb2c: `gate.sh full` passes in 166 s warm
   (`cargo-test` 98 s, `luau-witnesses` 63 s); `gate.sh timing`
   passes. A first run after the pull took 442 s with a cold build.

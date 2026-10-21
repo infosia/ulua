@@ -168,6 +168,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D33 | `Math` members whose Luau builtin differs from `node` or is absent use Rust `libm` 0.2.16 as a native helper: one result on every host OS; the 1- or 2-ulp difference from `node` is a named divergence | 2026-10-17 | `stdlib.md` §2, §5; collisions.md C4.9; owner decision after P7.0 M1 |
 | D34 | An object literal whose type reaches `JSON.stringify` lists its fields in the declaration order of the type, so the output order equals `node` | 2026-10-17 | `stdlib.md` §2; owner decision after P7.0 M4 |
 | D35 | A developer command `ulua` checks and runs a script through the product C ABI, prints the link flags, and builds a small host. `ulua emit` prints the generated Luau for a developer to read; no C ABI function returns it, and nothing accepts Luau (invariant 6). Revised the same day: the first form had no `emit` | 2026-10-20 | `cli.md` §2.5; owner request |
+| D36 | The sanitizer build and `gate.sh sanitize` are for macOS and Linux only. Windows is outside them: MSVC has AddressSanitizer and no UndefinedBehaviorSanitizer. Narrows D28 for this gate | 2026-10-21 | `pipeline.md` §2 item 6 (Rev 71); owner decision |
 
 ## 9. Corrections and revisions
 
