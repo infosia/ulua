@@ -118,6 +118,9 @@ the command has no grants.
   examples/hello/host.c --run` runs from Git Bash without a Developer
   Command Prompt. The `cl` lines of `docs/tutorial-c-cpp.md` build
   `examples/hello` (output equal to `expected.txt`) and `examples/run`.
+- The §5.1 tests do not run at 6d569b7. Reason: the round 2 review found
+  that each assertion fails with the 3668f24 behaviour, and the rule 3
+  tests do not compile at 6d569b7.
 - `ulua_fuzz` gives its root to `tsc` and `luau-analyze` in plain form
   (3668f24). The fuzz smoke run on Windows is not run. The gate runs
   `fuzz-smoke` only in `gate.sh sanitize`.
