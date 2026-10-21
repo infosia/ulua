@@ -122,8 +122,10 @@ the command has no grants.
   that each assertion fails with the 3668f24 behaviour, and the rule 3
   tests do not compile at 6d569b7.
 - `ulua_fuzz` gives its root to `tsc` and `luau-analyze` in plain form
-  (3668f24). The fuzz smoke run on Windows is not run. The gate runs
-  `fuzz-smoke` only in `gate.sh sanitize`.
+  (3668f24). `ulua_fuzz --smoke` on Windows at fb235fa (normal build):
+  0 failures in the targets compiler, run, abi, and requests. The gate
+  runs `fuzz-smoke` only in `gate.sh sanitize`, which is outside
+  Windows (D36), so no gate runs it on Windows.
 
 ## Gaps
 
