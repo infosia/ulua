@@ -66,14 +66,14 @@ Status: COMPLETE on Windows x86_64; macOS not measured with the later
 forms.
 
 Failure (CRITICAL, invariant 2): on Windows x86_64 MSVC Debug at
-ddb94ca, `ulua check` of a 265-byte source (41 nested method calls,
+9b18ef0, `ulua check` of a 265-byte source (41 nested method calls,
 `class C{m(x:number):number{return x}}function f(c:C):void{` +
 `c.m(` x41 + `1` + `)` x41 + `}`) stops the process: "thread
 'ulua-compiler' has overflowed its stack". 40 calls pass. Release
 passes at 41.
 
 Found through `ulua_fuzz --smoke`: the witness recompile overflowed a
-1 MiB main thread (fixed in ddb94ca); a 40-deep array needed about
+1 MiB main thread (fixed in 9b18ef0); a 40-deep array needed about
 1.6 MiB in MSVC Debug, against the P1 record of 716,864 B.
 
 The `measurements` feature did not compile (`ir::Module`,
@@ -170,7 +170,12 @@ feature builds again, and the clippy step of `gate.sh full` builds it
   passes (5 tests, 38 s). `ulua_fuzz --smoke` exits 1: target `run`
   gives 2 failures with the key `crash:exit:-1073741571`
   (0xC00000FD, `STATUS_STACK_OVERFLOW`); targets `abi` and `requests`
-  give 0. The cause is open.
+  give 0. Cause: the witness recompile on a 1 MiB main thread. Fixed
+  in 9b18ef0 (section "Compiler stack on Windows" above).
+- macOS arm64 at 158c947 (`COMPILER_STACK_BYTES` 8 MiB): `gate.sh full`
+  passes; `cargo-test` 308 s with the rebuild, `cargo-clippy` 44 s with
+  the `measurements` feature. `s3_measure` with the later forms is not
+  run on macOS.
 - macOS arm64 after 4c1bb2c: `gate.sh full` passes in 166 s warm
   (`cargo-test` 98 s, `luau-witnesses` 63 s); `gate.sh timing`
   passes. A first run after the pull took 442 s with a cold build.
