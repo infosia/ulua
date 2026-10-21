@@ -28,9 +28,9 @@ cargo build --release -p ulua
 ```
 
 The build gives the static library `target/release/libulua.a` and a
-dynamic library beside it. The dynamic library exports only the
-`ulua_` functions of the header. Link a host against the static
-library (macOS):
+dynamic library beside it (`ulua.lib` and `ulua.dll` on Windows).
+The dynamic library exports only the `ulua_` functions of the header.
+Link a host against the static library (macOS):
 
 ```sh
 mkdir -p target/examples
@@ -40,12 +40,24 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror examples/hello/host.c -I include \
 ```
 
 On Linux the tail of the link line is `-lstdc++ -lpthread -ldl -lm`.
-The comment at the top of each `host.c` holds both lines.
+The comment at the top of each `host.c` holds the macOS, Linux, and
+Windows lines.
+
+On Windows, the build gives `target\release\ulua.lib`. Link a host
+with MSVC in a Developer Command Prompt for Visual Studio (x64):
+
+```bat
+if not exist target\examples mkdir target\examples
+cl /nologo /W4 /WX /MD /D_CRT_SECURE_NO_WARNINGS /TC /std:c11 examples\hello\host.c /I include ^
+    /Fo:target\examples\ /Fe:target\examples\hello.exe ^
+    /link target\release\ulua.lib advapi32.lib bcrypt.lib ntdll.lib userenv.lib ws2_32.lib
+```
 
 The [`ulua` command](../README.md#the-ulua-command) holds these flags
 for the current OS. `ulua link-flags` prints the include directory,
 the library, and the system libraries, one on each line. `ulua build`
-compiles and links a host with the flags of the gate:
+compiles and links a host with the flags of the gate. On Windows it
+finds `cl.exe` without a Developer Command Prompt:
 
 ```sh
 ulua build --host examples/hello/host.c --run -- examples/hello/hello.ts

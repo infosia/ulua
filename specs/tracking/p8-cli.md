@@ -99,7 +99,25 @@ the command has no grants.
 - The §5.1 fix changes behaviour only on Windows. Its Windows tests did
   not compile or run on the machine of the fix (macOS).
 - Windows x86_64 (owner's run, MSVC, 15b9cd9): `gate.sh full` passes;
-  `cargo-test` 123 s, with the Windows tests of §5.1.
+  `cargo-test` 123 s, with the Windows tests of §5.1. Each test ran by
+  name at 9dd030b and passed:
+  - Rule 1: `canonical_removes_verbatim_prefix` (Windows only),
+    `filenames_escape_on_success_errors_usage_and_native_answers`
+    (`link-flags` lines), `build_hosts_and_link_flags` (`cl.exe`).
+  - Rule 2: `ulua_toolchain` `plain_paths`.
+  - Rule 3: `unsupported_derived_path_names_original_and_has_no_plain_form`,
+    `unsupported_host_directories_name_host_argument` (Windows only).
+  - Rule 4: `verbatim_user_text_keeps_prefix_and_escapes_format_characters`,
+    `missing_verbatim_library_option_and_environment_print_as_given`
+    (Windows only).
+  - Rule 5: `compiler_value_preserves_program_and_arguments`.
+  - Rule 6: `input_alias_and_rename_failure_preserve_files` (a verbatim
+    output on Windows).
+- Windows release build at 9dd030b: `ulua link-flags` prints `/I`,
+  `ulua.lib`, and five system libraries; `ulua build --host
+  examples/hello/host.c --run` runs from Git Bash without a Developer
+  Command Prompt. The `cl` lines of `docs/tutorial-c-cpp.md` build
+  `examples/hello` (output equal to `expected.txt`) and `examples/run`.
 - `ulua_fuzz` gives its root to `tsc` and `luau-analyze` in plain form
   (3668f24). The fuzz smoke run on Windows is not run. The gate runs
   `fuzz-smoke` only in `gate.sh sanitize`.

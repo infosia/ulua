@@ -278,8 +278,12 @@ C++ compiler, Node 24, and a Luau checkout at the revision in
 ```sh
 npm install                                   # once: the pinned TypeScript
 export LUAU_SOURCE_DIR=/path/to/luau          # checkout at luau-revision.txt
-cargo build --release -p ulua                 # libulua.a and the dynamic library
+cargo build --release -p ulua                 # the static and the dynamic library
 ```
+
+On Windows, run these commands and the gate in Git Bash, with MSVC
+installed. The static library is `target/release/ulua.lib`; on other
+platforms it is `target/release/libulua.a`.
 
 The header is [`include/ulua.h`](include/ulua.h). The gate:
 
@@ -304,7 +308,7 @@ alias ulua=target/release/ulua
 ulua check game.ts         # compile only; prints "check: game.ts: no errors"
 ulua run game.ts           # compile, then call the export main
 ulua emit game.ts          # print the generated Luau, to read
-ulua link-flags            # the include directory, libulua.a, and the system libraries
+ulua link-flags            # the include directory, the static library, and the system libraries
 ulua build --host host.c --run -- game.ts
 ```
 

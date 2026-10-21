@@ -62,6 +62,10 @@ cc -std=c11 -Wall -Wextra -Wpedantic -Werror examples/run/host.c -I include \
 alias run=target/examples/run
 ```
 
+On Windows, build the runner with the `cl` line of the
+[C tutorial](tutorial-c-cpp.md), with `examples\run\host.c` and
+`/Fe:target\examples\run.exe`.
+
 ```sh
 $ run hello.ts
 hello from Ulua

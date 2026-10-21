@@ -3,6 +3,8 @@
    cc -std=c11 -Wall -Wextra -Wpedantic -Werror <host.c> -I <include-dir> <libulua.a> -o <host> -lc++ -liconv -framework Security -framework CoreFoundation
    Linux:
    cc -std=c11 -Wall -Wextra -Wpedantic -Werror <host.c> -I <include-dir> <libulua.a> -o <host> -lstdc++ -lpthread -ldl -lm
+   Windows (MSVC, Developer Command Prompt):
+   cl /nologo /W4 /WX /MD /D_CRT_SECURE_NO_WARNINGS /TC /std:c11 <host.c> /I <include-dir> /Fe:<host.exe> /link <ulua.lib> advapi32.lib bcrypt.lib ntdll.lib userenv.lib ws2_32.lib
 */
 /* A host that sets run limits. Ulua treats each script as hostile, so the host bounds
    the steps and the memory of an instance. Three exports of limits.ts stop in three

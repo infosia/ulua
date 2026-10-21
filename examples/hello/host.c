@@ -3,6 +3,8 @@
    cc -std=c11 -Wall -Wextra -Wpedantic -Werror <host.c> -I <include-dir> <libulua.a> -o <host> -lc++ -liconv -framework Security -framework CoreFoundation
    Linux:
    cc -std=c11 -Wall -Wextra -Wpedantic -Werror <host.c> -I <include-dir> <libulua.a> -o <host> -lstdc++ -lpthread -ldl -lm
+   Windows (MSVC, Developer Command Prompt):
+   cl /nologo /W4 /WX /MD /D_CRT_SECURE_NO_WARNINGS /TC /std:c11 <host.c> /I <include-dir> /Fe:<host.exe> /link <ulua.lib> advapi32.lib bcrypt.lib ntdll.lib userenv.lib ws2_32.lib
 */
 /* The smallest complete Ulua host. It compiles hello.ts, makes a running instance of it,
    and calls the two exports `main` and `greet` by name. Each phase of `main` below has
