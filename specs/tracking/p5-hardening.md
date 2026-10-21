@@ -60,6 +60,58 @@ Consequence: a constant derived on one architecture does not bound
 another. Each constant is the largest derivation over the measured
 targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
 
+## Compiler stack on Windows (pipeline.md Rev 72)
+
+Status: COMPLETE on Windows x86_64; macOS not measured with the later
+forms.
+
+Failure (CRITICAL, invariant 2): on Windows x86_64 MSVC Debug at
+ddb94ca, `ulua check` of a 265-byte source (41 nested method calls,
+`class C{m(x:number):number{return x}}function f(c:C):void{` +
+`c.m(` x41 + `1` + `)` x41 + `}`) stops the process: "thread
+'ulua-compiler' has overflowed its stack". 40 calls pass. Release
+passes at 41.
+
+Found through `ulua_fuzz --smoke`: the witness recompile overflowed a
+1 MiB main thread (fixed in ddb94ca); a 40-deep array needed about
+1.6 MiB in MSVC Debug, against the P1 record of 716,864 B.
+
+The `measurements` feature did not compile (`ir::Module`,
+`ir::Function` fields added after P1); no gate built it.
+
+Measured on Windows with `s3_measure` (fixed), peak at the depth
+ceiling 48, on a 32 MiB thread. P1 forms and every later nesting form
+of the checker and the emitter (about 80 forms):
+
+| Form | Count | Debug | Release |
+|---|---:|---:|---:|
+| Class-method calls as a statement (deepest) | 42 | 2,154,792 | 146,312 |
+| Class-method calls in a return | 42 | 2,135,720 | 145,576 |
+| Math calls in a return | 42 | 2,076,904 | 135,128 |
+| Nested calls (P1) | 42 | 1,737,400 | 141,616 |
+| For-of (largest Release) | 21 | 1,145,656 | 231,912 |
+
+- Worst Debug slope: about 48,802 B per level; Release about 3,066 B.
+- Thread bisection of the deepest form: Debug needs 2,162,689 B,
+  Release 131,073 B.
+- Run stack at `LUAI_MAXCCALLS`: protected C calls 158,000 B Debug,
+  154,400 B Release; under `ULUA_MIN_RUN_STACK` 512 KiB.
+
+Consequence: the half-stack rule needs at least 4,309,584 B on Windows
+Debug. `COMPILER_STACK_BYTES` becomes 8 MiB on every target (owner
+decision): the value is the largest derivation over the measured
+targets, and the cost is address space of one thread per compile.
+macOS is not measured with the later forms.
+
+Change: `COMPILER_STACK_BYTES` 8 MiB. Tests in `s3_limits`:
+`compiler_stack_abi` (42 nested method calls through `ulua_compile`;
+43 give `limit:nesting-depth`) and `compiler_stack_half` (42 calls on
+a thread of `COMPILER_STACK_BYTES / 2`). With the constant at 2 MiB
+both stop with `STATUS_STACK_OVERFLOW` on Windows Debug; at 8 MiB both
+pass. `ulua check` of the 41-call source exits 0. The `measurements`
+feature builds again, and the clippy step of `gate.sh full` builds it
+(exit 101 before the fix). `gate.sh full` on Windows: PASS.
+
 ## Measurements (P5.1)
 
 - `sh tools/gate.sh sanitize` (macOS arm64, Apple clang, working

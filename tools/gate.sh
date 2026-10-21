@@ -74,7 +74,7 @@ fi
 step corpus-witnesses "$NODE" tools/witness/corpus.mjs
 if [ -f Cargo.toml ]; then
     step cargo-fmt cargo fmt --all --check
-    step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing,ulua/fault-injection -- -D warnings
+    step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing,ulua/fault-injection,ulua/measurements -- -D warnings
     step luau-tools sh tools/luau-tools.sh
     step cargo-test cargo test --quiet --workspace
     step luau-witnesses "$NODE" tools/witness/luau.mjs

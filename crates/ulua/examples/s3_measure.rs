@@ -3,6 +3,13 @@
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
 //! MODE is stack, heap, heap-products, heap-dense, heap-spill, native, run, or emit. Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
+//! Stack watermarks work on macOS and Windows. The measurement worker uses 32 MiB
+//! so a compiler margin failure can be reported without terminating the sweep.
+//! `source PATH [BYTES]` measures stages; `production PATH [BYTES]` measures the
+//! whole pipeline. `check PATH [BYTES]` compiles without painting the stack for
+//! subprocess stack-size bisection. `abi PATH [BYTES]` uses ulua_compile: BYTES
+//! sizes the caller only; the library's compiler thread uses COMPILER_STACK_BYTES.
+//! `native` also reports the direct and protected C-call stack at LUAI_MAXCCALLS.
 //! Native template emission is incremental: its probe reports a lower bound,
 //! not an absolute maximum, when the next input still compiles.
 // Each mode uses a subset of the shared generators.
@@ -85,6 +92,9 @@ fn boundary(mut accepts: impl FnMut(usize) -> bool, maximum: usize) -> usize {
 }
 fn stages(form: &str, n: usize) {
     let source = inputs::nested(form, n);
+    source_stages(&source, form, n);
+}
+fn source_stages(source: &str, form: &str, n: usize) {
     let mut values = Vec::new();
     let compiled =
         ulua_compiler::measure_compile(source.as_bytes(), Limits::default(), |stage, before| {
@@ -110,10 +120,14 @@ fn stages(form: &str, n: usize) {
         }
         Err(e) => e.code.to_owned(),
     };
-    for (_, bytes) in &values {
-        assert!(*bytes <= COMPILER_STACK_BYTES / 2, "compiler stack margin");
-    }
     println!("stack {form} levels={n} {values:?} status={status}");
+    if let Some(peak) = values.iter().map(|(_, bytes)| *bytes).max() {
+        println!(
+            "margin peak={peak} half_stack={} full_stack={}",
+            peak <= COMPILER_STACK_BYTES / 2,
+            peak <= COMPILER_STACK_BYTES
+        );
+    }
 }
 struct HeapPeak {
     total: usize,
@@ -181,6 +195,10 @@ fn largest(label: &str, maximum: usize, make: impl Fn(usize) -> String) {
     );
 }
 fn run_stack() {
+    native_stack();
+    run_recursion_stack();
+}
+fn native_stack() {
     for n in [197, 198, 199, 200] {
         // SAFETY: The native probe protects every recursive C call and uses no host objects.
         unsafe {
@@ -198,6 +216,8 @@ fn run_stack() {
             );
         }
     }
+}
+fn run_recursion_stack() {
     let source = inputs::recursion();
     let mut context = ptr::null_mut();
     let mut module = ptr::null_mut();
@@ -248,8 +268,66 @@ fn run_stack() {
 }
 fn main() {
     let mode = std::env::args().nth(1).unwrap_or_else(|| "stack".into());
-    if !cfg!(target_os = "macos") && !matches!(mode.as_str(), "native" | "emit") {
-        eprintln!("The stack watermark and native heap sampler need macOS.");
+    if matches!(mode.as_str(), "source" | "check" | "abi" | "production") {
+        let path = std::env::args().nth(2).expect("source path");
+        let source = std::fs::read_to_string(path).unwrap();
+        let stack = std::env::args()
+            .nth(3)
+            .map(|n| n.parse().expect("stack bytes"))
+            .unwrap_or(32 * 1024 * 1024);
+        std::thread::Builder::new()
+            .stack_size(stack)
+            .spawn(move || match mode.as_str() {
+                "source" => source_stages(&source, "file", 0),
+                "production" => {
+                    // SAFETY: The probe paints only this dedicated thread's unused stack.
+                    unsafe { ulua_internal_probe_stack_start() };
+                    let result = ulua_compiler::compile(source.as_bytes(), Limits::default());
+                    let status = result
+                        .as_ref()
+                        .map_err(|e| e.code.to_owned())
+                        .and_then(|c| native(&c.luau));
+                    // SAFETY: The matching start initialized this thread's watermark.
+                    let peak = unsafe { ulua_internal_probe_stack_end() };
+                    println!("production peak={peak} status={status:?}");
+                }
+                "check" => println!(
+                    "check {}",
+                    ulua_compiler::compile(source.as_bytes(), Limits::default())
+                        .map_or_else(|e| e.code.to_owned(), |_| "ok".to_owned())
+                ),
+                _ => {
+                    let mut context = ptr::null_mut();
+                    let mut module = ptr::null_mut();
+                    let mut diagnostic = Diagnostic::default();
+                    // SAFETY: This thread owns the context and every live ABI argument.
+                    unsafe {
+                        assert_eq!(ulua_context_new(&mut context), ULUA_OK);
+                        let status = ulua_compile(
+                            context,
+                            source.as_ptr().cast(),
+                            source.len(),
+                            ptr::null(),
+                            0,
+                            ptr::null(),
+                            &mut module,
+                            &mut diagnostic,
+                        );
+                        println!(
+                            "abi status={status} code={}",
+                            CStr::from_ptr(diagnostic.code.as_ptr()).to_string_lossy()
+                        );
+                        ulua_context_free(context);
+                    }
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        return;
+    }
+    if !cfg!(target_os = "macos") && mode.starts_with("heap") {
+        eprintln!("The native heap sampler needs macOS.");
         std::process::exit(2);
     }
     let half = std::env::args().any(|arg| arg == "--half");
@@ -258,6 +336,8 @@ fn main() {
         ULUA_MIN_RUN_STACK
     } else if half {
         COMPILER_STACK_BYTES / 2
+    } else if mode == "stack" {
+        16 * COMPILER_STACK_BYTES
     } else {
         COMPILER_STACK_BYTES
     };
@@ -402,6 +482,7 @@ fn main() {
                 }
             }
             "native" => {
+                native_stack();
                 largest("parameters", 256, |n| {
                     format!(
                         "local function f({}):number return 1 end return f",

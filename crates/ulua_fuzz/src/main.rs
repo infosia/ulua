@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn deep_witness_forms_use_the_compiler_stack() {
         // Build the two recursive expression forms from the Windows smoke crashes.
-        // The ABI still runs with 512 KiB; only the Rust witness gets 2 MiB.
+        // The ABI caller uses 512 KiB; the Rust witness uses COMPILER_STACK_BYTES.
         let sum = vec!["1"; 43].join("+");
         let array = format!("{}1{}", "[".repeat(40), "]".repeat(40));
         for expression in [sum, array] {

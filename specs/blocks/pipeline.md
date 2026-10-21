@@ -70,6 +70,7 @@ Rev 68: §5.31 a receiver with a type assertion keeps its temporary (P6.S13 revi
 Rev 69: §5.19 the update weight and the point before a loop for a later statement (P6.S14).
 Rev 70: §5.19 an update store counts its value cost; one counted path moves a point (P6.S14 review).
 Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
+Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYTES` 8 MiB.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1456,7 +1457,14 @@ the value.
 
 1. `COMPILER_STACK_BYTES`, and the ceiling of `max_nesting_depth`: the
    deepest form at the ceiling compiles in a Debug build with half of
-   the stack unused.
+   the stack unused. The forms are every form that the checker or the
+   emitter nests, not only the P1 forms. The stack peak depends on the
+   target and its compiler: the value is the largest derivation over
+   the measured targets (§6 item 4 states the same rule for compiler
+   memory). A test compiles the deepest form at the ceiling through
+   `ulua_compile`, and on a thread with half of `COMPILER_STACK_BYTES`.
+   When a change adds a nesting form or moves a peak, measure it on
+   each measured target (`s3_measure`, feature `measurements`).
 2. The ceiling of `max_source_bytes`.
 3. The C15 bounds and their limit names, and `LOCAL_BUDGET`.
 4. The stack that `ulua_call` needs on the host thread: Luau at
@@ -1467,8 +1475,8 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 
 | Value | P1 | Measurement |
 |---|---|---|
-| `COMPILER_STACK_BYTES` | 2 MiB | Debug peak 716,864 B at the depth ceiling |
-| Ceiling of `max_nesting_depth` | 48 | the deepest form passes with 1 MiB of stack in Debug |
+| `COMPILER_STACK_BYTES` | 8 MiB (2 MiB until Rev 72) | Windows x86_64 MSVC Debug peak 2,154,792 B at the depth ceiling (42 nested method calls); 2 MiB overflowed at 41. macOS P1 forms: Debug peak 716,864 B; later forms not measured on macOS |
+| Ceiling of `max_nesting_depth` | 48 | the deepest form passes with half of `COMPILER_STACK_BYTES` (4 MiB) in Debug on each measured target |
 | Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 93.1 MB at the ceiling (`spillD`, a fresh arrow per array literal over spilled bindings, Release, P2.2 review 2); Rust allocations 39.1 MB |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
 | `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |

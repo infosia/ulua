@@ -26,6 +26,35 @@ extern "C" size_t ulua_internal_probe_heap() noexcept {
     malloc_zone_statistics(nullptr, &stats);
     return stats.size_in_use;
 }
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <malloc.h>
+static thread_local unsigned char* bottom;
+static thread_local unsigned char* painted_end;
+static thread_local unsigned char* stack_top;
+extern "C" void ulua_internal_probe_stack_start() noexcept {
+    unsigned char marker;
+    MEMORY_BASIC_INFORMATION region = {};
+    VirtualQuery(&marker, &region, sizeof(region));
+    bottom = static_cast<unsigned char*>(region.AllocationBase) + 65536;
+    ULONG_PTR low, high;
+    GetCurrentThreadStackLimits(&low, &high);
+    stack_top = reinterpret_cast<unsigned char*>(high);
+    painted_end = reinterpret_cast<unsigned char*>(reinterpret_cast<uintptr_t>(&marker) - 4096);
+    const size_t length = size_t(painted_end - bottom);
+    // __chkstk grows the committed stack through its guard pages normally.
+    // Leave 64 KiB at the reservation bottom and 4 KiB below the live probe frame.
+    bottom = static_cast<unsigned char*>(_alloca(length));
+    painted_end = bottom + length;
+    std::memset(bottom, 0xa5, length);
+}
+extern "C" size_t ulua_internal_probe_stack_end() noexcept {
+    auto p = bottom;
+    while (p < painted_end && *p == 0xa5) ++p;
+    return size_t(stack_top - p);
+}
+extern "C" size_t ulua_internal_probe_heap() noexcept { return 0; }
 #else
 extern "C" void ulua_internal_probe_stack_start() noexcept {}
 extern "C" size_t ulua_internal_probe_stack_end() noexcept { return 0; }

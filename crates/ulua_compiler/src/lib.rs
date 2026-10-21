@@ -104,7 +104,11 @@ pub const INTERRUPT_INSTRUCTIONS: u64 = INTERRUPT_STATEMENTS as u64 * STATEMENT_
 /// AST and parser depth ceiling.
 pub const DEPTH_CEILING: u32 = 48;
 /// Stack size for the complete compiler pipeline.
-pub const COMPILER_STACK_BYTES: usize = 2 * 1024 * 1024;
+/// The deepest form at the depth ceiling must compile in Debug with half unused.
+/// At depth 48, 42 nested class-method calls as a statement use 2,154,792 bytes
+/// on Windows x86_64 MSVC Debug. The size is the largest derivation over the
+/// measured targets. macOS measurements cover P1 forms only.
+pub const COMPILER_STACK_BYTES: usize = 8 * 1024 * 1024;
 
 /// Host limits for the safe compiler stages.
 #[derive(Clone, Copy, Debug)]
@@ -335,6 +339,10 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
     let main_type = types.intern(vec![], Type::Void, 0);
     emitter::emit(
         &Module {
+            json: vec![],
+            field_names: Default::default(),
+            math: Default::default(),
+            capture_counts: vec![0, 0],
             hosts: vec![],
             exceptions: false,
             asynchronous: false,
@@ -360,6 +368,7 @@ pub fn measure_template(substitutions: usize) -> Result<String, Diagnostic> {
                 },
             ],
             functions: vec![Function {
+                declaration: true,
                 inline_callback: None,
                 asynchronous: false,
                 initializers: vec![],

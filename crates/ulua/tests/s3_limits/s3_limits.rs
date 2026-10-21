@@ -12,8 +12,8 @@ mod inputs;
 use std::{ffi::CStr, ptr, time::Instant};
 use ulua::*;
 use ulua_compiler::{
-    ARGUMENT_BOUND, DEPTH_CEILING, LOCAL_BUDGET, PARAMETER_BOUND, SOURCE_CEILING,
-    TEMPLATE_PART_BOUND,
+    ARGUMENT_BOUND, COMPILER_STACK_BYTES, DEPTH_CEILING, LOCAL_BUDGET, PARAMETER_BOUND,
+    SOURCE_CEILING, TEMPLATE_PART_BOUND,
 };
 
 struct Script {
@@ -147,6 +147,48 @@ fn pair(at: String, past: String, diagnostic: &str) {
     Script::new(&at);
     Script::compile(&past, CompileLimits::default(), diagnostic);
 }
+fn nested_method_calls(count: usize) -> String {
+    format!(
+        "class C{{m(x:number):number{{return x}}}}function f(c:C):void{{{}1{}}}",
+        "c.m(".repeat(count),
+        ")".repeat(count)
+    )
+}
+
+// Rev 72: three small compiles pin the deepest measured form and its stack margin.
+// Windows x86_64 MSVC Debug: ABI 6.1 ms, half-stack 5.5 ms (run in parallel).
+// Stack reservations: 8 MiB per ABI worker, 4 MiB for the Rust worker.
+// The tests report elapsed time for cost measurement; time is not an assertion.
+#[test]
+fn compiler_stack_abi() {
+    let start = Instant::now();
+    assert_eq!(DEPTH_CEILING, 48);
+    let mut limits = CompileLimits::default();
+    limits.max_nesting_depth = DEPTH_CEILING;
+    Script::compile(&nested_method_calls(42), limits, "");
+    Script::compile(&nested_method_calls(43), limits, "limit:nesting-depth");
+    eprintln!("S3 compiler stack ABI wall time: {:?}", start.elapsed());
+}
+
+#[test]
+fn compiler_stack_half() {
+    let start = Instant::now();
+    assert_eq!(DEPTH_CEILING, 48);
+    std::thread::Builder::new()
+        .name("s3-compiler-half-stack".into())
+        .stack_size(COMPILER_STACK_BYTES / 2)
+        .spawn(|| {
+            let source = nested_method_calls(42);
+            let mut limits = ulua_compiler::Limits::default();
+            limits.max_nesting_depth = DEPTH_CEILING;
+            ulua_compiler::compile(source.as_bytes(), limits).unwrap();
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+    eprintln!("S3 compiler half-stack wall time: {:?}", start.elapsed());
+}
+
 fn source_and_memory() {
     for kind in ["flat", "functions"] {
         let at = inputs::source_ceiling(kind, SOURCE_CEILING as usize);
