@@ -8,6 +8,8 @@ Rev 3: §2.5 `emit` (owner request); §1, §2, §3, §6, §7.
 Rev 4: §2.5 rules 2 and 3 after the emit review.
 Rev 5: §5.1 plain paths on Windows, after the review of the Windows
 change.
+Rev 6: §2.4 rule 4 names `/TC` and `/TP`, as `crates/ulua_toolchain`
+gives them.
 
 ## 1. Purpose and boundary
 
@@ -99,7 +101,7 @@ Compiles and links the host sources with the static library into
 4. The flags are the flags of the gate test helper: on Unix,
    `-std=c11` or `-std=c++17`, `-Wall -Wextra -Wpedantic -Werror`; on
    MSVC, `/nologo /W4 /WX /MD /D_CRT_SECURE_NO_WARNINGS` with
-   `/std:c11` or `/std:c++17 /permissive-`.
+   `/TC /std:c11` or `/TP /std:c++17 /permissive-`.
 5. The include directories are the directory of each `--host` file and
    the include directory of §5.
 6. The C compiler is `$CC` if set, else `cc`. The C++ compiler is
