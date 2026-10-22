@@ -142,3 +142,27 @@ the command has no grants.
   `crates/ulua/src/abi.rs`. The comparison of §7.8 finds a drift only
   where it changes accepted text; rule 3 compiles with `ulua_compile`
   first, so a rejection cannot drift.
+
+## Sanitizer build of the CLI (pipeline.md Rev 75)
+
+Status: COMPLETE 2026-10-22 on macOS arm64.
+
+Failure: `gate.sh sanitize` failed on macOS since P8. At 1c672d0, the
+`ulua_cli` lib test did not link: undefined `___asan_init` and other
+ASan symbols (43 s). `ulua_cli` had no `build.rs`. With the runtime
+preloaded, `build_hosts_and_link_flags` (`tests/hosts.rs:101`) failed
+the same way: `ulua build` linked the sanitized library into a host
+without `-fsanitize`. No macOS sanitize run took place between P8 and
+this fix.
+
+Fix: `crates/ulua_cli/build.rs` reads `crates/ulua/build/sanitize.rs`,
+as `ulua_corpus` and `ulua_fuzz` do. Under `cfg(ulua_sanitize)` the
+host tests add `-fsanitize=address,undefined` to `CC` and `CXX`
+(`cli.md` §2.4 rule 6). No product change. Audit: `ulua`,
+`ulua_cli`, `ulua_corpus`, and `ulua_fuzz` link the runtime;
+`ulua_bench` stays outside the sanitize gate (benchmarks.md §2).
+
+`gate.sh sanitize` (macOS arm64, with the uncommitted case reservation
+in the tree): PASS, 484 s; `cargo-test` 306 s, `luau-witnesses` 68 s,
+`fuzz-smoke` 68 s, `fault-sweep` 38 s. `gate.sh quick`: PASS. Linux is
+not run.

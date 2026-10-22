@@ -14,11 +14,27 @@ fn tool_path(path: PathBuf) -> OsString {
     #[cfg(not(windows))]
     path.into_os_string()
 }
+fn compiler(value: impl Into<OsString>) -> OsString {
+    let mut value = value.into();
+    if cfg!(ulua_sanitize) {
+        value.push(" -fsanitize=address,undefined");
+    }
+    value
+}
+fn command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ulua"));
+    if cfg!(ulua_sanitize) {
+        for (name, default) in [("CC", "cc"), ("CXX", "c++")] {
+            command.env(
+                name,
+                compiler(std::env::var_os(name).unwrap_or_else(|| default.into())),
+            );
+        }
+    }
+    command
+}
 fn invoke(args: &[OsString]) -> (i32, String, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ulua"))
-        .args(args)
-        .output()
-        .unwrap();
+    let output = command().args(args).output().unwrap();
     (
         output.status.code().unwrap_or(1),
         String::from_utf8(output.stdout).unwrap(),
@@ -200,7 +216,7 @@ fn native_io_errors_and_compiler_arguments() {
     args[4] = scratch.0.join("out").into_os_string();
     if !cfg!(target_env = "msvc") {
         let program = scratch.0.join("missing-compiler");
-        let output = Command::new(env!("CARGO_BIN_EXE_ulua"))
+        let output = command()
             .args(&args)
             .env("CC", format!("{} -DVALUE=1", program.display()))
             .output()
@@ -224,10 +240,10 @@ fn native_io_errors_and_compiler_arguments() {
         ];
         args.extend(host_options());
         args.push("--run".into());
-        let output = Command::new(env!("CARGO_BIN_EXE_ulua"))
+        let output = command()
             .args(args)
-            .env("CC", "cc -DULUA_CLI_C=1")
-            .env("CXX", "c++\t-DULUA_CLI_CPP=1")
+            .env("CC", compiler("cc -DULUA_CLI_C=1"))
+            .env("CXX", compiler("c++\t-DULUA_CLI_CPP=1"))
             .output()
             .unwrap();
         assert_eq!(
@@ -280,7 +296,7 @@ int main(int argc, char **argv) {
         stdout.clone().into_os_string(),
         stderr.clone().into_os_string(),
     ]);
-    let status = Command::new(env!("CARGO_BIN_EXE_ulua"))
+    let status = command()
         .args(args)
         .stdin(Stdio::from(std::fs::File::open(stdin).unwrap()))
         .stdout(Stdio::from(std::fs::File::create(&stdout).unwrap()))
