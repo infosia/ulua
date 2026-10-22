@@ -71,7 +71,7 @@ Rev 69: §5.19 the update weight and the point before a loop for a later stateme
 Rev 70: §5.19 an update store counts its value cost; one counted path moves a point (P6.S14 review).
 Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
 Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYTES` 8 MiB.
-Rev 73: §3 item 4 a form charges its levels at itself; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
+Rev 73: §3 item 4 a form charges its levels at itself; a small logical expression charges one more level; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -155,6 +155,12 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    through its children. A form with empty blocks or no operands
    charges the same levels as a full form. Example: a `try` statement
    charges two levels whatever its blocks hold.
+   A logical expression (`&&`, `||`) of at most `PURE_EXPRESSION_NODES`
+   nodes charges one more level at itself. Its pure lowering guards
+   the expression and its operands again. A larger logical expression
+   does not take the pure lowering and charges no more level. The
+   depth check counts nodes as the pure lowering counts them, and
+   reads the same constant.
    A gate test nests each statement and expression form that the
    emitter guards, with empty or minimal children, from depth 1 past
    the ceiling. Each result is `ok` or `limit:nesting-depth`, never
