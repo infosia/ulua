@@ -6,6 +6,7 @@ extern "C" void ulua_internal_fault_live(const ulua_vm* vm, ulua_fault_snapshot*
     *out = vm->fault.snapshot;
     out->live_bytes = vm->used;
 }
+static thread_local void* fault_seed = nullptr;
 extern "C" bool ulua_internal_fault_seed(ulua_vm* vm) noexcept {
     if (fault_seed) return false;
     fault_seed = allocate(vm, nullptr, 0, 31);

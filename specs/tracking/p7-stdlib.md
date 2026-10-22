@@ -344,7 +344,14 @@ product binary and a C host. Result: 0 CRITICAL, 3 MAJOR, 3 MINOR.
   test cost without a time: 0.315 s recorded; `fromCodePoint` and
   `fromCharCode` build at most 4 bytes outside the budget: accepted).
   Gates on the final code (macOS arm64): `gate.sh quick` PASS (413 s);
-  `gate.sh sanitize` PASS (424 s).
+  `gate.sh sanitize` PASS (424 s). Linux x86_64 (gcc 15.2.0) at
+  8ed9a44: `gate.sh full` and `gate.sh sanitize` failed in
+  `case_memory`. The fixture includes `faults.h` without
+  `fault_api.h`; g++ rejects the unused `static` `fault_seed`
+  (`-Werror=unused-variable`), clang++ 21.1.8 accepts it. Fix:
+  `fault_seed` is defined in `fault_api.h`, beside its only user. After
+  the fix: `cargo test --workspace --no-fail-fast` no failure; `gate.sh
+  full` PASS; `gate.sh sanitize` PASS (595 s).
 - m2 (MINOR): `assert!` and `unwrap()` on the `number.rs` dispatch
   path. Fix: total forms that return -1.
 - m3 (MINOR): `a84` did not stringify an extra field. Fix: `a86`.

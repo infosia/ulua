@@ -15,7 +15,6 @@ struct ulua_fault_state {
 };
 static thread_local uint64_t fault_next = 0;
 static thread_local ulua_fault_snapshot fault_last = {};
-static thread_local void* fault_seed = nullptr;
 static void fault_begin(ulua_fault_state* fault) {
     fault->snapshot.allocations = 0;
     fault->snapshot.failures = 0;
