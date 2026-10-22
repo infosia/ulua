@@ -296,6 +296,10 @@ The test file holds the nine-digit values. The bounds of
 fib-recursive and mandelbrot rise to the Linux derivation. The other
 bounds do not change.
 
+Correction: D38 (benchmarks.md Rev 7) removes these bounds. The test
+asserts no bound; the runs above stay as the Linux record
+(`tracking/p6-performance.md`).
+
 Not measured on Linux: the heap modes of `s3_measure`. They need the
 macOS heap sampler and exit 2 on another target. No contract value
 derives from them per target.
@@ -324,7 +328,10 @@ the exclusion. All three fixed.
 
 ## Header names (pipeline.md Rev 76)
 
-Status: COMPLETE on Windows x86_64.
+Status: COMPLETE on Windows x86_64 and Linux x86_64. Linux at f824bb6
+(gcc 15.2.0): `gate.sh full` PASS; `gate.sh sanitize` PASS
+(`cargo-test` 324 s, `luau-witnesses` 81 s, `fuzz-smoke` 127 s,
+`fault-sweep` 57 s).
 
 Failure: `gate.sh full` on Windows at a65f21c failed `case_memory`
 (`reservation_tracks_only_host_temporary_and_releases_before_lua`).
