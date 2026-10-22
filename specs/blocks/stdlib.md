@@ -1,6 +1,6 @@
 # Standard library — contract
 
-Status: Rev 14, 2026-10-22. Rev 14: §9 rule 4 a case call reserves VM memory for its Rust temporary. Rev 13: §8 rule 1a helpers per key type. Rev 12: §8 rule 1a number keys outside the `int` range (P7.4 defect). Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
+Status: Rev 14, 2026-10-22. Rev 14: §9 rule 4 a case call reserves budget for its Rust temporary; a reservation allocates nothing. Rev 13: §8 rule 1a helpers per key type. Rev 12: §8 rule 1a number keys outside the `int` range (P7.4 defect). Rev 11: §8 rule 6 `await` in a traversal, §10 rules 5 and 6 two divergences (P7 Phase Review). Rev 10: §10 P7.6 `JSON`. Rev 9: §9 P7.5 string case and code points. Rev 8: §8 rule 6 an overwrite during a traversal does not trap (P7.4 review). Rev 7: §8 P7.4 `Map`, `Set`. Rev 6: §7 rule 5 the format charge follows the work (P7.3). Rev 5: §7 rule 5 a fixed format charge (P7.3). Rev 4: §7 P7.3 `Number`. Rev 3: §6 P7.2 `find`, `findLast`, the absent type. Rev 2: §5 rule 5 `NATIVE_CALL_STEPS`; a70 row 27 reads `atan2(-0, -1)` (P7.1). Rev 1: the P7.0 decisions (§2) and the
 P7.1 contract (§5). Rev 0 (P7 plan) states the design rules,
 the absence rule D32, the measurement round, and the slice order. Each
 slice adds its detailed section here before its implementation opens.
@@ -474,9 +474,12 @@ an Ulua rule forces. Measured with `node` v24.18.0 (P7.4 contract).
    longer than the argument (`ß` gives `SS`) and is charged to
    `max_memory_bytes`.
    The Rust conversion builds its result in memory outside the VM
-   allocator. Before the conversion, the shim reserves VM memory that
+   allocator. Before the conversion, the shim reserves budget that
    covers the peak of that memory, and holds the reservation until the
-   conversion returns. The reservation is a function of the argument
+   conversion returns. A reservation adds to the used count of the VM
+   allocator and allocates nothing; the conversion returns it before
+   the result string is allocated. So VM memory and the Rust temporary
+   stay within `max_memory_bytes` together. The reservation is a function of the argument
    length and the operation. If the budget cannot hold it, the call
    stops with `limit:memory` before the conversion. A test counts the
    peak Rust allocation of the conversion for the worst inputs of each
