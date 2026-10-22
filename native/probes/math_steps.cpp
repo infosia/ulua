@@ -1,5 +1,5 @@
 // Isolate native charges from CALL interrupts in the product Math and Number closures.
-#include "../shim/math.h"
+#include "../shim/ulua_math.h"
 #include "../shim/runtime_errors.h"
 #include "lualib.h"
 #include <cstring>

@@ -322,6 +322,30 @@ the exclusion. All three fixed.
 `gate.sh full` on Linux with the slice: PASS (`cargo-test` 115 s,
 `luau-witnesses` 56 s).
 
+## Header names (pipeline.md Rev 76)
+
+Status: COMPLETE on Windows x86_64.
+
+Failure: `gate.sh full` on Windows at a65f21c failed `case_memory`
+(`reservation_tracks_only_host_temporary_and_releases_before_lua`).
+The test compiles `case_budget.cpp` with `/I native/shim`. cl.exe
+stdout: `cstdlib(24): error C2039: 'fabs'` (also `fabsf`, `fabsl`):
+`native/shim/math.h` shadowed the standard `<math.h>`. The failure
+message was empty: the test printed only stderr, and cl.exe writes its
+diagnostics to stdout.
+
+Class: 7e08e23 removed `native/shim` from the include path of
+`ulua_bench` for the same cause, and kept the header name, so the
+class came back in a new test.
+
+Change: `native/shim/math.h` is `native/shim/ulua_math.h`. pipeline.md
+§2 item 7: no header of the repository has the name of a standard C
+or C++ header. `tools/header-names.mjs` checks it in `gate.sh quick`
+and `full` (exit 1 at a65f21c, 0 after the rename). The test prints
+the compiler stdout and stderr, and passes `/utf-8` (C4819 on the
+UTF-8 text of the Luau headers under code page 932 after the rename).
+`case_memory`: 2 passed, 1 failed before; 3 passed after.
+
 ## Measurements (P5.1)
 
 - `sh tools/gate.sh sanitize` (macOS arm64, Apple clang, working

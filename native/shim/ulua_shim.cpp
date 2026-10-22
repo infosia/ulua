@@ -151,7 +151,7 @@ static void raise_call_error(lua_State* state, ulua_vm* vm) {
     }
     lua_error(state);
 }
-#include "math.h"
+#include "ulua_math.h"
 static int collect(lua_State* state);
 static int setup(lua_State* state) {
     ulua_vm* vm = static_cast<ulua_vm*>(lua_tolightuserdata(state, 1));

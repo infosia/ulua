@@ -1,6 +1,6 @@
 #!/bin/sh
 # Standing gate. Usage: sh tools/gate.sh <quick|full|sanitize|timing>
-#   quick: corpus witnesses (header, tsc, node).
+#   quick: corpus witnesses (header, tsc, node) and header names.
 #   full:  quick, then the remainder shadow checks and the hygiene scan.
 #   sanitize: the tests, the Luau witnesses, the examples, and the docs
 #   witness on the ASan and UBSan build (pipeline.md §2.6), in
@@ -72,6 +72,7 @@ if [ "$shape" = sanitize ]; then
     exit 0
 fi
 step corpus-witnesses "$NODE" tools/witness/corpus.mjs
+step header-names "$NODE" tools/header-names.mjs
 if [ -f Cargo.toml ]; then
     step cargo-fmt cargo fmt --all --check
     step cargo-clippy cargo clippy --quiet --workspace --all-targets --features ulua/timing,ulua/fault-injection,ulua/measurements -- -D warnings

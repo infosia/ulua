@@ -1,6 +1,6 @@
 // Cost: one native build and fourteen protected calls. No assertion uses elapsed time.
 // The allocator counts accepted requests independently of the VM used count.
-#include "math.h"
+#include "ulua_math.h"
 #include <cstdio>
 #include <climits>
 #include <initializer_list>

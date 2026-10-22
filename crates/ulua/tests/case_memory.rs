@@ -115,6 +115,8 @@ fn reservation_tracks_only_host_temporary_and_releases_before_lua() {
         );
     }
     if cfg!(target_env = "msvc") {
+        // Luau headers contain UTF-8 text, including on hosts using code page 932.
+        extra.push("/utf-8".into());
         // Complete production headers contain static helpers that this fixture does not call.
         extra.push("/wd4505".into());
     } else {
@@ -147,7 +149,8 @@ fn reservation_tracks_only_host_temporary_and_releases_before_lua() {
     let output = command.output().unwrap();
     assert!(
         output.status.success(),
-        "{command:?}\n{}",
+        "{command:?}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     let output = std::process::Command::new(&executable).output().unwrap();

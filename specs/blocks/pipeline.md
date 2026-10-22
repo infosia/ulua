@@ -74,6 +74,7 @@ Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYT
 Rev 73: §3 item 4 a form charges its levels at itself; the emitter guards each node once; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
 Rev 74: §6 item 4 and §7 item 1 Linux x86_64 is a measured target (D37); a tool that cannot measure a stack peak fails. §7 Linux stack peaks; the largest run stack.
 Rev 75: §2 item 6 every crate that links the library links the sanitizer runtime; a `ulua build` host in a test gets the flags through `CC`.
+Rev 76: §2 item 7 no project header has the name of a standard header.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -124,6 +125,13 @@ the C ABI. `collisions.md` states the lowering of each form.
    AddressSanitizer and no UndefinedBehaviorSanitizer, and its flags
    and runtime differ. On Windows, `gate.sh sanitize` exits 2 with a
    message that names this rule.
+7. No header of the repository has the file name of a standard C or
+   C++ header, compared without case. An include path names a project
+   directory, and a standard header that includes `<math.h>` reads the
+   first `math.h` on the path: with the former `native/shim/math.h`
+   (now `ulua_math.h`), MSVC's `<cstdlib>` and `<cstring>` read the
+   shim header and fail (`tracking/p5-hardening.md`). `tools/header-names.mjs` checks the
+   rule in `gate.sh quick` and `gate.sh full`.
 
 ## 3. Compiler
 

@@ -3,7 +3,7 @@
 #include "lua.h"
 #include "lualib.h"
 #include "lstate.h"
-#include "../shim/math.h"
+#include "../shim/ulua_math.h"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>

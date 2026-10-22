@@ -10,7 +10,7 @@ fn run() -> Result<(), String> {
     println!("cargo:rerun-if-changed=../../include/ulua.h");
     let source = PathBuf::from(env::var_os("LUAU_SOURCE_DIR").ok_or("Set LUAU_SOURCE_DIR")?);
     // The ulua dependency verifies the revision and builds the compiler and VM archives.
-    // Keep shim headers out of include paths so math.h cannot shadow the standard header.
+    // Shim headers are included by relative path from the host sources.
     cc::Build::new()
         .cpp(true)
         .std("c++17")
