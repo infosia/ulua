@@ -24,7 +24,9 @@ Status: COMPLETE 2026-10-16 (P5.1 to P5.6, Phase Review). Decisions: D28, D29 (`
 
 ## Compiler memory on x86_64 (pipeline.md Rev 56)
 
-Status: COMPLETE on Windows x86_64; macOS not remeasured.
+Status: COMPLETE on Windows x86_64 and macOS aarch64 (remeasured at
+55ce513, section "macOS remeasurement" below). Linux x86_64 is not
+measured.
 
 Failure: `gate.sh timing` on Windows x86_64 at 7e08e23 failed
 `compile_memory_bound`: derived base 85,504 > `COMPILE_MEMORY_BASE`
@@ -62,8 +64,8 @@ targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
 
 ## Compiler stack on Windows (pipeline.md Rev 72)
 
-Status: COMPLETE on Windows x86_64; macOS not measured with the later
-forms.
+Status: COMPLETE on Windows x86_64 and macOS aarch64 (section "macOS
+remeasurement" below).
 
 Failure (CRITICAL, invariant 2): on Windows x86_64 MSVC Debug at
 9b18ef0, `ulua check` of a 265-byte source (41 nested method calls,
@@ -111,6 +113,49 @@ both stop with `STATUS_STACK_OVERFLOW` on Windows Debug; at 8 MiB both
 pass. `ulua check` of the 41-call source exits 0. The `measurements`
 feature builds again, and the clippy step of `gate.sh full` builds it
 (exit 101 before the fix). `gate.sh full` on Windows: PASS.
+
+## macOS remeasurement (55ce513)
+
+macOS arm64, Apple clang, toolchain 1.95.0. Measurement only; no
+production change.
+
+Stack, `s3_measure stack --half` (the 13 P1 forms) and `s3_measure
+source` on 30 later forms at their largest accepted depth. The later
+sources come from a scratch generator. They are not committed.
+
+| Form | Count | Debug | Release |
+|---|---:|---:|---:|
+| Class-method calls as a statement (deepest) | 42 | 2,294,704 | 121,456 |
+| Class-method calls in a return | 42 | 2,276,064 | 121,616 |
+| `Math.abs` calls in a return | 42 | 2,212,896 | 120,944 |
+| Nested calls (P1 `call`) | 42 | 1,852,624 | 120,448 |
+| For-of (largest Release) | 21 | 1,224,448 | 228,624 |
+
+- Debug peak 2,294,704 B against the Windows peak 2,154,792 B.
+  `COMPILER_STACK_BYTES / 2` is 4,194,304 B. Every form gives
+  `half_stack=true`.
+- Release peak 228,624 B (Windows 231,912 B).
+- Run time: `stack --half` Debug 34 s and Release 24 s with the
+  build; the 30-form sweep 7 s.
+
+Compiler memory, `compile_memory_bound` (feature `timing`, alone):
+passed in 143 s. Derived base 83,617 B (small peak 66,893 B, seven
+classes); derived factor 1,115 (peak 58,409,145 B at 65,536 B,
+nested-empty-blocks). Both are at most their constants (85,504 and
+1,115).
+
+Defect found by the sweep (open): a script input gives `internal`.
+`ulua check` of 23 nested `try{}catch(e){}` with an empty innermost
+block (364 B) reports `error[internal]: Emitter depth limit exceeded
+after checked input`. `ulua_compile` gives status 6, code `internal`.
+22 levels pass; 24 give `limit:nesting-depth`. `try{}finally{}` and a
+nested catch body fail the same way at 23. Each try form with a
+statement in the innermost block gives `limit:nesting-depth`.
+
+Cause (read): `depth.rs` charges a try statement as two levels only
+through the statements of its blocks. An empty innermost block has no
+statement, so the AST check never charges its second level. The
+emitter guard charges the try itself.
 
 ## Measurements (P5.1)
 
