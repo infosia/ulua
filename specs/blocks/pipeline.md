@@ -71,6 +71,7 @@ Rev 69: §5.19 the update weight and the point before a loop for a later stateme
 Rev 70: §5.19 an update store counts its value cost; one counted path moves a point (P6.S14 review).
 Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
 Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYTES` 8 MiB.
+Rev 73: §3 item 4 a form charges its levels at itself; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -150,6 +151,14 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    of the emitter. If it does, the result is `internal`. Each limit
    diagnostic carries the source offset of the form that reaches the
    limit.
+   The checker charges the levels of a form at the form itself, not
+   through its children. A form with empty blocks or no operands
+   charges the same levels as a full form. Example: a `try` statement
+   charges two levels whatever its blocks hold.
+   A gate test nests each statement and expression form that the
+   emitter guards, with empty or minimal children, from depth 1 past
+   the ceiling. Each result is `ok` or `limit:nesting-depth`, never
+   `internal`.
 5. **Checker.** The checker implements `surface.md` and
    `collisions.md`. It derives each type itself (C1). It never reads a
    type from `tsc`.
@@ -1475,7 +1484,7 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 
 | Value | P1 | Measurement |
 |---|---|---|
-| `COMPILER_STACK_BYTES` | 8 MiB (2 MiB until Rev 72) | Windows x86_64 MSVC Debug peak 2,154,792 B at the depth ceiling (42 nested method calls); 2 MiB overflowed at 41. macOS P1 forms: Debug peak 716,864 B; later forms not measured on macOS |
+| `COMPILER_STACK_BYTES` | 8 MiB (2 MiB until Rev 72) | Windows x86_64 MSVC Debug peak 2,154,792 B at the depth ceiling (42 nested method calls); 2 MiB overflowed at 41. macOS aarch64 Debug peak 2,294,704 B, the same form (55ce513) |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with half of `COMPILER_STACK_BYTES` (4 MiB) in Debug on each measured target |
 | Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 93.1 MB at the ceiling (`spillD`, a fresh arrow per array literal over spilled bindings, Release, P2.2 review 2); Rust allocations 39.1 MB |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
