@@ -328,10 +328,13 @@ the exclusion. All three fixed.
 
 ## Header names (pipeline.md Rev 76)
 
-Status: COMPLETE on Windows x86_64 and Linux x86_64. Linux at f824bb6
-(gcc 15.2.0): `gate.sh full` PASS; `gate.sh sanitize` PASS
-(`cargo-test` 324 s, `luau-witnesses` 81 s, `fuzz-smoke` 127 s,
-`fault-sweep` 57 s).
+Status: COMPLETE on Windows x86_64, Linux x86_64, and macOS aarch64.
+Linux at f824bb6 (gcc 15.2.0): `gate.sh full` PASS; `gate.sh sanitize`
+PASS (`cargo-test` 324 s, `luau-witnesses` 81 s, `fuzz-smoke` 127 s,
+`fault-sweep` 57 s). macOS at c7603c6 (Apple clang): `gate.sh full`
+PASS (`cargo-test` 364 s); `gate.sh sanitize` PASS (`cargo-test`
+259 s, `fuzz-smoke` 66 s, `fault-sweep` 39 s); `gate.sh timing` PASS
+(485 s, with the p55_ratio bound 20 of Rev 77).
 
 Failure: `gate.sh full` on Windows at a65f21c failed `case_memory`
 (`reservation_tracks_only_host_temporary_and_releases_before_lua`).
