@@ -3,7 +3,7 @@
 //! Run `cargo run -p ulua --features measurements --example s3_measure -- MODE`.
 //! MODE is stack, heap, heap-products, heap-dense, heap-spill, native, run, or emit. Add --release before -p for Release.
 //! `stack --half` also verifies the compiler on half of its configured stack.
-//! Stack watermarks work on macOS and Windows. The measurement worker uses 32 MiB
+//! Stack watermarks work on macOS, Windows, and Linux. The measurement worker uses 32 MiB
 //! so a compiler margin failure can be reported without terminating the sweep.
 //! `source PATH [BYTES]` measures stages; `production PATH [BYTES]` measures the
 //! whole pipeline. `check PATH [BYTES]` compiles without painting the stack for
@@ -54,6 +54,17 @@ unsafe extern "C" {
     ) -> i32;
     fn ulua_internal_shim_bytecode_free(out: *mut c_char);
 }
+fn stack_peak() -> usize {
+    // SAFETY: Each caller starts the probe on this thread first, so the end reads only the range that this thread painted.
+    let peak = unsafe { ulua_internal_probe_stack_end() };
+    if peak == 0 {
+        eprintln!(
+            "Stack measurement failed: peak is zero; the stack watermark is unavailable or failed on this target."
+        );
+        std::process::exit(2);
+    }
+    peak
+}
 fn native(source: &str) -> Result<(), String> {
     let mut out = ptr::null_mut();
     let mut size = 0;
@@ -103,7 +114,7 @@ fn source_stages(source: &str, form: &str, n: usize) {
                 if before {
                     ulua_internal_probe_stack_start();
                 } else {
-                    values.push((stage, ulua_internal_probe_stack_end()));
+                    values.push((stage, stack_peak()));
                 }
             }
         });
@@ -114,8 +125,7 @@ fn source_stages(source: &str, form: &str, n: usize) {
                 ulua_internal_probe_stack_start();
             }
             let result = native(&c.luau);
-            // SAFETY: The matching start call initializes this thread's probe state.
-            values.push(("luau", unsafe { ulua_internal_probe_stack_end() }));
+            values.push(("luau", stack_peak()));
             result.map_or_else(|e| e, |_| "ok".to_owned())
         }
         Err(e) => e.code.to_owned(),
@@ -204,15 +214,12 @@ fn native_stack() {
         unsafe {
             ulua_internal_probe_stack_start();
             let status = ulua_internal_probe_ccalls(n);
-            println!(
-                "ccalls n={n} stack={} status={status}",
-                ulua_internal_probe_stack_end()
-            );
+            println!("ccalls n={n} stack={} status={status}", stack_peak());
             ulua_internal_probe_stack_start();
             let status = ulua_internal_probe_ccalls_protected(n);
             println!(
                 "protected ccalls n={n} stack={} status={status}",
-                ulua_internal_probe_stack_end()
+                stack_peak()
             );
         }
     }
@@ -259,7 +266,7 @@ fn run_recursion_stack() {
             let status = ulua_call(instance, 0, &arg, 1, &mut result, &mut d);
             println!(
                 "run depth={depth} stack={} status={status} code={}",
-                ulua_internal_probe_stack_end(),
+                stack_peak(),
                 CStr::from_ptr(d.code.as_ptr()).to_string_lossy()
             );
         }
@@ -287,8 +294,7 @@ fn main() {
                         .as_ref()
                         .map_err(|e| e.code.to_owned())
                         .and_then(|c| native(&c.luau));
-                    // SAFETY: The matching start initialized this thread's watermark.
-                    let peak = unsafe { ulua_internal_probe_stack_end() };
+                    let peak = stack_peak();
                     println!("production peak={peak} status={status:?}");
                 }
                 "check" => println!(

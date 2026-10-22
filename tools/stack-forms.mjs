@@ -4,7 +4,7 @@
 // For each form, it finds the largest accepted depth (1 to 64) with the Release `check` mode.
 // Then it runs the `source` mode at that depth in both builds.
 // `s3_measure stack --half` covers the P1 forms; this script covers the later forms.
-// It exits 1 when a form gives `internal` or a peak is above half of COMPILER_STACK_BYTES.
+// It exits 1 when a form gives `internal`, a peak is zero, or a peak is above half of COMPILER_STACK_BYTES.
 // Measured cost on macOS arm64: 22 s with both builds up to date (32 forms).
 // Not a gate step: pipeline.md §7 item 1 asks for this run on each measured target.
 import { execFileSync } from 'node:child_process';
@@ -94,7 +94,8 @@ try {
       if (depth === 0) break;
       const out = run(binary(profile), ['source', join(dir, `${name}-${depth}.ts`)]);
       const margin = out.match(/margin peak=(\d+) half_stack=(\w+)/);
-      if (!margin || margin[2] !== 'true' || !/status=ok/.test(out)) failed = true;
+      // A peak of zero means that the target has no stack watermark (pipeline.md §7 item 1).
+      if (!margin || margin[1] === '0' || margin[2] !== 'true' || !/status=ok/.test(out)) failed = true;
       peaks[profile] = margin ? Number(margin[1]) : NaN;
     }
     rows.push({ name, depth, next, ...peaks });

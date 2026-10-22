@@ -26,6 +26,43 @@ extern "C" size_t ulua_internal_probe_heap() noexcept {
     malloc_zone_statistics(nullptr, &stats);
     return stats.size_in_use;
 }
+#elif defined(__linux__)
+#include <pthread.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+static thread_local unsigned char* bottom;
+static thread_local unsigned char* painted_end;
+static thread_local unsigned char* stack_top;
+extern "C" void ulua_internal_probe_stack_start() noexcept {
+    bottom = nullptr;
+    painted_end = nullptr;
+    stack_top = nullptr;
+    // glibc derives main-thread bounds from rlimit; they do not exclude the kernel guard gap, so the probe stays unstarted and the end returns 0.
+    if (syscall(SYS_gettid) == getpid()) return;
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) != 0) return;
+    void* base = nullptr;
+    size_t size = 0;
+    const int status = pthread_attr_getstack(&attr, &base, &size);
+    pthread_attr_destroy(&attr);
+    if (status != 0 || size <= 65536) return;
+    unsigned char marker;
+    const uintptr_t low = reinterpret_cast<uintptr_t>(base) + 65536;
+    const uintptr_t high = reinterpret_cast<uintptr_t>(base) + size;
+    const uintptr_t end = reinterpret_cast<uintptr_t>(&marker) - 4096;
+    if (end <= low || end >= high) return;
+    bottom = reinterpret_cast<unsigned char*>(low);
+    painted_end = reinterpret_cast<unsigned char*>(end);
+    stack_top = reinterpret_cast<unsigned char*>(high);
+    std::memset(bottom, 0xa5, size_t(end - low));
+}
+extern "C" size_t ulua_internal_probe_stack_end() noexcept {
+    if (!bottom) return 0;
+    auto p = bottom;
+    while (p < painted_end && *p == 0xa5) ++p;
+    return size_t(stack_top - p);
+}
+extern "C" size_t ulua_internal_probe_heap() noexcept { return 0; }
 #elif defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

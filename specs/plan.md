@@ -169,6 +169,7 @@ TypeScript source -> oxc_parser (forked, nesting guard) -> checker
 | D34 | An object literal whose type reaches `JSON.stringify` lists its fields in the declaration order of the type, so the output order equals `node` | 2026-10-17 | `stdlib.md` §2; owner decision after P7.0 M4 |
 | D35 | A developer command `ulua` checks and runs a script through the product C ABI, prints the link flags, and builds a small host. `ulua emit` prints the generated Luau for a developer to read; no C ABI function returns it, and nothing accepts Luau (invariant 6). Revised the same day: the first form had no `emit` | 2026-10-20 | `cli.md` §2.5; owner request |
 | D36 | The sanitizer build and `gate.sh sanitize` are for macOS and Linux only. Windows is outside them: MSVC has AddressSanitizer and no UndefinedBehaviorSanitizer. Narrows D28 for this gate | 2026-10-21 | `pipeline.md` §2 item 6 (Rev 71); owner decision |
+| D37 | Linux x86_64 is a measured target, with macOS aarch64 and Windows x86_64. Each value that is the largest derivation over the measured targets covers Linux. A measurement tool that cannot measure a value on a target fails there | 2026-10-22 | `pipeline.md` §6 item 4, §7 item 1 (Rev 74); `benchmarks.md` §6 (Rev 6); `tracking/p5-hardening.md`; owner decision |
 
 ## 9. Corrections and revisions
 

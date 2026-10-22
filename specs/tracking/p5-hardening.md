@@ -25,8 +25,8 @@ Status: COMPLETE 2026-10-16 (P5.1 to P5.6, Phase Review). Decisions: D28, D29 (`
 ## Compiler memory on x86_64 (pipeline.md Rev 56)
 
 Status: COMPLETE on Windows x86_64 and macOS aarch64 (remeasured at
-55ce513, section "macOS remeasurement" below). Linux x86_64 is not
-measured.
+55ce513, section "macOS remeasurement" below), and on Linux x86_64
+(section "Linux measured target" below).
 
 Failure: `gate.sh timing` on Windows x86_64 at 7e08e23 failed
 `compile_memory_bound`: derived base 85,504 > `COMPILE_MEMORY_BASE`
@@ -60,12 +60,13 @@ after the change: passed (107 s).
 
 Consequence: a constant derived on one architecture does not bound
 another. Each constant is the largest derivation over the measured
-targets (macOS aarch64, Windows x86_64). Linux x86_64 is not measured.
+targets (macOS aarch64, Windows x86_64, and Linux x86_64 from D37).
 
 ## Compiler stack on Windows (pipeline.md Rev 72)
 
 Status: COMPLETE on Windows x86_64 and macOS aarch64 (section "macOS
-remeasurement" below).
+remeasurement" below), and on Linux x86_64 (section "Linux measured
+target" below).
 
 Failure (CRITICAL, invariant 2): on Windows x86_64 MSVC Debug at
 9b18ef0, `ulua check` of a 265-byte source (41 nested method calls,
@@ -227,6 +228,99 @@ Review round 1 (fresh reviewer): 0 CRITICAL, 0 MAJOR, 4 MINOR.
 
 Reviewer sweep: about 3,600 shapes in 18 statement and 8 expression
 contexts at 12 depth limits, 0 `internal` (74 at HEAD).
+
+## Linux measured target (D37)
+
+Status: measured at ebf2fed. Linux x86_64, gcc 15.2.0, kernel 7.0.
+Owner decision D37: Linux x86_64 is a measured target (pipeline.md
+Rev 74, benchmarks.md Rev 6).
+
+Failure before the fix: `native/probes/s3.cpp` had a stack watermark
+for macOS and Windows only. On Linux the probe returned 0.
+`node tools/stack-forms.mjs` printed peak 0 for all 32 forms in Debug
+and Release, and `stack-forms: PASS`. The accepted depths were
+correct; no form gave `internal`.
+
+Change: a Linux watermark from `pthread_getattr_np` on a spawned
+thread. On the main thread the probe stays unstarted: glibc derives
+the main-thread bounds from the rlimit (44,888,887,422,976 B under
+`ulimit -s unlimited`, review round 1). `s3_measure` exits 2 on a zero
+stack peak; `stack-forms.mjs` fails on a zero peak. Every
+`s3_measure` stack measurement runs on a spawned thread.
+Red: `s3_measure stack --half` with the zero check and without the
+Linux watermark exits 2.
+
+Compiler stack, `tools/stack-forms.mjs` (32 forms, 7 s):
+
+| Form | Depth | Debug | Release |
+|---|---:|---:|---:|
+| Class-method calls as a statement (deepest) | 42 | 2,179,832 | 119,688 |
+| Class-method calls in a return | 42 | 2,161,976 | 119,848 |
+| `Math.abs` calls in a return | 42 | 2,102,840 | 118,328 |
+| Nested calls as a statement | 43 | 1,812,232 | 120,568 |
+| For-of (largest Release) | 21 | 1,181,864 | 229,136 |
+
+- Debug peak 2,179,832 B: between Windows (2,154,792 B) and macOS
+  (2,294,704 B). Half of `COMPILER_STACK_BYTES` is 4,194,304 B.
+  `COMPILER_STACK_BYTES` stays 8 MiB.
+- `s3_measure stack --half` (13 P1 forms): every form passes with
+  `half_stack=true`. Largest Debug peak: `call` at 42, 1,760,696 B.
+
+Run stack, `s3_measure native` at `LUAI_MAXCCALLS`: protected C calls
+144,200 B Debug, 129,544 B Release; direct C calls 64,600 B Debug.
+Windows x86_64 Debug has the largest value, 158,000 B. All values are
+below `ULUA_MIN_RUN_STACK` (512 KiB).
+
+Compiler memory, `compile_memory_bound` (Debug, 115 s): factor peak
+58,409,249 B for `nested-empty-blocks` at 65,536 B, derived factor
+1,115; small peak 67,165 B for seven empty classes, derived base
+83,957. Native largest peak 51,616,892 B. `COMPILE_MEMORY_FACTOR`
+1,115 and `COMPILE_MEMORY_BASE` 85,504 do not change.
+
+Performance, `p63_performance`, three runs (each about 4 s):
+
+| Workload | Run 1 | Run 2 | Run 3 | Linux bound | Old bound |
+|---|---:|---:|---:|---:|---:|
+| fib-recursive | 1.827 | 1.663 | 1.742 | 2.29 | 2.18 |
+| fib-loop | 1.437 | 1.282 | 1.438 | 1.80 | 2.85 |
+| mandelbrot | 1.745 | 1.758 | 1.760 | 2.20 | 2.06 |
+| primes | 1.113 | 1.110 | 1.110 | 1.40 | 3.62 |
+| sort | 3.060 | 3.074 | 3.051 | 3.85 | 4.54 |
+| tree | 1.987 | 1.942 | 1.945 | 2.49 | 2.88 |
+| queen | 3.179 | 3.040 | 3.180 | 3.98 | 5.20 |
+| particles | 1.855 | 1.852 | 1.858 | 2.33 | 4.42 |
+| callbacks | 1.392 | 1.395 | 1.393 | 1.75 | 3.98 |
+| collect | 1.802 | 1.814 | 1.801 | 2.27 | 2.61 |
+
+The test file holds the nine-digit values. The bounds of
+fib-recursive and mandelbrot rise to the Linux derivation. The other
+bounds do not change.
+
+Not measured on Linux: the heap modes of `s3_measure`. They need the
+macOS heap sampler and exit 2 on another target. No contract value
+derives from them per target.
+
+Review round 1 (fresh reviewer): 0 CRITICAL, 1 MAJOR, 4 MINOR. Held:
+the Linux watermark over-reports by 4,688 B on a spawned thread (a
+scratch program with a known `alloca`); every stack peak of
+`s3_measure` passes the zero check; the ten bounds match the rule.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| This note said Linux is not measured and held no Linux numbers | MAJOR | This section; status lines updated |
+| pipeline.md §7 table had no Linux peak; the `ULUA_MIN_RUN_STACK` row was not the largest value | MINOR | Rows updated; `include/ulua.h` names 158,000 B |
+| D37 is broader than the code: heap modes print 0 on Linux | MINOR | Rejected: `s3_measure` exits 2 for a heap mode on a target other than macOS |
+| The main-thread bounds from glibc are the rlimit: terabytes under `ulimit -s unlimited` | MINOR | The probe stays unstarted on the main thread; the end returns 0 |
+| benchmarks.md line wrap; the SAFETY comment of `stack_peak()` | MINOR | Fixed |
+
+Review round 2 (fresh reviewer): 0 CRITICAL, 0 MAJOR, 3 MINOR. A
+status line of the Rev 72 section omitted Linux; the SAFETY comment
+of `stack_peak()` claimed that an unstarted probe gives 0, which is
+false on macOS; the main-thread comment and this note did not state
+the exclusion. All three fixed.
+
+`gate.sh full` on Linux with the slice: PASS (`cargo-test` 115 s,
+`luau-witnesses` 56 s).
 
 ## Measurements (P5.1)
 

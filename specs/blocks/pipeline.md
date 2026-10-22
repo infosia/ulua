@@ -72,6 +72,7 @@ Rev 70: §5.19 an update store counts its value cost; one counted path moves a p
 Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
 Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYTES` 8 MiB.
 Rev 73: §3 item 4 a form charges its levels at itself; the emitter guards each node once; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
+Rev 74: §6 item 4 and §7 item 1 Linux x86_64 is a measured target (D37); a tool that cannot measure a stack peak fails. §7 Linux stack peaks; the largest run stack.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -1433,10 +1434,9 @@ necessary and that this table does not name is a contract question.
      hashbrown has one control byte per bucket plus `Group::WIDTH`:
      16 on x86_64 (SSE2) and 8 on aarch64 (NEON). Each constant is
      the largest derivation over the measured targets. The measured
-     targets are macOS aarch64 and Windows x86_64. Linux x86_64 is
-     not measured: it has the x86_64 group width, and other
-     differences are unknown. When a change moves a peak, measure it
-     on each measured target.
+     targets are macOS aarch64, Windows x86_64, and Linux x86_64
+     (D37). When a change moves a peak, measure it on each measured
+     target.
    - Native `luau_compile` memory: the output of each growth shape at
      64 KiB is measured. The record names the largest peak and the
      largest peak per output byte; it follows `OUTPUT_FACTOR`
@@ -1477,7 +1477,9 @@ the value.
    `ulua_compile`, and on a thread with half of `COMPILER_STACK_BYTES`.
    When a change adds a nesting form or moves a peak, measure it on
    each measured target (`s3_measure stack --half` for the P1 forms,
-   `node tools/stack-forms.mjs` for the later forms).
+   `node tools/stack-forms.mjs` for the later forms). The measured
+   targets are those of §6 item 4. A stack peak of zero is not a
+   measurement: the tool fails on a target where it cannot measure.
 2. The ceiling of `max_source_bytes`.
 3. The C15 bounds and their limit names, and `LOCAL_BUDGET`.
 4. The stack that `ulua_call` needs on the host thread: Luau at
@@ -1488,11 +1490,11 @@ P1 values (constants in `ulua_compiler` and `include/ulua.h`):
 
 | Value | P1 | Measurement |
 |---|---|---|
-| `COMPILER_STACK_BYTES` | 8 MiB (2 MiB until Rev 72) | Windows x86_64 MSVC Debug peak 2,154,792 B at the depth ceiling (42 nested method calls); 2 MiB overflowed at 41. macOS aarch64 Debug peak 2,294,704 B, the same form (55ce513) |
+| `COMPILER_STACK_BYTES` | 8 MiB (2 MiB until Rev 72) | Windows x86_64 MSVC Debug peak 2,154,792 B at the depth ceiling (42 nested method calls); 2 MiB overflowed at 41. macOS aarch64 Debug peak 2,294,704 B, the same form (55ce513). Linux x86_64 Debug peak 2,179,832 B, the same form (ebf2fed) |
 | Ceiling of `max_nesting_depth` | 48 | the deepest form passes with half of `COMPILER_STACK_BYTES` (4 MiB) in Debug on each measured target |
 | Ceiling of `max_source_bytes` | 65,536 | compiler heap peak 93.1 MB at the ceiling (`spillD`, a fresh arrow per array literal over spilled bindings, Release, P2.2 review 2); Rust allocations 39.1 MB |
 | `LOCAL_BUDGET` | 176 | Luau accepts 200 live locals |
-| `ULUA_MIN_RUN_STACK` | 512 KiB | 130,544 B at `LUAI_MAXCCALLS` in Debug |
+| `ULUA_MIN_RUN_STACK` | 512 KiB | protected C calls at `LUAI_MAXCCALLS` in Debug: largest 158,000 B on Windows x86_64; Linux x86_64 144,200 B; macOS aarch64 130,544 B (P1) |
 | Default `max_memory_bytes` | 64 MiB | minimum instance 401,816 B |
 | Default `max_steps` | 1,000,000 | a test runs to the bound and one step past it |
 | `OUTPUT_FACTOR` | 80, prelude 2,086 B (1,222 B at P1) | largest measured ratio 71.69 (a fresh arrow per array literal over spilled bindings, P2.2 review 2); the growth test tracks the densest shape of 97 constructs (63.14) |
