@@ -324,7 +324,27 @@ product binary and a C host. Result: 0 CRITICAL, 3 MAJOR, 3 MINOR.
 - m1 (MINOR, open): a case call builds its result in a Rust `String`
   outside the VM allocator. The size is at most the charged VM buffer
   of `3 × len + 4` bytes, so peak host memory is at most twice the
-  charge for the duration of the call.
+  charge for the duration of the call. Fixed 2026-10-22 (`stdlib.md` Rev 14 §9 rule 4): before the
+  conversion, the shim adds a reservation R to the used count of the VM
+  allocator and allocates nothing; it returns R before the result
+  string. R(upper, n) = 6n and R(lower, n) = 3n for n >= 4, n + 8 for
+  n = 2, 3, and n for n <= 1: the peak of std 1.95.0's String growth
+  with a moving realloc (capacity n, doubling, minimum 8). Measured with
+  a counting allocator that forces a moving realloc: the peak equals R
+  at every length (84 lengths to 4,097 B; an earlier run to 4 MiB gave
+  the same). Largest expansions: upper U+0390, U+03B0; lower U+0130,
+  U+023A, U+023E. Red before the fix: `ΐ` x32,768 under 1 MiB and `İ`
+  x32,768 under 832 KiB ran; after, both give `limit:memory`. A
+  counting C++ fixture checks that `used` equals the physical bytes
+  after each of 14 paths. Length caps: upper 357,913,941 B (R in i32),
+  lower 715,827,881 B (the output buffer). A first form reserved R as a
+  VM buffer; it held R physical bytes beside the Rust temporary, so the
+  contract states that a reservation allocates nothing. Review: 0
+  CRITICAL, 0 MAJOR, 3 MINOR (a fixed cap on capacity + R: removed;
+  test cost without a time: 0.315 s recorded; `fromCodePoint` and
+  `fromCharCode` build at most 4 bytes outside the budget: accepted).
+  Gates on the final code (macOS arm64): `gate.sh quick` PASS (413 s);
+  `gate.sh sanitize` PASS (424 s).
 - m2 (MINOR): `assert!` and `unwrap()` on the `number.rs` dispatch
   path. Fix: total forms that return -1.
 - m3 (MINOR): `a84` did not stringify an extra field. Fix: `a86`.
@@ -335,7 +355,7 @@ PASS (primary run); `hygiene.sh` PASS. Timing: the emitted helper
 loops did not change after the P7.6 timing run (§5.19 largest 5.749,
 analyzer largest 11.638).
 
-Open: m1; the analyzer ratio of `P22-array-wide-function-product`
+Open: the analyzer ratio of `P22-array-wide-function-product`
 stays from 11.44 to 11.91 against the bound 12 (one run gave 12.023 in
 P6).
 

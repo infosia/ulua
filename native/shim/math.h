@@ -81,11 +81,35 @@ static int case_native(lua_State* state) {
         luaL_error(state, "String result exceeds memory limit");
     }
     unsigned char small[4];
-    auto* output = op <= 11 ? static_cast<unsigned char*>(lua_newbuffer(state, length * 3 + 4)) : small;
+    const size_t capacity = length * 3 + 4;
+    size_t reserved = 0;
+    if (op <= 11) {
+        // Private operations 15/16 query Rust's bound without conversion or allocation.
+        double unused_reservation = 0;
+        const int reservation = vm->number_dispatch(op + 5, static_cast<double>(length), 0, 0,
+            reinterpret_cast<const unsigned char*>(input), 0, small, &unused_reservation);
+        if (reservation < 0) {
+            record_stop(vm, SHIM_MEMORY);
+            luaL_error(state, "String reservation exceeds memory limit");
+        }
+        reserved = static_cast<size_t>(reservation);
+    }
+    // The output buffer contains no physical reservation bytes.
+    auto* output = op <= 11 ? static_cast<unsigned char*>(lua_newbuffer(state, capacity)) : small;
+    if (reserved > vm->budget || vm->used > vm->budget - reserved) {
+        record_stop(vm, SHIM_MEMORY);
+        luaL_error(state, "String reservation exceeds memory limit");
+    }
+    // Reserve budget without allocation, allocation steps, or a fault-injection attempt.
+    // This budget check applies even when allocation step charging is disabled.
+    vm->used += reserved;
     const double a = op <= 11 ? 0 : lua_tonumber(state, 1);
     double unused = 0;
     const int result = vm->number_dispatch(op, a, 0, 0,
         reinterpret_cast<const unsigned char*>(input), length, output, &unused);
+    // Rust dispatch neither calls Lua nor raises. No longjmp can skip this release.
+    // Release before any Lua allocation or error, including a failed conversion.
+    vm->used -= reserved;
     if (result < 0) {
         vm->trap_kind = 4;
         luaL_error(state, "Invalid String argument");

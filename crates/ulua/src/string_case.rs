@@ -21,7 +21,27 @@ fn convert(op: u32, a: f64, s: &str) -> Result<String, ()> {
         _ => Err(()),
     }
 }
-// SAFETY: C++ owns live UTF-8 input and an output buffer of at least 3*len+4 bytes.
+// Rust 1.95.0: alloc/src/str.rs::convert_while_ascii starts with capacity n.
+// raw_vec::grow_amortized doubles capacity, with a minimum byte capacity of eight.
+// Upper output is at most 3n; lower output is at most 3n/2 (Unicode 17).
+// For n >= 4, capacities reach at most 4n and 2n respectively.
+// A moving realloc holds both capacities: 2n+4n or n+2n.
+// For n=2,3, the minimum capacity gives a peak of n+8. For n<=1, no growth occurs.
+// Sources: https://github.com/rust-lang/rust/tree/1.95.0/library/alloc/src
+fn reservation(op: u32, n: usize) -> Option<usize> {
+    let factor = match op {
+        10 => 6,
+        11 => 3,
+        _ => return None,
+    };
+    match n {
+        0 | 1 => Some(n),
+        2 | 3 => n.checked_add(8),
+        _ => n.checked_mul(factor),
+    }
+}
+// SAFETY: For conversion, C++ owns UTF-8 input and at least 3*len+4 output bytes.
+// Operations 15 and 16 query reservations without access to input or output.
 pub(crate) unsafe fn dispatch(
     op: u32,
     a: f64,
@@ -29,6 +49,16 @@ pub(crate) unsafe fn dispatch(
     len: usize,
     output: *mut u8,
 ) -> i32 {
+    // Private operations 15/16 query upper/lower reservations through the existing dispatcher.
+    // The shim bounds the input length below INT32_MAX, so f64 represents it exactly.
+    if matches!(op, 15 | 16) {
+        if !a.is_finite() || a.fract() != 0.0 || !(0.0..=i32::MAX as f64).contains(&a) {
+            return -1;
+        }
+        return reservation(op - 5, a as usize)
+            .and_then(|n| i32::try_from(n).ok())
+            .unwrap_or(-1);
+    }
     let s = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(input, len)) };
     match convert(op, a, s) {
         Ok(result)
@@ -134,6 +164,7 @@ mod tests {
     }
 }
 
+// Cost: five protected calls isolate native step boundaries from allocator charges.
 #[cfg(test)]
 #[test]
 fn case_charge_budget_edges() {
@@ -158,6 +189,24 @@ fn case_charge_budget_edges() {
             error: *mut std::ffi::c_char,
         ) -> i32;
     }
+    // This step-only probe uses Luau's system allocator and has no VM memory budget.
+    // Suppress reservation queries only here. Dedicated memory tests use real reservations.
+    unsafe extern "C" fn steps_dispatch(
+        op: u32,
+        a: f64,
+        b: f64,
+        has_b: i32,
+        input: *const u8,
+        len: usize,
+        output: *mut u8,
+        number: *mut f64,
+    ) -> i32 {
+        if matches!(op, 15 | 16) {
+            return 0;
+        }
+        // SAFETY: The native probe owns the input and the output buffer through dispatch.
+        unsafe { crate::number::dispatch(op, a, b, has_b, input, len, output, number) }
+    }
     // SAFETY: These getters have no pointer arguments or side effects.
     let charge = unsafe {
         ulua_internal_probe_native_call_steps() + 32 / ulua_internal_probe_native_bytes_per_step()
@@ -171,12 +220,12 @@ fn case_charge_budget_edges() {
     ] {
         let mut counters = [0; 4];
         let mut error = [0; 256];
-        // SAFETY: The probe owns live input and output buffers and invokes the product dispatcher.
+        // SAFETY: The probe owns live buffers. The adapter preserves the product conversion.
         let actual = unsafe {
             ulua_internal_probe_number_charge(
                 budget,
                 2,
-                crate::number::dispatch,
+                steps_dispatch,
                 counters.as_mut_ptr(),
                 error.as_mut_ptr(),
             )
@@ -186,3 +235,7 @@ fn case_charge_budget_edges() {
         assert_eq!(counters[3], completed);
     }
 }
+
+#[cfg(test)]
+#[path = "string_case_memory.rs"]
+mod memory;
