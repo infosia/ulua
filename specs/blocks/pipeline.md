@@ -73,6 +73,7 @@ Rev 71: §2 item 6 the sanitizer build is for macOS and Linux only (D36).
 Rev 72: §7 item 1 every nesting form, each measured target; `COMPILER_STACK_BYTES` 8 MiB.
 Rev 73: §3 item 4 a form charges its levels at itself; the emitter guards each node once; a sweep of empty forms never gives `internal`. §7 macOS stack peak.
 Rev 74: §6 item 4 and §7 item 1 Linux x86_64 is a measured target (D37); a tool that cannot measure a stack peak fails. §7 Linux stack peaks; the largest run stack.
+Rev 75: §2 item 6 every crate that links the library links the sanitizer runtime; a `ulua build` host in a test gets the flags through `CC`.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -108,8 +109,12 @@ the C ABI. `collisions.md` states the lowering of each form.
    compiles every native unit (Luau and the shim) with
    `-fsanitize=address,undefined -fno-omit-frame-pointer
    -fno-sanitize-recover=undefined -O1`, and links the sanitizer
-   runtime into each test binary and example host. No other flag and
-   no source changes. The sanitized build writes to its own target
+   runtime into each test binary and example host. Each workspace
+   crate that links the library has a `build.rs` that reads the shared
+   rule (`crates/ulua/build/sanitize.rs`). A test that builds a host
+   through `ulua build` passes the sanitizer flags as words of `CC`
+   and `CXX` (`cli.md` §2.4 rule 6). No other flag and no source
+   changes. The sanitized build writes to its own target
    directory (`target/sanitize`), so it never mixes objects with the
    normal build. `sh tools/gate.sh sanitize` runs the tests, the Luau
    witnesses, the examples, and the docs witness on that build; any
