@@ -1064,6 +1064,8 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 - The witness predicate has a copy in `crates/ulua/tests/support/
   equality.mjs`; the next implementation task makes the test import
   `tools/witness/corpus.mjs`'s predicate.
+  Closed: `equality.mjs` reads `isAcceptedEquality` from
+  `tools/witness/corpus.mjs` (checked 2026-10-22).
 
 - P2.2 and P2.5: an arrow whose inferred result contains a function
   type at any depth (array element, nullable member, record field)

@@ -38,7 +38,7 @@ the gate bound comes from the record after the shrinks.
   reached `limit:memory` with a live heap near 400 KB; the collector
   completed no cycle (`tracking/p5-hardening.md`, Phase Review round 3).
 - P5 Phase Review: on Windows a fuzz crash is keyed by the panic
-  message, not the signal (tool only).
+  message, not the signal (tool only). Closed 2026-10-22 (`p5-hardening.md`).
 
 ## Measurements (P6.1)
 
