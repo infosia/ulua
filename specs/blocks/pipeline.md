@@ -1476,7 +1476,8 @@ the value.
    memory). A test compiles the deepest form at the ceiling through
    `ulua_compile`, and on a thread with half of `COMPILER_STACK_BYTES`.
    When a change adds a nesting form or moves a peak, measure it on
-   each measured target (`s3_measure`, feature `measurements`).
+   each measured target (`s3_measure stack --half` for the P1 forms,
+   `node tools/stack-forms.mjs` for the later forms).
 2. The ceiling of `max_source_bytes`.
 3. The C15 bounds and their limit names, and `LOCAL_BUDGET`.
 4. The stack that `ulua_call` needs on the host thread: Luau at

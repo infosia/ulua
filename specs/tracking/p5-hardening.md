@@ -121,7 +121,8 @@ production change.
 
 Stack, `s3_measure stack --half` (the 13 P1 forms) and `s3_measure
 source` on 30 later forms at their largest accepted depth. The later
-sources come from a scratch generator. They are not committed.
+sources come from a generator, later committed as
+`tools/stack-forms.mjs` (32 forms; same peaks).
 
 | Form | Count | Debug | Release |
 |---|---:|---:|---:|
