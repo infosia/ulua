@@ -1,9 +1,10 @@
 # C ABI
 
-Status: Rev 10, 2026-10-17. ABI version 1. No binary compatibility
+Status: Rev 11, 2026-10-22. ABI version 1. No binary compatibility
 rule applies (D23): a change of this file changes `include/ulua.h`, the
 implementation, and the tests in one commit.
 Rev 10: §6 `random_seed`, §6.0, §7 `ulua_instance_seed_random` (P7.1).
+Rev 11: §8 link tests read a library that the default build of the test wrote.
 Rev 1: §2, §3, §4.3, §8 (P1 Phase Review).
 Rev 2: §1.10, §8 (P1 Phase Review round 2).
 Rev 3: §1.10 names the dynamic library (round 3).
@@ -458,3 +459,7 @@ Link tests (P3) run in the default build:
    the dynamic library, and runs.
 3. The exported symbols of the dynamic library equal the functions of
    §7 (§1.10). A symbol check reads them from the built library.
+4. The libraries are the default-feature build of the same command.
+   A library that a build with other features or another profile
+   wrote is not a test input. If the test cannot find its own
+   library, it fails with a message that names the path.
