@@ -3,8 +3,11 @@
 //! At 64 KiB, each shape takes at most fifty times dense-assign.
 //! The largest measured ceiling ratio is 22.366 for P24-string-iteration.
 //! Each size uses the minimum of two single-worker analyzer runs. Only ratios are asserted.
-//! Measured Release default cost: 124.098 seconds for 260 measured shapes and one bounded shape.
-//! Measured Release ceiling cost: 702.022 seconds for the same shapes.
+//! Default ratios above 10.8 use five more runs per size, with the minimum over all seven runs.
+//! The full label keeps two runs per size.
+//! Measured Debug default cost: 164.265 seconds for 290 measured shapes and one bounded shape.
+//! One shape used extra runs, at an added cost of 2.871 seconds.
+//! Measured Release ceiling cost: 702.022 seconds.
 //! Stock tsc resource exceptions include TS2321 and TS2563 (CLAUDE.md invariant 3).
 #[path = "../support/analyzer.rs"]
 mod analyzer;
@@ -15,11 +18,16 @@ mod shapes;
 use std::{path::PathBuf, process::Command, time::Instant};
 use ulua_compiler::{Limits, compile_with_grants};
 
+const DEFAULT_GROWTH_BOUND: f64 = 12.0;
+
 #[test]
 fn all_growth_shapes_have_bounded_analyzer_time() {
     let _measurement = crate::measurement_lock();
     let largest = measure("default", [4096, 16384]);
-    assert!(largest <= 12.0, "Analyzer ratio: {largest:.3}");
+    assert!(
+        largest <= DEFAULT_GROWTH_BOUND,
+        "Analyzer ratio: {largest:.3}"
+    );
 }
 
 #[cfg(feature = "measurements")]
@@ -42,6 +50,8 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
     let mut largest = 0.0f64;
     let mut measured = 0;
     let mut bounded = 0;
+    let mut remeasured = 0;
+    let mut extra_seconds = 0.0;
     let mut failures = vec![];
     let mut ceiling_times = vec![];
     for shape in shapes::all() {
@@ -133,6 +143,34 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
             }
         }
         let growth_ratio = if times.len() == 2 {
+            let first_ratio = times[1] / times[0];
+            if label == "default" && first_ratio > 0.9 * DEFAULT_GROWTH_BOUND {
+                let extra_start = Instant::now();
+                for (bytes, minimum) in sizes.into_iter().zip(&mut times) {
+                    let path = directory.join(format!("{}-{bytes}.luau", shape.label));
+                    for _ in 0..5 {
+                        let now = Instant::now();
+                        let output = analyzer::command(root.join("target/luau-tools/luau-analyze"))
+                            .arg(&path)
+                            .output()
+                            .unwrap();
+                        *minimum = minimum.min(now.elapsed().as_secs_f64());
+                        assert!(
+                            output.status.success(),
+                            "{} bytes={bytes}: {}",
+                            shape.label,
+                            analyzer::failure(&output)
+                        );
+                    }
+                }
+                extra_seconds += extra_start.elapsed().as_secs_f64();
+                remeasured += 1;
+                eprintln!(
+                    "analyzer {label} {}: remeasured first_ratio={first_ratio:.3} final_ratio={:.3}",
+                    shape.label,
+                    times[1] / times[0]
+                );
+            }
             let ratio = times[1] / times[0];
             largest = largest.max(ratio);
             measured += 1;
@@ -140,7 +178,11 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
                 eprintln!(
                     "analyzer {label} {}: ratio={ratio:.3}{}",
                     shape.label,
-                    if ratio > 12.0 { " EXCEEDS_12" } else { "" }
+                    if ratio > DEFAULT_GROWTH_BOUND {
+                        " EXCEEDS_12"
+                    } else {
+                        ""
+                    }
                 );
             }
             Some(ratio)
@@ -242,6 +284,9 @@ fn measure(label: &str, sizes: [usize; 2]) -> f64 {
         );
     }
     std::fs::remove_dir_all(directory).unwrap();
+    if label == "default" {
+        eprintln!("analyzer {label} remeasured={remeasured} extra_seconds={extra_seconds:.3}");
+    }
     eprintln!(
         "analyzer {label} measured={measured} bounded={bounded} largest={largest:.3} cost={:.3}s",
         start.elapsed().as_secs_f64()

@@ -414,7 +414,12 @@ and 4.192; §5.19 largest 5.828; P6.3 within every bound.
 
 Open: the analyzer ratio of `P22-array-wide-function-product` moves
 from 11.2 to 12.0 between runs (its 4 KiB base is 22 ms), so the bound
-12 can fail on noise (MINOR, flake risk).
+12 can fail on noise (MINOR, flake risk). Fixed 2026-10-22: a default ratio
+above 10.8 (0.9 x 12) takes five more runs per size, and the minimum of
+seven runs per size gives the final ratio; the bound stays 12. Measured
+(macOS arm64): P22-array-wide-function-product 8.065 (no re-measure);
+one shape re-measured, dense-conditional 11.096 to 11.071, 2.871 s
+extra; largest final ratio 11.071. `gate.sh timing`: PASS, 460 s.
 
 ## Measurements (P6.S7)
 
