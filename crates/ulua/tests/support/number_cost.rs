@@ -1,4 +1,6 @@
 //! Product compiler/VM measurements, using p55_ratio's exact baseline source.
+//! The caller supplies the bound: the shared section 5.19 bound for the timing
+//! gate, or the separate target 5 for explicit charge measurements.
 #[allow(dead_code)]
 #[path = "script.rs"]
 mod support;

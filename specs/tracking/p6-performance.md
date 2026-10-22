@@ -650,6 +650,76 @@ Consequence: a bound from one target does not hold on another. Each
 bound is the largest of the three runs over each measured target,
 times 1.25.
 
+## p55_ratio on Windows x86_64 (pipeline.md Rev 77)
+
+Status: COMPLETE. `p55_ratio` and `p73_number` share the bound 20;
+`gate.sh timing` on Windows: PASS (23 passed, 4 ignored, 408 s).
+
+`gate.sh timing` on Windows failed `p55_ratio` at 7e08e23 (6.17), at
+a65f21c with the header fix (6.28), and passed once (5.195). Three runs
+of the test alone at 79ddbff:
+
+| Shape | Run 1 | Run 2 | Run 3 |
+|---|---:|---:|---:|
+| `async-reject-resume` | 7.469 | 6.604 | 7.620 |
+| `exports` | 6.244 | 6.231 | 6.184 |
+| next largest | 5.395 | 5.320 | 5.223 |
+
+macOS aarch64: largest 5.894 at P7 (`async-reject-resume`);
+`boolean-template` failed 6 twice (6.26, 6.03) and passed on reruns.
+The cause of the higher Windows ratios is not measured.
+
+A fourth run in the same session gave `async-reject-resume` 5.218 and
+`exports` 4.623: the ratio moves from 5.2 to 7.6 on one machine and
+one commit.
+
+A first change set the bound to 9.53 (the largest run times 1.25). It
+was reverted before a commit: a bound from a measured margin follows
+the machine and the build, not the defect, and each new target or
+noisy run moves it again. Owner decision: a time bound comes from the
+defect that the test detects. pipeline.md Rev 77: the bound is 20,
+between the largest correct ratio (7.62) and the recorded defect
+(5,633, the 42-term addition before the interrupt points, P5.5).
+
+## p63_performance leaves the gate (benchmarks.md Rev 7, D38)
+
+Status: COMPLETE. The test is ignored by default and asserts no
+bound; one run costs 3.3 s on Windows. A run at 79ddbff gave queen
+2.931 (4.12 to 4.16 in the three earlier runs). `gate.sh full` and
+`gate.sh timing` on Windows: PASS.
+
+Question: can a bound on `ulua / luau` detect the loss of a P6
+optimization on each measured target? A bound must lie between the
+ratio without the defect and the ratio with it.
+
+| Workload | Largest correct ratio, 3 targets | Defect, macOS before P6 (40da51b) | Gap |
+|---|---:|---:|---:|
+| fib-recursive | 1.83 | 3.13 | 1.71 |
+| fib-loop | 2.28 | 7.68 | 3.37 |
+| mandelbrot | 1.76 | 2.00 | 1.14 |
+| primes | 2.89 | 8.29 | 2.87 |
+| sort | 3.63 | 6.95 | 1.91 |
+| tree | 2.30 | 3.42 | 1.49 |
+| queen | 4.16 | 4.83 | 1.16 |
+| particles | 3.53 | 7.26 | 2.05 |
+| callbacks | 3.18 | 4.50 | 1.42 |
+| collect | 2.08 | 2.80 | 1.34 |
+
+Correct ratios: the three runs of each target in
+`p63_performance.rs` (macOS at the P6.3 close, Windows at c8cb050,
+Linux at ebf2fed). Defect values: the round 1 record at 40da51b,
+macOS, full sizes; no defect value exists for Windows or Linux.
+
+- The correct ratio differs between the targets by up to 2.3 times
+  (callbacks 3.18 on macOS, 1.39 on Linux), and moves between runs on
+  one machine (queen 3.56 and 4.12 to 4.16 on Windows).
+- A bound for all targets sits above the largest target, so a lower
+  target can lose an optimization without a failure.
+- dcaae63 (Rev 5) and 290c1e4 (Rev 6) raised bounds to the largest
+  measured ratio times 1.25; the bounds followed the machines.
+
+Owner decision D38: the test is a measurement, not a gate.
+
 ## Exit checklist (P6.1)
 
 - [x] `crates/ulua_bench`: the runner, the two subjects, the ten

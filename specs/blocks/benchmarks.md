@@ -1,14 +1,14 @@
 # Benchmarks — contract
 
-Status: Rev 6, 2026-10-22. Rev 6: §6 Linux x86_64 is a measured target (D37). Rev 5: §6 a bound covers each measured target (Windows x86_64). Rev 4: §4 a pair can use the `Math` members of the builtin-alias form (P7.1). Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
+Status: Rev 7, 2026-10-22. Rev 7: §6 a measurement, not a gate (D38). Rev 6: §6 Linux x86_64 is a measured target (D37). Rev 5: §6 a bound covers each measured target (Windows x86_64). Rev 4: §4 a pair can use the `Math` members of the builtin-alias form (P7.1). Rev 3, 2026-10-16 (P6). Rev 3: §6 the gate is stated (P6.3). Rev 2: a pair does the same operations; a record needs a clean tree (P6.1 review). Rev 1: the subjects are Luau and
 Ulua only (owner decision); the Luau baseline is 1.00×. Rev 0: the
 contract follows the benchmark contract of the owner's prior project:
 its timing method, its workload set, and its boundary-price
 measurement (`plan.md` P6). Each change from that contract is stated
 with the Ulua rule or the decision that forces it.
 
-The suite is a published comparison, not a gate. The performance gate
-of §6 is the gate. The code lives in `crates/ulua_bench`.
+The suite is a published comparison, not a gate. No performance gate
+exists (§6, D38). The code lives in `crates/ulua_bench`.
 
 ## 1. Reporting rules
 
@@ -137,28 +137,34 @@ decomposed:
 - No production change in P6.2. A shrink lands as a later slice, on
   this evidence.
 
-## 6. Performance gate (P6.3)
+## 6. Performance measurement (P6.3)
 
-A test in `gate.sh timing` (feature `timing`, under the timing lock)
-runs the ten workloads of §4 at reduced sizes in both subjects and
-asserts, for each workload, `ulua / luau` at most its bound. It asserts
-ratios, not budgets (principle 15).
+A test in the `witnesses` test binary (feature `timing`) runs the ten
+workloads of §4 at reduced sizes in both subjects and prints, for each
+workload, `ulua / luau`. It asserts no bound and is not a gate (D38).
+It is ignored by default; run it with
+`cargo test -p ulua --features timing --test witnesses -- p63_performance --ignored --nocapture`.
 
 - Reduced sizes: each Luau run takes about 5 to 20 ms in Release;
-  the implementer pins them in the test. The test runs in the build
-  profile of `gate.sh timing` and states its cost.
+  the implementer pins them in the test. The test states its cost.
 - Samples: a warm-up of at least 3 runs and 50 ms per subject, then
   the median of 7 runs for each subject; the two subjects alternate,
   so a load change hits both.
-- Bound per workload: the largest ratio of three runs at the slice
-  close in the gate's profile, over each measured target, times 1.25,
-  rounded up to two decimals. The measured targets are macOS aarch64,
-  Windows x86_64, and Linux x86_64 (D37). The ratio depends on the
-  target: the CPU and the C++ compiler of the VM change each subject
-  differently. When a change moves a ratio, measure it on each
-  measured target. The test prints each ratio and its bound.
-- The test is Red against a build without P6.S3 (a measurement at the
-  slice close, not a committed test).
+- A slice that changes the emitter or the runtime records the ratios
+  of each measured target in its tracking note, beside the record of
+  the slice before.
+
+Why there is no bound: a bound must lie between the ratio without a
+defect and the ratio with the defect that it detects. The defect is
+the loss of a P6 optimization. The ratio without the defect differs
+between the targets by up to 2.3 times (callbacks: 3.18 on macOS
+aarch64, 1.39 on Linux x86_64), and moves between runs on one
+machine. For mandelbrot and queen the defect value of macOS (2.00,
+4.83) is within 1.16 times of the largest correct ratio (1.76, 4.16).
+No bound for all targets detects the defect on each target
+(`tracking/p6-performance.md`). Rev 5 and Rev 6 raised the bounds to
+the largest measured ratio times 1.25; that follows the machine, not
+the defect.
 
 ## 7. Layout
 

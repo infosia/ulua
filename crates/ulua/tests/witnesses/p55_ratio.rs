@@ -9,6 +9,12 @@ mod support;
 use std::time::Instant;
 use ulua::{RunLimits, ULUA_FAILED};
 
+// Section 5.19: this bound lies between the largest correct ratio (7.62,
+// async-reject-resume, Windows x86_64 MSVC; 5.894 on macOS aarch64) and the
+// recorded defect (5,633 for the 42-term addition before the interrupt points,
+// P5.5). The instruction gap test p55_interrupts bounds the instructions of a step.
+pub(super) const TIME_RATIO_BOUND: f64 = 20.0;
+
 fn run(source: &str) -> f64 {
     let mut script = support::Script::new(source);
     let now = Instant::now();
@@ -76,7 +82,7 @@ fn all_interrupt_shape_step_time_ratios() {
         eprintln!(
             "interrupt ratio {name}: baseline={baseline:.6}s time={elapsed:.6}s ratio={ratio:.3}"
         );
-        if ratio > 6.0 {
+        if ratio > TIME_RATIO_BOUND {
             failures.push((name, ratio));
         }
     }
@@ -84,7 +90,10 @@ fn all_interrupt_shape_step_time_ratios() {
         "interrupt all ratios cost={:.3}s",
         start.elapsed().as_secs_f64()
     );
-    assert!(failures.is_empty(), "ratios exceed 6: {failures:?}");
+    assert!(
+        failures.is_empty(),
+        "ratios exceed {TIME_RATIO_BOUND}: {failures:?}"
+    );
 }
 
 // SAFETY: The private probe accepts live source bytes, a limits descriptor, and a fixed diagnostic buffer.

@@ -75,6 +75,7 @@ Rev 73: §3 item 4 a form charges its levels at itself; the emitter guards each 
 Rev 74: §6 item 4 and §7 item 1 Linux x86_64 is a measured target (D37); a tool that cannot measure a stack peak fails. §7 Linux stack peaks; the largest run stack.
 Rev 75: §2 item 6 every crate that links the library links the sanitizer runtime; a `ulua build` host in a test gets the flags through `CC`.
 Rev 76: §2 item 7 no project header has the name of a standard header.
+Rev 77: §5.19 the ratio bound 20 comes from the defect that the test detects, not from a measured margin.
 
 This file states the compiler and runtime structure. `abi.md` states
 the C ABI. `collisions.md` states the lowering of each form.
@@ -729,8 +730,20 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
       `__ulua_sf`, P5.5 review 3) and stays below the bound. The async prelude gave a gap of 47 at its
       `__ulua_async_register` call (P5.5 review 2).
     - A ratio test runs each shape in `while (true)` at the default
-      `max_steps` and asserts at most 6 times the run time of
-      `while (true) { i++ }` (gate timing).
+      `max_steps` and asserts at most 20 times the run time of
+      `while (true) { i++ }` (gate timing). The instruction gap test
+      (`p55_interrupts`, gate full) bounds the instructions of a step;
+      the ratio test detects a step that is short in instructions and
+      long in time. The bound comes from that defect: before the
+      interrupt points, the 42-term addition gave 5,633 (P5.5).
+      Without the defect, the largest ratio is 7.62
+      (`async-reject-resume`, Windows x86_64 MSVC; 5.2 to 7.6 over
+      runs) and 5.894 on macOS aarch64. A bound between the two is
+      independent of the target and of noise. The bound was 6 until
+      Rev 77: it was a measured value with a margin, and it failed on
+      noise on macOS and in each Windows run. A new kind of step that
+      can take long (a native helper, for example) states its defect
+      value when it enters the test.
     - The production compile options stay at O1. A change of the
       options reruns that test: O2 can unroll the loop form.
 
