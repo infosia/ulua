@@ -196,10 +196,10 @@ checker rules that P1 implements and tests.
 
 ## Gaps
 
-- The Luau witnesses join at P1.
-- The C15 bounds have no corpus entries until P1 measures their values.
-- The hygiene scan of commit messages is manual.
+- The Luau witnesses join at P1. Audit 2026-10-22: closed (P1).
+- The C15 bounds have no corpus entries until P1 measures their values. Audit 2026-10-22: closed: S3 gate tests at and past each bound (`p1-skeleton.md`).
+- The hygiene scan of commit messages is manual. Audit 2026-10-22: open; `git log` of every commit message has 0 hits.
 - The node witness runs every entry in one process. A promise chain or
-  a changed global can leak into a later entry (contrived).
+  a changed global can leak into a later entry (contrived). Audit 2026-10-22: open; `tools/witness/corpus.mjs` still imports each entry in one process.
 - The live length of C6.6 has an entry for growth only, because no
-  accepted member shrinks an array.
+  accepted member shrinks an array. Audit 2026-10-22: `pop`, `shift`, and `splice` shrink an array since P2.3; `a95` pins the live length on shrink (direct, through a function, in a `while` test); `ulua` and `node` give the same output.

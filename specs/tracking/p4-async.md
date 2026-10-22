@@ -240,7 +240,7 @@ Fix measurements (Codex): the cause was the branch-local writes of each protecte
 
 ## Gaps
 
-- P4.3: no test injects an OS allocation failure or a `lua_ref` registry failure on the request path (P5 fault injection).
+- P4.3: no test injects an OS allocation failure or a `lua_ref` registry failure on the request path (P5 fault injection). Audit 2026-10-22: closed: P5.3.
 
 - Gate cost: `cargo-test` grew from 473 s (P3 close) to 922 s (P4.2, `aed0365`). The 60 test targets run 296 s in sum (one target 138 s: the default witness-time test over 269 shapes); the other 626 s build and link 55 integration test binaries, each with the library and Luau. Resolved in P4.2 round 1: 6 binaries, `cargo-test` 226 s. Principle 15 asks for a stated reason per cost; review the P2 and P4.1 growth and random targets for overlap before P4 closes.
 

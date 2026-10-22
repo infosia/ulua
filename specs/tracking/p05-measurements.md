@@ -201,13 +201,13 @@ witness fails on exit status 1. Lint warnings do not fail it.
 ## Gaps
 
 - M2: `luau_compile` allocates outside the `lua_Alloc` budget. P1
-  bounds it through the source size limit and measures it.
+  bounds it through the source size limit and measures it. Audit 2026-10-22: closed: `pipeline.md` §6 item 4 measures native `luau_compile` memory.
 - M2: the time limit counts interrupt safepoints, not wall time.
 - M2: the C stack limits are measured on an 8 MiB main thread only. P1
   measures them on the compiler thread and the run thread.
-- M2: a Rust panic in a host function is not tested. P3 tests it.
-- M1, M2: macOS arm64 only. P5 adds Linux and Windows.
+- M2: a Rust panic in a host function is not tested. P3 tests it. Audit 2026-10-22: closed (`p3-host.md` exit checklist).
+- M1, M2: macOS arm64 only. P5 adds Linux and Windows. Audit 2026-10-22: closed: D28, D37.
 - M3: `oxc_semantic` is not measured (crate `self_cell` is not in the
   local cache). Mixed-form nesting and the guard's reject path are not
-  measured. P1 measures them with the fork pin.
-- M5 measures hand-written Luau. P1 measures the generated corpus.
+  measured. P1 measures them with the fork pin. Audit 2026-10-22: closed: the compiler never calls `oxc_semantic` (`pipeline.md` §3 item 4).
+- M5 measures hand-written Luau. P1 measures the generated corpus. Audit 2026-10-22: closed (P1 `luau-witnesses` times).

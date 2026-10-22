@@ -1053,11 +1053,11 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 
 - `tsc` time is super-linear on many narrowed lets with many joins
   (P2.5 review 12): 0.25 s at 13 KB, 2.21 s at 53 KB. Witness cost
-  only; a corpus entry of that shape costs about 2 s.
+  only; a corpus entry of that shape costs about 2 s. Audit 2026-10-22: open (witness cost only).
 
 - P5: a review of GC work and runtime internals outside the generated
   helpers against the run-time bound of §6.3 (a P2.4 reviewer did not
-  finish this line).
+  finish this line). Audit 2026-10-22: closed: P5.5.
 
 - Closed in P2.5: TS2339 that names `never` joins invariant 3's
   exception; `a41` pins it.
@@ -1069,6 +1069,6 @@ generated modules, 13 stress modules. Running tasks at the close: none.
 
 - P2.2 and P2.5: an arrow whose inferred result contains a function
   type at any depth (array element, nullable member, record field)
-  needs a result annotation, as a bare function result does now.
+  needs a result annotation, as a bare function result does now. Audit 2026-10-22: closed: `ulua check` gives C11 for an arrow result that is a function, an array of functions, a nullable function, and a record with a function field.
 - P2.2 and P2.5: the parentheses rule for function types applies to
-  every composite type they add (unions, arrays).
+  every composite type they add (unions, arrays). Audit 2026-10-22: closed: function types print as aliases (`__ulua_fnN`); a nullable function, an array of functions, and a record of both pass `luau-analyze` and run.

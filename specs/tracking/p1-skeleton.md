@@ -557,14 +557,14 @@ programs, 2,350 mutants, and 9,000 number formats agree with `tsc`,
 
 - `runtime_errors.h` classifies by message text. The `buffer` library
   raises "string length overflow" for an argument error. The phase that
-  exposes `buffer` classifies by source location, not by text.
+  exposes `buffer` classifies by source location, not by text. Audit 2026-10-22: open, unreachable: no generated Luau and no prelude helper calls the `buffer` library.
 
 - Sequential `for` loops each keep one generated local (round 1
-  MINOR). P6 measures the reuse of locals across sibling scopes.
+  MINOR). P6 measures the reuse of locals across sibling scopes. Audit 2026-10-22: closed: bindings past `LOCAL_BUDGET` spill; 68, 200, and 1,000 sequential `for` loops compile and run.
 
 - The `functions` input of `M heap` takes 502 ms in Release at 65,536
   bytes. The other inputs take at most 69 ms. The Phase Review checks
-  whether this cost grows faster than the source size.
+  whether this cost grows faster than the source size. Audit 2026-10-22: closed: the S4 fix of the quadratic emitter; `s4_growth` ratios 3.71 to 3.96 include `functions`.
 - Depth 48 admits 15 nested loops or `if` statements. P6 measures
-  whether a lower stack cost per level raises it.
-- The absolute Luau ceiling of template parts is unknown.
+  whether a lower stack cost per level raises it. Audit 2026-10-22: closed: at 55ce513 `if`, `while`, and `for` reach 22 levels (`s3_measure stack`).
+- The absolute Luau ceiling of template parts is unknown. Audit 2026-10-22: closed: `limit:template-parts` 1,025; above 16 parts a template lowers to `table.concat`.
