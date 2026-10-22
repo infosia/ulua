@@ -144,7 +144,8 @@ classes); derived factor 1,115 (peak 58,409,145 B at 65,536 B,
 nested-empty-blocks). Both are at most their constants (85,504 and
 1,115).
 
-Defect found by the sweep (open): a script input gives `internal`.
+Defect found by the sweep (fixed, section "Depth fix (pipeline.md Rev
+73)" below): a script input gives `internal`.
 `ulua check` of 23 nested `try{}catch(e){}` with an empty innermost
 block (364 B) reports `error[internal]: Emitter depth limit exceeded
 after checked input`. `ulua_compile` gives status 6, code `internal`.
@@ -156,6 +157,75 @@ Cause (read): `depth.rs` charges a try statement as two levels only
 through the statements of its blocks. An empty innermost block has no
 statement, so the AST check never charges its second level. The
 emitter guard charges the try itself.
+
+## Depth fix (pipeline.md Rev 73)
+
+Status: COMPLETE 2026-10-22. Contract: `pipeline.md` §3 item 4 Rev 73.
+
+Exit checklist:
+
+- [x] No script input that `depth.rs` accepts reaches the emitter
+  guard. Gate test: `depth_sweep_tests.rs` (the sweep and the direct
+  try test).
+- [x] The sweep is Red at 55ce513 and Green after the fix.
+- [x] Every existing test passes unchanged
+  (`condition_wrappers_reach_the_nesting_bound` included).
+- [x] The deepest form stays under `COMPILER_STACK_BYTES / 2` in Debug
+  on macOS.
+- [x] Fresh review: 0 CRITICAL, 0 MAJOR.
+
+Failures before the fix (the sweep at 55ce513): `internal` for
+try/catch, try/finally, catch body, try/catch/finally, and finally
+body at 23; empty template at 43; `true&&false` leaf at 42; `true&&`
+and `false||` chains at 43.
+
+Classes found:
+
+| Class | Cause | Fix |
+|---|---|---|
+| Empty protected block | `depth.rs` charges the second try level through block statements only | `depth.rs` charges a try at itself (`depth + 1`) |
+| Template string parts | the emitter lowers each string part as an expression; the AST has no child for an empty template | `depth.rs` charges a template at itself (`depth + 1`) |
+| Double guard | `E::Logical` passes its guarded depth with the same node to `pure()`, which guards it again | `pure(expr, outer)`: the depth before the guard |
+
+A first form charged every logical expression two levels in
+`depth.rs`. It rejected `alternating-logical-tests` at depth 21, which
+compiled before. The extra level was in the emitter, so the emitter
+changed.
+
+Accepted depth, 55ce513 and after:
+
+| Form | Before | After |
+|---|---:|---:|
+| `true&&` / `false\|\|` chain | 42 (43 gives `internal`) | 43 |
+| `true&&false` leaf in blocks | 41 (42 gives `internal`) | 42 |
+| Empty try forms | 22 (23 gives `internal`) | 22 |
+| Empty template in blocks | 42 | 42 |
+| Function declarations around an empty try (review) | 22 | 21 |
+| Empty template in parentheses (review) | 43 | 42 |
+| Empty template in parentheses in blocks (review) | 42 | 41 |
+
+The losses follow the contract: a form charges the levels of its full
+form.
+
+Stack (Debug, macOS arm64): `true&&` x43 peak 1,573,120 B; the
+deepest form (42 method calls) 2,294,704 B, unchanged.
+
+Gates: `cargo test -p ulua_compiler` 458 passed; `gate.sh quick` PASS
+(842 passed, 352 s, before the review fixes); sweep 81 shapes at depths
+1 to 64 (5,184 inputs), 1.56 s, on a `COMPILER_STACK_BYTES` thread.
+`gate.sh full` after the review fixes (macOS arm64): PASS, 356 s.
+
+Review round 1 (fresh reviewer): 0 CRITICAL, 0 MAJOR, 4 MINOR.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| §3 item 4 said "the checker charges"; the bound is `depth.rs` | MINOR | contract text names `depth.rs` |
+| Some empty shapes lose one level (table above) | MINOR | accepted: the contract rule |
+| The direct test runs on the default test thread | MINOR | runs on a `COMPILER_STACK_BYTES` thread |
+| The sweep omits error field, JSON, length, push, for init, string for-of, reduce, filter | MINOR | rows added |
+
+Reviewer sweep: about 3,600 shapes in 18 statement and 8 expression
+contexts at 12 depth limits, 0 `internal` (74 at HEAD).
 
 ## Measurements (P5.1)
 

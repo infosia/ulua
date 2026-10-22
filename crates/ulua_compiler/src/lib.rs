@@ -6,6 +6,8 @@ mod bounds;
 mod checker;
 mod counted;
 mod depth;
+#[cfg(test)]
+mod depth_sweep_tests;
 mod emitter;
 mod host_names;
 mod ir;

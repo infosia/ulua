@@ -43,7 +43,14 @@ pub(crate) fn check<'a>(
         .collect();
     while let Some((node, depth)) = pending.pop() {
         let offset = node.offset();
-        if depth >= limit {
+        let form_depth = match &node {
+            // statement() also guards each protected block, even when it has no statements.
+            Node::Statement(Statement::TryStatement(_)) => depth + 1,
+            // expression() visits the generated string parts, even without substitutions.
+            Node::Expression(Expression::TemplateLiteral(_)) => depth + 1,
+            _ => depth,
+        };
+        if form_depth >= limit {
             return Err(Diagnostic::at(
                 source,
                 offset as usize,

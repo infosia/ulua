@@ -8,6 +8,7 @@ pub(super) const PURE_EXPRESSION_NODES: usize = 3;
 impl Emitter<'_> {
     pub(super) fn expression(&mut self, expr: &Expr, depth: u32) -> Result<usize, Diagnostic> {
         self.offset = expr.start as usize;
+        let outer = depth;
         let depth = self.guard(depth)?;
         let dest = self.slot(if expr.ty == Type::Void {
             &Type::Boolean
@@ -261,8 +262,8 @@ impl Emitter<'_> {
                 self.release(b);
             }
             E::Logical(and, a, b) => {
-                // Pure boolean operands use Luau's short-circuit expression without temporary joins.
-                if let Some(value) = self.pure(expr, depth)? {
+                // The pure lowering guards this node itself.
+                if let Some(value) = self.pure(expr, outer)? {
                     self.write_slot(dest, value);
                     return Ok(dest);
                 }

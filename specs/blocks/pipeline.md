@@ -151,8 +151,8 @@ source bytes -> UTF-8 check -> oxc_parser (guard) -> depth check
    of the emitter. If it does, the result is `internal`. Each limit
    diagnostic carries the source offset of the form that reaches the
    limit.
-   The checker charges the levels of a form at the form itself, not
-   through its children. A form with empty blocks or no operands
+   The depth check before the checker (`depth.rs`) charges the levels
+   of a form at the form itself, not through its children. A form with empty blocks or no operands
    charges the same levels as a full form. Example: a `try` statement
    charges two levels whatever its blocks hold.
    The emitter guards each node once. A second lowering of the same
