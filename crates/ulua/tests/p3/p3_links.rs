@@ -1,12 +1,14 @@
 //! Default-build C11/C++17 static/dynamic links and the exact dynamic symbol set.
-//! Four compilations and four runs cost 7.181 seconds in the measured Debug build.
+//! A dedicated library build, four host compilations, and four runs verify the default features.
+//! macOS aarch64 Debug link test: 29.750 seconds cold, 1.522 seconds with the dedicated build up to date.
+//! The Cargo build costs 27.315 seconds cold and 0.181 seconds up to date.
 #[path = "../support/host.rs"]
 mod host;
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     process::Command,
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 fn checked(command: &mut Command) -> std::process::Output {
     let out = command.output().unwrap();
@@ -22,11 +24,16 @@ fn checked(command: &mut Command) -> std::process::Output {
 fn c11_cpp17_static_dynamic_and_exports() {
     let now = Instant::now();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let deps = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_owned();
+    let scratch = std::env::temp_dir().join(format!(
+        "ulua-p3-links-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&scratch).unwrap();
+    let deps = build_libraries(&root);
     let static_library = deps.join(if cfg!(target_env = "msvc") {
         "ulua.lib"
     } else {
@@ -39,10 +46,13 @@ fn c11_cpp17_static_dynamic_and_exports() {
     } else {
         "libulua.so"
     });
-    assert!(static_library.is_file());
-    assert!(dynamic_library.is_file());
-    let scratch = std::env::temp_dir().join(format!("ulua-p3-links-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).unwrap();
+    for library in [&static_library, &dynamic_library] {
+        assert!(
+            library.is_file(),
+            "Missing test library: {}",
+            library.display()
+        );
+    }
     if cfg!(target_os = "windows") {
         std::fs::copy(&dynamic_library, scratch.join("ulua.dll")).unwrap();
     }
@@ -55,6 +65,11 @@ fn c11_cpp17_static_dynamic_and_exports() {
             } else {
                 library.clone()
             };
+            assert!(
+                link_library.is_file(),
+                "Missing test library: {}",
+                link_library.display()
+            );
             let mut cmd = host::compile(
                 &root,
                 &root.join("native/host_link.c"),
@@ -109,6 +124,39 @@ fn c11_cpp17_static_dynamic_and_exports() {
         symbols.len(),
         now.elapsed().as_secs_f64()
     );
+}
+fn build_libraries(root: &Path) -> PathBuf {
+    let now = Instant::now();
+    let executable = std::env::current_exe().unwrap();
+    let profile_dir = executable.parent().unwrap().parent().unwrap();
+    let target_dir = profile_dir.parent().unwrap().join("p3-links");
+    let profile = profile_dir.file_name().unwrap().to_str().unwrap();
+    // These tests execute native hosts. Use Cargo's host target explicitly, independent of build.target.
+    let version = checked(Command::new(env!("CARGO")).arg("-vV"));
+    let version = String::from_utf8(version.stdout).unwrap();
+    let target = version
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .expect("cargo -vV must report its host target");
+    // Only this test writes this target directory. No other command uses it.
+    // Each Cargo build here selects default features, so shared outputs from other features or profiles are not inputs.
+    checked(
+        Command::new(env!("CARGO"))
+            .current_dir(root)
+            .args(["build", "--locked", "-p", "ulua", "--lib", "--profile"])
+            .arg(if profile == "debug" { "dev" } else { profile })
+            .arg("--target")
+            .arg(target)
+            .arg("--target-dir")
+            .arg(&target_dir),
+    );
+    let libraries = target_dir.join(target).join(profile);
+    eprintln!(
+        "P3 default libraries: {} build={:.3}s",
+        libraries.display(),
+        now.elapsed().as_secs_f64()
+    );
+    libraries
 }
 fn exported(library: &Path) -> BTreeSet<String> {
     if cfg!(target_env = "msvc") {

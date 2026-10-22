@@ -388,7 +388,15 @@ the committed form, 24.7 to 25.2 ns with the range test only.
 (`libulua.a` missing in the deps directory after the sanitizer and
 release builds of the slice); the test alone and a second
 `gate.sh quick` passed. MINOR: the test depends on the artifacts of an
-earlier build.
+earlier build. Fixed 2026-10-22 (`abi.md` Rev 11 §8 item 4): the test
+read `target/<profile>/deps/libulua.a`, which every build of the
+library overwrites. Measured before the fix: after `cargo build -p ulua
+--features fault-injection`, the test linked that library and passed.
+After: the test builds the default-feature library in
+`<target>/p3-links`, a directory that no other command writes; the
+same check links the dedicated library. Cost (macOS arm64 Debug): link
+test 29.750 s cold, 1.522 s up to date (7.181 s at P3). Linux and
+Windows are not run with the change.
 
 Review of 82ad9a0 and f1ab3b1: 0 CRITICAL, 0 MAJOR. Probes under ASan
 and UBSan with halt_on_error: the string, array, and `Math` members

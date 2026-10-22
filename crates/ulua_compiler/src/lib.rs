@@ -51,13 +51,14 @@ pub const SOURCE_CEILING: u64 = 64 * 1024;
 /// For nested-empty-blocks at 65,536 source bytes in Debug, Windows x86_64 peaked
 /// at 58,409,165 bytes: ceil(58,409,165 * 5 / (65,536 * 4)) = 1,115.
 /// Linux x86_64 Debug peaked at 58,409,249 bytes for the same shape: the derivation is also 1,115.
-/// macOS aarch64 last derived 1,115 at P5.4. Its current factor peak is not recorded.
+/// macOS aarch64 Debug at 55ce513 peaked at 58,409,145 bytes for the same shape: the derivation is 1,115.
 /// This factor is the largest derivation. The timing witness asserts the derivation.
 /// The count excludes borrowed inputs, stack space, and native Luau allocations.
 pub const COMPILE_MEMORY_FACTOR: usize = 1115;
 /// Fixed peak live Rust heap allowance for one compiler call.
 /// In Debug, the largest small-source peak on Windows x86_64 was 68,403 bytes
-/// for seven distinct empty classes. macOS aarch64 derived 85,180 (P7).
+/// for seven distinct empty classes.
+/// macOS aarch64 Debug at 55ce513 peaked at 66,893 bytes for seven empty classes: the derivation is 83,617.
 /// Windows x86_64 has the largest derivation: ceil(68,403 * 5 / 4) = 85,504.
 /// Linux x86_64 Debug peaked at 67,165 bytes for seven empty classes: ceil(67,165 * 5 / 4) = 83,957.
 /// This base is the largest derivation. The timing witness asserts the derivation.
